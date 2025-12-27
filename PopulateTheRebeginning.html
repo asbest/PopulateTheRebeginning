@@ -79,6 +79,7 @@
         <div id="tabs">
             <div class="tab-btn active" id="tab-spells" onclick="switchTab('spells')">⚡</div>
             <div class="tab-btn" id="tab-build" onclick="switchTab('build')">🔨</div>
+            <div class="tab-btn" id="btn-multiselect" onclick="toggleMultiSelect()">⊕</div>
         </div>
         
         <!-- Spells Menu -->
@@ -149,6 +150,23 @@
     let tapStart = { x: 0, y: 0 };
     let pinchStartDist = 0;
     let pinchStartScale = 35;
+    let multiSelectMode = false;
+
+    window.toggleMultiSelect = function() {
+        multiSelectMode = !multiSelectMode;
+        const btn = document.getElementById('btn-multiselect');
+        if(multiSelectMode) {
+             btn.classList.add('active');
+             btn.style.boxShadow = '0 0 10px #00FF00';
+             btn.style.borderColor = '#00FF00';
+             btn.style.color = '#00FF00';
+        } else {
+             btn.classList.remove('active');
+             btn.style.boxShadow = '';
+             btn.style.borderColor = '#888';
+             btn.style.color = 'white';
+        }
+    }
 
     // --- HÖHEN-LOGIK ---
     function mulberry32(a) {
@@ -968,7 +986,7 @@
 
     // Input Handling
     function onPointerDown(e) { isDragging = true; dragStart = {x: e.clientX, y: e.clientY}; tapStart = {x: e.clientX, y: e.clientY}; }
-    function onTouchStart(e) { if(e.touches.length === 1) onPointerDown(e.touches[0]); else if(e.touches.length === 2) { isDragging = false; const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY; pinchStartDist = Math.sqrt(dx*dx+dy*dy); pinchStartScale = viewScale; } }
+    function onTouchStart(e) { e.preventDefault(); if(e.touches.length === 1) onPointerDown(e.touches[0]); else if(e.touches.length === 2) { isDragging = false; const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY; pinchStartDist = Math.sqrt(dx*dx+dy*dy); pinchStartScale = viewScale; } }
     function onPointerMove(e) { if(!isDragging) return; const dx = e.clientX - dragStart.x; const dy = e.clientY - dragStart.y; const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize(); const rgt = new THREE.Vector3(); rgt.crossVectors(fwd, camera.up); rgt.y = 0; rgt.normalize(); const speed = 0.002 * viewScale; cameraLookAt.addScaledVector(rgt, -dx * speed); cameraLookAt.addScaledVector(fwd, dy * speed); updateCameraPosition(); dragStart = {x: e.clientX, y: e.clientY}; }
     function onTouchMove(e) { if(e.touches.length === 1) { e.preventDefault(); onPointerMove(e.touches[0]); } else if(e.touches.length === 2) { e.preventDefault(); const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY; const dist = Math.sqrt(dx*dx+dy*dy); if(pinchStartDist > 0) { viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinchStartScale * (pinchStartDist / dist))); updateCameraZoom(); updateCameraPosition(); } } }
     function onPointerUp(e) { isDragging = false; let x = e.clientX || (e.changedTouches ? e.changedTouches[0].clientX : 0); let y = e.clientY || (e.changedTouches ? e.changedTouches[0].clientY : 0); if(Math.sqrt((x-tapStart.x)**2 + (y-tapStart.y)**2) < 10) handleTap(x, y); }
