@@ -77,10 +77,8 @@
 
     <div id="bottom-ui">
         <div id="tabs">
-            <div class="tab-btn active" id="tab-select" onclick="switchTab('select')">👆</div>
-            <div class="tab-btn" id="tab-basic" onclick="switchTab('basic')" style="display:none;">👣</div>
-            <div class="tab-btn" id="tab-spells" onclick="switchTab('spells')" style="display:none;">⚡</div>
-            <div class="tab-btn" id="tab-build" onclick="switchTab('build')" style="display:none;">🔨</div>
+            <div class="tab-btn active" id="tab-spells" onclick="switchTab('spells')">⚡</div>
+            <div class="tab-btn" id="tab-build" onclick="switchTab('build')">🔨</div>
             <div class="tab-btn" id="btn-multiselect" onclick="toggleMultiSelect()">⊕</div>
         </div>
         
@@ -1047,12 +1045,7 @@
         const mouse = new THREE.Vector2((x/window.innerWidth)*2-1, -(y/window.innerHeight)*2+1);
         raycaster.setFromCamera(mouse, camera);
 
-        // Common: Get Terrain Point
-        const meshes = [];
-        for(let k in chunks) meshes.push(chunks[k].children[0]);
-        const terrainHits = raycaster.intersectObjects(meshes);
-
-        // Common: Get Unit Hits
+        // 1. Check for Unit Clicks
         const unitMeshes = [];
         const meshToUnit = new Map();
         units.forEach(u => {
@@ -1065,47 +1058,26 @@
                 });
             }
         });
+
         const unitHits = raycaster.intersectObjects(unitMeshes);
-
-        if (currentAction === 'select') {
-            if (unitHits.length > 0) {
-                const hitUnit = meshToUnit.get(unitHits[0].object);
-                if(hitUnit) {
-                    if(hitUnit.faction === 0) {
-                        if(multiSelectMode) {
-                            if(!selectedUnits.includes(hitUnit)) {
-                                 selectedUnits.push(hitUnit);
-                                 hitUnit.selectRing.visible = true;
-                            } else {
-                                 selectedUnits = selectedUnits.filter(u => u !== hitUnit);
-                                 hitUnit.selectRing.visible = false;
-                            }
-                        } else {
-                            selectedUnits.forEach(u => u.selectRing.visible = false);
-                            selectedUnits = [hitUnit];
-                            hitUnit.selectRing.visible = true;
-                        }
-                        updateContextMenus();
-                        return;
+        if (unitHits.length > 0) {
+            const hitUnit = meshToUnit.get(unitHits[0].object);
+            if(hitUnit) {
+                if(hitUnit.faction === 0) {
+                    // Toggle Selection for Player Units
+                    if(!selectedUnits.includes(hitUnit)) {
+                         selectedUnits.push(hitUnit);
+                         hitUnit.selectRing.visible = true;
+                    } else {
+                         selectedUnits = selectedUnits.filter(u => u !== hitUnit);
+                         hitUnit.selectRing.visible = false;
                     }
-                }
-            }
-
-            // If terrain clicked in select mode (and no unit hit)
-            if(terrainHits.length > 0 && !multiSelectMode) {
-                selectedUnits.forEach(u => u.selectRing.visible = false);
-                selectedUnits = [];
-                updateContextMenus();
-            }
-        } else {
-            // Action Mode (Move, Spell, Build)
-            if(currentAction === 'move' && unitHits.length > 0) {
-                 const hitUnit = meshToUnit.get(unitHits[0].object);
-                 if(hitUnit && hitUnit.faction === 1) {
-                     // Attack Logic
-                     if(selectedUnits.length > 0) {
+                    return;
+                } else {
+                    // Enemy Unit Clicked -> Attack Target
+                    if(selectedUnits.length > 0) {
                         selectedUnits.forEach(u => {
-                            if(!u.isShaman) {
+                            if(!u.isShaman) { // Shaman might need spell to attack, or can auto attack?
                                 u.attackTarget = hitUnit;
                                 u.state = 'combat';
                             }
@@ -1113,12 +1085,26 @@
                         spawnPulse(hitUnit.mesh.position.x, hitUnit.mesh.position.y, hitUnit.mesh.position.z, 0xFF0000);
                         return;
                     }
-                 }
+                }
             }
+        }
 
-            if(terrainHits.length > 0) {
-                 performAction(terrainHits[0].point.x, terrainHits[0].point.z);
-            }
+        // 2. Terrain Click
+        const meshes = [];
+        for(let k in chunks) meshes.push(chunks[k].children[0]);
+        const hits = raycaster.intersectObjects(meshes);
+        if(hits.length > 0) {
+             const pt = hits[0].point;
+             // If we are in 'move' mode and have units selected, move them
+             if(currentAction === 'move' && selectedUnits.length > 0) {
+                 selectedUnits.forEach(u => {
+                     u.goto(pt.x, pt.z);
+                     u.attackTarget = null;
+                 });
+                 spawnPulse(pt.x, getHeight(pt.x, pt.z), pt.z, 0xFFFFFF);
+             } else {
+                 performAction(pt.x, pt.z);
+             }
         }
     }
     function onWheel(e) { viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, viewScale + e.deltaY * 0.05)); updateCameraZoom(); updateCameraPosition(); }
