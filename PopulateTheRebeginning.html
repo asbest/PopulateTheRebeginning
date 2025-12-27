@@ -82,10 +82,23 @@
             <div class="tab-btn" id="btn-multiselect" onclick="toggleMultiSelect()">⊕</div>
         </div>
         
-        <!-- Spells Menu -->
-        <div id="menu-spells" class="action-menu">
+        <!-- Select Info / Mode -->
+        <div id="menu-select" class="action-menu">
+            <div id="action-bar" style="color:white; justify-content:center; padding-top:20px;">
+                Wähle eine Einheit
+            </div>
+        </div>
+
+        <!-- Basic Unit Actions (Move) -->
+        <div id="menu-basic" class="action-menu" style="display:none;">
             <div id="action-bar">
-                <div class="action-btn active" onclick="selectAction('move')" id="btn-move">👣<span class="label">Gehen</span></div>
+                <div class="action-btn" onclick="selectAction('move')" id="btn-move">👣<span class="label">Gehen</span></div>
+            </div>
+        </div>
+
+        <!-- Spells Menu -->
+        <div id="menu-spells" class="action-menu" style="display:none;">
+            <div id="action-bar">
                 <div class="action-btn" onclick="selectAction('blast')" id="btn-blast">🔥<span class="label">Feuer (10)</span></div>
                 <div class="action-btn" onclick="selectAction('raise')" id="btn-raise">▲<span class="label">Heben (5)</span></div>
                 <div class="action-btn" onclick="selectAction('lower')" id="btn-lower">▼<span class="label">Senken (5)</span></div>
@@ -141,7 +154,7 @@
     let selectedUnits = [];
     let cameraLookAt = new THREE.Vector3(0, 0, 0);
     let viewScale = 35; 
-    let currentAction = 'move';
+    let currentAction = 'select';
     let mana = 100;
     
     // Input
@@ -250,10 +263,26 @@
 
     // --- UI SYSTEM ---
     window.switchTab = function(tab) {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById(`tab-${tab}`).classList.add('active');
+        // If switching to select tab, set action to select
+        if(tab === 'select') {
+            currentAction = 'select';
+            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
+        }
+        // If switching to basic tab, default to move
+        if(tab === 'basic') {
+            selectAction('move');
+        }
+
+        document.querySelectorAll('.tab-btn').forEach(b => {
+             // Only remove active from main tabs, multiselect is separate
+             if(b.id !== 'btn-multiselect') b.classList.remove('active');
+        });
+        const tabBtn = document.getElementById(`tab-${tab}`);
+        if(tabBtn) tabBtn.classList.add('active');
+
         document.querySelectorAll('.action-menu').forEach(m => m.style.display = 'none');
-        document.getElementById(`menu-${tab}`).style.display = 'block';
+        const menu = document.getElementById(`menu-${tab}`);
+        if(menu) menu.style.display = 'block';
     }
 
     window.selectAction = function(action) {
@@ -263,11 +292,33 @@
         if(btn) btn.classList.add('active');
     }
 
+    function updateContextMenus() {
+        const hasShaman = selectedUnits.some(u => u.isShaman);
+        const hasBrave = selectedUnits.some(u => u.type === 'wild');
+        const hasSelection = selectedUnits.length > 0;
+
+        document.getElementById('tab-spells').style.display = hasShaman ? 'flex' : 'none';
+        document.getElementById('tab-build').style.display = hasBrave ? 'flex' : 'none';
+        document.getElementById('tab-basic').style.display = hasSelection ? 'flex' : 'none';
+
+        // Auto-switch tabs if needed
+        if(hasSelection) {
+            if(hasShaman) switchTab('spells');
+            else if(hasBrave) switchTab('build');
+            else switchTab('basic');
+        } else {
+            switchTab('select');
+        }
+    }
+
     // --- AKTIONEN ---
     function performAction(x, z) {
         if(currentAction === 'move') {
-            if(shaman && shaman.state !== 'dead') {
-                shaman.goto(x, z);
+            if(selectedUnits.length > 0) {
+                selectedUnits.forEach(u => {
+                    u.goto(x, z);
+                    u.attackTarget = null;
+                });
                 spawnPulse(x, getHeight(x, z), z, 0xFFFFFF);
             }
             return;
