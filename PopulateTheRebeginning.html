@@ -137,6 +137,7 @@
     const buildings = []; 
     
     let shaman;
+    let selectedUnits = [];
     let cameraLookAt = new THREE.Vector3(0, 0, 0);
     let viewScale = 35; 
     let currentAction = 'move';
@@ -290,7 +291,7 @@
     }
 
     // --- GEBÄUDE SYSTEM ---
-    function createBuilding(type, x, z) {
+    function createBuilding(type, x, z, faction = 0) {
         const baseH = getHeight(x, z);
         const radius = 3;
         
@@ -339,6 +340,7 @@
                 hpBar: hpBar,
                 hpGroup: hpGroup,
                 type: type, 
+                faction: faction,
                 hp: maxHp, 
                 maxHp: maxHp,
                 takeDamage: function(amount) {
@@ -354,8 +356,17 @@
                     scene.remove(this.mesh);
                     spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, COLORS.wood, 20);
                 },
-                update: function() {
+                update: function(dt) {
                     this.hpGroup.lookAt(camera.position);
+                    if(this.training) {
+                        this.trainTimer -= dt;
+                        if(this.trainTimer <= 0) {
+                            this.training = false;
+                            const u = new Humanoid(this.trainFaction, this.trainType, this.mesh.position.x + 2, this.mesh.position.z + 2);
+                            units.push(u);
+                            spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFD700);
+                        }
+                    }
                 }
             };
             
@@ -365,7 +376,10 @@
             if(type === 'hut') {
                 setTimeout(() => {
                     if(!building.dead) {
-                        const u = new Humanoid(COLORS.shirt_wild, x+2, z+2, false);
+                        // Assuming building belongs to player for now. Enemy AI will need its own building creation logic.
+                        // Or we infer faction from proximity or store faction in building.
+                        // For simplicity, let's assume buildings created via UI are Player (0).
+                        const u = new Humanoid(faction, 'wild', x+2, z+2);
                         units.push(u);
                         spawnPulse(x+2, baseH, z+2, 0xFFFFFF);
                     }
@@ -532,17 +546,34 @@
 
     // --- CHARAKTER & PHYSIK ---
     class Humanoid {
-        constructor(color, x, z, isShaman = false) {
+        constructor(faction, type, x, z) {
+            this.faction = faction; // 0 = Player, 1 = Enemy
+            this.type = type; // 'wild', 'warrior', 'firewarrior', 'spy', 'shaman'
+            this.isShaman = (type === 'shaman');
+
+            // Stats
+            this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6;
+            if(type === 'warrior') { this.maxHp = 200; this.damage = 15; }
+            if(type === 'firewarrior') { this.maxHp = 120; this.damage = 25; this.range = 12; this.attackSpeed = 2.0; }
+            if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; }
+
+            this.hp = this.maxHp; this.recoverTimer = 0;
+
+            // Visuals
             this.mesh = new THREE.Group();
-            this.maxHp = 100; this.hp = 100; this.isShaman = isShaman; this.recoverTimer = 0; 
+            const color = faction === 0 ? COLORS.blue : COLORS.red;
             const skinMat = new THREE.MeshLambertMaterial({color: COLORS.skin});
             const shirtMat = new THREE.MeshLambertMaterial({color: color});
             
+            // Selection Ring
+            this.selectRing = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.6, 16), new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}));
+            this.selectRing.rotation.x = -Math.PI/2; this.selectRing.visible = false; this.mesh.add(this.selectRing);
+
             // HP Bar
             this.hpGroup = new THREE.Group(); this.hpGroup.position.set(0, 2.3, 0);
             this.hpGroup.add(new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.15), new THREE.MeshBasicMaterial({color: 0x880000})));
             const fgGeo = new THREE.PlaneGeometry(1.0, 0.15); fgGeo.translate(0.5, 0, 0); 
-            this.hpBar = new THREE.Mesh(fgGeo, new THREE.MeshBasicMaterial({color: 0x00FF00}));
+            this.hpBar = new THREE.Mesh(fgGeo, new THREE.MeshBasicMaterial({color: faction === 0 ? 0x00FF00 : 0xFF0000}));
             this.hpBar.position.x = -0.5; this.hpGroup.add(this.hpBar);
             this.mesh.add(this.hpGroup);
 
@@ -552,12 +583,19 @@
             this.head = new THREE.Group(); this.head.position.y = 0.4; this.torso.add(this.head);
             this.head.add(new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.3), skinMat));
 
-            if(isShaman) {
+            // Props
+            if(this.isShaman) {
                 const mask = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.1), new THREE.MeshLambertMaterial({color: 0xFFD700}));
                 mask.position.z = 0.16; this.head.add(mask);
                 const hornGeo = new THREE.ConeGeometry(0.04, 0.3, 4);
                 const h1 = new THREE.Mesh(hornGeo, new THREE.MeshLambertMaterial({color:0xFFFFFF})); h1.position.set(0.15, 0.2, 0); h1.rotation.z = -0.3;
                 const h2 = h1.clone(); h2.position.set(-0.15, 0.2, 0); h2.rotation.z = 0.3; this.head.add(h1); this.head.add(h2);
+            } else if (type === 'warrior') {
+                const helm = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8, 0, Math.PI * 2, 0, Math.PI/2), new THREE.MeshLambertMaterial({color: 0x555555}));
+                helm.position.y = 0.1; this.head.add(helm);
+            } else if (type === 'firewarrior') {
+                const mask = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.1), new THREE.MeshLambertMaterial({color: 0xFF4500}));
+                mask.position.z = 0.16; this.head.add(mask);
             }
 
             const createLimb = (w, h, mat, px, py, pz) => {
@@ -568,6 +606,14 @@
             this.armL = createLimb(0.12, 0.45, skinMat, 0.26, 0.15, 0);
             this.armR = createLimb(0.12, 0.45, skinMat, -0.26, 0.15, 0);
             this.torso.add(this.armL); this.torso.add(this.armR);
+
+            // Weapons
+            if(type === 'warrior') {
+                const sword = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.6, 0.1), new THREE.MeshLambertMaterial({color: 0xDDDDDD}));
+                sword.position.y = -0.3; sword.position.z = 0.1; sword.rotation.x = Math.PI/2;
+                this.armR.children[0].add(sword);
+            }
+
             this.legL = createLimb(0.13, 0.55, shirtMat, 0.1, 0.65, 0);
             this.legR = createLimb(0.13, 0.55, shirtMat, -0.1, 0.65, 0);
             this.mesh.add(this.legL); this.mesh.add(this.legR);
@@ -575,7 +621,8 @@
             this.mesh.position.set(x, getHeight(x,z), z);
             scene.add(this.mesh);
             this.velocity = new THREE.Vector3(0,0,0);
-            this.isGrounded = true; this.target = null; this.state = 'idle'; this.animTime = Math.random() * 100; 
+            this.isGrounded = true; this.target = null; this.attackTarget = null; this.state = 'idle'; this.animTime = Math.random() * 100;
+            this.lastAttackTime = 0;
         }
 
         lookAtTarget(pos) {
@@ -606,6 +653,49 @@
             this.target = new THREE.Vector3(x, 0, z); this.state = 'move';
         }
         
+        findTarget() {
+             // Find closest enemy
+             let minDist = 1000;
+             let closest = null;
+             units.forEach(u => {
+                 if(u.faction !== this.faction && u.state !== 'dead') {
+                     const d = this.mesh.position.distanceTo(u.mesh.position);
+                     if(d < 30 && d < minDist) {
+                         minDist = d; closest = u;
+                     }
+                 }
+             });
+             // Also check for buildings?
+             return closest;
+        }
+
+        attack() {
+            if(!this.attackTarget || this.attackTarget.state === 'dead') {
+                 this.state = 'idle'; this.attackTarget = null; return;
+            }
+
+            this.mesh.lookAt(this.attackTarget.mesh.position.x, this.mesh.position.y, this.attackTarget.mesh.position.z);
+
+            // Animation
+            const t = this.animTime * 10;
+            this.armR.rotation.x = -Math.PI/2 + Math.sin(t) * 0.5; // Swing
+
+            // Deal damage at right time
+            // Simplified: just check cooldown
+            if(clock.getElapsedTime() - this.lastAttackTime > (1.0/this.attackSpeed)) {
+                this.lastAttackTime = clock.getElapsedTime();
+                if(this.type === 'firewarrior') {
+                    // Spawn Fireball
+                     const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+                     const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
+                     projectiles.push(new Fireball(startPos, targetPos));
+                } else {
+                    // Melee
+                    this.attackTarget.takeDamage(this.damage);
+                }
+            }
+        }
+
         update(dt) {
             this.hpGroup.lookAt(camera.position); this.animTime += dt;
             if(!this.isGrounded) this.velocity.y -= 30 * dt; 
@@ -619,6 +709,35 @@
                 this.isGrounded = true; this.velocity.y = 0;
                 if(this.state === 'stunned' && this.velocity.length() < 1) { this.state = 'idle'; this.mesh.rotation.z = 0; this.mesh.rotation.x = 0; }
             } else if (this.mesh.position.y > groundH + 0.35) { this.isGrounded = false; }
+
+            // Building Entry Check for Training
+            if(this.type === 'wild' && this.state !== 'dead' && this.faction === 0) {
+                 buildings.forEach(b => {
+                     // Check if building is ready to train?
+                     // For now instant training logic
+                     const dist = this.mesh.position.distanceTo(b.mesh.position);
+                     if(dist < 2.0 && b.hp > 0 && !b.training) {
+                         let newType = null;
+                         if(b.type === 'warrior') newType = 'warrior';
+                         if(b.type === 'fire') newType = 'firewarrior';
+                         if(b.type === 'spy') newType = 'spy'; // not implemented fully visual wise but logic is here
+
+                         if(newType) {
+                             // Enter building
+                             this.die(); // Remove old unit
+                             scene.remove(this.mesh); // Hide immediately
+                             this.hp = 0; // Ensure cleaned up
+
+                             // Start training timer on building
+                             b.training = true;
+                             b.trainTimer = 2.0;
+                             b.trainType = newType;
+                             b.trainFaction = this.faction;
+                             spawnPulse(b.mesh.position.x, b.mesh.position.y+2, b.mesh.position.z, 0x00FF00);
+                         }
+                     }
+                 });
+            }
 
             if (this.state === 'dead') {
                 if(this.mesh.rotation.x > -Math.PI/2) this.mesh.rotation.x -= dt * 5;
@@ -639,13 +758,42 @@
                     if(this.recoverTimer <= 0) { this.state = 'idle'; this.mesh.rotation.x = 0; }
                 }
             }
+            else if(this.state === 'combat') {
+                if(!this.attackTarget || this.attackTarget.state === 'dead') {
+                    // Try find new target
+                    this.attackTarget = this.findTarget();
+                    if(!this.attackTarget) { this.state = 'idle'; return; }
+                }
+
+                const dist = this.mesh.position.distanceTo(this.attackTarget.mesh.position);
+                if(dist <= this.range) {
+                    // In range, attack
+                    this.velocity.set(0,0,0);
+                    this.attack();
+                } else {
+                    // Move towards
+                    const dx = this.attackTarget.mesh.position.x - this.mesh.position.x;
+                    const dz = this.attackTarget.mesh.position.z - this.mesh.position.z;
+                    const dir = new THREE.Vector3(dx, 0, dz).normalize();
+                    const speed = this.moveSpeed;
+                    this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
+                    this.mesh.rotation.y = Math.atan2(dx, dz);
+
+                    // Walk Anim
+                    const walkSpeed = 10; const amp = 0.8;
+                    this.legL.rotation.x = Math.sin(this.animTime * walkSpeed) * amp;
+                    this.legR.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp;
+                    this.armL.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp * 0.6;
+                    this.armR.rotation.x = Math.sin(this.animTime * walkSpeed) * amp * 0.6;
+                }
+            }
             else if(this.state === 'move' && this.target && this.isGrounded) {
                 const dx = this.target.x - this.mesh.position.x;
                 const dz = this.target.z - this.mesh.position.z;
                 const dist = Math.sqrt(dx*dx + dz*dz);
                 if(dist < 0.5) { this.state = 'idle'; this.velocity.set(0,0,0); this.resetAnim(); } 
                 else {
-                    const speed = 6;
+                    const speed = this.moveSpeed;
                     const dir = new THREE.Vector3(dx, 0, dz).normalize();
                     this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
                     this.mesh.rotation.y = Math.atan2(dx, dz); 
@@ -658,6 +806,16 @@
                     this.torso.position.y = 0.9 + Math.abs(Math.sin(this.animTime * walkSpeed)) * 0.05;
                 }
             } else {
+                // Idle Check Aggro
+                if(this.type !== 'wild') { // Braves don't auto aggro usually? Or do they? In Populous they flee.
+                    // For now, only warriors/shamans auto aggro
+                    const target = this.findTarget();
+                    if(target) {
+                        this.attackTarget = target;
+                        this.state = 'combat';
+                    }
+                }
+
                 this.resetAnim();
                 this.torso.position.y = 0.9 + Math.sin(this.animTime * 2) * 0.02;
                 this.armL.rotation.z = Math.sin(this.animTime) * 0.05 + 0.1;
@@ -673,6 +831,67 @@
             this.armR.rotation.x += (0 - this.armR.rotation.x) * lerp;
         }
     }
+
+    // --- ENEMY AI ---
+    class EnemyAI {
+        constructor() {
+            this.timer = 0;
+            this.state = 'build'; // 'build', 'attack'
+            this.baseX = 0;
+            this.baseZ = 0;
+        }
+
+        init(x, z) {
+            this.baseX = x;
+            this.baseZ = z;
+            // Create initial base
+            createBuilding('hut', x, z, 1);
+            // Create some units
+            for(let i=0; i<3; i++) {
+                units.push(new Humanoid(1, 'wild', x + (Math.random()-0.5)*5, z + (Math.random()-0.5)*5));
+            }
+            // Create a tower
+            createBuilding('tower', x + 5, z + 5, 1);
+        }
+
+        update(dt) {
+            this.timer += dt;
+            if(this.timer > 5.0) {
+                this.timer = 0;
+                this.think();
+            }
+        }
+
+        think() {
+            // Get Enemy Units
+            const myUnits = units.filter(u => u.faction === 1 && u.state !== 'dead');
+            const myBuildings = buildings.filter(b => true); // Need faction on buildings really.
+            // For now assume buildings near base are mine.
+
+            // 1. Train Units
+            // If I have Braves and Buildings, train.
+            // Simplified: Just spawn occasionally for challenge.
+            if(Math.random() < 0.3) {
+                 const type = Math.random() > 0.5 ? 'warrior' : 'firewarrior';
+                 units.push(new Humanoid(1, type, this.baseX + (Math.random()-0.5)*10, this.baseZ + (Math.random()-0.5)*10));
+            }
+
+            // 2. Attack Player
+            if(myUnits.length > 5) {
+                // Send some to attack player shaman
+                const attackers = myUnits.filter(u => u.type !== 'wild' && u.state === 'idle');
+                const target = shaman;
+                if(target && target.state !== 'dead') {
+                    attackers.forEach(u => {
+                        u.goto(target.mesh.position.x, target.mesh.position.z);
+                        u.attackTarget = target;
+                        u.state = 'combat'; // Force combat state approach
+                    });
+                }
+            }
+        }
+    }
+    const enemyAI = new EnemyAI();
 
     // --- HELFER KLASSEN (Partikel, Feuerball) ---
     class Particle {
@@ -738,9 +957,12 @@
         if(!found) r = 0;
         cameraLookAt.set(r, 0, r); updateCameraPosition(); updateChunks(); 
         createShaman(r, r); createWildmen(r, r);
+
+        // Init Enemy
+        enemyAI.init(-r - 40, -r - 40);
     }
-    function createShaman(x, z) { shaman = new Humanoid(COLORS.shirt_shaman, x, z, true); units.push(shaman); }
-    function createWildmen(cx, cz) { for(let i=0; i<6; i++) { let x = cx + (Math.random()-0.5)*30; let z = cz + (Math.random()-0.5)*30; if(getHeight(x, z) > 2.5) units.push(new Humanoid(COLORS.shirt_wild, x, z, false)); } }
+    function createShaman(x, z) { shaman = new Humanoid(0, 'shaman', x, z); units.push(shaman); }
+    function createWildmen(cx, cz) { for(let i=0; i<6; i++) { let x = cx + (Math.random()-0.5)*30; let z = cz + (Math.random()-0.5)*30; if(getHeight(x, z) > 2.5) units.push(new Humanoid(0, 'wild', x, z)); } }
     
     function updateUI() { document.getElementById('mana-text').innerText = Math.floor(mana); document.getElementById('mana-fill').style.width = mana + '%'; }
 
@@ -750,7 +972,72 @@
     function onPointerMove(e) { if(!isDragging) return; const dx = e.clientX - dragStart.x; const dy = e.clientY - dragStart.y; const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize(); const rgt = new THREE.Vector3(); rgt.crossVectors(fwd, camera.up); rgt.y = 0; rgt.normalize(); const speed = 0.002 * viewScale; cameraLookAt.addScaledVector(rgt, -dx * speed); cameraLookAt.addScaledVector(fwd, dy * speed); updateCameraPosition(); dragStart = {x: e.clientX, y: e.clientY}; }
     function onTouchMove(e) { if(e.touches.length === 1) { e.preventDefault(); onPointerMove(e.touches[0]); } else if(e.touches.length === 2) { e.preventDefault(); const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY; const dist = Math.sqrt(dx*dx+dy*dy); if(pinchStartDist > 0) { viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinchStartScale * (pinchStartDist / dist))); updateCameraZoom(); updateCameraPosition(); } } }
     function onPointerUp(e) { isDragging = false; let x = e.clientX || (e.changedTouches ? e.changedTouches[0].clientX : 0); let y = e.clientY || (e.changedTouches ? e.changedTouches[0].clientY : 0); if(Math.sqrt((x-tapStart.x)**2 + (y-tapStart.y)**2) < 10) handleTap(x, y); }
-    function handleTap(x, y) { const mouse = new THREE.Vector2((x/window.innerWidth)*2-1, -(y/window.innerHeight)*2+1); raycaster.setFromCamera(mouse, camera); const meshes = []; for(let k in chunks) meshes.push(chunks[k].children[0]); const hits = raycaster.intersectObjects(meshes); if(hits.length > 0) performAction(hits[0].point.x, hits[0].point.z); }
+    function handleTap(x, y) {
+        const mouse = new THREE.Vector2((x/window.innerWidth)*2-1, -(y/window.innerHeight)*2+1);
+        raycaster.setFromCamera(mouse, camera);
+
+        // 1. Check for Unit Clicks
+        const unitMeshes = [];
+        const meshToUnit = new Map();
+        units.forEach(u => {
+            if(u.state !== 'dead') {
+                u.mesh.traverse(c => {
+                     if(c.isMesh) {
+                         unitMeshes.push(c);
+                         meshToUnit.set(c, u);
+                     }
+                });
+            }
+        });
+
+        const unitHits = raycaster.intersectObjects(unitMeshes);
+        if (unitHits.length > 0) {
+            const hitUnit = meshToUnit.get(unitHits[0].object);
+            if(hitUnit) {
+                if(hitUnit.faction === 0) {
+                    // Toggle Selection for Player Units
+                    if(!selectedUnits.includes(hitUnit)) {
+                         selectedUnits.push(hitUnit);
+                         hitUnit.selectRing.visible = true;
+                    } else {
+                         selectedUnits = selectedUnits.filter(u => u !== hitUnit);
+                         hitUnit.selectRing.visible = false;
+                    }
+                    return;
+                } else {
+                    // Enemy Unit Clicked -> Attack Target
+                    if(selectedUnits.length > 0) {
+                        selectedUnits.forEach(u => {
+                            if(!u.isShaman) { // Shaman might need spell to attack, or can auto attack?
+                                u.attackTarget = hitUnit;
+                                u.state = 'combat';
+                            }
+                        });
+                        spawnPulse(hitUnit.mesh.position.x, hitUnit.mesh.position.y, hitUnit.mesh.position.z, 0xFF0000);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // 2. Terrain Click
+        const meshes = [];
+        for(let k in chunks) meshes.push(chunks[k].children[0]);
+        const hits = raycaster.intersectObjects(meshes);
+        if(hits.length > 0) {
+             const pt = hits[0].point;
+             // If we are in 'move' mode and have units selected, move them
+             if(currentAction === 'move' && selectedUnits.length > 0) {
+                 selectedUnits.forEach(u => {
+                     u.goto(pt.x, pt.z);
+                     u.attackTarget = null;
+                 });
+                 spawnPulse(pt.x, getHeight(pt.x, pt.z), pt.z, 0xFFFFFF);
+             } else {
+                 performAction(pt.x, pt.z);
+             }
+        }
+    }
     function onWheel(e) { viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, viewScale + e.deltaY * 0.05)); updateCameraZoom(); updateCameraPosition(); }
     function updateCameraZoom() { const aspect = window.innerWidth / window.innerHeight; camera.left = -viewScale*aspect; camera.right = viewScale*aspect; camera.top = viewScale; camera.bottom = -viewScale; camera.updateProjectionMatrix(); }
     function updateCameraPosition() { const offsetX = 30; const offsetZ = 30; const targetX = cameraLookAt.x + offsetX; const targetZ = cameraLookAt.z + offsetZ; let targetY = 25 + (viewScale / MAX_ZOOM) * 35; const groundUnderCamera = getHeight(targetX, targetZ); if(targetY < groundUnderCamera + 5) { targetY = groundUnderCamera + 5; } camera.position.set(targetX, targetY, targetZ); camera.lookAt(cameraLookAt); }
@@ -758,10 +1045,15 @@
 
     function animate() {
         requestAnimationFrame(animate); const dt = Math.min(clock.getDelta(), 0.1);
-        if(mana < 100) { mana += dt * 2; updateUI(); }
+        // Mana Regeneration linked to population
+        const playerBraves = units.filter(u => u.faction === 0 && u.type === 'wild').length;
+        const manaRate = 1.0 + (playerBraves * 0.2); // Base + bonus per brave
+
+        if(mana < 100) { mana += dt * manaRate; updateUI(); }
         updateChunks();
+        enemyAI.update(dt);
         units.forEach(u => u.update(dt));
-        buildings.forEach(b => b.update());
+        buildings.forEach(b => b.update(dt));
         
         // Remove dead
         for(let i = buildings.length-1; i>=0; i--) { if(buildings[i].dead) buildings.splice(i, 1); }
