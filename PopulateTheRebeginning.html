@@ -1013,20 +1013,13 @@
             const hitUnit = meshToUnit.get(unitHits[0].object);
             if(hitUnit) {
                 if(hitUnit.faction === 0) {
-                    if(multiSelectMode) {
-                        // Toggle Selection for Player Units in Multi Mode
-                        if(!selectedUnits.includes(hitUnit)) {
-                             selectedUnits.push(hitUnit);
-                             hitUnit.selectRing.visible = true;
-                        } else {
-                             selectedUnits = selectedUnits.filter(u => u !== hitUnit);
-                             hitUnit.selectRing.visible = false;
-                        }
+                    // Toggle Selection for Player Units
+                    if(!selectedUnits.includes(hitUnit)) {
+                         selectedUnits.push(hitUnit);
+                         hitUnit.selectRing.visible = true;
                     } else {
-                        // Single Select Mode
-                        selectedUnits.forEach(u => u.selectRing.visible = false);
-                        selectedUnits = [hitUnit];
-                        hitUnit.selectRing.visible = true;
+                         selectedUnits = selectedUnits.filter(u => u !== hitUnit);
+                         hitUnit.selectRing.visible = false;
                     }
                     return;
                 } else {
