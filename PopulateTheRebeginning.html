@@ -1210,14 +1210,14 @@
 
     // --- HELFER KLASSEN (Partikel, Feuerball) ---
     class Particle {
-        constructor(pos, color, size, life) {
+        constructor(pos, color, size, life, gravity = 20) {
             this.mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshBasicMaterial({color: color}));
             this.mesh.position.copy(pos);
             this.vel = new THREE.Vector3((Math.random()-0.5)*10, Math.random()*10+5, (Math.random()-0.5)*10);
-            this.life = life; scene.add(this.mesh);
+            this.life = life; this.gravity = gravity; scene.add(this.mesh);
         }
         update(dt) {
-            this.vel.y -= 20 * dt; this.mesh.position.addScaledVector(this.vel, dt);
+            this.vel.y -= this.gravity * dt; this.mesh.position.addScaledVector(this.vel, dt);
             this.mesh.rotation.x += dt*2; this.mesh.rotation.y += dt*2; this.life -= dt;
             const h = getHeight(this.mesh.position.x, this.mesh.position.z);
             if(this.mesh.position.y < h) { this.mesh.position.y = h; this.vel.y *= -0.5; this.vel.x *= 0.8; this.vel.z *= 0.8; }
@@ -1234,7 +1234,7 @@
         update(dt) {
             if(!this.active) return false;
             this.mesh.position.addScaledVector(this.dir, this.speed * dt); this.trailTimer += dt;
-            if(this.trailTimer > 0.05) { particles.push(new Particle(this.mesh.position, 0xFFA500, 0.2, 0.5)); this.trailTimer = 0; }
+            if(this.trailTimer > 0.05) { particles.push(new Particle(this.mesh.position, 0xFFA500, 0.05, 0.5)); this.trailTimer = 0; }
             const dist = this.mesh.position.distanceTo(this.target);
             if(dist < 1.0 || getHeight(this.mesh.position.x, this.mesh.position.z) > this.mesh.position.y) { this.explode(); return false; } return true;
         }
@@ -1264,8 +1264,13 @@
         }
     }
 
-    function spawnExplosion(x, y, z, color, count) { for(let i=0; i<count; i++) particles.push(new Particle(new THREE.Vector3(x, y, z), color, 0.3+Math.random()*0.3, 1.0+Math.random())); }
-    function spawnPulse(x, y, z, color) { particles.push(new Particle(new THREE.Vector3(x, y+0.5, z), color, 0.2, 0.5)); }
+    function spawnExplosion(x, y, z, color, count) { for(let i=0; i<count; i++) particles.push(new Particle(new THREE.Vector3(x, y, z), color, 0.1+Math.random()*0.1, 1.0+Math.random())); }
+    function spawnPulse(x, y, z, color) { particles.push(new Particle(new THREE.Vector3(x, y+0.5, z), color, 0.05, 0.5)); }
+    function spawnHealing(x, y, z) {
+        const p = new Particle(new THREE.Vector3(x, y, z), 0x00FF00, 0.1, 1.0, -2);
+        p.vel.set((Math.random()-0.5)*2, 1.0, (Math.random()-0.5)*2);
+        particles.push(p);
+    }
 
     function findSafeSpawnAndStart() {
         let r = 0; let found = false;
