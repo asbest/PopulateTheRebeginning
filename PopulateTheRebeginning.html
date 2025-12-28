@@ -120,14 +120,12 @@
 <div id="ui-layer">
     <div id="unit-list"></div>
     <div id="top-bar">
-        <h1>Populous</h1>
         <div id="mana-bar"><div id="mana-fill"></div></div>
         <p>Mana: <span id="mana-text">100</span></p>
     </div>
 
     <div id="bottom-ui">
         <div id="tabs">
-            <div class="tab-btn active" id="tab-select" onclick="switchTab('select')">👆</div>
             <div class="tab-btn" id="tab-basic" onclick="switchTab('basic')" style="display:none;">👣</div>
             <div class="tab-btn" id="tab-spells" onclick="switchTab('spells')" style="display:none;">⚡</div>
             <div class="tab-btn" id="tab-build" onclick="switchTab('build')" style="display:none;">🔨</div>
@@ -187,6 +185,85 @@
         water: 0x1E90FF, sand: 0xEEDC82, grass: 0x228B22, rock: 0x696969, snow: 0xFFFFFF,
         lava: 0xCF1020, skin: 0xD2B48C, shirt_wild: 0x8B4513, shirt_shaman: 0xFF4500,
         wood: 0x8B4513, straw: 0xDAA520, stone: 0x808080, red: 0x8B0000, yellow: 0xFFD700, blue: 0x4169E1
+    };
+
+    // --- AUDIO SYSTEM ---
+    const SoundManager = {
+        ctx: null,
+        init: function() {
+            if (this.ctx) return;
+            window.AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContext();
+        },
+        playTone: function(freq, type, duration, vol=0.1) {
+            if(!this.ctx) this.init();
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + duration);
+        },
+        playNoise: function(duration, vol=0.1) {
+            if(!this.ctx) this.init();
+            const bufferSize = this.ctx.sampleRate * duration;
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = buffer;
+            const gain = this.ctx.createGain();
+            gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+            noise.connect(gain);
+            gain.connect(this.ctx.destination);
+            noise.start();
+        },
+        playSound: function(name) {
+            if(!this.ctx) this.init();
+            if(this.ctx.state === 'suspended') this.ctx.resume();
+
+            switch(name) {
+                case 'attack':
+                    this.playNoise(0.1, 0.2);
+                    this.playTone(150, 'square', 0.1, 0.1);
+                    break;
+                case 'fireball':
+                    this.playTone(400, 'sine', 0.3, 0.1);
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.3);
+                    gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.3);
+                    break;
+                case 'explosion':
+                    this.playNoise(0.5, 0.5);
+                    this.playTone(50, 'sawtooth', 0.5, 0.3);
+                    break;
+                case 'magic':
+                    this.playTone(800, 'sine', 0.5, 0.1);
+                    this.playTone(1200, 'sine', 0.5, 0.05);
+                    break;
+                case 'construct':
+                     this.playTone(200, 'square', 0.1, 0.1);
+                     setTimeout(()=>this.playTone(200, 'square', 0.1, 0.1), 200);
+                     break;
+                case 'rumble':
+                    this.playTone(80, 'sawtooth', 0.5, 0.2);
+                    break;
+            }
+        }
     };
 
     // --- GLOBALE SYSTEME ---
@@ -475,6 +552,7 @@
             const h = getHeight(x, z);
             const targetPos = new THREE.Vector3(x, h, z);
             projectiles.push(new Fireball(startPos, targetPos));
+            SoundManager.playSound('fireball');
             
             const dx = targetPos.x - shaman.mesh.position.x;
             const dz = targetPos.z - shaman.mesh.position.z;
@@ -483,13 +561,16 @@
         else if (currentAction === 'raise') {
             modifyTerrain(x, z, 5, 2.0); 
             spawnExplosion(x, getHeight(x, z), z, 0x00FF00, 10);
+            SoundManager.playSound('rumble');
         }
         else if (currentAction === 'lower') {
             modifyTerrain(x, z, 5, -2.0);
             spawnExplosion(x, getHeight(x, z), z, 0x0000FF, 10);
+            SoundManager.playSound('rumble');
         }
         else if (currentAction === 'volcano') {
             createVolcano(x, z);
+            SoundManager.playSound('explosion');
         }
         else if (currentAction.startsWith('build_')) {
             const type = currentAction.replace('build_', '');
@@ -499,6 +580,7 @@
 
     // --- GEBÄUDE SYSTEM ---
     function createBuilding(type, x, z, faction = 0) {
+        SoundManager.playSound('construct');
         const baseH = getHeight(x, z);
         const radius = 3;
         
@@ -896,9 +978,11 @@
                      const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
                      const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
                      projectiles.push(new Fireball(startPos, targetPos));
+                     SoundManager.playSound('fireball');
                 } else {
                     // Melee
                     this.attackTarget.takeDamage(this.damage);
+                    SoundManager.playSound('attack');
                 }
             }
         }
@@ -1133,6 +1217,7 @@
         explode() {
             scene.remove(this.mesh); this.active = false;
             spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFF4500, 20);
+            SoundManager.playSound('explosion');
             const impactPos = this.mesh.position;
             // Einheiten
             units.forEach(u => {
@@ -1174,7 +1259,11 @@
     function updateUI() { document.getElementById('mana-text').innerText = Math.floor(mana); document.getElementById('mana-fill').style.width = mana + '%'; }
 
     // Input Handling
-    function onPointerDown(e) { isDragging = true; dragStart = {x: e.clientX, y: e.clientY}; tapStart = {x: e.clientX, y: e.clientY}; }
+    function onPointerDown(e) {
+        SoundManager.init();
+        if(SoundManager.ctx.state === 'suspended') SoundManager.ctx.resume();
+        isDragging = true; dragStart = {x: e.clientX, y: e.clientY}; tapStart = {x: e.clientX, y: e.clientY};
+    }
     function onTouchStart(e) { e.preventDefault(); if(e.touches.length === 1) onPointerDown(e.touches[0]); else if(e.touches.length === 2) { isDragging = false; const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY; pinchStartDist = Math.sqrt(dx*dx+dy*dy); pinchStartScale = viewScale; } }
     function onPointerMove(e) { if(!isDragging) return; const dx = e.clientX - dragStart.x; const dy = e.clientY - dragStart.y; const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize(); const rgt = new THREE.Vector3(); rgt.crossVectors(fwd, camera.up); rgt.y = 0; rgt.normalize(); const speed = 0.002 * viewScale; cameraLookAt.addScaledVector(rgt, -dx * speed); cameraLookAt.addScaledVector(fwd, dy * speed); updateCameraPosition(); dragStart = {x: e.clientX, y: e.clientY}; }
     function onTouchMove(e) { if(e.touches.length === 1) { e.preventDefault(); onPointerMove(e.touches[0]); } else if(e.touches.length === 2) { e.preventDefault(); const dx = e.touches[0].clientX - e.touches[1].clientX; const dy = e.touches[0].clientY - e.touches[1].clientY; const dist = Math.sqrt(dx*dx+dy*dy); if(pinchStartDist > 0) { viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinchStartScale * (pinchStartDist / dist))); updateCameraZoom(); updateCameraPosition(); } } }
