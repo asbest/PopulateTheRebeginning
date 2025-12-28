@@ -79,6 +79,7 @@
             pointer-events: auto;
             scrollbar-width: none;
             z-index: 10;
+            touch-action: pan-y;
         }
         #unit-list::-webkit-scrollbar { display: none; }
 
@@ -1038,6 +1039,26 @@
                 if(this.mesh.position.y > groundH - 0.2) this.mesh.position.y -= dt * 0.1;
                 return; 
             }
+
+            // Passive Healing near Buildings
+            if(this.hp < this.maxHp && this.state !== 'combat') {
+                let nearBuilding = false;
+                for(let b of buildings) {
+                    if(b.faction === this.faction && !b.dead) {
+                        const dist = this.mesh.position.distanceTo(b.mesh.position);
+                        if(dist < 8.0) {
+                            nearBuilding = true;
+                            break;
+                        }
+                    }
+                }
+                if(nearBuilding) {
+                    this.hp += dt * 5; // 5 HP per second
+                    if(this.hp > this.maxHp) this.hp = this.maxHp;
+                    this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
+                }
+            }
+
             if(this.state === 'stunned') {
                 if(this.velocity.length() > 2 || !this.isGrounded) {
                      this.mesh.rotation.x += dt * 5; this.mesh.rotation.z += dt * 3;
