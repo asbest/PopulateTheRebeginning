@@ -404,11 +404,13 @@
                          u.selectRing.visible = true;
                      }
                      updateContextMenus();
-                     cameraLookAt.copy(u.mesh.position);
-                } else {
-                     cameraLookAt.copy(u.mesh.position);
                 }
                 updateUnitListSelection();
+            };
+
+            item.ondblclick = (e) => {
+                e.stopPropagation();
+                cameraLookAt.copy(u.mesh.position);
             };
 
             u.listItem = item;
