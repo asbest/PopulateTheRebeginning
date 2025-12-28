@@ -775,7 +775,7 @@
     }
 
     // --- GEBÄUDE SYSTEM ---
-    function createBuilding(type, x, z, faction = 0) {
+    function createBuilding(type, x, z, faction = 0, autoUpdate = true) {
         SoundManager.playSound('construct');
         const baseH = getHeight(x, z);
         const radius = 3;
@@ -796,7 +796,7 @@
                 }
             }
         }
-        updateChunks(true, modifiedChunks);
+        if(autoUpdate) updateChunks(true, modifiedChunks);
 
         const group = new THREE.Group();
         group.position.set(x, baseH, z);
@@ -958,7 +958,7 @@
                 activeKeys.add(key);
                 if(!chunks[key] || (force && (!specificChunks || specificChunks.has(key)))) {
 
-                    if (!force && createdCount >= MAX_CHUNKS_PER_FRAME) continue;
+                    if (!chunks[key] && createdCount >= MAX_CHUNKS_PER_FRAME) continue;
 
                     if(chunks[key]) {
                         scene.remove(chunks[key]);
@@ -1358,11 +1358,6 @@
             } else {
                 // Idle Check Aggro
                 // All unselected units auto aggro
-                if (!selectedUnits.includes(this)) {
-                    const target = this.findTarget();
-                    if(target) {
-                        this.attackTarget = target;
-                        this.state = 'combat';
                 if(this.type !== 'wild') { // Braves don't auto aggro usually? Or do they? In Populous they flee.
                     // For now, only warriors/shamans auto aggro
                     if (!selectedUnits.includes(this)) {
