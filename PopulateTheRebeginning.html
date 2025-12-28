@@ -1302,8 +1302,8 @@
                 }
             } else {
                 // Idle Check Aggro
-                if(this.type !== 'wild') { // Braves don't auto aggro usually? Or do they? In Populous they flee.
-                    // For now, only warriors/shamans auto aggro
+                // All unselected units auto aggro
+                if (!selectedUnits.includes(this)) {
                     const target = this.findTarget();
                     if(target) {
                         this.attackTarget = target;
