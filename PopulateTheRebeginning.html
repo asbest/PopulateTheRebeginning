@@ -1053,15 +1053,9 @@
                     }
                 }
                 if(nearBuilding) {
-                    this.hp += dt * 10;
+                    this.hp += dt * 5; // 5 HP per second
                     if(this.hp > this.maxHp) this.hp = this.maxHp;
                     this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
-
-                    this.healTimer = (this.healTimer || 0) + dt;
-                    if(this.healTimer > 0.5) {
-                        spawnHealing(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z);
-                        this.healTimer = 0;
-                    }
                 }
             }
 
@@ -1475,4 +1469,3 @@
 </script>
 </body>
 </html>
-
