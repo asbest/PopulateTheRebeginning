@@ -203,11 +203,20 @@
         ctx: null,
         init: function() {
             if (this.ctx) return;
-            window.AudioContext = window.AudioContext || window.webkitAudioContext;
-            this.ctx = new AudioContext();
+            try {
+                window.AudioContext = window.AudioContext || window.webkitAudioContext;
+                if(window.AudioContext) {
+                    this.ctx = new AudioContext();
+                } else {
+                    console.warn("WebAudio not supported");
+                }
+            } catch(e) {
+                console.warn("AudioContext creation failed:", e);
+            }
         },
         playTone: function(freq, type, duration, vol=0.1) {
             if(!this.ctx) this.init();
+            if(!this.ctx) return;
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
             osc.type = type;
@@ -221,6 +230,7 @@
         },
         playNoise: function(duration, vol=0.1) {
             if(!this.ctx) this.init();
+            if(!this.ctx) return;
             const bufferSize = this.ctx.sampleRate * duration;
             const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
             const data = buffer.getChannelData(0);
@@ -238,6 +248,7 @@
         },
         playSound: function(name) {
             if(!this.ctx) this.init();
+            if(!this.ctx) return;
             if(this.ctx.state === 'suspended') this.ctx.resume();
 
             switch(name) {
@@ -359,50 +370,60 @@
     window.onload = () => setTimeout(init, 100);
 
     function init() {
-        document.getElementById('loading').style.display = 'none';
-        
-        simplex = new SimplexNoise(mulberry32(12345));
+        try {
+            document.getElementById('loading').style.display = 'none';
 
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 20, 150);
+            if(typeof SimplexNoise !== 'undefined') {
+                simplex = new SimplexNoise(mulberry32(12345));
+            } else {
+                console.warn("SimplexNoise missing, using fallback");
+                simplex = { noise2D: (x,y) => Math.sin(x)*Math.cos(y) }; // Fallback
+            }
 
-        const aspect = window.innerWidth / window.innerHeight;
-        camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
-        updateCameraZoom();
-        
-        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.body.appendChild(renderer.domElement);
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 20, 150);
 
-        const amb = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(amb);
-        const sun = new THREE.DirectionalLight(0xffffff, 0.7);
-        sun.position.set(50, 100, 40);
-        sun.castShadow = true;
-        sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
-        sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
-        sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
-        sun.shadow.bias = -0.0005;
-        scene.add(sun);
+            const aspect = window.innerWidth / window.innerHeight;
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
+            updateCameraZoom();
 
-        raycaster = new THREE.Raycaster();
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
 
-        findSafeSpawnAndStart();
+            const amb = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(amb);
+            const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+            sun.position.set(50, 100, 40);
+            sun.castShadow = true;
+            sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
+            sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+            sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+            sun.shadow.bias = -0.0005;
+            scene.add(sun);
 
-        const c = renderer.domElement;
-        c.addEventListener('mousedown', onPointerDown);
-        window.addEventListener('mousemove', onPointerMove);
-        window.addEventListener('mouseup', onPointerUp);
-        c.addEventListener('touchstart', onTouchStart, {passive: false});
-        window.addEventListener('touchmove', onTouchMove, {passive: false});
-        window.addEventListener('touchend', onPointerUp);
-        c.addEventListener('wheel', onWheel, {passive: false});
-        window.addEventListener('resize', onResize);
+            raycaster = new THREE.Raycaster();
 
-        animate();
+            findSafeSpawnAndStart();
+
+            const c = renderer.domElement;
+            c.addEventListener('mousedown', onPointerDown);
+            window.addEventListener('mousemove', onPointerMove);
+            window.addEventListener('mouseup', onPointerUp);
+            c.addEventListener('touchstart', onTouchStart, {passive: false});
+            window.addEventListener('touchmove', onTouchMove, {passive: false});
+            window.addEventListener('touchend', onPointerUp);
+            c.addEventListener('wheel', onWheel, {passive: false});
+            window.addEventListener('resize', onResize);
+
+            animate();
+        } catch(e) {
+            console.error("Init failed:", e);
+            alert("Game failed to start: " + e.message);
+        }
     }
 
     // --- UI SYSTEM ---
@@ -928,7 +949,8 @@
                 if(!chunks[key] || (force && (!specificChunks || specificChunks.has(key)))) {
                     if(chunks[key]) {
                         scene.remove(chunks[key]);
-                        chunks[key].children.forEach(m=>{ if(m.geometry) m.geometry.dispose(); if(m.material) m.material.dispose(); });
+                        // Only dispose terrain geometry (child 0), water (child 1) is shared
+                        if(chunks[key].children[0] && chunks[key].children[0].geometry) chunks[key].children[0].geometry.dispose();
                     }
                     chunks[key] = createChunk(cx+x, cz+z); 
                     scene.add(chunks[key]); 
@@ -939,11 +961,17 @@
             for(let key in chunks) {
                 if(!activeKeys.has(key)) {
                     scene.remove(chunks[key]);
+                    // Only dispose terrain geometry
+                    if(chunks[key].children[0] && chunks[key].children[0].geometry) chunks[key].children[0].geometry.dispose();
                     delete chunks[key];
                 }
             }
         }
     }
+
+    const chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    const chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE);
+    const chunkWaterMat = new THREE.MeshBasicMaterial({color: COLORS.water, transparent: true, opacity: 0.6});
 
     function createChunk(cx, cz) {
         const grp = new THREE.Group();
@@ -964,10 +992,11 @@
         }
         geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         geo.computeVertexNormals();
-        const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+        const mesh = new THREE.Mesh(geo, chunkTerrainMat);
         mesh.position.set(offX, 0, offZ); mesh.receiveShadow = true;
         grp.add(mesh);
-        const wMesh = new THREE.Mesh(new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE), new THREE.MeshBasicMaterial({color: COLORS.water, transparent: true, opacity: 0.6}));
+
+        const wMesh = new THREE.Mesh(chunkWaterGeo, chunkWaterMat);
         wMesh.rotation.x = -Math.PI/2; wMesh.position.set(offX, 0.5, offZ);
         grp.add(wMesh);
         if(Math.random() > 0.5) { 
