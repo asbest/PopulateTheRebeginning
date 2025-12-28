@@ -150,8 +150,19 @@
         <div id="menu-spells" class="action-menu" style="display:none;">
             <div id="action-bar">
                 <div class="action-btn" onclick="selectAction('blast')" id="btn-blast">🔥<span class="label">Feuer (10)</span></div>
+                <div class="action-btn" onclick="selectAction('lightning')" id="btn-lightning">⚡<span class="label">Blitz (30)</span></div>
+                <div class="action-btn" onclick="selectAction('convert')" id="btn-convert">🙏<span class="label">Bekehr (10)</span></div>
                 <div class="action-btn" onclick="selectAction('raise')" id="btn-raise">▲<span class="label">Heben (5)</span></div>
                 <div class="action-btn" onclick="selectAction('lower')" id="btn-lower">▼<span class="label">Senken (5)</span></div>
+                <div class="action-btn" onclick="selectAction('flatten')" id="btn-flatten">➖<span class="label">Glätten (10)</span></div>
+                <div class="action-btn" onclick="selectAction('landbridge')" id="btn-landbridge">🌉<span class="label">Brücke (20)</span></div>
+                <div class="action-btn" onclick="selectAction('swamp')" id="btn-swamp">🌫️<span class="label">Sumpf (15)</span></div>
+                <div class="action-btn" onclick="selectAction('invisibility')" id="btn-invisibility">👻<span class="label">Unsicht (20)</span></div>
+                <div class="action-btn" onclick="selectAction('shield')" id="btn-shield">🛡️<span class="label">Schild (20)</span></div>
+                <div class="action-btn" onclick="selectAction('hypnotise')" id="btn-hypnotise">🌀<span class="label">Hypno (50)</span></div>
+                <div class="action-btn" onclick="selectAction('swarm')" id="btn-swarm">🐝<span class="label">Schwarm (20)</span></div>
+                <div class="action-btn" onclick="selectAction('tornado')" id="btn-tornado">🌪️<span class="label">Tornado (60)</span></div>
+                <div class="action-btn" onclick="selectAction('firestorm')" id="btn-firestorm">☄️<span class="label">Sturm (80)</span></div>
                 <div class="action-btn" onclick="selectAction('volcano')" id="btn-volcano">🌋<span class="label">Vulkan (40)</span></div>
             </div>
         </div>
@@ -278,6 +289,7 @@
     const particles = [];
     const projectiles = [];
     const buildings = []; 
+    const activeEffects = [];
     
     let shaman;
     let selectedUnits = [];
@@ -543,7 +555,8 @@
         }
 
         const costs = { 
-            blast: 10, raise: 5, lower: 5, volcano: 40,
+            blast: 10, lightning: 30, convert: 10, raise: 5, lower: 5, flatten: 10, landbridge: 20,
+            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40,
             build_hut: 15, build_tower: 20, build_warrior: 30, build_fire: 40, build_spy: 40 
         };
         if (mana < costs[currentAction]) return;
@@ -574,6 +587,149 @@
         else if (currentAction === 'volcano') {
             createVolcano(x, z);
             SoundManager.playSound('explosion');
+        }
+        else if (currentAction === 'tornado') {
+            activeEffects.push(new Tornado(x, z));
+        }
+        else if (currentAction === 'swarm') {
+            activeEffects.push(new Swarm(x, z));
+            SoundManager.playSound('magic');
+        }
+        else if (currentAction === 'firestorm') {
+            activeEffects.push(new Firestorm(x, z));
+        }
+        else if (currentAction === 'convert') {
+            SoundManager.playSound('magic');
+            spawnPulse(x, getHeight(x, z), z, 0x0000FF);
+            units.forEach(u => {
+                if(u.type === 'wild' && u.faction !== 0) {
+                     const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
+                     if(dist < 10) {
+                         u.faction = 0;
+                         u.mesh.traverse(c => {
+                             if(c.material && c.material.color.getHex() === COLORS.red) {
+                                 c.material.color.setHex(COLORS.blue);
+                             }
+                         });
+                         // Update HP Bar color
+                         u.hpBar.material.color.setHex(0x00FF00);
+                         spawnPulse(u.mesh.position.x, u.mesh.position.y+2, u.mesh.position.z, 0x0000FF);
+                     }
+                }
+            });
+        }
+        else if (currentAction === 'shield') {
+            SoundManager.playSound('magic');
+            spawnPulse(x, getHeight(x, z), z, 0x00FFFF);
+            units.forEach(u => {
+                if(u.faction === 0) {
+                    const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
+                    if(dist < 8) {
+                        u.setShield(true);
+                        setTimeout(() => u.setShield(false), 20000); // 20s
+                    }
+                }
+            });
+        }
+        else if (currentAction === 'invisibility') {
+            SoundManager.playSound('magic');
+            units.forEach(u => {
+                if(u.faction === 0) {
+                    const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
+                    if(dist < 8) {
+                        u.setInvisibility(true);
+                        setTimeout(() => u.setInvisibility(false), 30000); // 30s
+                    }
+                }
+            });
+        }
+        else if (currentAction === 'hypnotise') {
+            SoundManager.playSound('magic');
+            spawnPulse(x, getHeight(x, z), z, 0xFF00FF);
+            units.forEach(u => {
+                if(u.faction === 1 && !u.isShaman) {
+                     const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
+                     if(dist < 8) {
+                         u.faction = 0;
+                         u.mesh.traverse(c => {
+                             if(c.material && c.material.color.getHex() === COLORS.red) {
+                                 c.material.color.setHex(COLORS.blue);
+                             }
+                         });
+                         u.hpBar.material.color.setHex(0x00FF00);
+                         u.state = 'idle'; u.attackTarget = null;
+                         spawnPulse(u.mesh.position.x, u.mesh.position.y+2, u.mesh.position.z, 0xFF00FF);
+                     }
+                }
+            });
+        }
+        else if (currentAction === 'flatten') {
+            // Flatten to average
+            let totalH = 0; let count = 0;
+            const r = 5;
+            for(let ix = Math.floor(x - r); ix <= Math.ceil(x + r); ix++) {
+                for(let iz = Math.floor(z - r); iz <= Math.ceil(z + r); iz++) {
+                    if((ix-x)**2 + (iz-z)**2 <= r*r) {
+                        totalH += getHeight(ix, iz); count++;
+                    }
+                }
+            }
+            if(count > 0) {
+                const avg = totalH / count;
+                for(let ix = Math.floor(x - r); ix <= Math.ceil(x + r); ix++) {
+                    for(let iz = Math.floor(z - r); iz <= Math.ceil(z + r); iz++) {
+                         if((ix-x)**2 + (iz-z)**2 <= r*r) {
+                            const current = getHeight(ix, iz);
+                            const key = `${ix},${iz}`;
+                            const mod = terrainMods.get(key) || 0;
+                            terrainMods.set(key, mod + (avg - current));
+                         }
+                    }
+                }
+                updateChunks(true);
+                SoundManager.playSound('rumble');
+            }
+        }
+        else if (currentAction === 'landbridge') {
+            const start = shaman.mesh.position.clone();
+            const end = new THREE.Vector3(x, getHeight(x,z), z);
+            const dist = start.distanceTo(end);
+            const steps = Math.ceil(dist);
+            const dir = end.clone().sub(start).normalize();
+
+            for(let i=0; i<=steps; i++) {
+                const p = start.clone().add(dir.clone().multiplyScalar(i));
+                modifyTerrain(p.x, p.z, 2, 2.0); // Raise path
+            }
+            SoundManager.playSound('rumble');
+        }
+        else if (currentAction === 'lightning') {
+            SoundManager.playSound('explosion');
+            // Visual Line
+            const geo = new THREE.CylinderGeometry(0.5, 0.1, 30, 8);
+            const mat = new THREE.MeshBasicMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.8});
+            const bolt = new THREE.Mesh(geo, mat);
+            bolt.position.set(x, getHeight(x,z) + 15, z);
+            scene.add(bolt);
+            setTimeout(() => scene.remove(bolt), 100);
+            spawnExplosion(x, getHeight(x,z), z, 0xFFFFFF, 20);
+
+            // Damage
+            let hit = false;
+            units.forEach(u => {
+                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
+                 if(dist < 4) {
+                     u.takeDamage(1000);
+                     hit = true;
+                 }
+            });
+            buildings.forEach(b => {
+                 const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
+                 if(dist < 4) {
+                     b.takeDamage(500);
+                     hit = true;
+                 }
+            });
         }
         else if (currentAction.startsWith('build_')) {
             const type = currentAction.replace('build_', '');
@@ -744,30 +900,7 @@
     }
 
     function createVolcano(x, z) {
-        const radius = 12;
-        modifyTerrain(x, z, radius, 15);
-        setTimeout(() => {
-            modifyTerrain(x, z, 3, -8); 
-            spawnExplosion(x, getHeight(x,z), z, COLORS.lava, 50);
-            
-            // Einheiten
-            units.forEach(u => {
-                const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
-                if(dist < radius + 5) {
-                    const dir = u.mesh.position.clone().sub(new THREE.Vector3(x, u.mesh.position.y, z)).normalize();
-                    u.applyForce(dir.multiplyScalar(35).add(new THREE.Vector3(0, 25, 0)));
-                    if (!u.isShaman) { u.takeDamage(100); }
-                }
-            });
-            // Gebäude
-            buildings.forEach(b => {
-                const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
-                if(dist < radius + 5) {
-                    b.takeDamage(1000); // Sofortige Zerstörung
-                }
-            });
-
-        }, 200);
+        activeEffects.push(new Volcano(x, z));
     }
 
     function updateChunks(force = false) {
@@ -851,6 +984,9 @@
             if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; }
 
             this.hp = this.maxHp; this.recoverTimer = 0;
+            this.shielded = false;
+            this.invisible = false;
+            this.shieldMesh = null;
 
             // Visuals
             this.mesh = new THREE.Group();
@@ -926,10 +1062,36 @@
 
         takeDamage(amount) {
             if(this.state === 'dead') return;
+            if(this.shielded) {
+                spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0x00FFFF);
+                return;
+            }
             this.hp -= amount;
             this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
             spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0xFF0000);
             if(this.hp <= 0) this.die();
+        }
+
+        setShield(active) {
+            this.shielded = active;
+            if(active && !this.shieldMesh) {
+                this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.3}));
+                this.shieldMesh.position.y = 1.0;
+                this.mesh.add(this.shieldMesh);
+            } else if(!active && this.shieldMesh) {
+                this.mesh.remove(this.shieldMesh);
+                this.shieldMesh = null;
+            }
+        }
+
+        setInvisibility(active) {
+            this.invisible = active;
+            this.mesh.traverse(c => {
+                if(c.isMesh) {
+                    c.material.transparent = true;
+                    c.material.opacity = active ? 0.2 : 1.0;
+                }
+            });
         }
 
         die() {
@@ -951,7 +1113,7 @@
              let minDist = 1000;
              let closest = null;
              units.forEach(u => {
-                 if(u.faction !== this.faction && u.state !== 'dead') {
+                 if(u.faction !== this.faction && u.state !== 'dead' && !u.invisible) {
                      const d = this.mesh.position.distanceTo(u.mesh.position);
                      if(d < 30 && d < minDist) {
                          minDist = d; closest = u;
@@ -1226,7 +1388,233 @@
     }
     const enemyAI = new EnemyAI();
 
-    // --- HELFER KLASSEN (Partikel, Feuerball) ---
+    // --- HELFER KLASSEN (Partikel, Feuerball, Effekte) ---
+    class ActiveEffect {
+        constructor() {}
+        update(dt) { return false; }
+    }
+
+    class Volcano extends ActiveEffect {
+        constructor(x, z) {
+            super();
+            this.x = x; this.z = z;
+            this.timer = 15.0;
+            this.interval = 0;
+            SoundManager.playSound('explosion');
+            // Initial rise
+            modifyTerrain(x, z, 8, 5);
+        }
+        update(dt) {
+            this.timer -= dt;
+            this.interval += dt;
+
+            // Visuals
+            if(Math.random() < 0.5) {
+                const dist = Math.random() * 4;
+                const angle = Math.random() * Math.PI * 2;
+                const px = this.x + Math.cos(angle) * dist;
+                const pz = this.z + Math.sin(angle) * dist;
+                const h = getHeight(px, pz);
+                const p = new Particle(new THREE.Vector3(px, h, pz), COLORS.lava, 0.3 + Math.random()*0.3, 1.5);
+                p.vel.set((Math.random()-0.5)*4, Math.random()*8+4, (Math.random()-0.5)*4);
+                particles.push(p);
+            }
+
+            if(this.interval > 0.2) {
+                this.interval = 0;
+                // Continually raise/modify
+                modifyTerrain(this.x, this.z, 5, 0.2);
+
+                // Push & Damage
+                units.forEach(u => {
+                    const dist = u.mesh.position.distanceTo(new THREE.Vector3(this.x, u.mesh.position.y, this.z));
+                    if(dist < 10) {
+                        const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
+                        u.applyForce(dir.multiplyScalar(20).add(new THREE.Vector3(0, 10, 0)));
+                        if (!u.isShaman) u.takeDamage(5);
+                    }
+                });
+                buildings.forEach(b => {
+                     const dist = b.mesh.position.distanceTo(new THREE.Vector3(this.x, b.mesh.position.y, this.z));
+                     if(dist < 10) b.takeDamage(10);
+                });
+            }
+            return this.timer > 0;
+        }
+    }
+
+    class Swamp extends ActiveEffect {
+        constructor(x, z) {
+            super();
+            this.pos = new THREE.Vector3(x, getHeight(x,z)+0.1, z);
+            this.timer = 30.0;
+            this.radius = 4.0;
+
+            const geo = new THREE.CylinderGeometry(this.radius, this.radius, 0.2, 16);
+            const mat = new THREE.MeshBasicMaterial({color: 0x2F4F4F, transparent: true, opacity: 0.8});
+            this.mesh = new THREE.Mesh(geo, mat);
+            this.mesh.position.copy(this.pos);
+            scene.add(this.mesh);
+            SoundManager.playSound('magic');
+        }
+        update(dt) {
+            this.timer -= dt;
+
+            // Visual pulse
+            this.mesh.scale.setScalar(1.0 + Math.sin(this.timer * 2) * 0.05);
+
+            // Kill units
+            for(let i = units.length-1; i>=0; i--) {
+                const u = units[i];
+                if(u.state !== 'dead' && !u.isShaman) {
+                    const dist = Math.sqrt((u.mesh.position.x - this.pos.x)**2 + (u.mesh.position.z - this.pos.z)**2);
+                    if(dist < this.radius * 0.8) {
+                         u.takeDamage(10000); // Instant death
+                         spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0x000000);
+                    }
+                }
+            }
+
+            if(this.timer <= 0) {
+                scene.remove(this.mesh);
+                return false;
+            }
+            return true;
+        }
+    }
+
+    class Tornado extends ActiveEffect {
+        constructor(x, z) {
+            super();
+            this.pos = new THREE.Vector3(x, getHeight(x,z), z);
+            this.timer = 20.0;
+            this.angle = Math.random() * Math.PI * 2;
+            this.mesh = new THREE.Group();
+
+            // Visuals
+            for(let i=0; i<20; i++) {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({color: 0xAAAAAA}));
+                p.userData = { yOff: i * 0.5, r: 1 + i*0.2, ang: i };
+                this.mesh.add(p);
+            }
+            scene.add(this.mesh);
+            SoundManager.playSound('rumble');
+        }
+        update(dt) {
+            this.timer -= dt;
+
+            // Move Randomly
+            this.angle += (Math.random()-0.5) * 2 * dt;
+            const speed = 8;
+            this.pos.x += Math.cos(this.angle) * speed * dt;
+            this.pos.z += Math.sin(this.angle) * speed * dt;
+            this.pos.y = getHeight(this.pos.x, this.pos.z);
+
+            this.mesh.position.copy(this.pos);
+
+            // Animate Visuals
+            this.mesh.children.forEach(c => {
+                 c.userData.ang += dt * 10;
+                 c.position.set(Math.cos(c.userData.ang)*c.userData.r, c.userData.yOff, Math.sin(c.userData.ang)*c.userData.r);
+            });
+
+            // Physics
+            units.forEach(u => {
+                const d = u.mesh.position.distanceTo(this.pos);
+                if(d < 5 && !u.isShaman) {
+                     u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 25, (Math.random()-0.5)*10));
+                     u.takeDamage(2);
+                }
+            });
+            buildings.forEach(b => {
+                 const d = b.mesh.position.distanceTo(this.pos);
+                 if(d < 5) b.takeDamage(5);
+            });
+
+            if(this.timer <= 0) {
+                scene.remove(this.mesh);
+                return false;
+            }
+            return true;
+        }
+    }
+
+    class Swarm extends ActiveEffect {
+        constructor(x, z) {
+            super();
+            this.pos = new THREE.Vector3(x, getHeight(x,z)+3, z);
+            this.timer = 20.0;
+            this.particles = [];
+            for(let i=0; i<30; i++) {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial({color: 0x000000}));
+                p.position.set((Math.random()-0.5)*4, (Math.random()-0.5)*2, (Math.random()-0.5)*4);
+                // this.pos.add(p.position); // Removed erroneous accumulation
+                this.particles.push({mesh: p, off: p.position.clone()});
+                scene.add(p);
+            }
+        }
+        update(dt) {
+            this.timer -= dt;
+
+            // Move towards nearest enemy
+            let closest = null; let minDist = 50;
+            units.forEach(u => {
+                 if(u.faction === 1 && u.state !== 'dead') {
+                     const d = u.mesh.position.distanceTo(this.pos);
+                     if(d < minDist) { minDist = d; closest = u; }
+                 }
+            });
+
+            if(closest) {
+                 const dir = closest.mesh.position.clone().add(new THREE.Vector3(0,2,0)).sub(this.pos).normalize();
+                 this.pos.addScaledVector(dir, 10 * dt);
+            }
+
+            // Update particles
+            this.particles.forEach(p => {
+                p.off.applyAxisAngle(new THREE.Vector3(0,1,0), dt * 2);
+                p.mesh.position.copy(this.pos).add(p.off);
+            });
+
+            // Damage
+            units.forEach(u => {
+                const d = u.mesh.position.distanceTo(this.pos);
+                if(d < 4) {
+                    u.takeDamage(50 * dt);
+                }
+            });
+
+            if(this.timer <= 0) {
+                this.particles.forEach(p => scene.remove(p.mesh));
+                return false;
+            }
+            return true;
+        }
+    }
+
+    class Firestorm extends ActiveEffect {
+        constructor(x, z) {
+            super();
+            this.x = x; this.z = z;
+            this.timer = 10.0;
+            this.interval = 0;
+        }
+        update(dt) {
+            this.timer -= dt;
+            this.interval += dt;
+            if(this.interval > 0.5) {
+                this.interval = 0;
+                const rx = this.x + (Math.random()-0.5)*15;
+                const rz = this.z + (Math.random()-0.5)*15;
+                const start = new THREE.Vector3(rx, 40, rz);
+                const end = new THREE.Vector3(rx, getHeight(rx, rz), rz);
+                projectiles.push(new Fireball(start, end));
+                SoundManager.playSound('fireball');
+            }
+            return this.timer > 0;
+        }
+    }
+
     class Particle {
         constructor(pos, color, size, life, gravity = 20) {
             this.mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshBasicMaterial({color: color}));
@@ -1457,6 +1845,11 @@
         enemyAI.update(dt);
         units.forEach(u => u.update(dt));
         buildings.forEach(b => b.update(dt));
+
+        // Active Effects
+        for(let i = activeEffects.length-1; i>=0; i--) {
+            if(!activeEffects[i].update(dt)) activeEffects.splice(i, 1);
+        }
         
         // Remove dead
         for(let i = buildings.length-1; i>=0; i--) { if(buildings[i].dead) buildings.splice(i, 1); }
