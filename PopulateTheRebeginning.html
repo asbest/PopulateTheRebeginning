@@ -942,11 +942,17 @@
         const cx = Math.round(cameraLookAt.x / CHUNK_SIZE);
         const cz = Math.round(cameraLookAt.z / CHUNK_SIZE);
         const activeKeys = new Set();
+        let createdCount = 0;
+        const MAX_CHUNKS_PER_FRAME = 8;
+
         for(let x = -RENDER_DISTANCE; x <= RENDER_DISTANCE; x++) {
             for(let z = -RENDER_DISTANCE; z <= RENDER_DISTANCE; z++) {
                 const key = (cx+x) + "," + (cz+z);
                 activeKeys.add(key);
                 if(!chunks[key] || (force && (!specificChunks || specificChunks.has(key)))) {
+
+                    if (!force && createdCount >= MAX_CHUNKS_PER_FRAME) continue;
+
                     if(chunks[key]) {
                         scene.remove(chunks[key]);
                         // Only dispose terrain geometry (child 0), water (child 1) is shared
@@ -954,6 +960,7 @@
                     }
                     chunks[key] = createChunk(cx+x, cz+z); 
                     scene.add(chunks[key]); 
+                    createdCount++;
                 }
             }
         }
