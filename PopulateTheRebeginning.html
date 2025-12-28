@@ -575,12 +575,14 @@
             shaman.mesh.rotation.y = Math.atan2(dx, dz);
         }
         else if (currentAction === 'raise') {
-            modifyTerrain(x, z, 5, 2.0); 
+            const mods = modifyTerrain(x, z, 5, 2.0);
+            updateChunks(true, mods);
             spawnExplosion(x, getHeight(x, z), z, 0x00FF00, 10);
             SoundManager.playSound('rumble');
         }
         else if (currentAction === 'lower') {
-            modifyTerrain(x, z, 5, -2.0);
+            const mods = modifyTerrain(x, z, 5, -2.0);
+            updateChunks(true, mods);
             spawnExplosion(x, getHeight(x, z), z, 0x0000FF, 10);
             SoundManager.playSound('rumble');
         }
@@ -676,6 +678,7 @@
             }
             if(count > 0) {
                 const avg = totalH / count;
+                const modifiedChunks = new Set();
                 for(let ix = Math.floor(x - r); ix <= Math.ceil(x + r); ix++) {
                     for(let iz = Math.floor(z - r); iz <= Math.ceil(z + r); iz++) {
                          if((ix-x)**2 + (iz-z)**2 <= r*r) {
@@ -683,10 +686,13 @@
                             const key = `${ix},${iz}`;
                             const mod = terrainMods.get(key) || 0;
                             terrainMods.set(key, mod + (avg - current));
+                            const cx = Math.round(ix / CHUNK_SIZE);
+                            const cz = Math.round(iz / CHUNK_SIZE);
+                            modifiedChunks.add(`${cx},${cz}`);
                          }
                     }
                 }
-                updateChunks(true);
+                updateChunks(true, modifiedChunks);
                 SoundManager.playSound('rumble');
             }
         }
@@ -697,10 +703,13 @@
             const steps = Math.ceil(dist);
             const dir = end.clone().sub(start).normalize();
 
+            const allMods = new Set();
             for(let i=0; i<=steps; i++) {
                 const p = start.clone().add(dir.clone().multiplyScalar(i));
-                modifyTerrain(p.x, p.z, 2, 2.0); // Raise path
+                const mods = modifyTerrain(p.x, p.z, 2, 2.0); // Raise path
+                mods.forEach(m => allMods.add(m));
             }
+            updateChunks(true, allMods);
             SoundManager.playSound('rumble');
         }
         else if (currentAction === 'lightning') {
@@ -744,6 +753,7 @@
         const radius = 3;
         
         // Auto-Planierung
+        const modifiedChunks = new Set();
         for(let ix = Math.floor(x - radius); ix <= Math.ceil(x + radius); ix++) {
             for(let iz = Math.floor(z - radius); iz <= Math.ceil(z + radius); iz++) {
                 const dist = Math.sqrt((ix-x)**2 + (iz-z)**2);
@@ -752,10 +762,13 @@
                     const naturalH = getBaseHeight(ix, iz);
                     const targetMod = baseH - naturalH;
                     terrainMods.set(key, targetMod); 
+                    const cx = Math.round(ix / CHUNK_SIZE);
+                    const cz = Math.round(iz / CHUNK_SIZE);
+                    modifiedChunks.add(`${cx},${cz}`);
                 }
             }
         }
-        updateChunks(true); 
+        updateChunks(true, modifiedChunks);
 
         const group = new THREE.Group();
         group.position.set(x, baseH, z);
@@ -889,7 +902,7 @@
                 }
             }
         }
-        updateChunks(true);
+
         // Prüfen ob Gebäude einstürzen
         buildings.forEach(b => {
             const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
@@ -897,13 +910,14 @@
                 b.takeDamage(100); // Einsturzschaden
             }
         });
+        return modifiedChunks;
     }
 
     function createVolcano(x, z) {
         activeEffects.push(new Volcano(x, z));
     }
 
-    function updateChunks(force = false) {
+    function updateChunks(force = false, specificChunks = null) {
         const cx = Math.round(cameraLookAt.x / CHUNK_SIZE);
         const cz = Math.round(cameraLookAt.z / CHUNK_SIZE);
         const activeKeys = new Set();
@@ -911,7 +925,7 @@
             for(let z = -RENDER_DISTANCE; z <= RENDER_DISTANCE; z++) {
                 const key = (cx+x) + "," + (cz+z);
                 activeKeys.add(key);
-                if(!chunks[key] || force) { 
+                if(!chunks[key] || (force && (!specificChunks || specificChunks.has(key)))) {
                     if(chunks[key]) {
                         scene.remove(chunks[key]);
                         chunks[key].children.forEach(m=>{ if(m.geometry) m.geometry.dispose(); if(m.material) m.material.dispose(); });
@@ -1410,7 +1424,8 @@
             this.interval = 0;
             SoundManager.playSound('explosion');
             // Initial rise
-            modifyTerrain(x, z, 8, 5);
+            const mods = modifyTerrain(x, z, 8, 5);
+            updateChunks(true, mods);
         }
         update(dt) {
             this.timer -= dt;
@@ -1431,7 +1446,8 @@
             if(this.interval > 0.2) {
                 this.interval = 0;
                 // Continually raise/modify
-                modifyTerrain(this.x, this.z, 5, 0.2);
+                const mods = modifyTerrain(this.x, this.z, 5, 0.2);
+                updateChunks(true, mods);
 
                 // Push & Damage
                 units.forEach(u => {
