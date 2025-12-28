@@ -62,6 +62,55 @@
             background: #000; color: #FFD700; display: flex; align-items: center; justify-content: center;
             z-index: 100; font-size: 24px; font-weight: bold;
         }
+
+        /* UNIT LIST */
+        #unit-list {
+            position: absolute;
+            top: 70px;
+            left: 0;
+            width: 60px;
+            bottom: 120px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 5px;
+            pointer-events: auto;
+            scrollbar-width: none;
+            z-index: 10;
+        }
+        #unit-list::-webkit-scrollbar { display: none; }
+
+        .unit-item {
+            width: 46px;
+            height: 46px;
+            background: #333;
+            border: 2px solid #555;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            flex-shrink: 0;
+            position: relative;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+        .unit-item:active { transform: scale(0.9); }
+        .unit-item.selected { border-color: #00FF00; box-shadow: 0 0 10px #00FF00; background: #444; }
+        .unit-item.enemy { border-color: #FF0000; }
+        .unit-item.enemy.selected { border-color: #FF4500; box-shadow: 0 0 10px #FF4500; }
+
+        .hp-indicator {
+            position: absolute;
+            bottom: 3px; left: 10%; width: 80%; height: 3px; background: #555;
+        }
+        .hp-val { height: 100%; background: #00FF00; width: 100%; }
+        .unit-item.enemy .hp-val { background: #FF0000; }
+
     </style>
 </head>
 <body>
@@ -69,6 +118,7 @@
 <div id="loading">Welt wird generiert...</div>
 
 <div id="ui-layer">
+    <div id="unit-list"></div>
     <div id="top-bar">
         <h1>Populous</h1>
         <div id="mana-bar"><div id="mana-fill"></div></div>
@@ -77,8 +127,10 @@
 
     <div id="bottom-ui">
         <div id="tabs">
-            <div class="tab-btn active" id="tab-spells" onclick="switchTab('spells')">⚡</div>
-            <div class="tab-btn" id="tab-build" onclick="switchTab('build')">🔨</div>
+            <div class="tab-btn active" id="tab-select" onclick="switchTab('select')">👆</div>
+            <div class="tab-btn" id="tab-basic" onclick="switchTab('basic')" style="display:none;">👣</div>
+            <div class="tab-btn" id="tab-spells" onclick="switchTab('spells')" style="display:none;">⚡</div>
+            <div class="tab-btn" id="tab-build" onclick="switchTab('build')" style="display:none;">🔨</div>
             <div class="tab-btn" id="btn-multiselect" onclick="toggleMultiSelect()">⊕</div>
         </div>
         
@@ -290,6 +342,90 @@
         document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
         const btn = document.getElementById(`btn-${action}`);
         if(btn) btn.classList.add('active');
+    }
+
+    const UNIT_ICONS = {
+        'wild': '😐',
+        'warrior': '⚔️',
+        'firewarrior': '🔥',
+        'shaman': '⚡',
+        'spy': '🕵️'
+    };
+
+    let lastAliveCount = -1;
+
+    function updateUnitList() {
+        const list = document.getElementById('unit-list');
+        list.innerHTML = '';
+
+        // Sort: Shaman first, then Player units, then Enemy units
+        const sortedUnits = [...units].sort((a,b) => {
+            if(a.isShaman) return -1;
+            if(b.isShaman) return 1;
+            if(a.faction !== b.faction) return a.faction - b.faction;
+            return 0;
+        });
+
+        sortedUnits.forEach(u => {
+            if(u.state === 'dead') return;
+
+            const item = document.createElement('div');
+            item.className = 'unit-item';
+            if(u.faction === 1) item.classList.add('enemy');
+            if(selectedUnits.includes(u)) item.classList.add('selected');
+
+            const icon = UNIT_ICONS[u.type] || '?';
+            item.innerText = icon;
+
+            // HP Bar
+            const hpDiv = document.createElement('div');
+            hpDiv.className = 'hp-indicator';
+            const hpVal = document.createElement('div');
+            hpVal.className = 'hp-val';
+            hpVal.style.width = (u.hp / u.maxHp * 100) + '%';
+            hpDiv.appendChild(hpVal);
+            item.appendChild(hpDiv);
+
+            item.onclick = (e) => {
+                e.stopPropagation();
+
+                if(u.faction === 0) {
+                     if(multiSelectMode) {
+                         if(selectedUnits.includes(u)) {
+                             selectedUnits = selectedUnits.filter(x => x !== u);
+                             u.selectRing.visible = false;
+                         } else {
+                             selectedUnits.push(u);
+                             u.selectRing.visible = true;
+                         }
+                     } else {
+                         selectedUnits.forEach(x => x.selectRing.visible = false);
+                         selectedUnits = [u];
+                         u.selectRing.visible = true;
+                     }
+                     updateContextMenus();
+                     cameraLookAt.copy(u.mesh.position);
+                } else {
+                     cameraLookAt.copy(u.mesh.position);
+                }
+                updateUnitListSelection();
+            };
+
+            u.listItem = item;
+            u.hpValItem = hpVal;
+            list.appendChild(item);
+        });
+    }
+
+    function updateUnitListSelection() {
+        units.forEach(u => {
+            if(u.listItem) {
+                if(selectedUnits.includes(u)) u.listItem.classList.add('selected');
+                else u.listItem.classList.remove('selected');
+
+                if(u.hpValItem) u.hpValItem.style.width = Math.max(0, (u.hp / u.maxHp * 100)) + '%';
+            }
+        });
     }
 
     function updateContextMenus() {
@@ -1045,7 +1181,12 @@
         const mouse = new THREE.Vector2((x/window.innerWidth)*2-1, -(y/window.innerHeight)*2+1);
         raycaster.setFromCamera(mouse, camera);
 
-        // 1. Check for Unit Clicks
+        // Common: Get Terrain Point
+        const meshes = [];
+        for(let k in chunks) meshes.push(chunks[k].children[0]);
+        const terrainHits = raycaster.intersectObjects(meshes);
+
+        // Common: Get Unit Hits
         const unitMeshes = [];
         const meshToUnit = new Map();
         units.forEach(u => {
@@ -1058,26 +1199,47 @@
                 });
             }
         });
-
         const unitHits = raycaster.intersectObjects(unitMeshes);
-        if (unitHits.length > 0) {
-            const hitUnit = meshToUnit.get(unitHits[0].object);
-            if(hitUnit) {
-                if(hitUnit.faction === 0) {
-                    // Toggle Selection for Player Units
-                    if(!selectedUnits.includes(hitUnit)) {
-                         selectedUnits.push(hitUnit);
-                         hitUnit.selectRing.visible = true;
-                    } else {
-                         selectedUnits = selectedUnits.filter(u => u !== hitUnit);
-                         hitUnit.selectRing.visible = false;
+
+        if (currentAction === 'select') {
+            if (unitHits.length > 0) {
+                const hitUnit = meshToUnit.get(unitHits[0].object);
+                if(hitUnit) {
+                    if(hitUnit.faction === 0) {
+                        if(multiSelectMode) {
+                            if(!selectedUnits.includes(hitUnit)) {
+                                 selectedUnits.push(hitUnit);
+                                 hitUnit.selectRing.visible = true;
+                            } else {
+                                 selectedUnits = selectedUnits.filter(u => u !== hitUnit);
+                                 hitUnit.selectRing.visible = false;
+                            }
+                        } else {
+                            selectedUnits.forEach(u => u.selectRing.visible = false);
+                            selectedUnits = [hitUnit];
+                            hitUnit.selectRing.visible = true;
+                        }
+                        updateContextMenus();
+                        return;
                     }
-                    return;
-                } else {
-                    // Enemy Unit Clicked -> Attack Target
-                    if(selectedUnits.length > 0) {
+                }
+            }
+
+            // If terrain clicked in select mode (and no unit hit)
+            if(terrainHits.length > 0 && !multiSelectMode) {
+                selectedUnits.forEach(u => u.selectRing.visible = false);
+                selectedUnits = [];
+                updateContextMenus();
+            }
+        } else {
+            // Action Mode (Move, Spell, Build)
+            if(currentAction === 'move' && unitHits.length > 0) {
+                 const hitUnit = meshToUnit.get(unitHits[0].object);
+                 if(hitUnit && hitUnit.faction === 1) {
+                     // Attack Logic
+                     if(selectedUnits.length > 0) {
                         selectedUnits.forEach(u => {
-                            if(!u.isShaman) { // Shaman might need spell to attack, or can auto attack?
+                            if(!u.isShaman) {
                                 u.attackTarget = hitUnit;
                                 u.state = 'combat';
                             }
@@ -1085,26 +1247,12 @@
                         spawnPulse(hitUnit.mesh.position.x, hitUnit.mesh.position.y, hitUnit.mesh.position.z, 0xFF0000);
                         return;
                     }
-                }
+                 }
             }
-        }
 
-        // 2. Terrain Click
-        const meshes = [];
-        for(let k in chunks) meshes.push(chunks[k].children[0]);
-        const hits = raycaster.intersectObjects(meshes);
-        if(hits.length > 0) {
-             const pt = hits[0].point;
-             // If we are in 'move' mode and have units selected, move them
-             if(currentAction === 'move' && selectedUnits.length > 0) {
-                 selectedUnits.forEach(u => {
-                     u.goto(pt.x, pt.z);
-                     u.attackTarget = null;
-                 });
-                 spawnPulse(pt.x, getHeight(pt.x, pt.z), pt.z, 0xFFFFFF);
-             } else {
-                 performAction(pt.x, pt.z);
-             }
+            if(terrainHits.length > 0) {
+                 performAction(terrainHits[0].point.x, terrainHits[0].point.z);
+            }
         }
     }
     function onWheel(e) { viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, viewScale + e.deltaY * 0.05)); updateCameraZoom(); updateCameraPosition(); }
@@ -1127,6 +1275,25 @@
         // Remove dead
         for(let i = buildings.length-1; i>=0; i--) { if(buildings[i].dead) buildings.splice(i, 1); }
 
+        // Cleanup Dead Units
+        for(let i = units.length-1; i>=0; i--) {
+            if(units[i].state === 'dead') {
+                const groundH = getHeight(units[i].mesh.position.x, units[i].mesh.position.z);
+                if (units[i].mesh.position.y < groundH - 2.0) {
+                     scene.remove(units[i].mesh);
+                     units.splice(i, 1);
+                }
+            }
+        }
+
+        // Update Unit List
+        const currentAlive = units.filter(u => u.state !== 'dead').length;
+        if(currentAlive !== lastAliveCount) {
+            updateUnitList();
+            lastAliveCount = currentAlive;
+        }
+        updateUnitListSelection();
+
         for(let i = projectiles.length-1; i>=0; i--) { if(!projectiles[i].update(dt)) projectiles.splice(i, 1); }
         for(let i = particles.length-1; i>=0; i--) { if(!particles[i].update(dt)) particles.splice(i, 1); }
         renderer.render(scene, camera);
@@ -1134,5 +1301,4 @@
 </script>
 </body>
 </html>
-
 
