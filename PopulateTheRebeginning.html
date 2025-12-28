@@ -1053,9 +1053,15 @@
                     }
                 }
                 if(nearBuilding) {
-                    this.hp += dt * 5; // 5 HP per second
+                    this.hp += dt * 10;
                     if(this.hp > this.maxHp) this.hp = this.maxHp;
                     this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
+
+                    this.healTimer = (this.healTimer || 0) + dt;
+                    if(this.healTimer > 0.5) {
+                        spawnHealing(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z);
+                        this.healTimer = 0;
+                    }
                 }
             }
 
@@ -1090,7 +1096,13 @@
                     const dx = this.attackTarget.mesh.position.x - this.mesh.position.x;
                     const dz = this.attackTarget.mesh.position.z - this.mesh.position.z;
                     const dir = new THREE.Vector3(dx, 0, dz).normalize();
-                    const speed = this.moveSpeed;
+
+                    // Slope check
+                    const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
+                    const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
+                    const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
+
+                    const speed = this.moveSpeed * slopeFactor;
                     this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
                     this.mesh.rotation.y = Math.atan2(dx, dz);
 
@@ -1108,8 +1120,14 @@
                 const dist = Math.sqrt(dx*dx + dz*dz);
                 if(dist < 0.5) { this.state = 'idle'; this.velocity.set(0,0,0); this.resetAnim(); } 
                 else {
-                    const speed = this.moveSpeed;
                     const dir = new THREE.Vector3(dx, 0, dz).normalize();
+
+                    // Slope check
+                    const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
+                    const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
+                    const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
+
+                    const speed = this.moveSpeed * slopeFactor;
                     this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
                     this.mesh.rotation.y = Math.atan2(dx, dz); 
                     this.mesh.rotation.x = 0; this.mesh.rotation.z = 0;
