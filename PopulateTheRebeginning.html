@@ -290,7 +290,7 @@
 
     // --- GLOBALE SYSTEME ---
     let scene, camera, renderer, raycaster;
-    let clock = new THREE.Clock();
+    let clock;
     let simplex;
     
     // Spielzustand
@@ -304,7 +304,7 @@
     
     let shaman;
     let selectedUnits = [];
-    let cameraLookAt = new THREE.Vector3(0, 0, 0);
+    let cameraLookAt;
     let viewScale = 35; 
     let currentAction = 'select';
     let mana = 100;
@@ -379,6 +379,13 @@
                 console.warn("SimplexNoise missing, using fallback");
                 simplex = { noise2D: (x,y) => Math.sin(x)*Math.cos(y) }; // Fallback
             }
+
+            // Init THREE globals
+            clock = new THREE.Clock();
+            cameraLookAt = new THREE.Vector3(0, 0, 0);
+            chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+            chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE);
+            chunkWaterMat = new THREE.MeshBasicMaterial({color: COLORS.water, transparent: true, opacity: 0.6});
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);
@@ -976,9 +983,7 @@
         }
     }
 
-    const chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-    const chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE);
-    const chunkWaterMat = new THREE.MeshBasicMaterial({color: COLORS.water, transparent: true, opacity: 0.6});
+    let chunkTerrainMat, chunkWaterGeo, chunkWaterMat;
 
     function createChunk(cx, cz) {
         const grp = new THREE.Group();
