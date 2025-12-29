@@ -1570,18 +1570,27 @@
         }
 
         update(dt) {
+            if(this.state === 'transported') return;
             this.hpGroup.lookAt(camera.position); this.animTime += dt;
             if(!this.isGrounded) this.velocity.y -= 30 * dt; 
             else { this.velocity.x *= 0.9; this.velocity.z *= 0.9; }
             this.mesh.position.addScaledVector(this.velocity, dt);
 
             const groundH = getHeight(this.mesh.position.x, this.mesh.position.z);
-            if (this.mesh.position.y < groundH) {
-                if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(10);
-                this.mesh.position.y = groundH + 0.35; 
-                this.isGrounded = true; this.velocity.y = 0;
-                if(this.state === 'stunned' && this.velocity.length() < 1) { this.state = 'idle'; this.mesh.rotation.z = 0; this.mesh.rotation.x = 0; }
-            } else if (this.mesh.position.y > groundH + 0.35) { this.isGrounded = false; }
+            if (this.type === 'airship') {
+                const targetAlt = Math.max(groundH, 2.0) + 8.0; // Fly above water or ground
+                const diff = targetAlt - this.mesh.position.y;
+                this.velocity.y += diff * dt * 5.0;
+                this.velocity.y *= 0.9;
+                this.isGrounded = false;
+            } else {
+                if (this.mesh.position.y < groundH) {
+                    if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(10);
+                    this.mesh.position.y = groundH + 0.35;
+                    this.isGrounded = true; this.velocity.y = 0;
+                    if(this.state === 'stunned' && this.velocity.length() < 1) { this.state = 'idle'; this.mesh.rotation.z = 0; this.mesh.rotation.x = 0; }
+                } else if (this.mesh.position.y > groundH + 0.35) { this.isGrounded = false; }
+            }
 
             // Water constraint
             const WATER_LEVEL = 2.0;
@@ -1813,7 +1822,7 @@
             if(!this.passengers.length) return;
 
             // Unload below airship if safe, or find safe spot
-            const r = 3;
+            const r = 5; // Scan larger area
             for(let i=this.passengers.length-1; i>=0; i--) {
                 const p = this.passengers[i];
                 // Check directly below first
@@ -1822,12 +1831,15 @@
                 if (getHeight(tx, tz) < 2.0) {
                     // Try find land in radius
                     let found = false;
-                    for(let angle=0; angle<Math.PI*2; angle+=0.5) {
-                        const scanX = this.mesh.position.x + Math.cos(angle)*r;
-                        const scanZ = this.mesh.position.z + Math.sin(angle)*r;
-                        if(getHeight(scanX, scanZ) >= 2.0) {
-                            tx = scanX; tz = scanZ; found = true; break;
+                    for(let dist=1; dist<=r; dist+=1) {
+                        for(let angle=0; angle<Math.PI*2; angle+=0.5) {
+                            const scanX = this.mesh.position.x + Math.cos(angle)*dist;
+                            const scanZ = this.mesh.position.z + Math.sin(angle)*dist;
+                            if(getHeight(scanX, scanZ) >= 2.0) {
+                                tx = scanX; tz = scanZ; found = true; break;
+                            }
                         }
+                        if(found) break;
                     }
                     if(!found) continue; // Can't unload this unit safely yet
                 }
