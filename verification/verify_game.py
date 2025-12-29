@@ -28,11 +28,12 @@ def verify_changes():
         else:
             print("Shipyard button NOT visible")
 
-        boat_btn = page.locator("#btn-build_boat")
+        # Check for AIRSHIP button now, not boat
+        boat_btn = page.locator("#btn-build_airship")
         if boat_btn.is_visible():
-            print("Boat button visible")
+            print("Airship button visible")
         else:
-            print("Boat button NOT visible")
+            print("Airship button NOT visible")
 
         # 4. Check Unload Button existence (initially hidden)
         unload_btn = page.locator("#btn-unload")

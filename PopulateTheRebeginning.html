@@ -35,12 +35,12 @@
         }
 
         .action-btn {
-            width: 28px; height: 28px;
+            width: 42px; height: 42px;
             border-radius: 50%;
             border: 2px solid #555;
             background: #222;
             color: white;
-            font-size: 11px;
+            font-size: 16px;
             cursor: pointer;
             transition: all 0.2s;
             display: flex; align-items: center; justify-content: center;
@@ -49,7 +49,7 @@
         }
         .action-btn.active { border-color: #FFD700; transform: translateY(-3px); box-shadow: 0 0 8px #FFD700; background: #444; }
         .action-btn:active { transform: scale(0.95); }
-        .label { font-size: 7px; position: absolute; bottom: -12px; width: 140%; left: -20%; text-align: center; text-shadow: 1px 1px 1px black; color: #ddd;}
+        .label { font-size: 10px; position: absolute; bottom: -16px; width: 140%; left: -20%; text-align: center; text-shadow: 1px 1px 1px black; color: #ddd;}
 
         #mana-bar {
             width: 200px; height: 10px; background: #333; margin: 0 auto; border: 1px solid white; border-radius: 5px; overflow: hidden;
@@ -67,7 +67,7 @@
             position: absolute;
             top: 70px;
             left: 0;
-            width: 25px;
+            width: 40px;
             bottom: 120px;
             overflow-y: auto;
             overflow-x: hidden;
@@ -85,15 +85,15 @@
         #unit-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 1px; }
 
         .unit-item {
-            width: 16px;
-            height: 16px;
+            width: 24px;
+            height: 24px;
             background: #333;
             border: 1px solid #555;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 9px;
+            font-size: 14px;
             cursor: pointer;
             flex-shrink: 0;
             position: relative;
@@ -115,17 +115,17 @@
         /* RADIAL MENU CSS */
         #radial-container {
             position: relative;
-            width: 40px; height: 40px;
+            width: 60px; height: 60px;
             margin: 0 auto 5px auto;
             touch-action: none;
         }
         #main-icon {
-            width: 35px; height: 35px;
+            width: 52px; height: 52px;
             border-radius: 50%;
             background: #444;
             border: 2px solid #888;
             color: white;
-            font-size: 15px;
+            font-size: 22px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
             position: relative;
@@ -141,28 +141,28 @@
         }
         #radial-options.open { opacity: 1; pointer-events: auto; }
         .radial-option {
-            width: 25px; height: 25px;
+            width: 37px; height: 37px;
             border-radius: 50%;
             background: #333;
             border: 1px solid #666;
             color: white;
-            font-size: 12px;
+            font-size: 18px;
             display: flex; align-items: center; justify-content: center;
             position: absolute;
-            top: 7.5px; left: 7.5px; /* Center relative to container */
+            top: 11.5px; left: 11.5px; /* Center relative to container */
             transition: transform 0.2s, background 0.2s;
             box-shadow: 0 0 3px black;
         }
         /* Positions: Basic(Left), Spells(Top), Build(Right) */
-        .radial-option[data-tab="basic"] { transform: translate(-35px, -10px); }
-        .radial-option[data-tab="spells"] { transform: translate(0px, -45px); }
-        .radial-option[data-tab="build"] { transform: translate(35px, -10px); }
+        .radial-option[data-tab="basic"] { transform: translate(-50px, -15px); }
+        .radial-option[data-tab="spells"] { transform: translate(0px, -65px); }
+        .radial-option[data-tab="build"] { transform: translate(50px, -15px); }
 
         .radial-option.highlight { background: #FFD700; color: black; transform: scale(1.2) !important; z-index: 25; }
         /* Keep positions when highlighted */
-        .radial-option[data-tab="basic"].highlight { transform: translate(-35px, -10px) scale(1.2); }
-        .radial-option[data-tab="spells"].highlight { transform: translate(0px, -45px) scale(1.2); }
-        .radial-option[data-tab="build"].highlight { transform: translate(35px, -10px) scale(1.2); }
+        .radial-option[data-tab="basic"].highlight { transform: translate(-50px, -15px) scale(1.2); }
+        .radial-option[data-tab="spells"].highlight { transform: translate(0px, -65px) scale(1.2); }
+        .radial-option[data-tab="build"].highlight { transform: translate(50px, -15px) scale(1.2); }
 
     </style>
 </head>
@@ -234,7 +234,7 @@
                 <div class="action-btn" onclick="selectAction('build_fire')" id="btn-build_fire">🔥<span class="label">Tempel (40)</span></div>
                 <div class="action-btn" onclick="selectAction('build_spy')" id="btn-build_spy">🌙<span class="label">Geist (40)</span></div>
                 <div class="action-btn" onclick="selectAction('build_shipyard')" id="btn-build_shipyard">⚓<span class="label">Werft (50)</span></div>
-                <div class="action-btn" onclick="selectAction('build_boat')" id="btn-build_boat">⛵<span class="label">Boot (25)</span></div>
+                <div class="action-btn" onclick="selectAction('build_airship')" id="btn-build_airship">🎈<span class="label">Luftschiff (25)</span></div>
             </div>
         </div>
     </div>
@@ -764,7 +764,7 @@
         const hasBrave = selectedUnits.some(u => u.type === 'wild');
         const hasSelection = selectedUnits.length > 0;
 
-        const hasBoat = selectedUnits.length === 1 && selectedUnits[0].type === 'boat';
+        const hasAirship = selectedUnits.length === 1 && selectedUnits[0].type === 'airship';
 
         document.getElementById('tab-spells').style.display = hasShaman ? 'flex' : 'none';
         document.getElementById('tab-build').style.display = hasBrave ? 'flex' : 'none';
@@ -772,7 +772,7 @@
 
         // Unload Button
         const unloadBtn = document.getElementById('btn-unload');
-        if(unloadBtn) unloadBtn.style.display = (hasBoat && selectedUnits[0].passengers.length > 0) ? 'flex' : 'none';
+        if(unloadBtn) unloadBtn.style.display = (hasAirship && selectedUnits[0].passengers.length > 0) ? 'flex' : 'none';
 
         // Auto-switch tabs if needed
         if(hasSelection) {
@@ -801,10 +801,12 @@
             blast: 10, lightning: 30, convert: 10, raise: 5, lower: 5, flatten: 10, landbridge: 20,
             swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40,
             build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
-            build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy
+            build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
         };
-        if (mana < costs[currentAction]) return;
-        mana -= costs[currentAction];
+        const cost = costs[currentAction];
+        if (cost === undefined || isNaN(cost)) return;
+        if (mana < cost) return;
+        mana -= cost;
         updateUI();
 
         if (currentAction === 'blast') {
@@ -985,7 +987,8 @@
                  }
             });
         }
-        else if (currentAction === 'build_boat') {
+        else if (currentAction === 'build_airship') {
+            // Build Airship
             // Find nearest shipyard
             let nearest = null; let minD = 50;
             buildings.forEach(b => {
@@ -996,27 +999,19 @@
             });
 
             if(nearest) {
-                // Find spawn spot
-                // Simple: Spawn at clicked location if water, or near shipyard
-                const h = getHeight(x, z);
-                if(h < 2.0) {
-                     const boat = new Humanoid(0, 'boat', x, z);
-                     units.push(boat);
-                     spawnPulse(x, h, z, 0xFFFFFF);
-                     SoundManager.playSound('construct');
-                } else {
-                    // Try to find water near shipyard
-                    // Simple fallback: spawn at x,z regardless, physics will handle?
-                    // No, Humanoid constructor sets height.
-                    // We need to ensure it's water.
-                    // Let's assume user clicked on water.
-                }
+                 const h = getHeight(x, z);
+                 const airship = new Humanoid(0, 'airship', x, z);
+                 // Airship height override
+                 airship.mesh.position.y = Math.max(h, 10);
+                 units.push(airship);
+                 spawnPulse(x, h, z, 0xFFFFFF);
+                 SoundManager.playSound('construct');
             } else {
                  // No shipyard nearby
             }
         }
         else if (currentAction === 'unload') {
-            if(selectedUnits.length === 1 && selectedUnits[0].type === 'boat') {
+            if(selectedUnits.length === 1 && selectedUnits[0].type === 'airship') {
                 selectedUnits[0].unload();
             }
         }
@@ -1379,7 +1374,7 @@
             if(type === 'warrior') { this.maxHp = 200; this.damage = 15; }
             if(type === 'firewarrior') { this.maxHp = 120; this.damage = 25; this.range = 12; this.attackSpeed = 2.0; }
             if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; }
-            if(type === 'boat') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; }
+            if(type === 'airship') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; }
 
             this.hp = this.maxHp; this.recoverTimer = 0;
             this.shielded = false;
@@ -1405,14 +1400,25 @@
             this.mesh.add(this.hpGroup);
 
             // Body Parts
-            if(type === 'boat') {
-                 const hull = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), new THREE.MeshLambertMaterial({color: COLORS.wood}));
-                 hull.position.y = 0.5;
-                 this.mesh.add(hull);
-                 const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3), new THREE.MeshLambertMaterial({color: COLORS.wood}));
-                 mast.position.set(0, 2, 0); this.mesh.add(mast);
-                 const sail = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshLambertMaterial({color: 0xFFFFFF, side: THREE.DoubleSide}));
-                 sail.position.set(0, 2.5, 0.5); sail.rotation.y = Math.PI/2; this.mesh.add(sail);
+            if(type === 'airship') {
+                 // Basket
+                 const basket = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 3), new THREE.MeshLambertMaterial({color: COLORS.wood}));
+                 basket.position.y = 0.5;
+                 this.mesh.add(basket);
+                 // Ropes
+                 const rope1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshLambertMaterial({color: 0x888888}));
+                 rope1.position.set(0.9, 2, 1.4); this.mesh.add(rope1);
+                 const rope2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshLambertMaterial({color: 0x888888}));
+                 rope2.position.set(-0.9, 2, 1.4); this.mesh.add(rope2);
+                 const rope3 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshLambertMaterial({color: 0x888888}));
+                 rope3.position.set(0.9, 2, -1.4); this.mesh.add(rope3);
+                 const rope4 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshLambertMaterial({color: 0x888888}));
+                 rope4.position.set(-0.9, 2, -1.4); this.mesh.add(rope4);
+                 // Balloon
+                 const balloon = new THREE.Mesh(new THREE.SphereGeometry(2.5, 16, 16), new THREE.MeshLambertMaterial({color: 0xEEEEEE}));
+                 balloon.scale.set(1, 0.8, 1.5);
+                 balloon.position.set(0, 4.5, 0);
+                 this.mesh.add(balloon);
             } else {
                 this.torso = new THREE.Group(); this.torso.position.y = 0.9; this.mesh.add(this.torso);
                 this.torso.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.25), shirtMat));
@@ -1435,7 +1441,7 @@
                 mask.position.z = 0.16; this.head.add(mask);
             }
 
-            if (type !== 'boat') {
+            if (type !== 'airship') {
                 const createLimb = (w, h, mat, px, py, pz) => {
                     const group = new THREE.Group(); group.position.set(px, py, pz);
                     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mat); mesh.position.y = -h / 2; mesh.castShadow = true;
@@ -1579,7 +1585,7 @@
 
             // Water constraint
             const WATER_LEVEL = 2.0;
-            if (this.type !== 'boat' && this.state !== 'dead') {
+            if (this.type !== 'airship' && this.state !== 'dead') {
                 // If deep in water, push out or damage? Or just prevent entry?
                 // Here we prevent entry in movement logic below, but if stuck:
                 const h = getHeight(this.mesh.position.x, this.mesh.position.z);
@@ -1690,11 +1696,11 @@
                     const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
 
                     let canMove = true;
-                    if(this.type !== 'boat' && nextH < 2.0) canMove = false;
+                    if(this.type !== 'airship' && nextH < 2.0) canMove = false;
 
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
-                        const speed = this.moveSpeed * slopeFactor;
+                        const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
                         this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
                         this.mesh.rotation.y = Math.atan2(dx, dz);
                     } else {
@@ -1718,8 +1724,9 @@
 
                 // Check boat entry while moving (allow early entry)
                 if(this.targetBoat && this.targetBoat.state !== 'dead') {
-                     const d = this.mesh.position.distanceTo(this.targetBoat.mesh.position);
-                     if(d < 5.0) { // Large radius for boarding
+                     // 3D distance check, ignore Y difference essentially for trigger
+                     const distSq = (this.mesh.position.x - this.targetBoat.mesh.position.x)**2 + (this.mesh.position.z - this.targetBoat.mesh.position.z)**2;
+                     if(distSq < 25.0) { // 5.0 distance squared
                          if(this.targetBoat.loadUnit(this)) {
                              this.targetBoat = null;
                              this.state = 'idle'; this.velocity.set(0,0,0);
@@ -1741,13 +1748,13 @@
 
                     let canMove = true;
                     // Allow moving into water if targeting a boat
-                    if(this.type !== 'boat' && nextH < 2.0) {
+                    if(this.type !== 'airship' && nextH < 2.0) {
                         if(!this.targetBoat) canMove = false;
                     }
 
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
-                        const speed = this.moveSpeed * slopeFactor;
+                        const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
                         this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
                         this.mesh.rotation.y = Math.atan2(dx, dz);
                     } else {
@@ -1805,27 +1812,32 @@
         unload() {
             if(!this.passengers.length) return;
 
-            // Find valid land spot around boat
-            // Simple: Just dump them at boat pos if close to land or check radius
+            // Unload below airship if safe, or find safe spot
             const r = 3;
             for(let i=this.passengers.length-1; i>=0; i--) {
                 const p = this.passengers[i];
-                // Try find land
-                let found = false;
-                for(let angle=0; angle<Math.PI*2; angle+=0.5) {
-                    const tx = this.mesh.position.x + Math.cos(angle)*r;
-                    const tz = this.mesh.position.z + Math.sin(angle)*r;
-                    if(getHeight(tx, tz) >= 2.0) {
-                        p.mesh.position.set(tx, getHeight(tx, tz), tz);
-                        p.mesh.visible = true;
-                        p.state = 'idle';
-                        p.transportedBy = null;
-                        this.passengers.splice(i, 1);
-                        found = true;
-                        spawnPulse(tx, p.mesh.position.y, tz, 0xFFFFFF);
-                        break;
+                // Check directly below first
+                let tx = this.mesh.position.x;
+                let tz = this.mesh.position.z;
+                if (getHeight(tx, tz) < 2.0) {
+                    // Try find land in radius
+                    let found = false;
+                    for(let angle=0; angle<Math.PI*2; angle+=0.5) {
+                        const scanX = this.mesh.position.x + Math.cos(angle)*r;
+                        const scanZ = this.mesh.position.z + Math.sin(angle)*r;
+                        if(getHeight(scanX, scanZ) >= 2.0) {
+                            tx = scanX; tz = scanZ; found = true; break;
+                        }
                     }
+                    if(!found) continue; // Can't unload this unit safely yet
                 }
+
+                p.mesh.position.set(tx, getHeight(tx, tz), tz);
+                p.mesh.visible = true;
+                p.state = 'idle';
+                p.transportedBy = null;
+                this.passengers.splice(i, 1);
+                spawnPulse(tx, p.mesh.position.y, tz, 0xFFFFFF);
             }
         }
     }
@@ -2308,14 +2320,11 @@
                  const hitUnit = meshToUnit.get(unitHits[0].object);
 
                  // Enter Boat Logic
-                 if(hitUnit && hitUnit.type === 'boat' && hitUnit.faction === 0) {
+                 if(hitUnit && hitUnit.type === 'airship' && hitUnit.faction === 0) {
                      if(selectedUnits.length > 0) {
                          selectedUnits.forEach(u => {
-                             if(u.type !== 'boat' && !u.isShaman) {
-                                 // Simple: Teleport if close, or walk to?
-                                 // Walk to logic:
+                             if(u.type !== 'airship' && !u.isShaman) {
                                  u.goto(hitUnit.mesh.position.x, hitUnit.mesh.position.z);
-                                 // We need a way to check arrival and enter
                                  u.targetBoat = hitUnit;
                              }
                          });
@@ -2366,7 +2375,8 @@
         const playerBraves = units.filter(u => u.faction === 0 && u.type === 'wild').length;
         const manaRate = 1.0 + (playerBraves * 0.2); // Base + bonus per brave
 
-        if(mana < 100) { mana += dt * manaRate; updateUI(); }
+        if (isNaN(mana)) mana = 0;
+        if(mana < 100) { mana += dt * manaRate; if(isNaN(mana)) mana = 0; updateUI(); }
 
         if(chunkWaterMat && chunkWaterMat.uniforms) chunkWaterMat.uniforms.time.value += dt;
 
