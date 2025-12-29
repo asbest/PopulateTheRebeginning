@@ -67,32 +67,33 @@
             position: absolute;
             top: 70px;
             left: 0;
-            width: 60px;
+            width: 40px;
             bottom: 120px;
             overflow-y: auto;
             overflow-x: hidden;
             background: rgba(0,0,0,0.2);
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 5px;
             padding: 5px;
             pointer-events: auto;
-            scrollbar-width: none;
             z-index: 10;
             touch-action: pan-y;
         }
-        #unit-list::-webkit-scrollbar { display: none; }
+        #unit-list::-webkit-scrollbar { width: 4px; }
+        #unit-list::-webkit-scrollbar-track { background: transparent; }
+        #unit-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 2px; }
 
         .unit-item {
-            width: 46px;
-            height: 46px;
+            width: 32px;
+            height: 32px;
             background: #333;
             border: 2px solid #555;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 18px;
             cursor: pointer;
             flex-shrink: 0;
             position: relative;
@@ -106,7 +107,7 @@
 
         .hp-indicator {
             position: absolute;
-            bottom: 3px; left: 10%; width: 80%; height: 3px; background: #555;
+            bottom: 2px; left: 10%; width: 80%; height: 2px; background: #555;
         }
         .hp-val { height: 100%; background: #00FF00; width: 100%; }
         .unit-item.enemy .hp-val { background: #FF0000; }
@@ -186,7 +187,7 @@
 <script>
     // --- KONFIGURATION ---
     const CHUNK_SIZE = 40; 
-    const CHUNK_RES = 40; 
+    const CHUNK_RES = 150;
     const RENDER_DISTANCE = 3;
     const NOISE_SCALE = 0.02;
     const MIN_ZOOM = 3;
@@ -197,6 +198,8 @@
         lava: 0xCF1020, skin: 0xD2B48C, shirt_wild: 0x8B4513, shirt_shaman: 0xFF4500,
         wood: 0x8B4513, straw: 0xDAA520, stone: 0x808080, red: 0x8B0000, yellow: 0xFFD700, blue: 0x4169E1
     };
+
+    const BUILDING_COSTS = { hut: 15, tower: 20, warrior: 30, fire: 40, spy: 40 };
 
     // --- AUDIO SYSTEM ---
     const SoundManager = {
@@ -352,17 +355,36 @@
         y += simplex.noise2D(x * NOISE_SCALE, z * NOISE_SCALE) * 12;
         y += simplex.noise2D(x * NOISE_SCALE * 2, z * NOISE_SCALE * 2) * 4;
         y += simplex.noise2D(x * NOISE_SCALE * 4, z * NOISE_SCALE * 4) * 1.5; 
-        if (y < 2) y *= 0.8; 
-        if (y > 8) y *= 1.2;
+
+        // Continuous smoothing
+        if (y < 2.0) y -= (2.0 - y) * 0.2;
+        if (y > 8.0) y += (y - 8.0) * 0.5;
         return y;
     }
 
+    function getTerrainMod(x, z) {
+        const x1 = Math.floor(x);
+        const z1 = Math.floor(z);
+        const x2 = x1 + 1;
+        const z2 = z1 + 1;
+
+        const fx = x - x1;
+        const fz = z - z1;
+
+        const v11 = terrainMods.get(`${x1},${z1}`) || 0;
+        const v21 = terrainMods.get(`${x2},${z1}`) || 0;
+        const v12 = terrainMods.get(`${x1},${z2}`) || 0;
+        const v22 = terrainMods.get(`${x2},${z2}`) || 0;
+
+        // Bilinear interpolation
+        const i1 = v11 * (1 - fx) + v21 * fx;
+        const i2 = v12 * (1 - fx) + v22 * fx;
+        return i1 * (1 - fz) + i2 * fz;
+    }
+
     function getHeight(x, z) {
-        const ix = Math.round(x);
-        const iz = Math.round(z);
-        const key = `${ix},${iz}`;
         let h = getBaseHeight(x, z);
-        if (terrainMods.has(key)) h += terrainMods.get(key);
+        h += getTerrainMod(x, z);
         return h;
     }
 
@@ -383,9 +405,38 @@
             // Init THREE globals
             clock = new THREE.Clock();
             cameraLookAt = new THREE.Vector3(0, 0, 0);
-            chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-            chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE);
-            chunkWaterMat = new THREE.MeshBasicMaterial({color: COLORS.water, transparent: true, opacity: 0.6});
+            chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false });
+            chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES/2, CHUNK_RES/2);
+
+            const waterVertexShader = `
+                uniform float time;
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    vec3 pos = position;
+                    float freq = 0.5;
+                    float amp = 0.15;
+                    pos.z += sin(pos.x * freq + time) * amp + sin(pos.y * freq * 0.8 + time) * amp;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                }
+            `;
+            const waterFragmentShader = `
+                uniform vec3 color;
+                varying vec2 vUv;
+                void main() {
+                    gl_FragColor = vec4(color, 0.6);
+                }
+            `;
+            chunkWaterMat = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 },
+                    color: { value: new THREE.Color(COLORS.water) }
+                },
+                vertexShader: waterVertexShader,
+                fragmentShader: waterFragmentShader,
+                transparent: true,
+                side: THREE.DoubleSide
+            });
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);
@@ -585,7 +636,8 @@
         const costs = { 
             blast: 10, lightning: 30, convert: 10, raise: 5, lower: 5, flatten: 10, landbridge: 20,
             swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40,
-            build_hut: 15, build_tower: 20, build_warrior: 30, build_fire: 40, build_spy: 40 
+            build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
+            build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy
         };
         if (mana < costs[currentAction]) return;
         mana -= costs[currentAction];
@@ -824,14 +876,22 @@
 
             scene.add(group);
             
+            // Construction logic
+            const buildTime = BUILDING_COSTS[type] || 5; // Default 5s if not found
+            mesh.scale.y = 0.01; // Start flat
+
             const building = { 
                 mesh: group, 
+                visualMesh: mesh,
                 hpBar: hpBar,
                 hpGroup: hpGroup,
                 type: type, 
                 faction: faction,
                 hp: maxHp, 
                 maxHp: maxHp,
+                constructionTimer: buildTime,
+                totalBuildTime: buildTime,
+                underConstruction: true,
                 takeDamage: function(amount) {
                     this.hp -= amount;
                     this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
@@ -848,6 +908,28 @@
                 },
                 update: function(dt) {
                     this.hpGroup.lookAt(camera.position);
+
+                    if(this.underConstruction) {
+                        this.constructionTimer -= dt;
+                        const progress = 1.0 - (this.constructionTimer / this.totalBuildTime);
+                        this.visualMesh.scale.y = Math.max(0.01, progress);
+
+                        if(this.constructionTimer <= 0) {
+                            this.underConstruction = false;
+                            this.visualMesh.scale.y = 1.0;
+                            spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFFFFFF, 10);
+
+                            // On Complete Logic
+                            if(this.type === 'hut') {
+                                // Spawn initial brave
+                                const u = new Humanoid(this.faction, 'wild', this.mesh.position.x + 2, this.mesh.position.z + 2);
+                                units.push(u);
+                                spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFFFFF);
+                            }
+                        }
+                        return; // Skip other updates while building
+                    }
+
                     if(this.training) {
                         this.trainTimer -= dt;
                         if(this.trainTimer <= 0) {
@@ -862,19 +944,6 @@
             
             buildings.push(building);
             spawnExplosion(x, baseH, z, 0xFFD700, 15);
-            
-            if(type === 'hut') {
-                setTimeout(() => {
-                    if(!building.dead) {
-                        // Assuming building belongs to player for now. Enemy AI will need its own building creation logic.
-                        // Or we infer faction from proximity or store faction in building.
-                        // For simplicity, let's assume buildings created via UI are Player (0).
-                        const u = new Humanoid(faction, 'wild', x+2, z+2);
-                        units.push(u);
-                        spawnPulse(x+2, baseH, z+2, 0xFFFFFF);
-                    }
-                }, 2000);
-            }
         }
     }
 
@@ -950,7 +1019,7 @@
         const cz = Math.round(cameraLookAt.z / CHUNK_SIZE);
         const activeKeys = new Set();
         let createdCount = 0;
-        const MAX_CHUNKS_PER_FRAME = 8;
+        const MAX_CHUNKS_PER_FRAME = 2;
 
         for(let x = -RENDER_DISTANCE; x <= RENDER_DISTANCE; x++) {
             for(let z = -RENDER_DISTANCE; z <= RENDER_DISTANCE; z++) {
@@ -992,13 +1061,29 @@
         const pos = geo.attributes.position;
         const colors = []; const col = new THREE.Color();
         const offX = cx * CHUNK_SIZE; const offZ = cz * CHUNK_SIZE;
+
+        const cWater = new THREE.Color(COLORS.water);
+        const cSand = new THREE.Color(COLORS.sand);
+        const cGrass = new THREE.Color(COLORS.grass);
+        const cRock = new THREE.Color(COLORS.rock);
+        const cSnow = new THREE.Color(COLORS.snow);
+        const cLava = new THREE.Color(COLORS.lava);
+
         for(let i=0; i<pos.count; i++) {
             const wx = pos.getX(i) + offX; const wz = pos.getZ(i) + offZ;
             let h = getHeight(wx, wz);
             pos.setY(i, h);
-            if(h < 0.5) col.setHex(COLORS.water); else if(h < 2.5) col.setHex(COLORS.sand);
-            else if(h < 9) col.setHex(COLORS.grass); else if(h < 14) col.setHex(COLORS.rock);
-            else if(h > 20) col.setHex(COLORS.lava); else col.setHex(COLORS.snow);
+
+            if (h < 2.0) col.copy(cSand);
+            else if (h < 3.0) col.copy(cSand).lerp(cGrass, h - 2.0);
+            else if (h < 8.0) col.copy(cGrass);
+            else if (h < 9.0) col.copy(cGrass).lerp(cRock, h - 8.0);
+            else if (h < 13.0) col.copy(cRock);
+            else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
+            else if (h < 19.0) col.copy(cSnow);
+            else if (h < 21.0) col.copy(cSnow).lerp(cLava, (h - 19.0) / 2.0);
+            else col.copy(cLava);
+
             if(h > 2.5) col.offsetHSL(0, 0, (Math.random()-0.5)*0.03);
             colors.push(col.r, col.g, col.b);
         }
@@ -1358,14 +1443,11 @@
             } else {
                 // Idle Check Aggro
                 // All unselected units auto aggro
-                if(this.type !== 'wild') { // Braves don't auto aggro usually? Or do they? In Populous they flee.
-                    // For now, only warriors/shamans auto aggro
-                    if (!selectedUnits.includes(this)) {
-                        const target = this.findTarget();
-                        if(target) {
-                            this.attackTarget = target;
-                            this.state = 'combat';
-                        }
+                if (!selectedUnits.includes(this)) {
+                    const target = this.findTarget();
+                    if(target) {
+                        this.attackTarget = target;
+                        this.state = 'combat';
                     }
                 }
 
@@ -1901,6 +1983,9 @@
         const manaRate = 1.0 + (playerBraves * 0.2); // Base + bonus per brave
 
         if(mana < 100) { mana += dt * manaRate; updateUI(); }
+
+        if(chunkWaterMat && chunkWaterMat.uniforms) chunkWaterMat.uniforms.time.value += dt;
+
         updateChunks();
         enemyAI.update(dt);
         units.forEach(u => u.update(dt));
