@@ -77,11 +77,12 @@
             gap: 5px;
             padding: 5px;
             pointer-events: auto;
-            scrollbar-width: none;
             z-index: 10;
             touch-action: pan-y;
         }
-        #unit-list::-webkit-scrollbar { display: none; }
+        #unit-list::-webkit-scrollbar { width: 4px; }
+        #unit-list::-webkit-scrollbar-track { background: transparent; }
+        #unit-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 2px; }
 
         .unit-item {
             width: 32px;
