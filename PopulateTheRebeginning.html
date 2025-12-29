@@ -187,7 +187,7 @@
 <script>
     // --- KONFIGURATION ---
     const CHUNK_SIZE = 40; 
-    const CHUNK_RES = 80;
+    const CHUNK_RES = 150;
     const RENDER_DISTANCE = 3;
     const NOISE_SCALE = 0.02;
     const MIN_ZOOM = 3;
@@ -971,7 +971,7 @@
         const cz = Math.round(cameraLookAt.z / CHUNK_SIZE);
         const activeKeys = new Set();
         let createdCount = 0;
-        const MAX_CHUNKS_PER_FRAME = 8;
+        const MAX_CHUNKS_PER_FRAME = 2;
 
         for(let x = -RENDER_DISTANCE; x <= RENDER_DISTANCE; x++) {
             for(let z = -RENDER_DISTANCE; z <= RENDER_DISTANCE; z++) {
