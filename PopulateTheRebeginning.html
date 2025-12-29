@@ -1726,7 +1726,7 @@
                     }
                 }
             }
-            else if(this.state === 'move' && this.target && this.isGrounded) {
+            else if(this.state === 'move' && this.target && (this.isGrounded || this.type === 'airship')) {
                 const dx = this.target.x - this.mesh.position.x;
                 const dz = this.target.z - this.mesh.position.z;
                 const dist = Math.sqrt(dx*dx + dz*dz);
