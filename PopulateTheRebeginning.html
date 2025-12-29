@@ -814,6 +814,7 @@
 
             // Damage
             let hit = false;
+            burnTreesAt(x, z, 5); // Burn trees
             units.forEach(u => {
                  const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                  if(dist < 4) {
@@ -991,6 +992,35 @@
     }
 
     // --- TERRAIN FUNKTIONEN ---
+    function burnTreesAt(x, z, radius) {
+        Object.values(chunks).forEach(chunk => {
+            if(chunk.userData && chunk.userData.trees) {
+                chunk.userData.trees.forEach(tree => {
+                    if(tree.burned) return;
+                    const dist = Math.sqrt((tree.mesh.position.x - x)**2 + (tree.mesh.position.z - z)**2);
+                    if(dist < radius) {
+                        tree.burned = true;
+                        // Charred visual
+                        const t = tree.mesh.children[0]; // Trunk
+                        const l = tree.mesh.children[1]; // Leaves
+                        t.material = t.material.clone();
+                        t.material.color.setHex(0x111111); // Black trunk
+
+                        l.material = l.material.clone();
+                        l.material.color.setHex(0x222222); // Charred leaves
+                        l.scale.set(0.8, 0.5, 0.8); // Shriveled
+
+                        // Smoke
+                        for(let i=0; i<3; i++) {
+                            const p = new Particle(tree.mesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 0x333333, 0.2, 2.0, -1);
+                            particles.push(p);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
     function modifyTerrain(centerX, centerZ, radius, amount) {
         const rSq = radius * radius;
         const modifiedChunks = new Set();
@@ -1105,16 +1135,31 @@
         const wMesh = new THREE.Mesh(chunkWaterGeo, chunkWaterMat);
         wMesh.rotation.x = -Math.PI/2; wMesh.position.set(offX, 0.5, offZ);
         grp.add(wMesh);
-        if(Math.random() > 0.5) { 
-             const lx = (Math.random()-0.5)*CHUNK_SIZE; const lz = (Math.random()-0.5)*CHUNK_SIZE;
-             const h = getHeight(lx+offX, lz+offZ);
-             if(h > 3 && h < 8) {
-                const t = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.25,1,5), new THREE.MeshLambertMaterial({color:0x8B4513}));
-                t.position.set(lx+offX, h+0.5, lz+offZ); t.castShadow = true;
-                const l = new THREE.Mesh(new THREE.ConeGeometry(0.9,2.8,5), new THREE.MeshLambertMaterial({color:0x006400}));
-                l.position.set(lx+offX, h+1.9, lz+offZ); l.castShadow = true;
-                grp.add(t); grp.add(l);
-             }
+
+        grp.userData = { trees: [] };
+        for(let k=0; k<3; k++) {
+            if(Math.random() > 0.5) {
+                 const lx = (Math.random()-0.5)*CHUNK_SIZE; const lz = (Math.random()-0.5)*CHUNK_SIZE;
+                 const h = getHeight(lx+offX, lz+offZ);
+                 if(h > 3 && h < 8) {
+                    const treeGroup = new THREE.Group();
+                    treeGroup.position.set(lx+offX, h, lz+offZ);
+
+                    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.25,1,5), new THREE.MeshLambertMaterial({color:0x8B4513}));
+                    t.position.y = 0.5; t.castShadow = true;
+
+                    const l = new THREE.Mesh(new THREE.ConeGeometry(0.9,2.8,5), new THREE.MeshLambertMaterial({color:0x006400}));
+                    l.position.y = 1.9; l.castShadow = true;
+
+                    treeGroup.add(t); treeGroup.add(l);
+                    grp.add(treeGroup);
+
+                    grp.userData.trees.push({
+                        mesh: treeGroup,
+                        burned: false
+                    });
+                 }
+            }
         }
         return grp;
     }
@@ -1576,6 +1621,8 @@
                 const mods = modifyTerrain(this.x, this.z, 5, 0.2);
                 updateChunks(true, mods);
 
+                burnTreesAt(this.x, this.z, 10);
+
                 // Push & Damage
                 units.forEach(u => {
                     const dist = u.mesh.position.distanceTo(new THREE.Vector3(this.x, u.mesh.position.y, this.z));
@@ -1800,6 +1847,7 @@
             spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFF4500, 20);
             SoundManager.playSound('explosion');
             const impactPos = this.mesh.position;
+            burnTreesAt(impactPos.x, impactPos.z, 8); // Burn trees
             // Einheiten
             units.forEach(u => {
                 const d = u.mesh.position.distanceTo(impactPos);
