@@ -386,7 +386,7 @@
             // Init THREE globals
             clock = new THREE.Clock();
             cameraLookAt = new THREE.Vector3(0, 0, 0);
-            chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+            chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false });
             chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE);
             chunkWaterMat = new THREE.MeshBasicMaterial({color: COLORS.water, transparent: true, opacity: 0.6});
 
@@ -1013,13 +1013,30 @@
         const pos = geo.attributes.position;
         const colors = []; const col = new THREE.Color();
         const offX = cx * CHUNK_SIZE; const offZ = cz * CHUNK_SIZE;
+
+        const cWater = new THREE.Color(COLORS.water);
+        const cSand = new THREE.Color(COLORS.sand);
+        const cGrass = new THREE.Color(COLORS.grass);
+        const cRock = new THREE.Color(COLORS.rock);
+        const cSnow = new THREE.Color(COLORS.snow);
+        const cLava = new THREE.Color(COLORS.lava);
+
         for(let i=0; i<pos.count; i++) {
             const wx = pos.getX(i) + offX; const wz = pos.getZ(i) + offZ;
             let h = getHeight(wx, wz);
             pos.setY(i, h);
-            if(h < 0.5) col.setHex(COLORS.water); else if(h < 2.5) col.setHex(COLORS.sand);
-            else if(h < 9) col.setHex(COLORS.grass); else if(h < 14) col.setHex(COLORS.rock);
-            else if(h > 20) col.setHex(COLORS.lava); else col.setHex(COLORS.snow);
+
+            if (h < 0.5) col.copy(cWater);
+            else if (h < 2.0) col.copy(cSand);
+            else if (h < 3.0) col.copy(cSand).lerp(cGrass, h - 2.0);
+            else if (h < 8.0) col.copy(cGrass);
+            else if (h < 9.0) col.copy(cGrass).lerp(cRock, h - 8.0);
+            else if (h < 13.0) col.copy(cRock);
+            else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
+            else if (h < 19.0) col.copy(cSnow);
+            else if (h < 21.0) col.copy(cSnow).lerp(cLava, (h - 19.0) / 2.0);
+            else col.copy(cLava);
+
             if(h > 2.5) col.offsetHSL(0, 0, (Math.random()-0.5)*0.03);
             colors.push(col.r, col.g, col.b);
         }
