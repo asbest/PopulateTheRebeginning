@@ -112,6 +112,58 @@
         .hp-val { height: 100%; background: #00FF00; width: 100%; }
         .unit-item.enemy .hp-val { background: #FF0000; }
 
+        /* RADIAL MENU CSS */
+        #radial-container {
+            position: relative;
+            width: 80px; height: 80px;
+            margin: 0 auto 10px auto;
+            touch-action: none;
+        }
+        #main-icon {
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            background: #444;
+            border: 3px solid #888;
+            color: white;
+            font-size: 30px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            position: relative;
+            z-index: 20;
+            box-shadow: 0 0 10px black;
+        }
+        #radial-options {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        #radial-options.open { opacity: 1; pointer-events: auto; }
+        .radial-option {
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            background: #333;
+            border: 2px solid #666;
+            color: white;
+            font-size: 24px;
+            display: flex; align-items: center; justify-content: center;
+            position: absolute;
+            top: 10px; left: 10px; /* Center relative to container */
+            transition: transform 0.2s, background 0.2s;
+            box-shadow: 0 0 5px black;
+        }
+        /* Positions: Basic(Left), Spells(Top), Build(Right) */
+        .radial-option[data-tab="basic"] { transform: translate(-70px, -20px); }
+        .radial-option[data-tab="spells"] { transform: translate(0px, -90px); }
+        .radial-option[data-tab="build"] { transform: translate(70px, -20px); }
+
+        .radial-option.highlight { background: #FFD700; color: black; transform: scale(1.2) !important; z-index: 25; }
+        /* Keep positions when highlighted */
+        .radial-option[data-tab="basic"].highlight { transform: translate(-70px, -20px) scale(1.2); }
+        .radial-option[data-tab="spells"].highlight { transform: translate(0px, -90px) scale(1.2); }
+        .radial-option[data-tab="build"].highlight { transform: translate(70px, -20px) scale(1.2); }
+
     </style>
 </head>
 <body>
@@ -126,12 +178,16 @@
     </div>
 
     <div id="bottom-ui">
-        <div id="tabs">
-            <div class="tab-btn" id="tab-basic" onclick="switchTab('basic')" style="display:none;">👣</div>
-            <div class="tab-btn" id="tab-spells" onclick="switchTab('spells')" style="display:none;">⚡</div>
-            <div class="tab-btn" id="tab-build" onclick="switchTab('build')" style="display:none;">🔨</div>
-            <div class="tab-btn" id="btn-multiselect" onclick="toggleMultiSelect()">⊕</div>
+        <!-- Radial Menu Structure -->
+        <div id="radial-container">
+            <div id="main-icon">👣</div>
+            <div id="radial-options">
+                <div class="radial-option" data-tab="basic">👣</div>
+                <div class="radial-option" data-tab="spells">⚡</div>
+                <div class="radial-option" data-tab="build">🔨</div>
+            </div>
         </div>
+        <div id="btn-multiselect" class="tab-btn" onclick="toggleMultiSelect()" style="position:absolute; bottom:20px; right:20px;">⊕</div>
         
         <!-- Select Info / Mode -->
         <div id="menu-select" class="action-menu">
@@ -486,6 +542,11 @@
             c.addEventListener('wheel', onWheel, {passive: false});
             window.addEventListener('resize', onResize);
 
+            setupRadialMenu();
+            // Default to Basic/Move
+            switchTab('basic');
+            selectAction('move');
+
             animate();
         } catch(e) {
             console.error("Init failed:", e);
@@ -494,6 +555,73 @@
     }
 
     // --- UI SYSTEM ---
+    function setupRadialMenu() {
+        const btn = document.getElementById('main-icon');
+        const container = document.getElementById('radial-container');
+        const options = document.getElementById('radial-options');
+        let isHolding = false;
+        let holdTimer = null;
+
+        const startHold = (e) => {
+            isHolding = true;
+            options.classList.add('open');
+            // Prevent default?
+        };
+
+        const moveHold = (e) => {
+            if(!isHolding) return;
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            const y = e.touches ? e.touches[0].clientY : e.clientY;
+
+            // Check overlap
+            document.querySelectorAll('.radial-option').forEach(opt => {
+                const rect = opt.getBoundingClientRect();
+                if(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    opt.classList.add('highlight');
+                } else {
+                    opt.classList.remove('highlight');
+                }
+            });
+        };
+
+        const endHold = (e) => {
+            if(!isHolding) return;
+            isHolding = false;
+            options.classList.remove('open');
+
+            let selected = null;
+            document.querySelectorAll('.radial-option').forEach(opt => {
+                if(opt.classList.contains('highlight')) {
+                    selected = opt.getAttribute('data-tab');
+                    opt.classList.remove('highlight');
+                }
+            });
+
+            if(selected) {
+                switchTab(selected);
+            } else {
+                // If dropped on center or nothing, default to move/basic?
+                // "Walk default selection"
+                const rect = btn.getBoundingClientRect();
+                const x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+                const y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+                // If on center button
+                if(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                     switchTab('basic');
+                     selectAction('move');
+                }
+            }
+        };
+
+        btn.addEventListener('mousedown', startHold);
+        window.addEventListener('mousemove', moveHold);
+        window.addEventListener('mouseup', endHold);
+
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(e); }, {passive:false});
+        window.addEventListener('touchmove', moveHold, {passive:false});
+        window.addEventListener('touchend', endHold);
+    }
+
     window.switchTab = function(tab) {
         // If switching to select tab, set action to select
         if(tab === 'select') {
@@ -505,12 +633,11 @@
             selectAction('move');
         }
 
-        document.querySelectorAll('.tab-btn').forEach(b => {
-             // Only remove active from main tabs, multiselect is separate
-             if(b.id !== 'btn-multiselect') b.classList.remove('active');
-        });
-        const tabBtn = document.getElementById(`tab-${tab}`);
-        if(tabBtn) tabBtn.classList.add('active');
+        // Update Main Icon
+        const mainIcon = document.getElementById('main-icon');
+        if(tab === 'basic' || tab === 'select') mainIcon.innerHTML = '👣';
+        else if(tab === 'spells') mainIcon.innerHTML = '⚡';
+        else if(tab === 'build') mainIcon.innerHTML = '🔨';
 
         document.querySelectorAll('.action-menu').forEach(m => m.style.display = 'none');
         const menu = document.getElementById(`menu-${tab}`);
