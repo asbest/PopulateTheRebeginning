@@ -947,17 +947,41 @@
         }
         else if (currentAction === 'landbridge') {
             const start = shaman.mesh.position.clone();
-            const end = new THREE.Vector3(x, getHeight(x,z), z);
-            const dist = start.distanceTo(end);
+            const targetH = getHeight(start.x, start.z);
+            const dist = Math.sqrt((x - start.x)**2 + (z - start.z)**2);
             const steps = Math.ceil(dist);
-            const dir = end.clone().sub(start).normalize();
+            const dirX = (x - start.x) / dist;
+            const dirZ = (z - start.z) / dist;
 
             const allMods = new Set();
+            const r = 2; // Radius 2 for width 4
+
             for(let i=0; i<=steps; i++) {
-                const p = start.clone().add(dir.clone().multiplyScalar(i));
-                const mods = modifyTerrain(p.x, p.z, 4, 2.0); // Raise path
-                mods.forEach(m => allMods.add(m));
+                const px = start.x + dirX * i;
+                const pz = start.z + dirZ * i;
+
+                for(let ix = Math.floor(px - r); ix <= Math.ceil(px + r); ix++) {
+                    for(let iz = Math.floor(pz - r); iz <= Math.ceil(pz + r); iz++) {
+                        if((ix - px)**2 + (iz - pz)**2 <= r*r) {
+                            const key = `${ix},${iz}`;
+                            const base = getBaseHeight(ix, iz);
+                            terrainMods.set(key, targetH - base);
+                            const cx = Math.round(ix / CHUNK_SIZE);
+                            const cz = Math.round(iz / CHUNK_SIZE);
+                            allMods.add(`${cx},${cz}`);
+                        }
+                    }
+                }
             }
+
+            // Building collapse check
+            buildings.forEach(b => {
+                const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
+                if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
+                    b.takeDamage(100);
+                }
+            });
+
             updateChunks(true, allMods);
             SoundManager.playSound('rumble');
         }
