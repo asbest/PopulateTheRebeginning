@@ -1915,19 +1915,23 @@
         }
 
         init(x, z) {
-            this.baseX = x;
-            this.baseZ = z;
+            // Ensure base is on land
+            const startSafe = findNearestLand(x, z, 50);
+            this.baseX = startSafe.x;
+            this.baseZ = startSafe.z;
+
             // Create initial base
-            createBuilding('hut', x, z, 1);
+            createBuilding('hut', this.baseX, this.baseZ, 1);
             // Create some units
             for(let i=0; i<3; i++) {
-                const spawnX = x + (Math.random()-0.5)*5;
-                const spawnZ = z + (Math.random()-0.5)*5;
+                const spawnX = this.baseX + (Math.random()-0.5)*5;
+                const spawnZ = this.baseZ + (Math.random()-0.5)*5;
                 const safe = findNearestLand(spawnX, spawnZ);
                 units.push(new Humanoid(1, 'wild', safe.x, safe.z));
             }
             // Create a tower
-            createBuilding('tower', x + 5, z + 5, 1);
+            const towerSafe = findNearestLand(this.baseX + 5, this.baseZ + 5, 20);
+            createBuilding('tower', towerSafe.x, towerSafe.z, 1);
         }
 
         update(dt) {
@@ -1955,11 +1959,11 @@
             }
 
             // 2. Expand Base
-            const idleBraves = myUnits.filter(u => u.type === 'wild' && u.state === 'idle');
-            // Aggressive expansion: always try if we have at least one building and one idle brave
-            if (myBuildings.length > 0 && idleBraves.length > 0) {
-                // Try up to 3 times to find a spot per think cycle
-                for(let attempt=0; attempt<3; attempt++) {
+            const myBraves = myUnits.filter(u => u.type === 'wild');
+            // Aggressive expansion: always try if we have at least one building and one brave (busy or idle)
+            if (myBuildings.length > 0 && myBraves.length > 0) {
+                // Try up to 10 times to find a spot per think cycle
+                for(let attempt=0; attempt<10; attempt++) {
                     const ref = myBuildings[Math.floor(Math.random() * myBuildings.length)];
                     const angle = Math.random() * Math.PI * 2;
                     const dist = 10 + Math.random() * 15; // Increased distance range 10-25
@@ -1967,7 +1971,7 @@
                     let tz = ref.mesh.position.z + Math.sin(angle) * dist;
 
                     // Snap to land (function is hoisted and available)
-                    const safe = findNearestLand(tx, tz, 10);
+                    const safe = findNearestLand(tx, tz, 20);
                     tx = safe.x; tz = safe.z;
 
                     // Check land validity again (just in case)
@@ -1975,7 +1979,7 @@
                         // Check spacing
                         let clear = true;
                         for (let b of buildings) {
-                            if (!b.dead && b.mesh.position.distanceTo(new THREE.Vector3(tx, b.mesh.position.y, tz)) < 8.0) {
+                            if (!b.dead && b.mesh.position.distanceTo(new THREE.Vector3(tx, b.mesh.position.y, tz)) < 6.0) {
                                 clear = false; break;
                             }
                         }

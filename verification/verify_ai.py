@@ -1,27 +1,37 @@
-
-from playwright.sync_api import sync_playwright
+import asyncio
+from playwright.async_api import async_playwright
 import os
 
-def run():
-    file_path = os.path.abspath('PopulateTheRebeginning.html')
-    url = f'file://{file_path}'
+async def run():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            args=['--no-sandbox', '--disable-setuid-sandbox']
+        )
+        page = await browser.new_page()
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url)
+        # Capture logs
+        page.on("console", lambda msg: print(f"BROWSER LOG: {msg.text}"))
+        page.on("pageerror", lambda err: print(f"BROWSER ERROR: {err}"))
 
-        # Wait for game to initialize (remove loading screen)
-        page.wait_for_selector('#loading', state='hidden', timeout=10000)
+        url = 'file://' + os.getcwd() + '/PopulateTheRebeginning.html'
+        print(f"Loading: {url}")
+        await page.goto(url)
 
-        # Wait a bit for game loop to run and AI to potentially do something (though 5s might be long for a test)
-        # We mainly verify the game loads and UI is present
-        page.wait_for_timeout(2000)
+        print("Waiting 20 seconds for AI...")
+        await page.wait_for_timeout(20000)
 
-        # Take screenshot of the initial state
-        page.screenshot(path='verification/game_screen.png')
+        enemy_buildings = await page.evaluate("() => buildings.filter(b => b.faction === 1 && !b.dead).length")
+        print(f"Enemy Buildings: {enemy_buildings}")
 
-        browser.close()
+        # Take screenshot regardless of result to visualize the state
+        await page.screenshot(path="verification/game_screen.png")
 
-if __name__ == '__main__':
-    run()
+        if enemy_buildings > 2:
+            print("SUCCESS: Enemy AI has built new buildings.")
+        else:
+            print(f"FAILURE: Enemy AI failed to expand (Count: {enemy_buildings})")
+
+        await browser.close()
+
+if __name__ == "__main__":
+    asyncio.run(run())
