@@ -1658,6 +1658,7 @@
             this.isGrounded = true; this.target = null; this.attackTarget = null; this.state = 'idle'; this.animTime = Math.random() * 100;
             this.lastAttackTime = 0;
             this.path = []; this.pathIndex = 0; this.pathTimer = 0;
+            this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
         }
 
         lookAtTarget(pos) {
@@ -1712,6 +1713,7 @@
         goto(x, z) {
             if(this.state === 'stunned' || this.state === 'dead') return;
             const end = new THREE.Vector3(x, 0, z);
+            this.finalDest = end.clone();
             const isFlying = (this.type === 'airship');
             this.path = Pathfinder.findPath(this.mesh.position, end, isFlying);
             this.pathIndex = 0;
@@ -1963,6 +1965,24 @@
                 }
             }
             else if(this.state === 'move' && this.target && (this.isGrounded || this.type === 'airship')) {
+                // Stuck Detection
+                const movedDist = this.mesh.position.distanceTo(this.lastPos);
+                if(dt > 0.001) {
+                    if(movedDist < this.moveSpeed * dt * 0.2) {
+                        this.stuckTimer += dt;
+                        if(this.stuckTimer > 2.0 && this.finalDest) {
+                            this.stuckTimer = 0;
+                            const isFlying = (this.type === 'airship');
+                            this.path = Pathfinder.findPath(this.mesh.position, this.finalDest, isFlying);
+                            this.pathIndex = 0;
+                            if(this.path.length > 0) this.target = this.path[0];
+                        }
+                    } else {
+                        this.stuckTimer = 0;
+                    }
+                }
+                this.lastPos.copy(this.mesh.position);
+
                 let dx = this.target.x - this.mesh.position.x;
                 let dz = this.target.z - this.mesh.position.z;
                 let dist = Math.sqrt(dx*dx + dz*dz);
@@ -1996,9 +2016,7 @@
                      }
                 }
 
-                if(false) { // Replaced check
-                }
-                else {
+                if(true) {
                     const dir = new THREE.Vector3(dx, 0, dz).normalize();
 
                     // Slope check
