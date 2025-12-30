@@ -6,9 +6,9 @@
     <title>Populate the Rebeginning</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #87CEEB; font-family: 'Segoe UI', sans-serif; user-select: none; touch-action: none; }
-        
+
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
-        
+
         #top-bar { padding: 10px; text-align: center; text-shadow: 1px 1px 2px black; pointer-events: auto; background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);}
         p { margin: 5px 0 0; font-size: 12px; color: white; }
 
@@ -189,7 +189,7 @@
         </div>
         <div id="btn-multiselect" class="tab-btn" onclick="toggleMultiSelect()" style="position:absolute; bottom:20px; right:20px;">⊕</div>
         <div id="btn-unload" class="action-btn" onclick="unloadSelected()" style="position:absolute; bottom:20px; left:calc(50% + 60px); display:none; background:#444; border-color:#fff; z-index: 50;">⬇️</div>
-        
+
         <!-- Select Info / Mode -->
         <div id="menu-select" class="action-menu">
             <div id="action-bar" style="color:white; justify-content:center; padding-top:20px;">
@@ -245,7 +245,7 @@
 
 <script>
     // --- KONFIGURATION ---
-    const CHUNK_SIZE = 40; 
+    const CHUNK_SIZE = 40;
     const CHUNK_RES = 150;
     const RENDER_DISTANCE = 3;
     const NOISE_SCALE = 0.02;
@@ -354,23 +354,23 @@
     let scene, camera, renderer, raycaster;
     let clock;
     let simplex;
-    
+
     // Spielzustand
-    const chunks = {}; 
+    const chunks = {};
     const terrainMods = new Map();
     const units = [];
     const particles = [];
     const projectiles = [];
-    const buildings = []; 
+    const buildings = [];
     const activeEffects = [];
-    
+
     let shaman;
     let selectedUnits = [];
     let cameraLookAt;
-    let viewScale = 35; 
+    let viewScale = 35;
     let currentAction = 'select';
     let mana = 100;
-    
+
     // Input
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
@@ -413,7 +413,7 @@
         let y = 0;
         y += simplex.noise2D(x * NOISE_SCALE, z * NOISE_SCALE) * 12;
         y += simplex.noise2D(x * NOISE_SCALE * 2, z * NOISE_SCALE * 2) * 4;
-        y += simplex.noise2D(x * NOISE_SCALE * 4, z * NOISE_SCALE * 4) * 1.5; 
+        y += simplex.noise2D(x * NOISE_SCALE * 4, z * NOISE_SCALE * 4) * 1.5;
 
         // Continuous smoothing
         if (y < 2.0) y -= (2.0 - y) * 0.2;
@@ -800,7 +800,7 @@
             return;
         }
 
-        const costs = { 
+        const costs = {
             blast: 10, lightning: 30, convert: 10, raise: 5, lower: 5, flatten: 10, landbridge: 20,
             swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40,
             build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
@@ -818,7 +818,7 @@
             const targetPos = new THREE.Vector3(x, h, z);
             projectiles.push(new Fireball(startPos, targetPos));
             SoundManager.playSound('fireball');
-            
+
             const dx = targetPos.x - shaman.mesh.position.x;
             const dz = targetPos.z - shaman.mesh.position.z;
             shaman.mesh.rotation.y = Math.atan2(dx, dz);
@@ -947,41 +947,17 @@
         }
         else if (currentAction === 'landbridge') {
             const start = shaman.mesh.position.clone();
-            const targetH = getHeight(start.x, start.z);
-            const dist = Math.sqrt((x - start.x)**2 + (z - start.z)**2);
+            const end = new THREE.Vector3(x, getHeight(x,z), z);
+            const dist = start.distanceTo(end);
             const steps = Math.ceil(dist);
-            const dirX = (x - start.x) / dist;
-            const dirZ = (z - start.z) / dist;
+            const dir = end.clone().sub(start).normalize();
 
             const allMods = new Set();
-            const r = 2; // Radius 2 for width 4
-
             for(let i=0; i<=steps; i++) {
-                const px = start.x + dirX * i;
-                const pz = start.z + dirZ * i;
-
-                for(let ix = Math.floor(px - r); ix <= Math.ceil(px + r); ix++) {
-                    for(let iz = Math.floor(pz - r); iz <= Math.ceil(pz + r); iz++) {
-                        if((ix - px)**2 + (iz - pz)**2 <= r*r) {
-                            const key = `${ix},${iz}`;
-                            const base = getBaseHeight(ix, iz);
-                            terrainMods.set(key, targetH - base);
-                            const cx = Math.round(ix / CHUNK_SIZE);
-                            const cz = Math.round(iz / CHUNK_SIZE);
-                            allMods.add(`${cx},${cz}`);
-                        }
-                    }
-                }
+                const p = start.clone().add(dir.clone().multiplyScalar(i));
+                const mods = modifyTerrain(p.x, p.z, 4, 2.0); // Raise path
+                mods.forEach(m => allMods.add(m));
             }
-
-            // Building collapse check
-            buildings.forEach(b => {
-                const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
-                if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
-                    b.takeDamage(100);
-                }
-            });
-
             updateChunks(true, allMods);
             SoundManager.playSound('rumble');
         }
@@ -1053,7 +1029,7 @@
         SoundManager.playSound('construct');
         const baseH = getHeight(x, z);
         const radius = 3;
-        
+
         // Auto-Planierung
         const modifiedChunks = new Set();
         for(let ix = Math.floor(x - radius); ix <= Math.ceil(x + radius); ix++) {
@@ -1063,7 +1039,7 @@
                     const key = `${ix},${iz}`;
                     const naturalH = getBaseHeight(ix, iz);
                     const targetMod = baseH - naturalH;
-                    terrainMods.set(key, targetMod); 
+                    terrainMods.set(key, targetMod);
                     const cx = Math.round(ix / CHUNK_SIZE);
                     const cz = Math.round(iz / CHUNK_SIZE);
                     modifiedChunks.add(`${cx},${cz}`);
@@ -1074,7 +1050,7 @@
 
         const group = new THREE.Group();
         group.position.set(x, baseH, z);
-        
+
         let mesh, maxHp;
         if (type === 'hut') { mesh = buildHut(); maxHp = 100; }
         else if (type === 'tower') { mesh = buildTower(); maxHp = 150; }
@@ -1082,35 +1058,35 @@
         else if (type === 'fire') { mesh = buildFireTemple(); maxHp = 300; }
         else if (type === 'spy') { mesh = buildSpyHut(); maxHp = 200; }
         else if (type === 'shipyard') { mesh = buildShipyard(); maxHp = 350; }
-        
+
         if(mesh) {
             group.add(mesh);
-            
+
             // HP Bar für Gebäude
             const hpGroup = new THREE.Group();
             hpGroup.position.set(0, 5, 0); // Hoch über dem Gebäude
             const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.3), new THREE.MeshBasicMaterial({color: 0x880000}));
             hpGroup.add(bgMesh);
-            const fgGeo = new THREE.PlaneGeometry(2.0, 0.3); fgGeo.translate(1.0, 0, 0); 
+            const fgGeo = new THREE.PlaneGeometry(2.0, 0.3); fgGeo.translate(1.0, 0, 0);
             const hpBar = new THREE.Mesh(fgGeo, new THREE.MeshBasicMaterial({color: 0x00FF00}));
             hpBar.position.x = -1.0;
             hpGroup.add(hpBar);
             group.add(hpGroup);
 
             scene.add(group);
-            
+
             // Construction logic
             const buildTime = BUILDING_COSTS[type] || 5; // Default 5s if not found
             mesh.scale.y = 0.01; // Start flat
 
-            const building = { 
-                mesh: group, 
+            const building = {
+                mesh: group,
                 visualMesh: mesh,
                 hpBar: hpBar,
                 hpGroup: hpGroup,
-                type: type, 
+                type: type,
                 faction: faction,
-                hp: maxHp, 
+                hp: maxHp,
                 maxHp: maxHp,
                 constructionTimer: buildTime,
                 totalBuildTime: buildTime,
@@ -1164,7 +1140,7 @@
                     }
                 }
             };
-            
+
             buildings.push(building);
             spawnExplosion(x, baseH, z, 0xFFD700, 15);
         }
@@ -1298,8 +1274,8 @@
                         // Only dispose terrain geometry (child 0), water (child 1) is shared
                         if(chunks[key].children[0] && chunks[key].children[0].geometry) chunks[key].children[0].geometry.dispose();
                     }
-                    chunks[key] = createChunk(cx+x, cz+z); 
-                    scene.add(chunks[key]); 
+                    chunks[key] = createChunk(cx+x, cz+z);
+                    scene.add(chunks[key]);
                     createdCount++;
                 }
             }
@@ -1413,7 +1389,7 @@
             const color = faction === 0 ? COLORS.blue : COLORS.red;
             const skinMat = new THREE.MeshLambertMaterial({color: COLORS.skin});
             const shirtMat = new THREE.MeshLambertMaterial({color: color});
-            
+
             // Selection Ring
             this.selectRing = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.6, 16), new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}));
             this.selectRing.rotation.x = -Math.PI/2; this.selectRing.visible = false; this.mesh.add(this.selectRing);
@@ -1421,7 +1397,7 @@
             // HP Bar
             this.hpGroup = new THREE.Group(); this.hpGroup.position.set(0, 2.3, 0);
             this.hpGroup.add(new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.15), new THREE.MeshBasicMaterial({color: 0x880000})));
-            const fgGeo = new THREE.PlaneGeometry(1.0, 0.15); fgGeo.translate(0.5, 0, 0); 
+            const fgGeo = new THREE.PlaneGeometry(1.0, 0.15); fgGeo.translate(0.5, 0, 0);
             this.hpBar = new THREE.Mesh(fgGeo, new THREE.MeshBasicMaterial({color: faction === 0 ? 0x00FF00 : 0xFF0000}));
             this.hpBar.position.x = -0.5; this.hpGroup.add(this.hpBar);
             this.mesh.add(this.hpGroup);
@@ -1540,7 +1516,7 @@
         die() {
             this.state = 'dead'; this.hpGroup.visible = false; this.velocity.set(0, 0, 0);
         }
-        
+
         applyForce(vec) {
             if(this.state === 'dead') return;
             this.velocity.add(vec); this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 2.0; this.target = null;
@@ -1550,7 +1526,7 @@
             if(this.state === 'stunned' || this.state === 'dead') return;
             this.target = new THREE.Vector3(x, 0, z); this.state = 'move';
         }
-        
+
         findTarget() {
              // Find closest enemy
              let minDist = 1000;
@@ -1599,7 +1575,7 @@
         update(dt) {
             if(this.state === 'transported') return;
             this.hpGroup.lookAt(camera.position); this.animTime += dt;
-            if(!this.isGrounded) this.velocity.y -= 30 * dt; 
+            if(!this.isGrounded) this.velocity.y -= 30 * dt;
             else { this.velocity.x *= 0.9; this.velocity.z *= 0.9; }
             this.mesh.position.addScaledVector(this.velocity, dt);
 
@@ -1665,7 +1641,7 @@
             if (this.state === 'dead') {
                 if(this.mesh.rotation.x > -Math.PI/2) this.mesh.rotation.x -= dt * 5;
                 if(this.mesh.position.y > groundH - 0.2) this.mesh.position.y -= dt * 0.1;
-                return; 
+                return;
             }
 
             // Passive Healing near Buildings
@@ -1704,7 +1680,7 @@
                     this.recoverTimer -= dt;
                     const targetRotX = -Math.PI/2;
                     this.mesh.rotation.x += (targetRotX - this.mesh.rotation.x) * 5 * dt;
-                    this.mesh.rotation.z *= 0.9; 
+                    this.mesh.rotation.z *= 0.9;
                     this.resetAnim();
                     if(this.recoverTimer <= 0) { this.state = 'idle'; this.mesh.rotation.x = 0; }
                 }
@@ -2241,7 +2217,7 @@
         let r = 0; let found = false;
         for(let i=0; i<50; i++) { if(getHeight(r, r) > 2.5) { found = true; break; } r += 20; }
         if(!found) r = 0;
-        cameraLookAt.set(r, 0, r); updateCameraPosition(); updateChunks(); 
+        cameraLookAt.set(r, 0, r); updateCameraPosition(); updateChunks();
         createShaman(r, r); createWildmen(r, r);
 
         // Init Enemy
@@ -2249,7 +2225,7 @@
     }
     function createShaman(x, z) { shaman = new Humanoid(0, 'shaman', x, z); units.push(shaman); }
     function createWildmen(cx, cz) { for(let i=0; i<6; i++) { let x = cx + (Math.random()-0.5)*30; let z = cz + (Math.random()-0.5)*30; if(getHeight(x, z) > 2.5) units.push(new Humanoid(0, 'wild', x, z)); } }
-    
+
     function updateUI() { document.getElementById('mana-text').innerText = Math.floor(mana); document.getElementById('mana-fill').style.width = mana + '%'; }
 
     // Input Handling
@@ -2428,7 +2404,7 @@
         for(let i = activeEffects.length-1; i>=0; i--) {
             if(!activeEffects[i].update(dt)) activeEffects.splice(i, 1);
         }
-        
+
         // Remove dead
         for(let i = buildings.length-1; i>=0; i--) { if(buildings[i].dead) buildings.splice(i, 1); }
 
