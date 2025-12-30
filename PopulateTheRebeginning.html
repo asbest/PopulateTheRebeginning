@@ -155,13 +155,13 @@
         }
         /* Positions: Basic(Left), Spells(Top), Build(Right) */
         .radial-option[data-tab="basic"] { transform: translate(-50px, -15px); }
-        .radial-option[data-tab="spells"] { transform: translate(0px, -65px); }
+        .radial-option[data-tab="spells"] { transform: translate(0, -65px); }
         .radial-option[data-tab="build"] { transform: translate(50px, -15px); }
 
         .radial-option.highlight { background: #FFD700; color: black; transform: scale(1.2) !important; z-index: 25; }
         /* Keep positions when highlighted */
         .radial-option[data-tab="basic"].highlight { transform: translate(-50px, -15px) scale(1.2); }
-        .radial-option[data-tab="spells"].highlight { transform: translate(0px, -65px) scale(1.2); }
+        .radial-option[data-tab="spells"].highlight { transform: translate(0, -65px) scale(1.2); }
         .radial-option[data-tab="build"].highlight { transform: translate(50px, -15px) scale(1.2); }
 
     </style>
@@ -358,10 +358,10 @@
     // Spielzustand
     const chunks = {}; 
     const terrainMods = new Map();
-    const units = [];
+    const units = []; window.units = units;
     const particles = [];
     const projectiles = [];
-    const buildings = []; 
+    const buildings = []; window.buildings = buildings;
     const activeEffects = [];
     
     let shaman;
@@ -613,7 +613,7 @@
                     const cx = rect.left + rect.width / 2;
                     const cy = rect.top + rect.height / 2;
                     const dist = Math.sqrt((x-cx)**2 + (y-cy)**2);
-                    if(dist < 30 && dist < closestDist) { // 30px radius forgiveness
+                    if(dist < 40 && dist < closestDist) { // 40px radius forgiveness
                         closestDist = dist;
                         closestTab = opt.getAttribute('data-tab');
                     }
@@ -624,14 +624,9 @@
             if(selected) {
                 switchTab(selected);
             } else {
-                // If dropped on center or nothing, default to move/basic?
-                // "Walk default selection"
-                const rect = btn.getBoundingClientRect();
-                // If on center button
-                if(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                     switchTab('basic');
-                     selectAction('move');
-                }
+                // Walking is default: if dropped anywhere else (center or void), revert to basic/move
+                switchTab('basic');
+                selectAction('move');
             }
         };
 
@@ -1426,6 +1421,136 @@
         return grp;
     }
 
+    // --- WEGFINDUNG ---
+    class BinaryHeap {
+        constructor(scoreFunction) { this.content = []; this.scoreFunction = scoreFunction; }
+        push(element) { this.content.push(element); this.siftUp(this.content.length - 1); }
+        pop() {
+            const result = this.content[0]; const end = this.content.pop();
+            if (this.content.length > 0) { this.content[0] = end; this.siftDown(0); }
+            return result;
+        }
+        size() { return this.content.length; }
+        siftUp(n) {
+            const element = this.content[n];
+            while (n > 0) {
+                const parentN = Math.floor((n + 1) / 2) - 1;
+                const parent = this.content[parentN];
+                if (this.scoreFunction(element) < this.scoreFunction(parent)) {
+                    this.content[parentN] = element; this.content[n] = parent; n = parentN;
+                } else break;
+            }
+        }
+        siftDown(n) {
+            const length = this.content.length; const element = this.content[n];
+            while (true) {
+                const child2N = (n + 1) * 2; const child1N = child2N - 1;
+                let swap = null;
+                if (child1N < length) {
+                    const child1 = this.content[child1N];
+                    if (this.scoreFunction(child1) < this.scoreFunction(element)) swap = child1N;
+                }
+                if (child2N < length) {
+                    const child2 = this.content[child2N];
+                    if (this.scoreFunction(child2) < (swap === null ? this.scoreFunction(element) : this.scoreFunction(this.content[child1N]))) swap = child2N;
+                }
+                if (swap !== null) { this.content[n] = this.content[swap]; this.content[swap] = element; n = swap; } else break;
+            }
+        }
+    }
+
+    const Pathfinder = {
+        GRID_SIZE: 2.0,
+        findPath: function(startPos, endPos, isFlying = false) {
+            const startNode = { x: Math.round(startPos.x / this.GRID_SIZE), y: Math.round(startPos.z / this.GRID_SIZE) };
+            const endNode = { x: Math.round(endPos.x / this.GRID_SIZE), y: Math.round(endPos.z / this.GRID_SIZE) };
+
+            if(startNode.x === endNode.x && startNode.y === endNode.y) return [];
+
+            const openHeap = new BinaryHeap(node => node.f);
+            const openSet = new Map();
+            const closedSet = new Set();
+
+            startNode.g = 0; startNode.f = 0;
+            openHeap.push(startNode);
+            openSet.set(`${startNode.x},${startNode.y}`, startNode);
+
+            let iterations = 0;
+            const MAX_ITER = 2000;
+
+            while(openHeap.size() > 0) {
+                iterations++;
+                if(iterations > MAX_ITER) break;
+
+                const currentNode = openHeap.pop();
+                const key = `${currentNode.x},${currentNode.y}`;
+                openSet.delete(key);
+                closedSet.add(key);
+
+                if(currentNode.x === endNode.x && currentNode.y === endNode.y) {
+                    const path = [];
+                    let curr = currentNode;
+                    while(curr.parent) {
+                        path.push(new THREE.Vector3(curr.x * this.GRID_SIZE, 0, curr.y * this.GRID_SIZE));
+                        curr = curr.parent;
+                    }
+                    return path.reverse();
+                }
+
+                const neighbors = [
+                    {x:0,y:1}, {x:1,y:0}, {x:0,y:-1}, {x:-1,y:0},
+                    {x:1,y:1}, {x:1,y:-1}, {x:-1,y:1}, {x:-1,y:-1}
+                ];
+
+                for(let offset of neighbors) {
+                    const nx = currentNode.x + offset.x;
+                    const ny = currentNode.y + offset.y;
+                    const nKey = `${nx},${ny}`;
+
+                    if(closedSet.has(nKey)) continue;
+
+                    const wx = nx * this.GRID_SIZE;
+                    const wz = ny * this.GRID_SIZE;
+                    const h = getHeight(wx, wz);
+
+                    if(!isFlying && h < 2.0) continue;
+
+                    // Diagonal corner cutting check
+                    if (Math.abs(offset.x) === 1 && Math.abs(offset.y) === 1) {
+                        if (!isFlying) {
+                            const h1 = getHeight((currentNode.x + offset.x) * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
+                            const h2 = getHeight(currentNode.x * this.GRID_SIZE, (currentNode.y + offset.y) * this.GRID_SIZE);
+                            if (h1 < 2.0 || h2 < 2.0) continue;
+                        }
+                    }
+
+                    const dist = Math.sqrt(offset.x*offset.x + offset.y*offset.y);
+                    const currentH = getHeight(currentNode.x * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
+                    const dh = Math.abs(h - currentH);
+                    if(!isFlying && dh > 2.0) continue;
+
+                    const gScore = currentNode.g + dist + dh * 0.5;
+
+                    let neighbor = openSet.get(nKey);
+                    if(!neighbor) {
+                        neighbor = { x: nx, y: ny, parent: currentNode, g: gScore, f: 0 };
+                        const hScore = Math.sqrt((nx - endNode.x)**2 + (ny - endNode.y)**2);
+                        neighbor.f = neighbor.g + hScore;
+                        openHeap.push(neighbor);
+                        openSet.set(nKey, neighbor);
+                    } else if(gScore < neighbor.g) {
+                        neighbor.g = gScore;
+                        neighbor.parent = currentNode;
+                        neighbor.f = neighbor.g + Math.sqrt((nx - endNode.x)**2 + (ny - endNode.y)**2);
+                        openHeap.push(neighbor);
+                    }
+                }
+            }
+            return [endPos];
+        }
+    };
+    window.Pathfinder = Pathfinder;
+
     // --- CHARAKTER & PHYSIK ---
     class Humanoid {
         constructor(faction, type, x, z) {
@@ -1532,6 +1657,7 @@
             this.velocity = new THREE.Vector3(0,0,0);
             this.isGrounded = true; this.target = null; this.attackTarget = null; this.state = 'idle'; this.animTime = Math.random() * 100;
             this.lastAttackTime = 0;
+            this.path = []; this.pathIndex = 0; this.pathTimer = 0;
         }
 
         lookAtTarget(pos) {
@@ -1585,7 +1711,16 @@
 
         goto(x, z) {
             if(this.state === 'stunned' || this.state === 'dead') return;
-            this.target = new THREE.Vector3(x, 0, z); this.state = 'move';
+            const end = new THREE.Vector3(x, 0, z);
+            const isFlying = (this.type === 'airship');
+            this.path = Pathfinder.findPath(this.mesh.position, end, isFlying);
+            this.pathIndex = 0;
+            if(this.path.length > 0) {
+                this.target = this.path[0];
+                this.state = 'move';
+            } else {
+                this.target = end; this.state = 'move';
+            }
         }
         
         findTarget() {
@@ -1661,8 +1796,8 @@
             if (this.type !== 'airship' && this.state !== 'dead') {
                 const h = getHeight(this.mesh.position.x, this.mesh.position.z);
                 if (h < WATER_LEVEL) {
-                    // Units lose 1% HP per second in water
-                    this.takeDamage(this.maxHp * 0.01 * dt);
+                    // Units lose 10% HP per second in water
+                    this.takeDamage(this.maxHp * 0.10 * dt);
 
                     // Automatically swim to land if not already moving
                     // We set state to 'move' and target to nearest land
@@ -1767,9 +1902,33 @@
                     this.velocity.set(0,0,0);
                     this.attack();
                 } else {
+                    // Pathfinding for combat
+                    this.pathTimer += dt;
+                    let targetPos = this.attackTarget.mesh.position;
+
+                    if(this.pathTimer > 1.0) {
+                         this.pathTimer = 0;
+                         const isFlying = (this.type === 'airship');
+                         // Only recalculate if far
+                         if(dist > 10) {
+                             this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying);
+                             this.pathIndex = 0;
+                         } else {
+                             this.path = []; // Close enough for direct
+                         }
+                    }
+
+                    if(this.path && this.path.length > 0 && this.pathIndex < this.path.length) {
+                        targetPos = this.path[this.pathIndex];
+                        if(this.mesh.position.distanceTo(targetPos) < 1.0) {
+                            this.pathIndex++;
+                            if(this.pathIndex < this.path.length) targetPos = this.path[this.pathIndex];
+                        }
+                    }
+
                     // Move towards
-                    const dx = this.attackTarget.mesh.position.x - this.mesh.position.x;
-                    const dz = this.attackTarget.mesh.position.z - this.mesh.position.z;
+                    const dx = targetPos.x - this.mesh.position.x;
+                    const dz = targetPos.z - this.mesh.position.z;
                     const dir = new THREE.Vector3(dx, 0, dz).normalize();
 
                     // Slope check
@@ -1804,9 +1963,25 @@
                 }
             }
             else if(this.state === 'move' && this.target && (this.isGrounded || this.type === 'airship')) {
-                const dx = this.target.x - this.mesh.position.x;
-                const dz = this.target.z - this.mesh.position.z;
-                const dist = Math.sqrt(dx*dx + dz*dz);
+                let dx = this.target.x - this.mesh.position.x;
+                let dz = this.target.z - this.mesh.position.z;
+                let dist = Math.sqrt(dx*dx + dz*dz);
+
+                // Update Path
+                if(dist < 1.0) {
+                     this.pathIndex++;
+                     if(this.path && this.pathIndex < this.path.length) {
+                         this.target = this.path[this.pathIndex];
+                         dx = this.target.x - this.mesh.position.x;
+                         dz = this.target.z - this.mesh.position.z;
+                         dist = Math.sqrt(dx*dx + dz*dz);
+                     } else {
+                        this.state = 'idle'; this.velocity.set(0,0,0); this.resetAnim();
+                        this.targetBoat = null;
+                        this.path = [];
+                        return;
+                     }
+                }
 
                 // Check boat entry while moving (allow early entry)
                 if(this.targetBoat && this.targetBoat.state !== 'dead') {
@@ -1821,9 +1996,7 @@
                      }
                 }
 
-                if(dist < 0.5) {
-                    this.state = 'idle'; this.velocity.set(0,0,0); this.resetAnim();
-                    this.targetBoat = null;
+                if(false) { // Replaced check
                 }
                 else {
                     const dir = new THREE.Vector3(dx, 0, dz).normalize();
@@ -2024,6 +2197,19 @@
                 }
             }
 
+            // 4. Random Movement for Expansion (Braves)
+            const idleBraves = myUnits.filter(u => u.type === 'wild');
+            idleBraves.forEach(u => {
+                if(u.state === 'idle' && Math.random() < 0.5) { // 50% chance to move if idle
+                     const dist = 10 + Math.random() * 20;
+                     const angle = Math.random() * Math.PI * 2;
+                     const tx = u.mesh.position.x + Math.cos(angle) * dist;
+                     const tz = u.mesh.position.z + Math.sin(angle) * dist;
+                     const safe = findNearestLand(tx, tz, 20);
+                     u.goto(safe.x, safe.z);
+                }
+            });
+
             // 3. Attack Player
             if(myUnits.length > 5) {
                 // Send some to attack player shaman
@@ -2039,7 +2225,7 @@
             }
         }
     }
-    const enemyAI = new EnemyAI();
+    const enemyAI = new EnemyAI(); window.enemyAI = enemyAI;
 
     // --- HELFER KLASSEN (Partikel, Feuerball, Effekte) ---
     class ActiveEffect {
