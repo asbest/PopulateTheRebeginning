@@ -1956,26 +1956,35 @@
 
             // 2. Expand Base
             const idleBraves = myUnits.filter(u => u.type === 'wild' && u.state === 'idle');
-            if (idleBraves.length >= 3 && Math.random() < 0.5 && myBuildings.length > 0) {
-                const ref = myBuildings[Math.floor(Math.random() * myBuildings.length)];
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 10 + Math.random() * 5;
-                const tx = ref.mesh.position.x + Math.cos(angle) * dist;
-                const tz = ref.mesh.position.z + Math.sin(angle) * dist;
+            // Aggressive expansion: always try if we have at least one building and one idle brave
+            if (myBuildings.length > 0 && idleBraves.length > 0) {
+                // Try up to 3 times to find a spot per think cycle
+                for(let attempt=0; attempt<3; attempt++) {
+                    const ref = myBuildings[Math.floor(Math.random() * myBuildings.length)];
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 10 + Math.random() * 15; // Increased distance range 10-25
+                    let tx = ref.mesh.position.x + Math.cos(angle) * dist;
+                    let tz = ref.mesh.position.z + Math.sin(angle) * dist;
 
-                // Check land validity
-                if (getHeight(tx, tz) >= 2.0) {
-                    // Check spacing
-                    let clear = true;
-                    for (let b of buildings) {
-                        if (!b.dead && b.mesh.position.distanceTo(new THREE.Vector3(tx, b.mesh.position.y, tz)) < 8.0) {
-                            clear = false; break;
+                    // Snap to land (function is hoisted and available)
+                    const safe = findNearestLand(tx, tz, 10);
+                    tx = safe.x; tz = safe.z;
+
+                    // Check land validity again (just in case)
+                    if (getHeight(tx, tz) >= 2.0) {
+                        // Check spacing
+                        let clear = true;
+                        for (let b of buildings) {
+                            if (!b.dead && b.mesh.position.distanceTo(new THREE.Vector3(tx, b.mesh.position.y, tz)) < 8.0) {
+                                clear = false; break;
+                            }
                         }
-                    }
-                    if (clear) {
-                        const types = ['hut', 'tower', 'warrior', 'fire'];
-                        const type = types[Math.floor(Math.random() * types.length)];
-                        createBuilding(type, tx, tz, 1);
+                        if (clear) {
+                            const types = ['hut', 'tower', 'warrior', 'fire', 'spy', 'shipyard'];
+                            const type = types[Math.floor(Math.random() * types.length)];
+                            createBuilding(type, tx, tz, 1);
+                            break; // Built one, stop trying this frame
+                        }
                     }
                 }
             }
