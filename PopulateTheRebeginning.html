@@ -803,6 +803,9 @@
         // Prevent building on water
         if (currentAction.startsWith('build_') && getHeight(x, z) < 2.0) return;
 
+        // Prevent building if no brave nearby
+        if (currentAction.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
+
         const costs = { 
             blast: 10, lightning: 30, convert: 10, raise: 5, lower: 5, flatten: 10, landbridge: 20,
             swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40,
@@ -1225,6 +1228,16 @@
     }
 
     // --- TERRAIN FUNKTIONEN ---
+    function isBraveNearby(faction, x, z, radius) {
+        for(let u of units) {
+            if(u.faction === faction && u.type === 'wild' && u.state !== 'dead') {
+                const dist = Math.sqrt((u.mesh.position.x - x)**2 + (u.mesh.position.z - z)**2);
+                if(dist <= radius) return true;
+            }
+        }
+        return false;
+    }
+
     function findNearestLand(x, z, maxRadius = 20) {
         if(getHeight(x, z) >= 2.0) return {x, z};
 
@@ -1646,14 +1659,22 @@
             // Water constraint
             const WATER_LEVEL = 2.0;
             if (this.type !== 'airship' && this.state !== 'dead') {
-                // If deep in water, push out or damage? Or just prevent entry?
-                // Here we prevent entry in movement logic below, but if stuck:
                 const h = getHeight(this.mesh.position.x, this.mesh.position.z);
                 if (h < WATER_LEVEL) {
-                    // stuck in water, maybe push towards land?
-                    // Simple hack: if very deep, maybe die? or just slow?
-                    // User request: "Units may not go through water".
-                    // We handle this in 'combat' and 'move' logic by checking next step.
+                    // Units lose 1% HP per second in water
+                    this.takeDamage(this.maxHp * 0.01 * dt);
+
+                    // Automatically swim to land if not already moving
+                    // We set state to 'move' and target to nearest land
+                    // If target is null or not a land spot, find one.
+                    const isMovingToLand = (this.state === 'move' && this.target && getHeight(this.target.x, this.target.z) >= 2.0);
+
+                    if (!isMovingToLand) {
+                        const safe = findNearestLand(this.mesh.position.x, this.mesh.position.z, 30);
+                        if (safe.x !== this.mesh.position.x || safe.z !== this.mesh.position.z) {
+                            this.goto(safe.x, safe.z);
+                        }
+                    }
                 }
             }
 
@@ -1756,7 +1777,12 @@
                     const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
 
                     let canMove = true;
-                    if(this.type !== 'airship' && nextH < 2.0) canMove = false;
+                    // Prevent entering water from land
+                    // But allow moving if already in water (swimming)
+                    if(this.type !== 'airship') {
+                        const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                        if(nextH < 2.0 && currentH >= 2.0) canMove = false;
+                    }
 
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
@@ -1807,9 +1833,13 @@
                     const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
 
                     let canMove = true;
-                    // Allow moving into water if targeting a boat
-                    if(this.type !== 'airship' && nextH < 2.0) {
-                        if(!this.targetBoat) canMove = false;
+                    // Prevent entering water from land unless targeting boat
+                    // Allow moving if already in water (swimming)
+                    if(this.type !== 'airship') {
+                        const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                        if (nextH < 2.0 && currentH >= 2.0) {
+                             if(!this.targetBoat) canMove = false;
+                        }
                     }
 
                     if(canMove) {
@@ -1964,9 +1994,10 @@
             if (myBuildings.length > 0 && myBraves.length > 0) {
                 // Try up to 10 times to find a spot per think cycle
                 for(let attempt=0; attempt<10; attempt++) {
-                    const ref = myBuildings[Math.floor(Math.random() * myBuildings.length)];
+                    // Pick a brave as reference to satisfy "build only near brave"
+                    const ref = myBraves[Math.floor(Math.random() * myBraves.length)];
                     const angle = Math.random() * Math.PI * 2;
-                    const dist = 10 + Math.random() * 15; // Increased distance range 10-25
+                    const dist = 2 + Math.random() * 6; // Closer range (2-8) to ensure brave is "nearby" (within 10)
                     let tx = ref.mesh.position.x + Math.cos(angle) * dist;
                     let tz = ref.mesh.position.z + Math.sin(angle) * dist;
 
