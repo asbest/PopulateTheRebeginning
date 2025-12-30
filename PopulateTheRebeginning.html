@@ -188,6 +188,7 @@
             </div>
         </div>
         <div id="btn-multiselect" class="tab-btn" onclick="toggleMultiSelect()" style="position:absolute; bottom:20px; right:20px;">⊕</div>
+        <div id="btn-unload" class="tab-btn" onclick="selectAction('unload')" style="position:absolute; bottom:20px; left:calc(50% + 50px); display:none; background:#444; border-color:#fff; z-index: 50;">⬇️</div>
         
         <!-- Select Info / Mode -->
         <div id="menu-select" class="action-menu">
@@ -200,7 +201,6 @@
         <div id="menu-basic" class="action-menu" style="display:none;">
             <div id="action-bar">
                 <div class="action-btn" onclick="selectAction('move')" id="btn-move">👣<span class="label">Gehen</span></div>
-                <div class="action-btn" onclick="selectAction('unload')" id="btn-unload" style="display:none;">⬇️<span class="label">Ausladen</span></div>
             </div>
         </div>
 
@@ -671,6 +671,12 @@
         document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
         const btn = document.getElementById(`btn-${action}`);
         if(btn) btn.classList.add('active');
+    }
+
+    window.unloadSelected = function() {
+        if(selectedUnits.length === 1 && selectedUnits[0].type === 'airship') {
+            selectedUnits[0].unload();
+        }
     }
 
     const UNIT_ICONS = {
