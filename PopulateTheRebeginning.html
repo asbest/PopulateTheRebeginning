@@ -800,6 +800,9 @@
             return;
         }
 
+        // Prevent building on water
+        if (currentAction.startsWith('build_') && getHeight(x, z) < 2.0) return;
+
         const costs = { 
             blast: 10, lightning: 30, convert: 10, raise: 5, lower: 5, flatten: 10, landbridge: 20,
             swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40,
@@ -1051,6 +1054,8 @@
 
     // --- GEBÄUDE SYSTEM ---
     function createBuilding(type, x, z, faction = 0, autoUpdate = true) {
+        if(getHeight(x, z) < 2.0) return;
+
         SoundManager.playSound('construct');
         const baseH = getHeight(x, z);
         const radius = 3;
