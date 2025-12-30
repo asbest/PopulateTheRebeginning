@@ -222,6 +222,7 @@
                 <div class="action-btn" onclick="selectAction('tornado')" id="btn-tornado">🌪️<span class="label">Tornado (60)</span></div>
                 <div class="action-btn" onclick="selectAction('firestorm')" id="btn-firestorm">☄️<span class="label">Sturm (80)</span></div>
                 <div class="action-btn" onclick="selectAction('volcano')" id="btn-volcano">🌋<span class="label">Vulkan (40)</span></div>
+                <div class="action-btn" onclick="selectAction('heal')" id="btn-heal">💖<span class="label">Heilen (10)</span></div>
             </div>
         </div>
 
@@ -803,7 +804,7 @@
 
         const costs = { 
             blast: 10, lightning: 30, convert: 10, raise: 5, lower: 5, flatten: 10, landbridge: 20,
-            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40,
+            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40, heal: 10,
             build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
             build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
         };
@@ -839,6 +840,20 @@
         else if (currentAction === 'volcano') {
             createVolcano(x, z);
             SoundManager.playSound('explosion');
+        }
+        else if (currentAction === 'heal') {
+            SoundManager.playSound('magic');
+            spawnPulse(x, getHeight(x, z), z, 0xFF69B4);
+            units.forEach(u => {
+                if(u.faction === 0 && u.state !== 'dead') {
+                    const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
+                    if(dist < 8) {
+                        u.hp = u.maxHp;
+                        u.hpBar.scale.x = 1.0;
+                        spawnHealing(u.mesh.position.x, u.mesh.position.y + 2, u.mesh.position.z);
+                    }
+                }
+            });
         }
         else if (currentAction === 'tornado') {
             activeEffects.push(new Tornado(x, z));
@@ -1659,6 +1674,7 @@
             this.lastAttackTime = 0;
             this.path = []; this.pathIndex = 0; this.pathTimer = 0;
             this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
+            this.deathTimer = 0;
         }
 
         lookAtTarget(pos) {
@@ -1845,8 +1861,12 @@
             }
 
             if (this.state === 'dead') {
+                this.deathTimer += dt;
                 if(this.mesh.rotation.x > -Math.PI/2) this.mesh.rotation.x -= dt * 5;
-                if(this.mesh.position.y > groundH - 0.2) this.mesh.position.y -= dt * 0.1;
+
+                if (this.deathTimer > 95) {
+                    if(this.mesh.position.y > groundH - 2.0) this.mesh.position.y -= dt * 0.5;
+                }
                 return; 
             }
 
@@ -2749,12 +2769,38 @@
         // Cleanup Dead Units
         for(let i = units.length-1; i>=0; i--) {
             if(units[i].state === 'dead') {
-                const groundH = getHeight(units[i].mesh.position.x, units[i].mesh.position.z);
-                if (units[i].mesh.position.y < groundH - 2.0) {
+                if (units[i].deathTimer > 100) {
                      scene.remove(units[i].mesh);
                      units.splice(i, 1);
                 }
             }
+        }
+
+        // Shaman Rebirth Logic
+        if (shaman && shaman.state === 'dead') {
+             if (!shaman.respawnPending) {
+                 shaman.respawnPending = true;
+                 shaman.respawnTimer = 3.0;
+             } else {
+                 shaman.respawnTimer -= dt;
+                 if (shaman.respawnTimer <= 0) {
+                     const braves = units.filter(u => u.faction === 0 && u.type === 'wild' && u.state !== 'dead');
+                     if (braves.length > 0) {
+                         const brave = braves[Math.floor(Math.random() * braves.length)];
+                         createShaman(brave.mesh.position.x, brave.mesh.position.z);
+                         spawnPulse(shaman.mesh.position.x, shaman.mesh.position.y, shaman.mesh.position.z, 0xFFD700);
+                         SoundManager.playSound('magic');
+                     } else {
+                         // Game Over
+                         if(!window.gameOverAlertShown) {
+                             alert("GAME OVER - Shaman dead and no followers left.");
+                             window.gameOverAlertShown = true;
+                         }
+                     }
+                     // Reset timer to prevent rapid firing if game over alert is dismissed but loop continues
+                     shaman.respawnTimer = 100000;
+                 }
+             }
         }
 
         // Update Unit List
