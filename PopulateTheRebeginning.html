@@ -155,13 +155,13 @@
         }
         /* Positions: Basic(Left), Spells(Top), Build(Right) */
         .radial-option[data-tab="basic"] { transform: translate(-50px, -15px); }
-        .radial-option[data-tab="spells"] { transform: translate(0px, -65px); }
+        .radial-option[data-tab="spells"] { transform: translate(0, -65px); }
         .radial-option[data-tab="build"] { transform: translate(50px, -15px); }
 
         .radial-option.highlight { background: #FFD700; color: black; transform: scale(1.2) !important; z-index: 25; }
         /* Keep positions when highlighted */
         .radial-option[data-tab="basic"].highlight { transform: translate(-50px, -15px) scale(1.2); }
-        .radial-option[data-tab="spells"].highlight { transform: translate(0px, -65px) scale(1.2); }
+        .radial-option[data-tab="spells"].highlight { transform: translate(0, -65px) scale(1.2); }
         .radial-option[data-tab="build"].highlight { transform: translate(50px, -15px) scale(1.2); }
 
     </style>
@@ -358,10 +358,10 @@
     // Spielzustand
     const chunks = {}; 
     const terrainMods = new Map();
-    const units = [];
+    const units = []; window.units = units;
     const particles = [];
     const projectiles = [];
-    const buildings = []; 
+    const buildings = []; window.buildings = buildings;
     const activeEffects = [];
     
     let shaman;
@@ -613,7 +613,7 @@
                     const cx = rect.left + rect.width / 2;
                     const cy = rect.top + rect.height / 2;
                     const dist = Math.sqrt((x-cx)**2 + (y-cy)**2);
-                    if(dist < 30 && dist < closestDist) { // 30px radius forgiveness
+                    if(dist < 40 && dist < closestDist) { // 40px radius forgiveness
                         closestDist = dist;
                         closestTab = opt.getAttribute('data-tab');
                     }
@@ -624,14 +624,9 @@
             if(selected) {
                 switchTab(selected);
             } else {
-                // If dropped on center or nothing, default to move/basic?
-                // "Walk default selection"
-                const rect = btn.getBoundingClientRect();
-                // If on center button
-                if(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                     switchTab('basic');
-                     selectAction('move');
-                }
+                // Walking is default: if dropped anywhere else (center or void), revert to basic/move
+                switchTab('basic');
+                selectAction('move');
             }
         };
 
@@ -1661,8 +1656,8 @@
             if (this.type !== 'airship' && this.state !== 'dead') {
                 const h = getHeight(this.mesh.position.x, this.mesh.position.z);
                 if (h < WATER_LEVEL) {
-                    // Units lose 1% HP per second in water
-                    this.takeDamage(this.maxHp * 0.01 * dt);
+                    // Units lose 10% HP per second in water
+                    this.takeDamage(this.maxHp * 0.10 * dt);
 
                     // Automatically swim to land if not already moving
                     // We set state to 'move' and target to nearest land
@@ -2024,6 +2019,19 @@
                 }
             }
 
+            // 4. Random Movement for Expansion (Braves)
+            const idleBraves = myUnits.filter(u => u.type === 'wild');
+            idleBraves.forEach(u => {
+                if(u.state === 'idle' && Math.random() < 0.5) { // 50% chance to move if idle
+                     const dist = 10 + Math.random() * 20;
+                     const angle = Math.random() * Math.PI * 2;
+                     const tx = u.mesh.position.x + Math.cos(angle) * dist;
+                     const tz = u.mesh.position.z + Math.sin(angle) * dist;
+                     const safe = findNearestLand(tx, tz, 20);
+                     u.goto(safe.x, safe.z);
+                }
+            });
+
             // 3. Attack Player
             if(myUnits.length > 5) {
                 // Send some to attack player shaman
@@ -2039,7 +2047,7 @@
             }
         }
     }
-    const enemyAI = new EnemyAI();
+    const enemyAI = new EnemyAI(); window.enemyAI = enemyAI;
 
     // --- HELFER KLASSEN (Partikel, Feuerball, Effekte) ---
     class ActiveEffect {
