@@ -23,8 +23,8 @@
             display: flex; justify-content: center; gap: 10px; margin-bottom: 5px;
         }
         .tab-btn {
-            width: 20px; height: 20px; border-radius: 50%; background: #444; border: 2px solid #888;
-            color: white; font-size: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+            width: 24px; height: 24px; border-radius: 50%; background: #444; border: 2px solid #888;
+            color: white; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
         .tab-btn.active { background: #FFD700; color: black; border-color: white; box-shadow: 0 0 5px #FFD700; }
 
@@ -35,12 +35,12 @@
         }
 
         .action-btn {
-            width: 42px; height: 42px;
+            width: 50px; height: 50px;
             border-radius: 50%;
             border: 2px solid #555;
             background: #222;
             color: white;
-            font-size: 16px;
+            font-size: 19px;
             cursor: pointer;
             transition: all 0.2s;
             display: flex; align-items: center; justify-content: center;
@@ -49,7 +49,7 @@
         }
         .action-btn.active { border-color: #FFD700; transform: translateY(-3px); box-shadow: 0 0 8px #FFD700; background: #444; }
         .action-btn:active { transform: scale(0.95); }
-        .label { font-size: 10px; position: absolute; bottom: -16px; width: 140%; left: -20%; text-align: center; text-shadow: 1px 1px 1px black; color: #ddd;}
+        .label { font-size: 12px; position: absolute; bottom: -19px; width: 140%; left: -20%; text-align: center; text-shadow: 1px 1px 1px black; color: #ddd;}
 
         #mana-bar {
             width: 200px; height: 10px; background: #333; margin: 0 auto; border: 1px solid white; border-radius: 5px; overflow: hidden;
@@ -67,7 +67,7 @@
             position: absolute;
             top: 70px;
             left: 0;
-            width: 40px;
+            width: 48px;
             bottom: 120px;
             overflow-y: auto;
             overflow-x: hidden;
@@ -85,15 +85,15 @@
         #unit-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 1px; }
 
         .unit-item {
-            width: 24px;
-            height: 24px;
+            width: 29px;
+            height: 29px;
             background: #333;
             border: 1px solid #555;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
+            font-size: 17px;
             cursor: pointer;
             flex-shrink: 0;
             position: relative;
@@ -115,17 +115,17 @@
         /* RADIAL MENU CSS */
         #radial-container {
             position: relative;
-            width: 60px; height: 60px;
+            width: 72px; height: 72px;
             margin: 0 auto 5px auto;
             touch-action: none;
         }
         #main-icon {
-            width: 52px; height: 52px;
+            width: 62px; height: 62px;
             border-radius: 50%;
             background: #444;
             border: 2px solid #888;
             color: white;
-            font-size: 22px;
+            font-size: 26px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer;
             position: relative;
@@ -141,15 +141,15 @@
         }
         #radial-options.open { opacity: 1; pointer-events: auto; }
         .radial-option {
-            width: 37px; height: 37px;
+            width: 44px; height: 44px;
             border-radius: 50%;
             background: #333;
             border: 1px solid #666;
             color: white;
-            font-size: 18px;
+            font-size: 22px;
             display: flex; align-items: center; justify-content: center;
             position: absolute;
-            top: 11.5px; left: 11.5px; /* Center relative to container */
+            top: 14px; left: 14px; /* Center relative to container */
             transition: transform 0.2s, background 0.2s;
             box-shadow: 0 0 3px black;
         }
@@ -168,7 +168,7 @@
 </head>
 <body>
 
-<div id="loading">Welt wird generiert...</div>
+<div id="loading">Generating World...</div>
 
 <div id="ui-layer">
     <div id="unit-list"></div>
@@ -193,49 +193,49 @@
         <!-- Select Info / Mode -->
         <div id="menu-select" class="action-menu">
             <div id="action-bar" style="color:white; justify-content:center; padding-top:20px;">
-                Wähle eine Einheit
+                Select a unit
             </div>
         </div>
 
         <!-- Basic Unit Actions (Move) -->
         <div id="menu-basic" class="action-menu" style="display:none;">
             <div id="action-bar">
-                <div class="action-btn" onclick="selectAction('move')" id="btn-move">👣<span class="label">Gehen</span></div>
+                <div class="action-btn" onclick="selectAction('move')" id="btn-move">👣<span class="label">Walk</span></div>
             </div>
         </div>
 
         <!-- Spells Menu -->
         <div id="menu-spells" class="action-menu" style="display:none;">
             <div id="action-bar">
-                <div class="action-btn" onclick="selectAction('blast')" id="btn-blast">🔥<span class="label">Feuer (10)</span></div>
-                <div class="action-btn" onclick="selectAction('lightning')" id="btn-lightning">⚡<span class="label">Blitz (30)</span></div>
-                <div class="action-btn" onclick="selectAction('convert')" id="btn-convert">🙏<span class="label">Bekehr (10)</span></div>
-                <div class="action-btn" onclick="selectAction('raise')" id="btn-raise">▲<span class="label">Heben (5)</span></div>
-                <div class="action-btn" onclick="selectAction('lower')" id="btn-lower">▼<span class="label">Senken (5)</span></div>
-                <div class="action-btn" onclick="selectAction('flatten')" id="btn-flatten">➖<span class="label">Glätten (10)</span></div>
-                <div class="action-btn" onclick="selectAction('landbridge')" id="btn-landbridge">🌉<span class="label">Brücke (20)</span></div>
-                <div class="action-btn" onclick="selectAction('swamp')" id="btn-swamp">🌫️<span class="label">Sumpf (15)</span></div>
-                <div class="action-btn" onclick="selectAction('invisibility')" id="btn-invisibility">👻<span class="label">Unsicht (20)</span></div>
-                <div class="action-btn" onclick="selectAction('shield')" id="btn-shield">🛡️<span class="label">Schild (20)</span></div>
+                <div class="action-btn" onclick="selectAction('blast')" id="btn-blast">🔥<span class="label">Fire (10)</span></div>
+                <div class="action-btn" onclick="selectAction('lightning')" id="btn-lightning">⚡<span class="label">Lightning (30)</span></div>
+                <div class="action-btn" onclick="selectAction('convert')" id="btn-convert">🙏<span class="label">Convert (10)</span></div>
+                <div class="action-btn" onclick="selectAction('raise')" id="btn-raise">▲<span class="label">Raise (5)</span></div>
+                <div class="action-btn" onclick="selectAction('lower')" id="btn-lower">▼<span class="label">Lower (5)</span></div>
+                <div class="action-btn" onclick="selectAction('flatten')" id="btn-flatten">➖<span class="label">Flatten (10)</span></div>
+                <div class="action-btn" onclick="selectAction('landbridge')" id="btn-landbridge">🌉<span class="label">Bridge (20)</span></div>
+                <div class="action-btn" onclick="selectAction('swamp')" id="btn-swamp">🌫️<span class="label">Swamp (15)</span></div>
+                <div class="action-btn" onclick="selectAction('invisibility')" id="btn-invisibility">👻<span class="label">Invis (20)</span></div>
+                <div class="action-btn" onclick="selectAction('shield')" id="btn-shield">🛡️<span class="label">Shield (20)</span></div>
                 <div class="action-btn" onclick="selectAction('hypnotise')" id="btn-hypnotise">🌀<span class="label">Hypno (50)</span></div>
-                <div class="action-btn" onclick="selectAction('swarm')" id="btn-swarm">🐝<span class="label">Schwarm (20)</span></div>
+                <div class="action-btn" onclick="selectAction('swarm')" id="btn-swarm">🐝<span class="label">Swarm (20)</span></div>
                 <div class="action-btn" onclick="selectAction('tornado')" id="btn-tornado">🌪️<span class="label">Tornado (60)</span></div>
-                <div class="action-btn" onclick="selectAction('firestorm')" id="btn-firestorm">☄️<span class="label">Sturm (80)</span></div>
-                <div class="action-btn" onclick="selectAction('volcano')" id="btn-volcano">🌋<span class="label">Vulkan (40)</span></div>
-                <div class="action-btn" onclick="selectAction('heal')" id="btn-heal">💖<span class="label">Heilen (10)</span></div>
+                <div class="action-btn" onclick="selectAction('firestorm')" id="btn-firestorm">☄️<span class="label">Storm (80)</span></div>
+                <div class="action-btn" onclick="selectAction('volcano')" id="btn-volcano">🌋<span class="label">Volcano (40)</span></div>
+                <div class="action-btn" onclick="selectAction('heal')" id="btn-heal">💖<span class="label">Heal (10)</span></div>
             </div>
         </div>
 
         <!-- Build Menu -->
         <div id="menu-build" class="action-menu" style="display:none;">
             <div id="action-bar">
-                <div class="action-btn" onclick="selectAction('build_hut')" id="btn-build_hut">🏠<span class="label">Hütte (15)</span></div>
-                <div class="action-btn" onclick="selectAction('build_tower')" id="btn-build_tower">🗼<span class="label">Turm (20)</span></div>
-                <div class="action-btn" onclick="selectAction('build_warrior')" id="btn-build_warrior">⚔️<span class="label">Kaserne (30)</span></div>
-                <div class="action-btn" onclick="selectAction('build_fire')" id="btn-build_fire">🔥<span class="label">Tempel (40)</span></div>
-                <div class="action-btn" onclick="selectAction('build_spy')" id="btn-build_spy">🌙<span class="label">Geist (40)</span></div>
-                <div class="action-btn" onclick="selectAction('build_shipyard')" id="btn-build_shipyard">⚓<span class="label">Werft (50)</span></div>
-                <div class="action-btn" onclick="selectAction('build_airship')" id="btn-build_airship">🎈<span class="label">Luftschiff (25)</span></div>
+                <div class="action-btn" onclick="selectAction('build_hut')" id="btn-build_hut">🏠<span class="label">Hut (15)</span></div>
+                <div class="action-btn" onclick="selectAction('build_tower')" id="btn-build_tower">🗼<span class="label">Tower (20)</span></div>
+                <div class="action-btn" onclick="selectAction('build_warrior')" id="btn-build_warrior">⚔️<span class="label">Barracks (30)</span></div>
+                <div class="action-btn" onclick="selectAction('build_fire')" id="btn-build_fire">🔥<span class="label">Temple (40)</span></div>
+                <div class="action-btn" onclick="selectAction('build_spy')" id="btn-build_spy">🌙<span class="label">Spy (40)</span></div>
+                <div class="action-btn" onclick="selectAction('build_shipyard')" id="btn-build_shipyard">⚓<span class="label">Shipyard (50)</span></div>
+                <div class="action-btn" onclick="selectAction('build_airship')" id="btn-build_airship">🎈<span class="label">Airship (25)</span></div>
             </div>
         </div>
     </div>
@@ -245,7 +245,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
 
 <script>
-    // --- KONFIGURATION ---
+    // --- CONFIGURATION ---
     const CHUNK_SIZE = 40; 
     const CHUNK_RES = 150;
     const RENDER_DISTANCE = 3;
@@ -351,12 +351,12 @@
         }
     };
 
-    // --- GLOBALE SYSTEME ---
+    // --- GLOBAL SYSTEMS ---
     let scene, camera, renderer, raycaster;
     let clock;
     let simplex;
     
-    // Spielzustand
+    // Game State
     const chunks = {}; 
     const terrainMods = new Map();
     const units = []; window.units = units;
@@ -399,7 +399,7 @@
         }
     }
 
-    // --- HÖHEN-LOGIK ---
+    // --- HEIGHT LOGIC ---
     function mulberry32(a) {
         return function() {
           var t = a += 0x6D2B79F5;
@@ -448,7 +448,7 @@
         return h;
     }
 
-    // --- INITIALISIERUNG ---
+    // --- INITIALIZATION ---
     window.onload = () => setTimeout(init, 100);
 
     function init() {
@@ -783,7 +783,7 @@
         }
     }
 
-    // --- AKTIONEN ---
+    // --- ACTIONS ---
     function performAction(x, z) {
         if(currentAction === 'move') {
             if(selectedUnits.length > 0) {
@@ -1065,7 +1065,7 @@
         }
     }
 
-    // --- GEBÄUDE SYSTEM ---
+    // --- BUILDING SYSTEM ---
     function createBuilding(type, x, z, faction = 0, autoUpdate = true) {
         if(getHeight(x, z) < 2.0) return;
 
@@ -1073,7 +1073,7 @@
         const baseH = getHeight(x, z);
         const radius = 3;
         
-        // Auto-Planierung
+        // Auto-Leveling
         const modifiedChunks = new Set();
         for(let ix = Math.floor(x - radius); ix <= Math.ceil(x + radius); ix++) {
             for(let iz = Math.floor(z - radius); iz <= Math.ceil(z + radius); iz++) {
@@ -1105,9 +1105,9 @@
         if(mesh) {
             group.add(mesh);
             
-            // HP Bar für Gebäude
+            // HP Bar for Building
             const hpGroup = new THREE.Group();
-            hpGroup.position.set(0, 5, 0); // Hoch über dem Gebäude
+            hpGroup.position.set(0, 5, 0); // High above the building
             const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.3), new THREE.MeshBasicMaterial({color: 0x880000}));
             hpGroup.add(bgMesh);
             const fgGeo = new THREE.PlaneGeometry(2.0, 0.3); fgGeo.translate(1.0, 0, 0); 
@@ -1191,7 +1191,7 @@
         }
     }
 
-    // --- GEBÄUDE MODELLE ---
+    // --- BUILDING MODELS ---
     function buildHut() {
         const g = new THREE.Group();
         const base = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 1.5, 8), new THREE.MeshLambertMaterial({color: COLORS.wood})); base.position.y = 0.75; base.castShadow = true; g.add(base);
@@ -1237,7 +1237,7 @@
         return g;
     }
 
-    // --- TERRAIN FUNKTIONEN ---
+    // --- TERRAIN FUNCTIONS ---
     function isBraveNearby(faction, x, z, radius) {
         for(let u of units) {
             if(u.faction === faction && u.type === 'wild' && u.state !== 'dead') {
@@ -1311,11 +1311,11 @@
             }
         }
 
-        // Prüfen ob Gebäude einstürzen
+        // Check if buildings collapse
         buildings.forEach(b => {
             const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
             if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
-                b.takeDamage(100); // Einsturzschaden
+                b.takeDamage(100); // Collapse damage
             }
         });
         return modifiedChunks;
@@ -1436,7 +1436,7 @@
         return grp;
     }
 
-    // --- WEGFINDUNG ---
+    // --- PATHFINDING ---
     class BinaryHeap {
         constructor(scoreFunction) { this.content = []; this.scoreFunction = scoreFunction; }
         push(element) { this.content.push(element); this.siftUp(this.content.length - 1); }
@@ -1566,7 +1566,7 @@
     };
     window.Pathfinder = Pathfinder;
 
-    // --- CHARAKTER & PHYSIK ---
+    // --- CHARACTER & PHYSICS ---
     class Humanoid {
         constructor(faction, type, x, z) {
             this.faction = faction; // 0 = Player, 1 = Enemy
@@ -2265,7 +2265,7 @@
     }
     const enemyAI = new EnemyAI(); window.enemyAI = enemyAI;
 
-    // --- HELFER KLASSEN (Partikel, Feuerball, Effekte) ---
+    // --- HELPER CLASSES (Particles, Fireball, Effects) ---
     class ActiveEffect {
         constructor() {}
         update(dt) { return false; }
@@ -2531,7 +2531,7 @@
             SoundManager.playSound('explosion');
             const impactPos = this.mesh.position;
             burnTreesAt(impactPos.x, impactPos.z, 8); // Burn trees
-            // Einheiten
+            // Units
             units.forEach(u => {
                 const d = u.mesh.position.distanceTo(impactPos);
                 if(d < 8) {
@@ -2542,11 +2542,11 @@
                     }
                 }
             });
-            // Gebäude
+            // Buildings
             buildings.forEach(b => {
                 const d = b.mesh.position.distanceTo(impactPos);
                 if(d < 8) {
-                    b.takeDamage(75); // Feuerball macht 25 Schaden an Gebäuden
+                    b.takeDamage(75); // Fireball deals 75 damage to buildings
                 }
             });
         }
