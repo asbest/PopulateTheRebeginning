@@ -207,22 +207,21 @@
         <!-- Spells Menu -->
         <div id="menu-spells" class="action-menu" style="display:none;">
             <div id="action-bar">
-                <div class="action-btn" onclick="selectAction('blast')" id="btn-blast">🔥<span class="label">Fire (10)</span></div>
-                <div class="action-btn" onclick="selectAction('lightning')" id="btn-lightning">⚡<span class="label">Lightning (30)</span></div>
-                <div class="action-btn" onclick="selectAction('convert')" id="btn-convert">🙏<span class="label">Convert (10)</span></div>
-                <div class="action-btn" onclick="selectAction('raise')" id="btn-raise">▲<span class="label">Raise (5)</span></div>
-                <div class="action-btn" onclick="selectAction('lower')" id="btn-lower">▼<span class="label">Lower (5)</span></div>
-                <div class="action-btn" onclick="selectAction('flatten')" id="btn-flatten">➖<span class="label">Flatten (10)</span></div>
-                <div class="action-btn" onclick="selectAction('landbridge')" id="btn-landbridge">🌉<span class="label">Bridge (20)</span></div>
-                <div class="action-btn" onclick="selectAction('swamp')" id="btn-swamp">🌫️<span class="label">Swamp (15)</span></div>
-                <div class="action-btn" onclick="selectAction('invisibility')" id="btn-invisibility">👻<span class="label">Invis (20)</span></div>
-                <div class="action-btn" onclick="selectAction('shield')" id="btn-shield">🛡️<span class="label">Shield (20)</span></div>
-                <div class="action-btn" onclick="selectAction('hypnotise')" id="btn-hypnotise">🌀<span class="label">Hypno (50)</span></div>
-                <div class="action-btn" onclick="selectAction('swarm')" id="btn-swarm">🐝<span class="label">Swarm (20)</span></div>
-                <div class="action-btn" onclick="selectAction('tornado')" id="btn-tornado">🌪️<span class="label">Tornado (60)</span></div>
-                <div class="action-btn" onclick="selectAction('firestorm')" id="btn-firestorm">☄️<span class="label">Storm (80)</span></div>
-                <div class="action-btn" onclick="selectAction('volcano')" id="btn-volcano">🌋<span class="label">Volcano (40)</span></div>
-                <div class="action-btn" onclick="selectAction('heal')" id="btn-heal">💖<span class="label">Heal (10)</span></div>
+                <div class="action-btn" onclick="selectAction('blast')" id="btn-blast">🔥<span class="label">10</span></div>
+                <div class="action-btn" onclick="selectAction('lightning')" id="btn-lightning">⚡<span class="label">30</span></div>
+                <div class="action-btn" onclick="selectAction('raise')" id="btn-raise">▲<span class="label">5</span></div>
+                <div class="action-btn" onclick="selectAction('lower')" id="btn-lower">▼<span class="label">5</span></div>
+                <div class="action-btn" onclick="selectAction('flatten')" id="btn-flatten">➖<span class="label">10</span></div>
+                <div class="action-btn" onclick="selectAction('landbridge')" id="btn-landbridge">🌉<span class="label">20</span></div>
+                <div class="action-btn" onclick="selectAction('swamp')" id="btn-swamp">🌫️<span class="label">15</span></div>
+                <div class="action-btn" onclick="selectAction('invisibility')" id="btn-invisibility">👻<span class="label">20</span></div>
+                <div class="action-btn" onclick="selectAction('shield')" id="btn-shield">🛡️<span class="label">20</span></div>
+                <div class="action-btn" onclick="selectAction('hypnotise')" id="btn-hypnotise">🌀<span class="label">50</span></div>
+                <div class="action-btn" onclick="selectAction('swarm')" id="btn-swarm">🐝<span class="label">20</span></div>
+                <div class="action-btn" onclick="selectAction('tornado')" id="btn-tornado">🌪️<span class="label">60</span></div>
+                <div class="action-btn" onclick="selectAction('firestorm')" id="btn-firestorm">☄️<span class="label">80</span></div>
+                <div class="action-btn" onclick="selectAction('volcano')" id="btn-volcano">🌋<span class="label">40</span></div>
+                <div class="action-btn" onclick="selectAction('heal')" id="btn-heal">💖<span class="label">10</span></div>
             </div>
         </div>
 
@@ -366,6 +365,7 @@
     const activeEffects = [];
     
     let shaman;
+    let rangeRing;
     let selectedUnits = [];
     let cameraLookAt;
     let viewScale = 35; 
@@ -468,6 +468,10 @@
             chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false });
             chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES/2, CHUNK_RES/2);
 
+            rangeRing = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.0, 64), new THREE.MeshBasicMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.5, side: THREE.DoubleSide}));
+            rangeRing.rotation.x = -Math.PI/2;
+            rangeRing.visible = false;
+
             const waterVertexShader = `
                 uniform float time;
                 varying vec2 vUv;
@@ -523,6 +527,7 @@
 
             const amb = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(amb);
+            scene.add(rangeRing);
             const sun = new THREE.DirectionalLight(0xffffff, 0.7);
             sun.position.set(50, 100, 40);
             sun.castShadow = true;
@@ -827,78 +832,41 @@
     }
 
     // --- ACTIONS ---
-    function performAction(x, z) {
-        if(currentAction === 'move') {
-            if(selectedUnits.length > 0) {
-                selectedUnits.forEach(u => {
-                    u.goto(x, z);
-                    u.attackTarget = null;
-                });
-                spawnPulse(x, getHeight(x, z), z, 0xFFFFFF);
-            }
-            return;
-        }
+    function executeSpell(type, x, z, caster) {
+        if (!caster || !caster.mesh) return;
 
-        // Prevent building on water
-        if (currentAction.startsWith('build_') && getHeight(x, z) < 2.0) return;
-
-        // Prevent building if no brave nearby
-        if (currentAction.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
-
-        const spells = ['blast', 'lightning', 'convert', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal'];
-
-        // Range Check for Spells
-        if (spells.includes(currentAction)) {
-            if (!shaman || shaman.state === 'dead') return;
-            const maxRange = 10.0 + shaman.mesh.position.y;
-            const dist = Math.sqrt((x - shaman.mesh.position.x)**2 + (z - shaman.mesh.position.z)**2);
-            if (dist > maxRange) return;
-        }
-
-        const costs = { 
-            blast: 10, lightning: 30, convert: 10, raise: 5, lower: 5, flatten: 10, landbridge: 20,
-            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40, heal: 10,
-            build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
-            build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
-        };
-        const cost = costs[currentAction];
-        if (cost === undefined || isNaN(cost)) return;
-        if (mana < cost) return;
-        mana -= cost;
-        updateUI();
-
-        if (currentAction === 'blast') {
-            const startPos = shaman.mesh.position.clone().add(new THREE.Vector3(0, 2, 0));
+        if (type === 'blast') {
+            const startPos = caster.mesh.position.clone().add(new THREE.Vector3(0, 2, 0));
             const h = getHeight(x, z);
             const targetPos = new THREE.Vector3(x, h, z);
-            projectiles.push(new Fireball(startPos, targetPos, 0));
+            projectiles.push(new Fireball(startPos, targetPos, caster.faction));
             SoundManager.playSound('fireball');
             
-            const dx = targetPos.x - shaman.mesh.position.x;
-            const dz = targetPos.z - shaman.mesh.position.z;
-            shaman.mesh.rotation.y = Math.atan2(dx, dz);
+            const dx = targetPos.x - caster.mesh.position.x;
+            const dz = targetPos.z - caster.mesh.position.z;
+            caster.mesh.rotation.y = Math.atan2(dx, dz);
         }
-        else if (currentAction === 'raise') {
+        else if (type === 'raise') {
             const mods = modifyTerrain(x, z, 5, 2.0);
             updateChunks(true, mods);
             spawnExplosion(x, getHeight(x, z), z, 0x00FF00, 10);
             SoundManager.playSound('rumble');
         }
-        else if (currentAction === 'lower') {
+        else if (type === 'lower') {
             const mods = modifyTerrain(x, z, 5, -2.0);
             updateChunks(true, mods);
             spawnExplosion(x, getHeight(x, z), z, 0x0000FF, 10);
             SoundManager.playSound('rumble');
         }
-        else if (currentAction === 'volcano') {
+        else if (type === 'volcano') {
             createVolcano(x, z);
             SoundManager.playSound('explosion');
         }
-        else if (currentAction === 'heal') {
+        else if (type === 'heal') {
             SoundManager.playSound('magic');
             spawnPulse(x, getHeight(x, z), z, 0xFF69B4);
             units.forEach(u => {
-                if(u.faction === 0 && u.state !== 'dead') {
+                if(u.faction === caster.faction && u.state !== 'dead') {
                     const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                     if(dist < 8) {
                         u.hp = u.maxHp;
@@ -908,41 +876,21 @@
                 }
             });
         }
-        else if (currentAction === 'tornado') {
+        else if (type === 'tornado') {
             activeEffects.push(new Tornado(x, z));
         }
-        else if (currentAction === 'swarm') {
+        else if (type === 'swarm') {
             activeEffects.push(new Swarm(x, z));
             SoundManager.playSound('magic');
         }
-        else if (currentAction === 'firestorm') {
-            activeEffects.push(new Firestorm(x, z, 0));
+        else if (type === 'firestorm') {
+            activeEffects.push(new Firestorm(x, z, caster.faction));
         }
-        else if (currentAction === 'convert') {
-            SoundManager.playSound('magic');
-            spawnPulse(x, getHeight(x, z), z, 0x0000FF);
-            units.forEach(u => {
-                if(u.type === 'wild' && u.faction !== 0) {
-                     const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
-                     if(dist < 10) {
-                         u.faction = 0;
-                         u.mesh.traverse(c => {
-                             if(c.material && c.material.color.getHex() === COLORS.red) {
-                                 c.material.color.setHex(COLORS.blue);
-                             }
-                         });
-                         // Update HP Bar color
-                         u.hpBar.material.color.setHex(0x00FF00);
-                         spawnPulse(u.mesh.position.x, u.mesh.position.y+2, u.mesh.position.z, 0x0000FF);
-                     }
-                }
-            });
-        }
-        else if (currentAction === 'shield') {
+        else if (type === 'shield') {
             SoundManager.playSound('magic');
             spawnPulse(x, getHeight(x, z), z, 0x00FFFF);
             units.forEach(u => {
-                if(u.faction === 0) {
+                if(u.faction === caster.faction) {
                     const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                     if(dist < 8) {
                         u.setShield(true);
@@ -951,10 +899,10 @@
                 }
             });
         }
-        else if (currentAction === 'invisibility') {
+        else if (type === 'invisibility') {
             SoundManager.playSound('magic');
             units.forEach(u => {
-                if(u.faction === 0) {
+                if(u.faction === caster.faction) {
                     const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                     if(dist < 8) {
                         u.setInvisibility(true);
@@ -963,27 +911,28 @@
                 }
             });
         }
-        else if (currentAction === 'hypnotise') {
+        else if (type === 'hypnotise') {
             SoundManager.playSound('magic');
             spawnPulse(x, getHeight(x, z), z, 0xFF00FF);
             units.forEach(u => {
-                if(u.faction === 1 && !u.isShaman) {
+                if(u.faction !== caster.faction && !u.isShaman) {
                      const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                      if(dist < 8) {
-                         u.faction = 0;
+                         u.faction = caster.faction;
                          u.mesh.traverse(c => {
-                             if(c.material && c.material.color.getHex() === COLORS.red) {
-                                 c.material.color.setHex(COLORS.blue);
+                             if(c.material && c.material.color) {
+                                  if(c.material.color.getHex() === COLORS.red && caster.faction === 0) c.material.color.setHex(COLORS.blue);
+                                  if(c.material.color.getHex() === COLORS.blue && caster.faction === 1) c.material.color.setHex(COLORS.red);
                              }
                          });
-                         u.hpBar.material.color.setHex(0x00FF00);
+                         u.hpBar.material.color.setHex(caster.faction === 0 ? 0x00FF00 : 0xFF0000);
                          u.state = 'idle'; u.attackTarget = null;
                          spawnPulse(u.mesh.position.x, u.mesh.position.y+2, u.mesh.position.z, 0xFF00FF);
                      }
                 }
             });
         }
-        else if (currentAction === 'flatten') {
+        else if (type === 'flatten') {
             // Flatten to average
             let totalH = 0; let count = 0;
             const r = 5;
@@ -1014,10 +963,10 @@
                 SoundManager.playSound('rumble');
             }
         }
-        else if (currentAction === 'landbridge') {
-            castLandbridge(shaman, x, z);
+        else if (type === 'landbridge') {
+            castLandbridge(caster, x, z);
         }
-        else if (currentAction === 'lightning') {
+        else if (type === 'lightning') {
             SoundManager.playSound('explosion');
             // Visual Line
             const geo = new THREE.CylinderGeometry(0.5, 0.1, 30, 8);
@@ -1045,6 +994,51 @@
                      hit = true;
                  }
             });
+        }
+    }
+
+    function performAction(x, z) {
+        if(currentAction === 'move') {
+            if(selectedUnits.length > 0) {
+                selectedUnits.forEach(u => {
+                    u.goto(x, z);
+                    u.attackTarget = null;
+                });
+                spawnPulse(x, getHeight(x, z), z, 0xFFFFFF);
+            }
+            return;
+        }
+
+        // Prevent building on water
+        if (currentAction.startsWith('build_') && getHeight(x, z) < 2.0) return;
+
+        // Prevent building if no brave nearby
+        if (currentAction.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
+
+        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal'];
+
+        // Range Check for Spells
+        if (spells.includes(currentAction)) {
+            if (!shaman || shaman.state === 'dead') return;
+            const maxRange = 10.0 + shaman.mesh.position.y;
+            const dist = Math.sqrt((x - shaman.mesh.position.x)**2 + (z - shaman.mesh.position.z)**2);
+            if (dist > maxRange) return;
+        }
+
+        const costs = {
+            blast: 10, lightning: 30, raise: 5, lower: 5, flatten: 10, landbridge: 20,
+            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40, heal: 10,
+            build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
+            build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
+        };
+        const cost = costs[currentAction];
+        if (cost === undefined || isNaN(cost)) return;
+        if (mana < cost) return;
+        mana -= cost;
+        updateUI();
+
+        if (spells.includes(currentAction)) {
+            executeSpell(currentAction, x, z, shaman);
         }
         else if (currentAction === 'build_airship') {
             // Build Airship
@@ -1924,7 +1918,19 @@
                     this.mesh.rotation.x += (targetRotX - this.mesh.rotation.x) * 5 * dt;
                     this.mesh.rotation.z *= 0.9; 
                     this.resetAnim();
-                    if(this.recoverTimer <= 0) { this.state = 'idle'; this.mesh.rotation.x = 0; }
+                    if(this.recoverTimer <= 0) {
+                        this.state = 'getting_up';
+                        this.getUpTimer = 0.5;
+                    }
+                }
+            }
+            else if(this.state === 'getting_up') {
+                this.getUpTimer -= dt;
+                const progress = 1.0 - (this.getUpTimer / 0.5);
+                this.mesh.rotation.x = -Math.PI/2 * (1 - progress);
+                if (this.getUpTimer <= 0) {
+                     this.state = 'idle';
+                     this.mesh.rotation.x = 0;
                 }
             }
             else if(this.state === 'combat') {
@@ -2170,6 +2176,7 @@
             this.baseX = 0;
             this.baseZ = 0;
             this.lastBridgeTime = 0;
+            this.lastSpellTime = 0;
         }
 
         init(x, z) {
@@ -2180,13 +2187,6 @@
 
             // Create initial base
             createBuilding('hut', this.baseX, this.baseZ, 1);
-            // Create some units
-            for(let i=0; i<3; i++) {
-                const spawnX = this.baseX + (Math.random()-0.5)*5;
-                const spawnZ = this.baseZ + (Math.random()-0.5)*5;
-                const safe = findNearestLand(spawnX, spawnZ);
-                units.push(new Humanoid(1, 'wild', safe.x, safe.z));
-            }
             // Create Enemy Shaman
             const shamanSafe = findNearestLand(this.baseX - 5, this.baseZ - 5, 20);
             units.push(new Humanoid(1, 'shaman', shamanSafe.x, shamanSafe.z));
@@ -2283,11 +2283,23 @@
                 }
             }
 
-            // 4. Shaman Logic (Landbridge)
+            // 4. Shaman Logic (Landbridge & Spells)
             const myShaman = myUnits.find(u => u.isShaman);
             const target = shaman; // Player shaman
             if(myShaman && target && target.state !== 'dead') {
                 const dist = myShaman.mesh.position.distanceTo(target.mesh.position);
+
+                // Offensive Spells
+                const spellRange = 10.0 + myShaman.mesh.position.y;
+                if (clock.getElapsedTime() - this.lastSpellTime > 5.0) {
+                    if (dist < spellRange) {
+                        const offensiveSpells = ['blast', 'lightning', 'tornado', 'swarm', 'firestorm'];
+                        const spell = offensiveSpells[Math.floor(Math.random() * offensiveSpells.length)];
+                        executeSpell(spell, target.mesh.position.x, target.mesh.position.z, myShaman);
+                        this.lastSpellTime = clock.getElapsedTime();
+                    }
+                }
+
                 // Check cooldown
                 if (clock.getElapsedTime() - this.lastBridgeTime > 10.0) {
                     // Check for water in path
@@ -2622,7 +2634,7 @@
         for(let i=0; i<50; i++) { if(getHeight(r, r) > 2.5) { found = true; break; } r += 20; }
         if(!found) r = 0;
         cameraLookAt.set(r, 0, r); updateCameraPosition(); updateChunks(); 
-        createShaman(r, r); createWildmen(r, r);
+        createShaman(r, r);
 
         // Init Enemy
         enemyAI.init(-r - 40, -r - 40);
@@ -2631,14 +2643,6 @@
         const safe = findNearestLand(x, z);
         shaman = new Humanoid(0, 'shaman', safe.x, safe.z);
         units.push(shaman);
-    }
-    function createWildmen(cx, cz) {
-        for(let i=0; i<6; i++) {
-            let x = cx + (Math.random()-0.5)*30;
-            let z = cz + (Math.random()-0.5)*30;
-            const safe = findNearestLand(x, z);
-            units.push(new Humanoid(0, 'wild', safe.x, safe.z));
-        }
     }
     
     function updateUI() { document.getElementById('mana-text').innerText = Math.floor(mana); document.getElementById('mana-fill').style.width = mana + '%'; }
@@ -2809,6 +2813,21 @@
         if(mana < 100) { mana += dt * manaRate; if(isNaN(mana)) mana = 0; updateUI(); }
 
         if(chunkWaterMat && chunkWaterMat.uniforms) chunkWaterMat.uniforms.time.value += dt;
+
+        // Range Ring Update
+        if (shaman && shaman.state !== 'dead') {
+            const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal'];
+            if (spells.includes(currentAction)) {
+                rangeRing.visible = true;
+                rangeRing.position.set(shaman.mesh.position.x, getHeight(shaman.mesh.position.x, shaman.mesh.position.z) + 0.5, shaman.mesh.position.z);
+                const r = 10.0 + shaman.mesh.position.y;
+                rangeRing.scale.set(r, r, r);
+            } else {
+                rangeRing.visible = false;
+            }
+        } else {
+            rangeRing.visible = false;
+        }
 
         updateChunks();
         enemyAI.update(dt);
