@@ -469,8 +469,7 @@
             chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false });
             chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES/2, CHUNK_RES/2);
 
-            rangeRing = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.0, 64), new THREE.MeshBasicMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.5, side: THREE.DoubleSide}));
-            rangeRing.rotation.x = -Math.PI/2;
+            rangeRing = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 64, 1, true), new THREE.MeshBasicMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false}));
             rangeRing.visible = false;
 
             const waterVertexShader = `
@@ -2827,9 +2826,9 @@
             const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create'];
             if (spells.includes(currentAction)) {
                 rangeRing.visible = true;
-                rangeRing.position.set(shaman.mesh.position.x, getHeight(shaman.mesh.position.x, shaman.mesh.position.z) + 0.5, shaman.mesh.position.z);
                 const r = 10.0 + shaman.mesh.position.y;
-                rangeRing.scale.set(r, r, r);
+                rangeRing.scale.set(r, 60, r);
+                rangeRing.position.set(shaman.mesh.position.x, shaman.mesh.position.y - 30, shaman.mesh.position.z);
             } else {
                 rangeRing.visible = false;
             }
