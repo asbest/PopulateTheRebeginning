@@ -783,6 +783,49 @@
         }
     }
 
+    // --- SPELL HELPERS ---
+    window.castLandbridge = function(caster, x, z) {
+        if (!caster || !caster.mesh) return;
+        const start = caster.mesh.position.clone();
+        const targetH = getHeight(start.x, start.z);
+        const dist = Math.sqrt((x - start.x)**2 + (z - start.z)**2);
+        const steps = Math.ceil(dist);
+        const dirX = (x - start.x) / dist;
+        const dirZ = (z - start.z) / dist;
+
+        const allMods = new Set();
+        const r = 2; // Radius 2 for width 4
+
+        for(let i=0; i<=steps; i++) {
+            const px = start.x + dirX * i;
+            const pz = start.z + dirZ * i;
+
+            for(let ix = Math.floor(px - r); ix <= Math.ceil(px + r); ix++) {
+                for(let iz = Math.floor(pz - r); iz <= Math.ceil(pz + r); iz++) {
+                    if((ix - px)**2 + (iz - pz)**2 <= r*r) {
+                        const key = `${ix},${iz}`;
+                        const base = getBaseHeight(ix, iz);
+                        terrainMods.set(key, targetH - base);
+                        const cx = Math.round(ix / CHUNK_SIZE);
+                        const cz = Math.round(iz / CHUNK_SIZE);
+                        allMods.add(`${cx},${cz}`);
+                    }
+                }
+            }
+        }
+
+        // Building collapse check
+        buildings.forEach(b => {
+            const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
+            if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
+                b.takeDamage(100);
+            }
+        });
+
+        updateChunks(true, allMods);
+        SoundManager.playSound('rumble');
+    }
+
     // --- ACTIONS ---
     function performAction(x, z) {
         if(currentAction === 'move') {
@@ -962,44 +1005,7 @@
             }
         }
         else if (currentAction === 'landbridge') {
-            const start = shaman.mesh.position.clone();
-            const targetH = getHeight(start.x, start.z);
-            const dist = Math.sqrt((x - start.x)**2 + (z - start.z)**2);
-            const steps = Math.ceil(dist);
-            const dirX = (x - start.x) / dist;
-            const dirZ = (z - start.z) / dist;
-
-            const allMods = new Set();
-            const r = 2; // Radius 2 for width 4
-
-            for(let i=0; i<=steps; i++) {
-                const px = start.x + dirX * i;
-                const pz = start.z + dirZ * i;
-
-                for(let ix = Math.floor(px - r); ix <= Math.ceil(px + r); ix++) {
-                    for(let iz = Math.floor(pz - r); iz <= Math.ceil(pz + r); iz++) {
-                        if((ix - px)**2 + (iz - pz)**2 <= r*r) {
-                            const key = `${ix},${iz}`;
-                            const base = getBaseHeight(ix, iz);
-                            terrainMods.set(key, targetH - base);
-                            const cx = Math.round(ix / CHUNK_SIZE);
-                            const cz = Math.round(iz / CHUNK_SIZE);
-                            allMods.add(`${cx},${cz}`);
-                        }
-                    }
-                }
-            }
-
-            // Building collapse check
-            buildings.forEach(b => {
-                const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
-                if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
-                    b.takeDamage(100);
-                }
-            });
-
-            updateChunks(true, allMods);
-            SoundManager.playSound('rumble');
+            castLandbridge(shaman, x, z);
         }
         else if (currentAction === 'lightning') {
             SoundManager.playSound('explosion');
@@ -2153,6 +2159,7 @@
             this.state = 'build'; // 'build', 'attack'
             this.baseX = 0;
             this.baseZ = 0;
+            this.lastBridgeTime = 0;
         }
 
         init(x, z) {
@@ -2170,6 +2177,10 @@
                 const safe = findNearestLand(spawnX, spawnZ);
                 units.push(new Humanoid(1, 'wild', safe.x, safe.z));
             }
+            // Create Enemy Shaman
+            const shamanSafe = findNearestLand(this.baseX - 5, this.baseZ - 5, 20);
+            units.push(new Humanoid(1, 'shaman', shamanSafe.x, shamanSafe.z));
+
             // Create a tower
             const towerSafe = findNearestLand(this.baseX + 5, this.baseZ + 5, 20);
             createBuilding('tower', towerSafe.x, towerSafe.z, 1);
@@ -2259,6 +2270,40 @@
                         u.attackTarget = target;
                         u.state = 'combat'; // Force combat state approach
                     });
+                }
+            }
+
+            // 4. Shaman Logic (Landbridge)
+            const myShaman = myUnits.find(u => u.isShaman);
+            const target = shaman; // Player shaman
+            if(myShaman && target && target.state !== 'dead') {
+                const dist = myShaman.mesh.position.distanceTo(target.mesh.position);
+                // Check cooldown
+                if (clock.getElapsedTime() - this.lastBridgeTime > 10.0) {
+                    // Check for water in path
+                    const steps = 10;
+                    let waterFound = false;
+                    const dir = target.mesh.position.clone().sub(myShaman.mesh.position).normalize();
+
+                    for(let i=1; i<=steps; i++) {
+                        const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, i * 4.0); // Check ahead 40 units
+                        if (getHeight(checkPos.x, checkPos.z) < 2.0) {
+                            waterFound = true;
+                            break;
+                        }
+                    }
+
+                    if (waterFound) {
+                        // Cast Bridge towards player (limited distance)
+                        const bridgeTarget = myShaman.mesh.position.clone().addScaledVector(dir, 30.0);
+                        castLandbridge(myShaman, bridgeTarget.x, bridgeTarget.z);
+                        this.lastBridgeTime = clock.getElapsedTime();
+                    }
+                }
+
+                // Also move shaman to attack if idle
+                if (myShaman.state === 'idle' && dist > 20) {
+                     myShaman.goto(target.mesh.position.x, target.mesh.position.z);
                 }
             }
         }
