@@ -222,6 +222,7 @@
                 <div class="action-btn" onclick="selectAction('firestorm')" id="btn-firestorm">☄️<span class="label">80</span></div>
                 <div class="action-btn" onclick="selectAction('volcano')" id="btn-volcano">🌋<span class="label">40</span></div>
                 <div class="action-btn" onclick="selectAction('heal')" id="btn-heal">💖<span class="label">10</span></div>
+                <div class="action-btn" onclick="selectAction('create')" id="btn-create">👶<span class="label">100</span></div>
             </div>
         </div>
 
@@ -876,6 +877,13 @@
                 }
             });
         }
+        else if (type === 'create') {
+            SoundManager.playSound('magic');
+            const safe = findNearestLand(x, z);
+            const u = new Humanoid(caster.faction, 'wild', safe.x, safe.z);
+            units.push(u);
+            spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFFFFF);
+        }
         else if (type === 'tornado') {
             activeEffects.push(new Tornado(x, z));
         }
@@ -1015,7 +1023,7 @@
         // Prevent building if no brave nearby
         if (currentAction.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
 
-        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal'];
+        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create'];
 
         // Range Check for Spells
         if (spells.includes(currentAction)) {
@@ -1027,7 +1035,7 @@
 
         const costs = {
             blast: 10, lightning: 30, raise: 5, lower: 5, flatten: 10, landbridge: 20,
-            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40, heal: 10,
+            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40, heal: 10, create: 100,
             build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
             build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
         };
@@ -2816,7 +2824,7 @@
 
         // Range Ring Update
         if (shaman && shaman.state !== 'dead') {
-            const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal'];
+            const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create'];
             if (spells.includes(currentAction)) {
                 rangeRing.visible = true;
                 rangeRing.position.set(shaman.mesh.position.x, getHeight(shaman.mesh.position.x, shaman.mesh.position.z) + 0.5, shaman.mesh.position.z);
