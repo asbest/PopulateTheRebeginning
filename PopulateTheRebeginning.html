@@ -2823,32 +2823,49 @@
             }
         }
 
-        // Shaman Rebirth Logic
-        if (shaman && shaman.state === 'dead') {
-             if (!shaman.respawnPending) {
-                 shaman.respawnPending = true;
-                 shaman.respawnTimer = 3.0;
-             } else {
-                 shaman.respawnTimer -= dt;
-                 if (shaman.respawnTimer <= 0) {
-                     const braves = units.filter(u => u.faction === 0 && u.type === 'wild' && u.state !== 'dead');
-                     if (braves.length > 0) {
-                         const brave = braves[Math.floor(Math.random() * braves.length)];
-                         createShaman(brave.mesh.position.x, brave.mesh.position.z);
-                         spawnPulse(shaman.mesh.position.x, shaman.mesh.position.y, shaman.mesh.position.z, 0xFFD700);
-                         SoundManager.playSound('magic');
-                     } else {
-                         // Game Over
-                         if(!window.gameOverAlertShown) {
-                             alert("GAME OVER - Shaman dead and no followers left.");
-                             window.gameOverAlertShown = true;
-                         }
-                     }
-                     // Reset timer to prevent rapid firing if game over alert is dismissed but loop continues
-                     shaman.respawnTimer = 100000;
-                 }
-             }
-        }
+        // Shaman Rebirth Logic (Player and Enemy)
+        units.forEach(u => {
+            if (u.isShaman && u.state === 'dead' && !u.respawnComplete) {
+                if (!u.respawnPending) {
+                    u.respawnPending = true;
+                    u.respawnTimer = 30.0;
+                } else {
+                    u.respawnTimer -= dt;
+                    if (u.respawnTimer <= 0) {
+                        const braves = units.filter(b => b.faction === u.faction && b.type === 'wild' && b.state !== 'dead');
+                        if (braves.length > 0) {
+                            const brave = braves[Math.floor(Math.random() * braves.length)];
+                            const safe = findNearestLand(brave.mesh.position.x, brave.mesh.position.z);
+
+                            const newShaman = new Humanoid(u.faction, 'shaman', safe.x, safe.z);
+                            units.push(newShaman);
+                            spawnPulse(newShaman.mesh.position.x, newShaman.mesh.position.y, newShaman.mesh.position.z, 0xFFD700);
+                            SoundManager.playSound('magic');
+
+                            // If Player Shaman, update global reference
+                            if (u.faction === 0) {
+                                shaman = newShaman;
+                            }
+
+                            u.respawnComplete = true; // Mark old corpse as processed
+                        } else {
+                            // No followers left
+                            if (u.faction === 0) {
+                                // Game Over for Player
+                                if(!window.gameOverAlertShown) {
+                                    alert("GAME OVER - Shaman dead and no followers left.");
+                                    window.gameOverAlertShown = true;
+                                }
+                                u.respawnTimer = 100000; // Prevent loop
+                            } else {
+                                // Enemy just stays dead
+                                u.respawnComplete = true;
+                            }
+                        }
+                    }
+                }
+            }
+        });
 
         // Update Unit List
         const currentAlive = units.filter(u => u.state !== 'dead').length;
