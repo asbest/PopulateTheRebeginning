@@ -861,7 +861,7 @@
             const startPos = shaman.mesh.position.clone().add(new THREE.Vector3(0, 2, 0));
             const h = getHeight(x, z);
             const targetPos = new THREE.Vector3(x, h, z);
-            projectiles.push(new Fireball(startPos, targetPos));
+            projectiles.push(new Fireball(startPos, targetPos, 0));
             SoundManager.playSound('fireball');
             
             const dx = targetPos.x - shaman.mesh.position.x;
@@ -906,7 +906,7 @@
             SoundManager.playSound('magic');
         }
         else if (currentAction === 'firestorm') {
-            activeEffects.push(new Firestorm(x, z));
+            activeEffects.push(new Firestorm(x, z, 0));
         }
         else if (currentAction === 'convert') {
             SoundManager.playSound('magic');
@@ -1782,7 +1782,7 @@
                     // Spawn Fireball
                      const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
                      const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
-                     projectiles.push(new Fireball(startPos, targetPos));
+                     projectiles.push(new Fireball(startPos, targetPos, this.faction));
                      SoundManager.playSound('fireball');
                 } else {
                     // Melee
@@ -2519,9 +2519,10 @@
     }
 
     class Firestorm extends ActiveEffect {
-        constructor(x, z) {
+        constructor(x, z, faction) {
             super();
             this.x = x; this.z = z;
+            this.faction = faction;
             this.timer = 10.0;
             this.interval = 0;
         }
@@ -2534,7 +2535,7 @@
                 const rz = this.z + (Math.random()-0.5)*15;
                 const start = new THREE.Vector3(rx, 40, rz);
                 const end = new THREE.Vector3(rx, getHeight(rx, rz), rz);
-                projectiles.push(new Fireball(start, end));
+                projectiles.push(new Fireball(start, end, this.faction));
                 SoundManager.playSound('fireball');
             }
             return this.timer > 0;
@@ -2558,9 +2559,10 @@
     }
 
     class Fireball {
-        constructor(start, end) {
+        constructor(start, end, faction) {
             this.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({color: 0xFF4500}));
             this.mesh.position.copy(start); this.target = end; this.dir = end.clone().sub(start).normalize();
+            this.faction = faction;
             this.speed = 25; this.active = true; this.trailTimer = 0; scene.add(this.mesh);
         }
         update(dt) {
@@ -2580,7 +2582,7 @@
             units.forEach(u => {
                 const d = u.mesh.position.distanceTo(impactPos);
                 if(d < 8) {
-                    if (!u.isShaman) {
+                    if (!u.isShaman || u.faction !== this.faction) {
                         const forceDir = u.mesh.position.clone().sub(impactPos).normalize(); const force = (8 - d) * 3;
                         forceDir.multiplyScalar(force); forceDir.y += force * 0.5;
                         u.applyForce(forceDir); u.takeDamage(27);
