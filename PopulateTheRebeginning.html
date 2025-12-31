@@ -845,6 +845,16 @@
         // Prevent building if no brave nearby
         if (currentAction.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
 
+        const spells = ['blast', 'lightning', 'convert', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal'];
+
+        // Range Check for Spells
+        if (spells.includes(currentAction)) {
+            if (!shaman || shaman.state === 'dead') return;
+            const maxRange = 10.0 + shaman.mesh.position.y;
+            const dist = Math.sqrt((x - shaman.mesh.position.x)**2 + (z - shaman.mesh.position.z)**2);
+            if (dist > maxRange) return;
+        }
+
         const costs = { 
             blast: 10, lightning: 30, convert: 10, raise: 5, lower: 5, flatten: 10, landbridge: 20,
             swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40, heal: 10,
