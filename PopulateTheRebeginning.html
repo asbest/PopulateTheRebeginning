@@ -356,7 +356,7 @@
     let rotateStartCamera = 0;
     let cameraRotation = Math.PI / 4;
     let multiSelectMode = false;
-    let joystickVector = new THREE.Vector2(0, 0);
+    let joystickVector = new THREE.Vector2(0, 0); window.joystickVector = joystickVector;
     let isPaused = false;
 
     window.togglePause = function() {
@@ -440,7 +440,7 @@
 
             // Init THREE globals
             clock = new THREE.Clock();
-            cameraLookAt = new THREE.Vector3(0, 0, 0);
+            cameraLookAt = new THREE.Vector3(0, 0, 0); window.cameraLookAt = cameraLookAt;
             chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false });
             chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES/2, CHUNK_RES/2);
 
@@ -609,9 +609,13 @@
     };
 
     window.selectAction = function(action) {
-        currentAction = action;
+        if (currentAction === action && action !== 'move') {
+            currentAction = 'move';
+        } else {
+            currentAction = action;
+        }
         document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
-        const btn = document.getElementById(`btn-${action}`);
+        const btn = document.getElementById(`btn-${currentAction}`);
         if(btn) btn.classList.add('active');
     }
 
@@ -2882,6 +2886,16 @@
         enemyAI.update(dt);
         units.forEach(u => u.update(dt));
         buildings.forEach(b => b.update(dt));
+
+        // Camera Follow Joystick
+        if(joystickVector.lengthSq() > 0.001 && selectedUnits.length > 0) {
+            const center = new THREE.Vector3();
+            selectedUnits.forEach(u => center.add(u.mesh.position));
+            center.divideScalar(selectedUnits.length);
+            // Smoothly interpolate camera position
+            cameraLookAt.lerp(center, dt * 5.0);
+            updateCameraPosition();
+        }
 
         // Active Effects
         for(let i = activeEffects.length-1; i>=0; i--) {
