@@ -2892,7 +2892,8 @@
             const center = new THREE.Vector3();
             selectedUnits.forEach(u => center.add(u.mesh.position));
             center.divideScalar(selectedUnits.length);
-            cameraLookAt.copy(center);
+            // Smoothly interpolate camera position
+            cameraLookAt.lerp(center, dt * 5.0);
             updateCameraPosition();
         }
 
