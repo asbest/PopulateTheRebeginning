@@ -77,17 +77,17 @@
         #right-menu {
             position: absolute;
             top: 60px;
-            right: 0;
-            width: 70px;
+            right: 10px;
+            width: 120px;
             bottom: 20px;
             overflow-y: auto;
             overflow-x: hidden;
             pointer-events: auto;
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 8px;
             padding: 5px;
-            align-items: center;
+            justify-items: center;
             /* background: linear-gradient(to left, rgba(0,0,0,0.5), transparent); */
         }
         #right-menu::-webkit-scrollbar { width: 0; } /* Hide scrollbar */
@@ -613,9 +613,9 @@
 
         // Sort: Shaman first, then Player units, then Enemy units
         const sortedUnits = [...units].sort((a,b) => {
-            if(a.isShaman) return -1;
-            if(b.isShaman) return 1;
-            if(a.faction !== b.faction) return a.faction - b.faction;
+            if (a.isShaman && !b.isShaman) return -1;
+            if (!a.isShaman && b.isShaman) return 1;
+            if (a.faction !== b.faction) return a.faction - b.faction;
             return 0;
         });
 
@@ -793,7 +793,7 @@
             SoundManager.playSound('rumble');
         }
         else if (type === 'volcano') {
-            createVolcano(x, z);
+            createVolcano(x, z, caster.faction);
             SoundManager.playSound('explosion');
         }
         else if (type === 'heal') {
@@ -818,10 +818,10 @@
             spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFFFFF);
         }
         else if (type === 'tornado') {
-            activeEffects.push(new Tornado(x, z));
+            activeEffects.push(new Tornado(x, z, caster.faction));
         }
         else if (type === 'swarm') {
-            activeEffects.push(new Swarm(x, z));
+            activeEffects.push(new Swarm(x, z, caster.faction));
             SoundManager.playSound('magic');
         }
         else if (type === 'firestorm') {
@@ -907,6 +907,10 @@
         else if (type === 'landbridge') {
             castLandbridge(caster, x, z);
         }
+        else if (type === 'swamp') {
+             activeEffects.push(new Swamp(x, z, caster.faction));
+             SoundManager.playSound('magic');
+        }
         else if (type === 'lightning') {
             SoundManager.playSound('explosion');
             // Visual Line
@@ -923,14 +927,14 @@
             burnTreesAt(x, z, 5); // Burn trees
             units.forEach(u => {
                  const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
-                 if(dist < 4) {
+                 if(dist < 4 && u.faction !== caster.faction) {
                      u.takeDamage(1000);
                      hit = true;
                  }
             });
             buildings.forEach(b => {
                  const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
-                 if(dist < 4) {
+                 if(dist < 4 && b.faction !== caster.faction) {
                      b.takeDamage(500);
                      hit = true;
                  }
@@ -1272,8 +1276,8 @@
         return modifiedChunks;
     }
 
-    function createVolcano(x, z) {
-        activeEffects.push(new Volcano(x, z));
+    function createVolcano(x, z, faction) {
+        activeEffects.push(new Volcano(x, z, faction));
     }
 
     function updateChunks(force = false, specificChunks = null) {
@@ -2337,9 +2341,10 @@
     }
 
     class Volcano extends ActiveEffect {
-        constructor(x, z) {
+        constructor(x, z, faction) {
             super();
             this.x = x; this.z = z;
+            this.faction = faction;
             this.timer = 15.0;
             this.interval = 0;
             SoundManager.playSound('explosion');
@@ -2374,7 +2379,7 @@
                 // Push & Damage
                 units.forEach(u => {
                     const dist = u.mesh.position.distanceTo(new THREE.Vector3(this.x, u.mesh.position.y, this.z));
-                    if(dist < 10) {
+                    if(dist < 10 && u.faction !== this.faction) {
                         const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
                         u.applyForce(dir.multiplyScalar(20).add(new THREE.Vector3(0, 10, 0)));
                         if (!u.isShaman) u.takeDamage(5);
@@ -2382,7 +2387,7 @@
                 });
                 buildings.forEach(b => {
                      const dist = b.mesh.position.distanceTo(new THREE.Vector3(this.x, b.mesh.position.y, this.z));
-                     if(dist < 10) b.takeDamage(10);
+                     if(dist < 10 && b.faction !== this.faction) b.takeDamage(10);
                 });
             }
             return this.timer > 0;
@@ -2390,9 +2395,10 @@
     }
 
     class Swamp extends ActiveEffect {
-        constructor(x, z) {
+        constructor(x, z, faction) {
             super();
             this.pos = new THREE.Vector3(x, getHeight(x,z)+0.1, z);
+            this.faction = faction;
             this.timer = 30.0;
             this.radius = 4.0;
 
@@ -2412,7 +2418,7 @@
             // Kill units
             for(let i = units.length-1; i>=0; i--) {
                 const u = units[i];
-                if(u.state !== 'dead' && !u.isShaman) {
+                if(u.state !== 'dead' && !u.isShaman && u.faction !== this.faction) {
                     const dist = Math.sqrt((u.mesh.position.x - this.pos.x)**2 + (u.mesh.position.z - this.pos.z)**2);
                     if(dist < this.radius * 0.8) {
                          u.takeDamage(10000); // Instant death
@@ -2430,9 +2436,10 @@
     }
 
     class Tornado extends ActiveEffect {
-        constructor(x, z) {
+        constructor(x, z, faction) {
             super();
             this.pos = new THREE.Vector3(x, getHeight(x,z), z);
+            this.faction = faction;
             this.timer = 20.0;
             this.angle = Math.random() * Math.PI * 2;
             this.mesh = new THREE.Group();
@@ -2467,14 +2474,14 @@
             // Physics
             units.forEach(u => {
                 const d = u.mesh.position.distanceTo(this.pos);
-                if(d < 5 && !u.isShaman) {
+                if(d < 5 && !u.isShaman && u.faction !== this.faction) {
                      u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 25, (Math.random()-0.5)*10));
                      u.takeDamage(2);
                 }
             });
             buildings.forEach(b => {
                  const d = b.mesh.position.distanceTo(this.pos);
-                 if(d < 5) b.takeDamage(5);
+                 if(d < 5 && b.faction !== this.faction) b.takeDamage(5);
             });
 
             if(this.timer <= 0) {
@@ -2486,9 +2493,10 @@
     }
 
     class Swarm extends ActiveEffect {
-        constructor(x, z) {
+        constructor(x, z, faction) {
             super();
             this.pos = new THREE.Vector3(x, getHeight(x,z)+3, z);
+            this.faction = faction;
             this.timer = 20.0;
             this.particles = [];
             for(let i=0; i<30; i++) {
@@ -2505,7 +2513,7 @@
             // Move towards nearest enemy
             let closest = null; let minDist = 50;
             units.forEach(u => {
-                 if(u.faction === 1 && u.state !== 'dead') {
+                 if(u.faction !== this.faction && u.state !== 'dead') {
                      const d = u.mesh.position.distanceTo(this.pos);
                      if(d < minDist) { minDist = d; closest = u; }
                  }
@@ -2525,7 +2533,7 @@
             // Damage
             units.forEach(u => {
                 const d = u.mesh.position.distanceTo(this.pos);
-                if(d < 4) {
+                if(d < 4 && u.faction !== this.faction) {
                     u.takeDamage(50 * dt);
                 }
             });
@@ -2602,7 +2610,7 @@
             units.forEach(u => {
                 const d = u.mesh.position.distanceTo(impactPos);
                 if(d < 8) {
-                    if (!u.isShaman || u.faction !== this.faction) {
+                    if (u.faction !== this.faction) {
                         const forceDir = u.mesh.position.clone().sub(impactPos).normalize(); const force = (8 - d) * 3;
                         forceDir.multiplyScalar(force); forceDir.y += force * 0.5;
                         u.applyForce(forceDir); u.takeDamage(27);
@@ -2612,7 +2620,7 @@
             // Buildings
             buildings.forEach(b => {
                 const d = b.mesh.position.distanceTo(impactPos);
-                if(d < 8) {
+                if(d < 8 && b.faction !== this.faction) {
                     b.takeDamage(75); // Fireball deals 75 damage to buildings
                 }
             });
