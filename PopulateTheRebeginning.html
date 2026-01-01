@@ -78,14 +78,14 @@
             position: absolute;
             top: 60px;
             right: 10px;
-            width: 120px;
+            width: 80px;
             bottom: 20px;
             overflow-y: auto;
             overflow-x: hidden;
             pointer-events: auto;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
+            gap: 4px;
             padding: 5px;
             justify-items: center;
             /* background: linear-gradient(to left, rgba(0,0,0,0.5), transparent); */
@@ -93,12 +93,12 @@
         #right-menu::-webkit-scrollbar { width: 0; } /* Hide scrollbar */
 
         .action-btn {
-            width: 54px; height: 54px;
+            width: 30px; height: 30px;
             border-radius: 50%;
             border: 2px solid #555;
             background: #222;
             color: white;
-            font-size: 24px;
+            font-size: 14px;
             cursor: pointer;
             transition: all 0.2s;
             display: flex; align-items: center; justify-content: center;
@@ -109,9 +109,9 @@
         .action-btn.active { border-color: #FFD700; transform: scale(1.1); box-shadow: 0 0 10px #FFD700; background: #444; z-index: 5; }
         .action-btn:active { transform: scale(0.95); }
         .label {
-            font-size: 11px; position: absolute; bottom: -16px; width: 140%; left: -20%;
+            font-size: 9px; position: absolute; bottom: -12px; width: 160%; left: -30%;
             text-align: center; text-shadow: 1px 1px 1px black; color: #ddd;
-            background: rgba(0,0,0,0.5); border-radius: 4px; padding: 1px 0;
+            background: rgba(0,0,0,0.5); border-radius: 4px; padding: 0;
             pointer-events: none;
         }
 
@@ -168,6 +168,23 @@
             z-index: 50; display: none;
         }
 
+        #btn-pause {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 40px; height: 40px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: 2px solid white;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+            cursor: pointer;
+            pointer-events: auto;
+            z-index: 100;
+        }
+        #btn-pause:active { transform: scale(0.9); }
+
     </style>
 </head>
 <body>
@@ -194,6 +211,7 @@
 
     <div id="btn-multiselect" class="multi-select-btn" onclick="toggleMultiSelect()">⊕</div>
     <div id="btn-unload" class="unload-btn" onclick="unloadSelected()">⬇️</div>
+    <div id="btn-pause" onclick="togglePause()">⏸️</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -339,6 +357,13 @@
     let cameraRotation = Math.PI / 4;
     let multiSelectMode = false;
     let joystickVector = new THREE.Vector2(0, 0);
+    let isPaused = false;
+
+    window.togglePause = function() {
+        isPaused = !isPaused;
+        const btn = document.getElementById('btn-pause');
+        btn.innerText = isPaused ? '▶️' : '⏸️';
+    }
 
     window.toggleMultiSelect = function() {
         multiSelectMode = !multiSelectMode;
@@ -2812,6 +2837,7 @@
     function animate() {
         requestAnimationFrame(animate); const dt = Math.min(clock.getDelta(), 0.1);
 
+        if(!isPaused) {
         // Joystick Logic
         if(joystickVector.lengthSq() > 0.001 && selectedUnits.length > 0) {
              const camDir = new THREE.Vector3();
@@ -2834,6 +2860,7 @@
         if(mana < 100) { mana += dt * manaRate; if(isNaN(mana)) mana = 0; updateUI(); }
 
         if(chunkWaterMat && chunkWaterMat.uniforms) chunkWaterMat.uniforms.time.value += dt;
+        }
 
         // Range Ring Update
         if (shaman && shaman.state !== 'dead') {
@@ -2851,6 +2878,7 @@
         }
 
         updateChunks();
+        if(!isPaused) {
         enemyAI.update(dt);
         units.forEach(u => u.update(dt));
         buildings.forEach(b => b.update(dt));
@@ -2923,10 +2951,13 @@
             updateUnitList();
             lastAliveCount = currentAlive;
         }
-        updateUnitListSelection();
+        // updateUnitListSelection(); // Moved out
 
         for(let i = projectiles.length-1; i>=0; i--) { if(!projectiles[i].update(dt)) projectiles.splice(i, 1); }
         for(let i = particles.length-1; i>=0; i--) { if(!particles[i].update(dt)) particles.splice(i, 1); }
+        }
+
+        updateUnitListSelection();
         renderer.render(scene, camera);
     }
 </script>
