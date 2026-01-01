@@ -609,9 +609,13 @@
     };
 
     window.selectAction = function(action) {
-        currentAction = action;
+        if (currentAction === action && action !== 'move') {
+            currentAction = 'move';
+        } else {
+            currentAction = action;
+        }
         document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
-        const btn = document.getElementById(`btn-${action}`);
+        const btn = document.getElementById(`btn-${currentAction}`);
         if(btn) btn.classList.add('active');
     }
 
