@@ -78,14 +78,14 @@
             position: absolute;
             top: 60px;
             right: 10px;
-            width: 120px;
+            width: 80px;
             bottom: 20px;
             overflow-y: auto;
             overflow-x: hidden;
             pointer-events: auto;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
+            gap: 4px;
             padding: 5px;
             justify-items: center;
             /* background: linear-gradient(to left, rgba(0,0,0,0.5), transparent); */
@@ -93,12 +93,12 @@
         #right-menu::-webkit-scrollbar { width: 0; } /* Hide scrollbar */
 
         .action-btn {
-            width: 54px; height: 54px;
+            width: 30px; height: 30px;
             border-radius: 50%;
             border: 2px solid #555;
             background: #222;
             color: white;
-            font-size: 24px;
+            font-size: 14px;
             cursor: pointer;
             transition: all 0.2s;
             display: flex; align-items: center; justify-content: center;
@@ -109,9 +109,9 @@
         .action-btn.active { border-color: #FFD700; transform: scale(1.1); box-shadow: 0 0 10px #FFD700; background: #444; z-index: 5; }
         .action-btn:active { transform: scale(0.95); }
         .label {
-            font-size: 11px; position: absolute; bottom: -16px; width: 140%; left: -20%;
+            font-size: 9px; position: absolute; bottom: -12px; width: 160%; left: -30%;
             text-align: center; text-shadow: 1px 1px 1px black; color: #ddd;
-            background: rgba(0,0,0,0.5); border-radius: 4px; padding: 1px 0;
+            background: rgba(0,0,0,0.5); border-radius: 4px; padding: 0;
             pointer-events: none;
         }
 
