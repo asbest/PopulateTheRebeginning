@@ -12,45 +12,6 @@
         #top-bar { padding: 10px; text-align: center; text-shadow: 1px 1px 2px black; pointer-events: auto; background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);}
         p { margin: 5px 0 0; font-size: 12px; color: white; }
 
-        /* TAB SYSTEM */
-        #bottom-ui {
-            pointer-events: auto;
-            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
-            padding-bottom: 20px;
-        }
-
-        #tabs {
-            display: flex; justify-content: center; gap: 10px; margin-bottom: 5px;
-        }
-        .tab-btn {
-            width: 24px; height: 24px; border-radius: 50%; background: #444; border: 2px solid #888;
-            color: white; font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer;
-        }
-        .tab-btn.active { background: #FFD700; color: black; border-color: white; box-shadow: 0 0 5px #FFD700; }
-
-        #action-bar {
-            display: flex; justify-content: center; gap: 5px; padding: 5px;
-            flex-wrap: wrap;
-            min-height: 40px;
-        }
-
-        .action-btn {
-            width: 50px; height: 50px;
-            border-radius: 50%;
-            border: 2px solid #555;
-            background: #222;
-            color: white;
-            font-size: 19px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 2px 3px rgba(0,0,0,0.5);
-            position: relative;
-        }
-        .action-btn.active { border-color: #FFD700; transform: translateY(-3px); box-shadow: 0 0 8px #FFD700; background: #444; }
-        .action-btn:active { transform: scale(0.95); }
-        .label { font-size: 12px; position: absolute; bottom: -19px; width: 140%; left: -20%; text-align: center; text-shadow: 1px 1px 1px black; color: #ddd;}
-
         #mana-bar {
             width: 200px; height: 10px; background: #333; margin: 0 auto; border: 1px solid white; border-radius: 5px; overflow: hidden;
         }
@@ -62,13 +23,13 @@
             z-index: 100; font-size: 24px; font-weight: bold;
         }
 
-        /* UNIT LIST */
+        /* UNIT LIST - Left side, above joystick */
         #unit-list {
             position: absolute;
             top: 70px;
             left: 0;
             width: 48px;
-            bottom: 120px;
+            bottom: 220px; /* Space for joystick */
             overflow-y: auto;
             overflow-x: hidden;
             background: rgba(0,0,0,0.2);
@@ -112,57 +73,100 @@
         .hp-val { height: 100%; background: #00FF00; width: 100%; }
         .unit-item.enemy .hp-val { background: #FF0000; }
 
-        /* RADIAL MENU CSS */
-        #radial-container {
+        /* RIGHT ACTION MENU */
+        #right-menu {
+            position: absolute;
+            top: 60px;
+            right: 0;
+            width: 70px;
+            bottom: 20px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 5px;
+            align-items: center;
+            /* background: linear-gradient(to left, rgba(0,0,0,0.5), transparent); */
+        }
+        #right-menu::-webkit-scrollbar { width: 0; } /* Hide scrollbar */
+
+        .action-btn {
+            width: 54px; height: 54px;
+            border-radius: 50%;
+            border: 2px solid #555;
+            background: #222;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.5);
             position: relative;
-            width: 72px; height: 72px;
-            margin: 0 auto 5px auto;
+            flex-shrink: 0;
+        }
+        .action-btn.active { border-color: #FFD700; transform: scale(1.1); box-shadow: 0 0 10px #FFD700; background: #444; z-index: 5; }
+        .action-btn:active { transform: scale(0.95); }
+        .label {
+            font-size: 11px; position: absolute; bottom: -16px; width: 140%; left: -20%;
+            text-align: center; text-shadow: 1px 1px 1px black; color: #ddd;
+            background: rgba(0,0,0,0.5); border-radius: 4px; padding: 1px 0;
+            pointer-events: none;
+        }
+
+        /* JOYSTICK */
+        #joystick-area {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 150px;
+            height: 150px;
+            pointer-events: auto;
             touch-action: none;
         }
-        #main-icon {
-            width: 62px; height: 62px;
-            border-radius: 50%;
-            background: #444;
-            border: 2px solid #888;
-            color: white;
-            font-size: 26px;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            position: relative;
-            z-index: 20;
-            box-shadow: 0 0 5px black;
-        }
-        #radial-options {
+        #joystick-bg {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-        #radial-options.open { opacity: 1; pointer-events: auto; }
-        .radial-option {
-            width: 44px; height: 44px;
+            top: 50%; left: 50%;
+            width: 120px; height: 120px;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
-            background: #333;
-            border: 1px solid #666;
-            color: white;
-            font-size: 22px;
-            display: flex; align-items: center; justify-content: center;
-            position: absolute;
-            top: 14px; left: 14px; /* Center relative to container */
-            transition: transform 0.2s, background 0.2s;
-            box-shadow: 0 0 3px black;
         }
-        /* Positions: Basic(Left), Spells(Top), Build(Right) */
-        .radial-option[data-tab="basic"] { transform: translate(-50px, -15px); }
-        .radial-option[data-tab="spells"] { transform: translate(0, -65px); }
-        .radial-option[data-tab="build"] { transform: translate(50px, -15px); }
+        #joystick-knob {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 50px; height: 50px;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 215, 0, 0.5);
+            border: 2px solid rgba(255, 215, 0, 0.8);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
 
-        .radial-option.highlight { background: #FFD700; color: black; transform: scale(1.2) !important; z-index: 25; }
-        /* Keep positions when highlighted */
-        .radial-option[data-tab="basic"].highlight { transform: translate(-50px, -15px) scale(1.2); }
-        .radial-option[data-tab="spells"].highlight { transform: translate(0, -65px) scale(1.2); }
-        .radial-option[data-tab="build"].highlight { transform: translate(50px, -15px) scale(1.2); }
+        .multi-select-btn {
+            position: absolute;
+            bottom: 180px; left: 20px;
+            width: 40px; height: 40px;
+            background: #444; border: 2px solid #888;
+            color: white; font-size: 20px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        .multi-select-btn.active { border-color: #00FF00; color: #00FF00; box-shadow: 0 0 5px #00FF00; }
+
+        .unload-btn {
+            position: absolute; bottom: 20px; right: 90px;
+            width: 50px; height: 50px;
+            background: #444; border: 2px solid white;
+            color: white; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; pointer-events: auto; cursor: pointer;
+            z-index: 50; display: none;
+        }
 
     </style>
 </head>
@@ -177,68 +181,19 @@
         <p>Mana: <span id="mana-text">100</span></p>
     </div>
 
-    <div id="bottom-ui">
-        <!-- Radial Menu Structure -->
-        <div id="radial-container">
-            <div id="main-icon">👣</div>
-            <div id="radial-options">
-                <div class="radial-option" data-tab="basic">👣</div>
-                <div class="radial-option" data-tab="spells">⚡</div>
-                <div class="radial-option" data-tab="build">🔨</div>
-            </div>
-        </div>
-        <div id="btn-multiselect" class="tab-btn" onclick="toggleMultiSelect()" style="position:absolute; bottom:20px; right:20px;">⊕</div>
-        <div id="btn-unload" class="action-btn" onclick="unloadSelected()" style="position:absolute; bottom:20px; left:calc(50% + 60px); display:none; background:#444; border-color:#fff; z-index: 50;">⬇️</div>
-        
-        <!-- Select Info / Mode -->
-        <div id="menu-select" class="action-menu">
-            <div id="action-bar" style="color:white; justify-content:center; padding-top:20px;">
-                Select a unit
-            </div>
-        </div>
-
-        <!-- Basic Unit Actions (Move) -->
-        <div id="menu-basic" class="action-menu" style="display:none;">
-            <div id="action-bar">
-                <div class="action-btn" onclick="selectAction('move')" id="btn-move">👣<span class="label">Walk</span></div>
-            </div>
-        </div>
-
-        <!-- Spells Menu -->
-        <div id="menu-spells" class="action-menu" style="display:none;">
-            <div id="action-bar">
-                <div class="action-btn" onclick="selectAction('blast')" id="btn-blast">🔥<span class="label">10</span></div>
-                <div class="action-btn" onclick="selectAction('lightning')" id="btn-lightning">⚡<span class="label">30</span></div>
-                <div class="action-btn" onclick="selectAction('raise')" id="btn-raise">▲<span class="label">5</span></div>
-                <div class="action-btn" onclick="selectAction('lower')" id="btn-lower">▼<span class="label">5</span></div>
-                <div class="action-btn" onclick="selectAction('flatten')" id="btn-flatten">➖<span class="label">10</span></div>
-                <div class="action-btn" onclick="selectAction('landbridge')" id="btn-landbridge">🌉<span class="label">20</span></div>
-                <div class="action-btn" onclick="selectAction('swamp')" id="btn-swamp">🌫️<span class="label">15</span></div>
-                <div class="action-btn" onclick="selectAction('invisibility')" id="btn-invisibility">👻<span class="label">20</span></div>
-                <div class="action-btn" onclick="selectAction('shield')" id="btn-shield">🛡️<span class="label">20</span></div>
-                <div class="action-btn" onclick="selectAction('hypnotise')" id="btn-hypnotise">🌀<span class="label">50</span></div>
-                <div class="action-btn" onclick="selectAction('swarm')" id="btn-swarm">🐝<span class="label">20</span></div>
-                <div class="action-btn" onclick="selectAction('tornado')" id="btn-tornado">🌪️<span class="label">60</span></div>
-                <div class="action-btn" onclick="selectAction('firestorm')" id="btn-firestorm">☄️<span class="label">80</span></div>
-                <div class="action-btn" onclick="selectAction('volcano')" id="btn-volcano">🌋<span class="label">40</span></div>
-                <div class="action-btn" onclick="selectAction('heal')" id="btn-heal">💖<span class="label">10</span></div>
-                <div class="action-btn" onclick="selectAction('create')" id="btn-create">👶<span class="label">100</span></div>
-            </div>
-        </div>
-
-        <!-- Build Menu -->
-        <div id="menu-build" class="action-menu" style="display:none;">
-            <div id="action-bar">
-                <div class="action-btn" onclick="selectAction('build_hut')" id="btn-build_hut">🏠<span class="label">Hut (15)</span></div>
-                <div class="action-btn" onclick="selectAction('build_tower')" id="btn-build_tower">🗼<span class="label">Tower (20)</span></div>
-                <div class="action-btn" onclick="selectAction('build_warrior')" id="btn-build_warrior">⚔️<span class="label">Barracks (30)</span></div>
-                <div class="action-btn" onclick="selectAction('build_fire')" id="btn-build_fire">🔥<span class="label">Temple (40)</span></div>
-                <div class="action-btn" onclick="selectAction('build_spy')" id="btn-build_spy">🌙<span class="label">Spy (40)</span></div>
-                <div class="action-btn" onclick="selectAction('build_shipyard')" id="btn-build_shipyard">⚓<span class="label">Shipyard (50)</span></div>
-                <div class="action-btn" onclick="selectAction('build_airship')" id="btn-build_airship">🎈<span class="label">Airship (25)</span></div>
-            </div>
-        </div>
+    <!-- Right Side Action Menu -->
+    <div id="right-menu">
+        <!-- Filled dynamically by JS -->
     </div>
+
+    <!-- Joystick Left -->
+    <div id="joystick-area">
+        <div id="joystick-bg"></div>
+        <div id="joystick-knob"></div>
+    </div>
+
+    <div id="btn-multiselect" class="multi-select-btn" onclick="toggleMultiSelect()">⊕</div>
+    <div id="btn-unload" class="unload-btn" onclick="unloadSelected()">⬇️</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -383,20 +338,15 @@
     let rotateStartCamera = 0;
     let cameraRotation = Math.PI / 4;
     let multiSelectMode = false;
+    let joystickVector = new THREE.Vector2(0, 0);
 
     window.toggleMultiSelect = function() {
         multiSelectMode = !multiSelectMode;
         const btn = document.getElementById('btn-multiselect');
         if(multiSelectMode) {
              btn.classList.add('active');
-             btn.style.boxShadow = '0 0 10px #00FF00';
-             btn.style.borderColor = '#00FF00';
-             btn.style.color = '#00FF00';
         } else {
              btn.classList.remove('active');
-             btn.style.boxShadow = '';
-             btn.style.borderColor = '#888';
-             btn.style.color = 'white';
         }
     }
 
@@ -551,10 +501,10 @@
             c.addEventListener('wheel', onWheel, {passive: false});
             window.addEventListener('resize', onResize);
 
-            setupRadialMenu();
-            // Default to Basic/Move
-            switchTab('basic');
+            setupJoystick();
+            // Default to Move
             selectAction('move');
+            updateContextMenus();
 
             animate();
         } catch(e) {
@@ -564,108 +514,74 @@
     }
 
     // --- UI SYSTEM ---
-    function setupRadialMenu() {
-        const btn = document.getElementById('main-icon');
-        const container = document.getElementById('radial-container');
-        const options = document.getElementById('radial-options');
-        let isHolding = false;
-        let holdTimer = null;
+    function setupJoystick() {
+        const area = document.getElementById('joystick-area');
+        const knob = document.getElementById('joystick-knob');
+        let startX = 0, startY = 0;
+        let active = false;
 
-        const startHold = (e) => {
-            isHolding = true;
-            options.classList.add('open');
-            // Prevent default?
+        const handleStart = (x, y) => {
+            active = true;
+            startX = x; startY = y;
+            knob.style.transition = 'none';
         };
 
-        const moveHold = (e) => {
-            if(!isHolding) return;
-            const x = e.touches ? e.touches[0].clientX : e.clientX;
-            const y = e.touches ? e.touches[0].clientY : e.clientY;
-
-            // Check overlap
-            document.querySelectorAll('.radial-option').forEach(opt => {
-                const rect = opt.getBoundingClientRect();
-                if(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-                    opt.classList.add('highlight');
-                } else {
-                    opt.classList.remove('highlight');
-                }
-            });
-        };
-
-        const endHold = (e) => {
-            if(!isHolding) return;
-            isHolding = false;
-            options.classList.remove('open');
-
-            let selected = null;
-            const x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
-            const y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
-
-            // Prioritize already highlighted
-            document.querySelectorAll('.radial-option').forEach(opt => {
-                if(opt.classList.contains('highlight')) {
-                    selected = opt.getAttribute('data-tab');
-                    opt.classList.remove('highlight');
-                }
-            });
-
-            // If not strictly highlighted, check distance to icons for forgiving selection (Drop at icon)
-            if(!selected) {
-                let closestDist = 9999;
-                let closestTab = null;
-                document.querySelectorAll('.radial-option').forEach(opt => {
-                    const rect = opt.getBoundingClientRect();
-                    const cx = rect.left + rect.width / 2;
-                    const cy = rect.top + rect.height / 2;
-                    const dist = Math.sqrt((x-cx)**2 + (y-cy)**2);
-                    if(dist < 40 && dist < closestDist) { // 40px radius forgiveness
-                        closestDist = dist;
-                        closestTab = opt.getAttribute('data-tab');
-                    }
-                });
-                if(closestTab) selected = closestTab;
+        const handleMove = (x, y) => {
+            if(!active) return;
+            const maxDist = 50;
+            let dx = x - startX;
+            let dy = y - startY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist > maxDist) {
+                dx = (dx / dist) * maxDist;
+                dy = (dy / dist) * maxDist;
             }
-
-            if(selected) {
-                switchTab(selected);
-            } else {
-                // Walking is default: if dropped anywhere else (center or void), revert to basic/move
-                switchTab('basic');
-                selectAction('move');
-            }
+            knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+            joystickVector.set(dx / maxDist, dy / maxDist);
         };
 
-        btn.addEventListener('mousedown', startHold);
-        window.addEventListener('mousemove', moveHold);
-        window.addEventListener('mouseup', endHold);
+        const handleEnd = () => {
+            active = false;
+            knob.style.transition = 'transform 0.2s';
+            knob.style.transform = `translate(-50%, -50%)`;
+            joystickVector.set(0, 0);
+        };
 
-        btn.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(e); }, {passive:false});
-        window.addEventListener('touchmove', moveHold, {passive:false});
-        window.addEventListener('touchend', endHold);
+        area.addEventListener('touchstart', e => { e.preventDefault(); handleStart(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+        area.addEventListener('touchmove', e => { e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+        area.addEventListener('touchend', e => { e.preventDefault(); handleEnd(); });
+
+        area.addEventListener('mousedown', e => { handleStart(e.clientX, e.clientY); });
+        window.addEventListener('mousemove', e => { if(active) handleMove(e.clientX, e.clientY); });
+        window.addEventListener('mouseup', e => { if(active) handleEnd(); });
     }
 
-    window.switchTab = function(tab) {
-        // If switching to select tab, set action to select
-        if(tab === 'select') {
-            currentAction = 'select';
-            document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
-        }
-        // If switching to basic tab, default to move
-        if(tab === 'basic') {
-            selectAction('move');
-        }
-
-        // Update Main Icon
-        const mainIcon = document.getElementById('main-icon');
-        if(tab === 'basic' || tab === 'select') mainIcon.innerHTML = '👣';
-        else if(tab === 'spells') mainIcon.innerHTML = '⚡';
-        else if(tab === 'build') mainIcon.innerHTML = '🔨';
-
-        document.querySelectorAll('.action-menu').forEach(m => m.style.display = 'none');
-        const menu = document.getElementById(`menu-${tab}`);
-        if(menu) menu.style.display = 'block';
-    }
+    const ACTIONS = {
+        'move': { icon: '👣', label: 'Walk', cost: 0 },
+        'blast': { icon: '🔥', label: 'Blast', cost: 10 },
+        'lightning': { icon: '⚡', label: 'Lght', cost: 30 },
+        'raise': { icon: '▲', label: 'Rais', cost: 5 },
+        'lower': { icon: '▼', label: 'Lowr', cost: 5 },
+        'flatten': { icon: '➖', label: 'Flat', cost: 10 },
+        'landbridge': { icon: '🌉', label: 'Bridg', cost: 20 },
+        'swamp': { icon: '🌫️', label: 'Swmp', cost: 15 },
+        'invisibility': { icon: '👻', label: 'Invis', cost: 20 },
+        'shield': { icon: '🛡️', label: 'Shld', cost: 20 },
+        'hypnotise': { icon: '🌀', label: 'Conv', cost: 50 },
+        'swarm': { icon: '🐝', label: 'Swrm', cost: 20 },
+        'tornado': { icon: '🌪️', label: 'Torn', cost: 60 },
+        'firestorm': { icon: '☄️', label: 'Fire', cost: 80 },
+        'volcano': { icon: '🌋', label: 'Volc', cost: 40 },
+        'heal': { icon: '💖', label: 'Heal', cost: 10 },
+        'create': { icon: '👶', label: 'Spwn', cost: 100 },
+        'build_hut': { icon: '🏠', label: 'Hut', cost: 15 },
+        'build_tower': { icon: '🗼', label: 'Towr', cost: 20 },
+        'build_warrior': { icon: '⚔️', label: 'War', cost: 30 },
+        'build_fire': { icon: '🔥', label: 'Fire', cost: 40 },
+        'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
+        'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
+        'build_airship': { icon: '🎈', label: 'Ship', cost: 25 }
+    };
 
     window.selectAction = function(action) {
         currentAction = action;
@@ -685,7 +601,8 @@
         'warrior': '⚔️',
         'firewarrior': '🔥',
         'shaman': '⚡',
-        'spy': '🕵️'
+        'spy': '🕵️',
+        'airship': '🎈'
     };
 
     let lastAliveCount = -1;
@@ -767,25 +684,42 @@
     }
 
     function updateContextMenus() {
+        const menu = document.getElementById('right-menu');
+        menu.innerHTML = '';
+
         const hasShaman = selectedUnits.some(u => u.isShaman);
         const hasBrave = selectedUnits.some(u => u.type === 'wild');
         const hasSelection = selectedUnits.length > 0;
-
         const hasAirship = selectedUnits.length === 1 && selectedUnits[0].type === 'airship';
 
-
-        // Unload Button
+        // Unload Button Visibility
         const unloadBtn = document.getElementById('btn-unload');
         if(unloadBtn) unloadBtn.style.display = (hasAirship && selectedUnits[0].passengers.length > 0) ? 'flex' : 'none';
 
-        // Auto-switch tabs if needed
-        if(hasSelection) {
-            if(hasShaman) switchTab('spells');
-            else if(hasBrave) switchTab('build');
-            else switchTab('basic');
-        } else {
-            switchTab('select');
+        let visibleActions = [];
+
+        if (hasShaman) {
+            visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create'];
+        } else if (hasBrave) {
+            visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy', 'build_shipyard', 'build_airship'];
         }
+
+        visibleActions.forEach(act => {
+             const data = ACTIONS[act];
+             if(!data) return;
+
+             const btn = document.createElement('div');
+             btn.className = 'action-btn';
+             btn.id = `btn-${act}`;
+             btn.innerHTML = `${data.icon}<span class="label">${data.label}</span>`;
+             if(currentAction === act) btn.classList.add('active');
+
+             btn.onclick = (e) => {
+                 e.stopPropagation();
+                 selectAction(act);
+             };
+             menu.appendChild(btn);
+        });
     }
 
     // --- SPELL HELPERS ---
@@ -1649,11 +1583,16 @@
 
             // Props
             if(this.isShaman) {
-                const mask = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.1), new THREE.MeshLambertMaterial({color: 0xFFD700}));
+                this.mesh.scale.set(1.5, 1.5, 1.5);
+                const mask = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.1), new THREE.MeshLambertMaterial({color: 0xFFD700, emissive: 0x443300}));
                 mask.position.z = 0.16; this.head.add(mask);
                 const hornGeo = new THREE.ConeGeometry(0.04, 0.3, 4);
-                const h1 = new THREE.Mesh(hornGeo, new THREE.MeshLambertMaterial({color:0xFFFFFF})); h1.position.set(0.15, 0.2, 0); h1.rotation.z = -0.3;
+                const h1 = new THREE.Mesh(hornGeo, new THREE.MeshLambertMaterial({color:0xFFFFFF, emissive: 0x333333})); h1.position.set(0.15, 0.2, 0); h1.rotation.z = -0.3;
                 const h2 = h1.clone(); h2.position.set(-0.15, 0.2, 0); h2.rotation.z = 0.3; this.head.add(h1); this.head.add(h2);
+
+                const light = new THREE.PointLight(0xFFD700, 1, 8);
+                light.position.set(0, 2, 0);
+                this.mesh.add(light);
             } else if (type === 'warrior') {
                 const helm = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8, 0, Math.PI * 2, 0, Math.PI/2), new THREE.MeshLambertMaterial({color: 0x555555}));
                 helm.position.y = 0.1; this.head.add(helm);
@@ -1741,6 +1680,37 @@
         applyForce(vec) {
             if(this.state === 'dead') return;
             this.velocity.add(vec); this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 2.0; this.target = null;
+        }
+
+        manualMove(vec) {
+            if(this.state === 'dead' || this.state === 'stunned') return;
+            const speed = this.moveSpeed;
+
+            // Check water collision
+            let allowed = true;
+            if(this.type !== 'airship') {
+                 // Simple lookahead
+                 const futureX = this.mesh.position.x + vec.x * speed * 0.1;
+                 const futureZ = this.mesh.position.z + vec.z * speed * 0.1;
+                 if(getHeight(futureX, futureZ) < 2.0 && getHeight(this.mesh.position.x, this.mesh.position.z) >= 2.0) {
+                     allowed = false;
+                 }
+            }
+
+            if(allowed) {
+                this.velocity.x = vec.x * speed;
+                this.velocity.z = vec.z * speed;
+                if(vec.lengthSq() > 0.001) {
+                    this.mesh.rotation.y = Math.atan2(vec.x, vec.z);
+                }
+            } else {
+                this.velocity.x = 0;
+                this.velocity.z = 0;
+            }
+
+            this.state = 'manual';
+            this.target = null;
+            this.path = [];
         }
 
         goto(x, z) {
@@ -1940,6 +1910,19 @@
                      this.mesh.rotation.x = 0;
                 }
             }
+            else if(this.state === 'manual') {
+                if(this.velocity.lengthSq() > 0.1) {
+                    if(this.legL) {
+                        const walkSpeed = 10; const amp = 0.8;
+                        this.legL.rotation.x = Math.sin(this.animTime * walkSpeed) * amp;
+                        this.legR.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp;
+                        this.armL.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp * 0.6;
+                        this.armR.rotation.x = Math.sin(this.animTime * walkSpeed) * amp * 0.6;
+                    }
+                } else {
+                    this.resetAnim();
+                }
+            }
             else if(this.state === 'combat') {
                 if(!this.attackTarget || this.attackTarget.state === 'dead') {
                     // Try find new target
@@ -2120,6 +2103,14 @@
                     this.armR.rotation.z = -Math.sin(this.animTime) * 0.05 - 0.1;
                 }
                 this.mesh.rotation.x *= 0.8; this.mesh.rotation.z *= 0.8;
+            }
+
+            if(this.isShaman && this.state !== 'dead') {
+                if(Math.random() < 0.1) {
+                    const p = new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1+Math.random(), (Math.random()-0.5))), 0xFFD700, 0.15, 1.0);
+                    p.vel.set(0, 2, 0);
+                    particles.push(p);
+                }
             }
         }
         resetAnim() {
@@ -2812,6 +2803,21 @@
 
     function animate() {
         requestAnimationFrame(animate); const dt = Math.min(clock.getDelta(), 0.1);
+
+        // Joystick Logic
+        if(joystickVector.lengthSq() > 0.001 && selectedUnits.length > 0) {
+             const camDir = new THREE.Vector3();
+             camera.getWorldDirection(camDir);
+             camDir.y = 0; camDir.normalize();
+             const camRight = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0,1,0)).normalize();
+
+             const moveDir = camDir.clone().multiplyScalar(-joystickVector.y)
+                .add(camRight.clone().multiplyScalar(joystickVector.x));
+             moveDir.normalize();
+
+             selectedUnits.forEach(u => u.manualMove(moveDir));
+        }
+
         // Mana Regeneration linked to population
         const playerBraves = units.filter(u => u.faction === 0 && u.type === 'wild').length;
         const manaRate = 1.0 + (playerBraves * 0.2); // Base + bonus per brave
