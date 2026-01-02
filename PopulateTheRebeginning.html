@@ -220,7 +220,7 @@
 <script>
     // --- CONFIGURATION ---
     const CHUNK_SIZE = 40; 
-    const CHUNK_RES = 150;
+    const CHUNK_RES = 50;
     const RENDER_DISTANCE = 3;
     const NOISE_SCALE = 0.02;
     const MIN_ZOOM = 3;
@@ -399,6 +399,7 @@
     }
 
     function getTerrainMod(x, z) {
+        if (terrainMods.size === 0) return 0;
         const x1 = Math.floor(x);
         const z1 = Math.floor(z);
         const x2 = x1 + 1;
@@ -2221,6 +2222,9 @@
             // Create Enemy Shaman
             const shamanSafe = findNearestLand(this.baseX - 5, this.baseZ - 5, 20);
             units.push(new Humanoid(1, 'shaman', shamanSafe.x, shamanSafe.z));
+            // Create initial Brave
+            const braveSafe = findNearestLand(this.baseX + 2, this.baseZ + 2, 10);
+            units.push(new Humanoid(1, 'wild', braveSafe.x, braveSafe.z));
 
             // Create a tower
             const towerSafe = findNearestLand(this.baseX + 5, this.baseZ + 5, 20);
@@ -2254,7 +2258,7 @@
             // 2. Expand Base
             const myBraves = myUnits.filter(u => u.type === 'wild');
             // Aggressive expansion: always try if we have at least one building and one brave (busy or idle)
-            if (myBuildings.length > 0 && myBraves.length > 0) {
+            if (myBuildings.length < 15 && myBraves.length > 0) {
                 // Try up to 10 times to find a spot per think cycle
                 for(let attempt=0; attempt<10; attempt++) {
                     // Pick a brave as reference to satisfy "build only near brave"
