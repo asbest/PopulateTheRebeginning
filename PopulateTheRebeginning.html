@@ -357,6 +357,7 @@
     let cameraRotation = Math.PI / 4;
     let multiSelectMode = false;
     let joystickVector = new THREE.Vector2(0, 0); window.joystickVector = joystickVector;
+    let keyboardVector = new THREE.Vector2(0, 0); window.keyboardVector = keyboardVector;
     let isPaused = false;
 
     window.togglePause = function() {
@@ -528,6 +529,7 @@
             window.addEventListener('resize', onResize);
 
             setupJoystick();
+            setupKeyboard();
             // Default to Move
             selectAction('move');
             updateContextMenus();
@@ -540,6 +542,25 @@
     }
 
     // --- UI SYSTEM ---
+    function setupKeyboard() {
+        const keys = { w: false, a: false, s: false, d: false };
+        const update = () => {
+            keyboardVector.set(0, 0);
+            if(keys.w) keyboardVector.y += 1;
+            if(keys.s) keyboardVector.y -= 1;
+            if(keys.a) keyboardVector.x -= 1;
+            if(keys.d) keyboardVector.x += 1;
+        };
+        window.addEventListener('keydown', (e) => {
+            const k = e.key.toLowerCase();
+            if(keys.hasOwnProperty(k)) { keys[k] = true; update(); }
+        });
+        window.addEventListener('keyup', (e) => {
+            const k = e.key.toLowerCase();
+            if(keys.hasOwnProperty(k)) { keys[k] = false; update(); }
+        });
+    }
+
     function setupJoystick() {
         const area = document.getElementById('joystick-area');
         const knob = document.getElementById('joystick-knob');
@@ -763,7 +784,7 @@
         const dirZ = (z - start.z) / dist;
 
         const allMods = new Set();
-        const r = 2; // Radius 2 for width 4
+        const r = 4; // Radius 4 for width 8
 
         for(let i=0; i<=steps; i++) {
             const px = start.x + dirX * i;
@@ -1641,8 +1662,11 @@
                     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mat); mesh.position.y = -h / 2; mesh.castShadow = true;
                     group.add(mesh); return group;
                 };
-                this.armL = createLimb(0.12, 0.45, skinMat, 0.26, 0.15, 0);
-                this.armR = createLimb(0.12, 0.45, skinMat, -0.26, 0.15, 0);
+                let armMat = skinMat;
+                if(this.type === 'firewarrior') armMat = new THREE.MeshLambertMaterial({color: 0xFF4500, emissive: 0xFF4500});
+
+                this.armL = createLimb(0.12, 0.45, armMat, 0.26, 0.15, 0);
+                this.armR = createLimb(0.12, 0.45, armMat, -0.26, 0.15, 0);
                 this.torso.add(this.armL); this.torso.add(this.armR);
 
                 // Weapons
@@ -2144,6 +2168,20 @@
                     const p = new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1+Math.random(), (Math.random()-0.5))), 0xFFD700, 0.15, 1.0);
                     p.vel.set(0, 2, 0);
                     particles.push(p);
+                }
+            }
+            if(this.type === 'firewarrior' && this.state !== 'dead') {
+                if(Math.random() < 0.3) {
+                     const spawnFire = (limb) => {
+                         const pos = new THREE.Vector3();
+                         limb.getWorldPosition(pos);
+                         pos.y -= 0.2;
+                         const p = new Particle(pos.add(new THREE.Vector3((Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2)), 0xFF4500, 0.1, 0.5);
+                         p.vel.set(0, 1, 0);
+                         particles.push(p);
+                     };
+                     if(this.armL) spawnFire(this.armL);
+                     if(this.armR) spawnFire(this.armR);
                 }
             }
         }
@@ -2846,15 +2884,16 @@
         requestAnimationFrame(animate); const dt = Math.min(clock.getDelta(), 0.1);
 
         if(!isPaused) {
-        // Joystick Logic
-        if(joystickVector.lengthSq() > 0.001 && selectedUnits.length > 0) {
+        // Joystick & Keyboard Logic
+        const inputVector = joystickVector.clone().add(keyboardVector).clampLength(0, 1);
+        if(inputVector.lengthSq() > 0.001 && selectedUnits.length > 0) {
              const camDir = new THREE.Vector3();
              camera.getWorldDirection(camDir);
              camDir.y = 0; camDir.normalize();
              const camRight = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0,1,0)).normalize();
 
-             const moveDir = camDir.clone().multiplyScalar(-joystickVector.y)
-                .add(camRight.clone().multiplyScalar(joystickVector.x));
+             const moveDir = camDir.clone().multiplyScalar(-inputVector.y)
+                .add(camRight.clone().multiplyScalar(inputVector.x));
              moveDir.normalize();
 
              selectedUnits.forEach(u => u.manualMove(moveDir));
@@ -2892,7 +2931,8 @@
         buildings.forEach(b => b.update(dt));
 
         // Camera Follow Joystick
-        if(joystickVector.lengthSq() > 0.001 && selectedUnits.length > 0) {
+        const inputVector = joystickVector.clone().add(keyboardVector).clampLength(0, 1);
+        if(inputVector.lengthSq() > 0.001 && selectedUnits.length > 0) {
             const center = new THREE.Vector3();
             selectedUnits.forEach(u => center.add(u.mesh.position));
             center.divideScalar(selectedUnits.length);
