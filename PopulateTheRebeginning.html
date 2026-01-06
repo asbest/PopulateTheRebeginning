@@ -597,8 +597,14 @@
             joystickVector.set(0, 0);
         };
 
-        area.addEventListener('touchstart', e => { e.preventDefault(); handleStart(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
-        area.addEventListener('touchmove', e => { e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+        area.addEventListener('touchstart', e => {
+            e.preventDefault();
+            if(e.targetTouches.length > 0) handleStart(e.targetTouches[0].clientX, e.targetTouches[0].clientY);
+        }, {passive:false});
+        area.addEventListener('touchmove', e => {
+            e.preventDefault();
+            if(e.targetTouches.length > 0) handleMove(e.targetTouches[0].clientX, e.targetTouches[0].clientY);
+        }, {passive:false});
         area.addEventListener('touchend', e => { e.preventDefault(); handleEnd(); });
 
         area.addEventListener('mousedown', e => { handleStart(e.clientX, e.clientY); });
