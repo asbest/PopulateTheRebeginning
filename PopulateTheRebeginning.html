@@ -1257,6 +1257,17 @@
     }
 
     // --- TERRAIN FUNCTIONS ---
+    function isBlocked(x, z) {
+        for(let b of buildings) {
+            if(!b.dead && !b.underConstruction) {
+                 const dx = x - b.mesh.position.x;
+                 const dz = z - b.mesh.position.z;
+                 if (dx*dx + dz*dz < 4.0) return true; // Radius 2.0 squared
+            }
+        }
+        return false;
+    }
+
     function isBraveNearby(faction, x, z, radius) {
         for(let u of units) {
             if(u.faction === faction && u.type === 'wild' && u.state !== 'dead') {
@@ -1549,6 +1560,9 @@
 
                     if(!isFlying && h < 2.0) continue;
 
+                    // Building collision check
+                    if(!isFlying && isBlocked(wx, wz)) continue;
+
                     // Diagonal corner cutting check
                     if (Math.abs(offset.x) === 1 && Math.abs(offset.y) === 1) {
                         if (!isFlying) {
@@ -1766,6 +1780,9 @@
                  if(getHeight(futureX, futureZ) < 2.0 && getHeight(this.mesh.position.x, this.mesh.position.z) >= 2.0) {
                      allowed = false;
                  }
+                  if(isBlocked(futureX, futureZ)) {
+                      allowed = false;
+                  }
             }
 
             if(allowed) {
@@ -2014,13 +2031,8 @@
                     if(this.pathTimer > 1.0) {
                          this.pathTimer = 0;
                          const isFlying = (this.type === 'airship');
-                         // Only recalculate if far
-                         if(dist > 10) {
-                             this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying);
-                             this.pathIndex = 0;
-                         } else {
-                             this.path = []; // Close enough for direct
-                         }
+                         this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying);
+                         this.pathIndex = 0;
                     }
 
                     if(this.path && this.path.length > 0 && this.pathIndex < this.path.length) {
