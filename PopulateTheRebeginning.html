@@ -350,6 +350,7 @@
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
     let tapStart = { x: 0, y: 0 };
+    let dragButton = 0;
     let pinchStartDist = 0;
     let pinchStartScale = 35;
     let pinchStartAngle = 0;
@@ -533,6 +534,8 @@
             // Default to Move
             selectAction('move');
             updateContextMenus();
+
+            window.addEventListener('contextmenu', e => e.preventDefault());
 
             animate();
         } catch(e) {
@@ -993,8 +996,8 @@
         }
     }
 
-    function performAction(x, z) {
-        if(currentAction === 'move') {
+    function performAction(x, z, action = currentAction) {
+        if(action === 'move') {
             if(selectedUnits.length > 0) {
                 selectedUnits.forEach(u => {
                     u.goto(x, z);
@@ -1006,15 +1009,15 @@
         }
 
         // Prevent building on water
-        if (currentAction.startsWith('build_') && getHeight(x, z) < 2.0) return;
+        if (action.startsWith('build_') && getHeight(x, z) < 2.0) return;
 
         // Prevent building if no brave nearby
-        if (currentAction.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
+        if (action.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
 
         const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create'];
 
         // Range Check for Spells
-        if (spells.includes(currentAction)) {
+        if (spells.includes(action)) {
             if (!shaman || shaman.state === 'dead') return;
             const maxRange = 10.0 + shaman.mesh.position.y;
             const dist = Math.sqrt((x - shaman.mesh.position.x)**2 + (z - shaman.mesh.position.z)**2);
@@ -1027,16 +1030,16 @@
             build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
             build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
         };
-        const cost = costs[currentAction];
+        const cost = costs[action];
         if (cost === undefined || isNaN(cost)) return;
         if (mana < cost) return;
         mana -= cost;
         updateUI();
 
-        if (spells.includes(currentAction)) {
-            executeSpell(currentAction, x, z, shaman);
+        if (spells.includes(action)) {
+            executeSpell(action, x, z, shaman);
         }
-        else if (currentAction === 'build_airship') {
+        else if (action === 'build_airship') {
             // Build Airship
             // Find nearest shipyard
             let nearest = null; let minD = 50;
@@ -1060,13 +1063,13 @@
                  // No shipyard nearby
             }
         }
-        else if (currentAction === 'unload') {
+        else if (action === 'unload') {
             if(selectedUnits.length === 1 && selectedUnits[0].type === 'airship') {
                 selectedUnits[0].unload();
             }
         }
-        else if (currentAction.startsWith('build_')) {
-            const type = currentAction.replace('build_', '');
+        else if (action.startsWith('build_')) {
+            const type = action.replace('build_', '');
             createBuilding(type, x, z);
         }
     }
@@ -2728,32 +2731,56 @@
     function onPointerDown(e) {
         SoundManager.init();
         if(SoundManager.ctx.state === 'suspended') SoundManager.ctx.resume();
-        isDragging = true; dragStart = {x: e.clientX, y: e.clientY}; tapStart = {x: e.clientX, y: e.clientY};
+        isDragging = true;
+        dragStart = {x: e.clientX, y: e.clientY};
+        tapStart = {x: e.clientX, y: e.clientY};
+        dragButton = e.button || 0;
     }
     function onTouchStart(e) {
         e.preventDefault();
-        if(e.touches.length === 1) onPointerDown(e.touches[0]);
-        else if(e.touches.length === 2) {
+        if(e.targetTouches.length === 1) onPointerDown(e.targetTouches[0]);
+        else if(e.targetTouches.length === 2) {
             SoundManager.init();
             if(SoundManager.ctx.state === 'suspended') SoundManager.ctx.resume();
             isDragging = false;
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dx = e.targetTouches[0].clientX - e.targetTouches[1].clientX;
+            const dy = e.targetTouches[0].clientY - e.targetTouches[1].clientY;
             pinchStartDist = Math.sqrt(dx*dx+dy*dy);
             pinchStartScale = viewScale;
             pinchStartAngle = Math.atan2(dy, dx);
             rotateStartCamera = cameraRotation;
         }
     }
-    function onPointerMove(e) { if(!isDragging) return; const dx = e.clientX - dragStart.x; const dy = e.clientY - dragStart.y; const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize(); const rgt = new THREE.Vector3(); rgt.crossVectors(fwd, camera.up); rgt.y = 0; rgt.normalize(); const speed = 0.002 * viewScale; cameraLookAt.addScaledVector(rgt, -dx * speed); cameraLookAt.addScaledVector(fwd, dy * speed); updateCameraPosition(); dragStart = {x: e.clientX, y: e.clientY}; }
+    function onPointerMove(e) {
+        if(!isDragging) return;
+        const dx = e.clientX - dragStart.x;
+        const dy = e.clientY - dragStart.y;
+
+        if (dragButton === 2) {
+             // Right Drag: Rotate
+             const speed = 0.005;
+             cameraRotation += dx * speed;
+             updateCameraPosition();
+        } else {
+             // Left Drag: Pan
+             const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+             const rgt = new THREE.Vector3(); rgt.crossVectors(fwd, camera.up); rgt.y = 0; rgt.normalize();
+             const speed = 0.002 * viewScale;
+             cameraLookAt.addScaledVector(rgt, -dx * speed);
+             cameraLookAt.addScaledVector(fwd, dy * speed);
+             updateCameraPosition();
+        }
+        dragStart = {x: e.clientX, y: e.clientY};
+    }
     function onTouchMove(e) {
-        if(e.touches.length === 1) {
+        if (e.target !== renderer.domElement) return;
+        if(e.targetTouches.length === 1) {
             e.preventDefault();
-            onPointerMove(e.touches[0]);
-        } else if(e.touches.length === 2) {
+            onPointerMove(e.targetTouches[0]);
+        } else if(e.targetTouches.length === 2) {
             e.preventDefault();
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dx = e.targetTouches[0].clientX - e.targetTouches[1].clientX;
+            const dy = e.targetTouches[0].clientY - e.targetTouches[1].clientY;
 
             // Zoom
             const dist = Math.sqrt(dx*dx+dy*dy);
@@ -2770,8 +2797,15 @@
             updateCameraPosition();
         }
     }
-    function onPointerUp(e) { isDragging = false; let x = e.clientX || (e.changedTouches ? e.changedTouches[0].clientX : 0); let y = e.clientY || (e.changedTouches ? e.changedTouches[0].clientY : 0); if(Math.sqrt((x-tapStart.x)**2 + (y-tapStart.y)**2) < 10) handleTap(x, y); }
-    function handleTap(x, y) {
+    function onPointerUp(e) {
+        if (e.type === 'touchend' && e.target !== renderer.domElement) return;
+        isDragging = false;
+        let x = e.clientX || (e.changedTouches ? e.changedTouches[0].clientX : 0);
+        let y = e.clientY || (e.changedTouches ? e.changedTouches[0].clientY : 0);
+        if(Math.sqrt((x-tapStart.x)**2 + (y-tapStart.y)**2) < 10) handleTap(x, y, e.button === 2);
+    }
+
+    function handleTap(x, y, isRightClick) {
         const mouse = new THREE.Vector2((x/window.innerWidth)*2-1, -(y/window.innerHeight)*2+1);
         raycaster.setFromCamera(mouse, camera);
 
@@ -2795,7 +2829,10 @@
         });
         const unitHits = raycaster.intersectObjects(unitMeshes);
 
-        if (currentAction === 'select') {
+        let action = currentAction;
+        if(isRightClick) action = 'move';
+
+        if (action === 'select') {
             if (unitHits.length > 0) {
                 const hitUnit = meshToUnit.get(unitHits[0].object);
                 if(hitUnit) {
@@ -2827,7 +2864,7 @@
             }
         } else {
             // Action Mode (Move, Spell, Build)
-            if(currentAction === 'move' && unitHits.length > 0) {
+            if(action === 'move' && unitHits.length > 0) {
                  const hitUnit = meshToUnit.get(unitHits[0].object);
 
                  // Enter Boat Logic
@@ -2860,7 +2897,7 @@
             }
 
             if(terrainHits.length > 0) {
-                 performAction(terrainHits[0].point.x, terrainHits[0].point.z);
+                 performAction(terrainHits[0].point.x, terrainHits[0].point.z, action);
             }
         }
     }
