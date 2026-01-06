@@ -712,9 +712,14 @@
                              u.selectRing.visible = true;
                          }
                      } else {
-                         selectedUnits.forEach(x => x.selectRing.visible = false);
-                         selectedUnits = [u];
-                         u.selectRing.visible = true;
+                         if (selectedUnits.length === 1 && selectedUnits[0] === u) {
+                             u.selectRing.visible = false;
+                             selectedUnits = [];
+                         } else {
+                             selectedUnits.forEach(x => x.selectRing.visible = false);
+                             selectedUnits = [u];
+                             u.selectRing.visible = true;
+                         }
                      }
                      updateContextMenus();
                 }
