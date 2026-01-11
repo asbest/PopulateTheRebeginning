@@ -325,6 +325,9 @@
 
     // --- GLOBAL SYSTEMS ---
     let scene, camera, renderer, raycaster;
+    let orthoCamera, perspectiveCamera;
+    let isFPV = false;
+    let fpvYaw = 0, fpvPitch = 0;
     let clock;
     let simplex;
     
@@ -493,7 +496,9 @@
             scene.fog = new THREE.Fog(0x87CEEB, 20, 150);
 
             const aspect = window.innerWidth / window.innerHeight;
-            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
+            orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
+            perspectiveCamera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+            camera = orthoCamera;
             updateCameraZoom();
 
             renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -2780,17 +2785,27 @@
 
         if (dragButton === 2) {
              // Right Drag: Rotate
-             const speed = 0.005;
-             cameraRotation += dx * speed;
-             updateCameraPosition();
+             if(isFPV) {
+                 const speed = 0.005;
+                 fpvYaw -= dx * speed;
+                 fpvPitch -= dy * speed;
+                 fpvPitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, fpvPitch));
+                 updateCameraPosition();
+             } else {
+                 const speed = 0.005;
+                 cameraRotation += dx * speed;
+                 updateCameraPosition();
+             }
         } else {
              // Left Drag: Pan
-             const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
-             const rgt = new THREE.Vector3(); rgt.crossVectors(fwd, camera.up); rgt.y = 0; rgt.normalize();
-             const speed = 0.002 * viewScale;
-             cameraLookAt.addScaledVector(rgt, -dx * speed);
-             cameraLookAt.addScaledVector(fwd, dy * speed);
-             updateCameraPosition();
+             if(!isFPV) {
+                 const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+                 const rgt = new THREE.Vector3(); rgt.crossVectors(fwd, camera.up); rgt.y = 0; rgt.normalize();
+                 const speed = 0.002 * viewScale;
+                 cameraLookAt.addScaledVector(rgt, -dx * speed);
+                 cameraLookAt.addScaledVector(fwd, dy * speed);
+                 updateCameraPosition();
+             }
         }
         dragStart = {x: e.clientX, y: e.clientY};
     }
@@ -2807,13 +2822,29 @@
             // Zoom
             const dist = Math.sqrt(dx*dx+dy*dy);
             if(pinchStartDist > 0) {
-                viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinchStartScale * (pinchStartDist / dist)));
+                const newScale = pinchStartScale * (pinchStartDist / dist);
+                if(isFPV) {
+                     if(newScale > MIN_ZOOM + 2) { // Zoom out threshold
+                         isFPV = false; camera = orthoCamera;
+                         viewScale = MIN_ZOOM + 1;
+                     }
+                } else {
+                    viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));
+                    if (viewScale <= MIN_ZOOM && selectedUnits.length > 0) {
+                         isFPV = true; camera = perspectiveCamera;
+                         fpvYaw = cameraRotation + Math.PI; fpvPitch = -0.2;
+                    }
+                }
             }
 
             // Rotate
             const currentAngle = Math.atan2(dy, dx);
             const delta = currentAngle - pinchStartAngle;
-            cameraRotation = rotateStartCamera + delta;
+            if(!isFPV) {
+                cameraRotation = rotateStartCamera + delta;
+            } else {
+                fpvYaw = rotateStartCamera + delta;
+            }
 
             updateCameraZoom();
             updateCameraPosition();
@@ -2923,19 +2954,65 @@
             }
         }
     }
-    function onWheel(e) { viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, viewScale + e.deltaY * 0.05)); updateCameraZoom(); updateCameraPosition(); }
-    function updateCameraZoom() { const aspect = window.innerWidth / window.innerHeight; camera.left = -viewScale*aspect; camera.right = viewScale*aspect; camera.top = viewScale; camera.bottom = -viewScale; camera.updateProjectionMatrix(); }
+    function onWheel(e) {
+        if(isFPV) {
+            if(e.deltaY > 0) { // Zoom out
+                isFPV = false;
+                camera = orthoCamera;
+                viewScale = MIN_ZOOM + 1;
+                updateCameraZoom();
+                updateCameraPosition();
+            }
+        } else {
+            if (viewScale <= MIN_ZOOM && e.deltaY < 0 && selectedUnits.length > 0) {
+                 isFPV = true;
+                 camera = perspectiveCamera;
+                 fpvYaw = cameraRotation + Math.PI;
+                 fpvPitch = -0.2;
+                 updateCameraPosition();
+            } else {
+                viewScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, viewScale + e.deltaY * 0.05));
+                updateCameraZoom();
+                updateCameraPosition();
+            }
+        }
+    }
+    function updateCameraZoom() {
+        const aspect = window.innerWidth / window.innerHeight;
+        orthoCamera.left = -viewScale*aspect;
+        orthoCamera.right = viewScale*aspect;
+        orthoCamera.top = viewScale;
+        orthoCamera.bottom = -viewScale;
+        orthoCamera.updateProjectionMatrix();
+
+        perspectiveCamera.aspect = aspect;
+        perspectiveCamera.updateProjectionMatrix();
+    }
     function updateCameraPosition() {
-        const dist = 42.4;
-        const offsetX = Math.sin(cameraRotation) * dist;
-        const offsetZ = Math.cos(cameraRotation) * dist;
-        const targetX = cameraLookAt.x + offsetX;
-        const targetZ = cameraLookAt.z + offsetZ;
-        let targetY = 25 + (viewScale / MAX_ZOOM) * 35;
-        const groundUnderCamera = getHeight(targetX, targetZ);
-        if(targetY < groundUnderCamera + 5) { targetY = groundUnderCamera + 5; }
-        camera.position.set(targetX, targetY, targetZ);
-        camera.lookAt(cameraLookAt);
+        if(isFPV) {
+             if(selectedUnits.length === 0 || selectedUnits[0].state === 'dead') {
+                 isFPV = false; camera = orthoCamera;
+             } else {
+                 const u = selectedUnits[0];
+                 const headH = (u.isShaman ? 2.5 : 1.7);
+                 const pos = u.mesh.position.clone().add(new THREE.Vector3(0, headH, 0));
+                 perspectiveCamera.position.copy(pos);
+                 perspectiveCamera.rotation.set(fpvPitch, fpvYaw, 0, 'YXZ');
+             }
+        }
+
+        if(!isFPV) {
+            const dist = 42.4;
+            const offsetX = Math.sin(cameraRotation) * dist;
+            const offsetZ = Math.cos(cameraRotation) * dist;
+            const targetX = cameraLookAt.x + offsetX;
+            const targetZ = cameraLookAt.z + offsetZ;
+            let targetY = 25 + (viewScale / MAX_ZOOM) * 35;
+            const groundUnderCamera = getHeight(targetX, targetZ);
+            if(targetY < groundUnderCamera + 5) { targetY = groundUnderCamera + 5; }
+            orthoCamera.position.set(targetX, targetY, targetZ);
+            orthoCamera.lookAt(cameraLookAt);
+        }
     }
     function onResize() { updateCameraZoom(); renderer.setSize(window.innerWidth, window.innerHeight); }
 
@@ -3000,6 +3077,8 @@
             cameraLookAt.lerp(center, dt * 5.0);
             updateCameraPosition();
         }
+
+        if(isFPV) updateCameraPosition();
 
         // Active Effects
         for(let i = activeEffects.length-1; i>=0; i--) {
