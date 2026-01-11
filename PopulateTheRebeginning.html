@@ -2797,8 +2797,14 @@
                  updateCameraPosition();
              }
         } else {
-             // Left Drag: Pan
-             if(!isFPV) {
+             // Left Drag: Pan or Look (FPV)
+             if(isFPV) {
+                 const speed = 0.005;
+                 fpvYaw -= dx * speed;
+                 fpvPitch -= dy * speed;
+                 fpvPitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, fpvPitch));
+                 updateCameraPosition();
+             } else {
                  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
                  const rgt = new THREE.Vector3(); rgt.crossVectors(fwd, camera.up); rgt.y = 0; rgt.normalize();
                  const speed = 0.002 * viewScale;
