@@ -338,7 +338,7 @@
     const particles = [];
     const projectiles = [];
     const buildings = []; window.buildings = buildings;
-    const activeEffects = [];
+    const activeEffects = []; window.activeEffects = activeEffects;
     
     let shaman;
     let rangeRing;
@@ -661,13 +661,14 @@
     }
 
     const UNIT_ICONS = {
-        'wild': '😐',
+        'wild': '👷',
         'warrior': '⚔️',
-        'firewarrior': '🔥',
-        'shaman': '⚡',
+        'firewarrior': '🏹',
+        'shaman': '🧙',
         'spy': '🕵️',
         'airship': '🎈'
     };
+    window.UNIT_ICONS = UNIT_ICONS;
 
     let lastAliveCount = -1;
 
@@ -835,6 +836,7 @@
     }
 
     // --- ACTIONS ---
+    window.executeSpell = executeSpell;
     function executeSpell(type, x, z, caster) {
         if (!caster || !caster.mesh) return;
 
@@ -2542,6 +2544,7 @@
             this.pos = new THREE.Vector3(x, getHeight(x,z), z);
             this.faction = faction;
             this.timer = 20.0;
+            this.moveDelay = 5.0;
             this.angle = Math.random() * Math.PI * 2;
             this.mesh = new THREE.Group();
 
@@ -2557,11 +2560,15 @@
         update(dt) {
             this.timer -= dt;
 
-            // Move Randomly
-            this.angle += (Math.random()-0.5) * 2 * dt;
-            const speed = 8;
-            this.pos.x += Math.cos(this.angle) * speed * dt;
-            this.pos.z += Math.sin(this.angle) * speed * dt;
+            if (this.moveDelay > 0) {
+                this.moveDelay -= dt;
+            } else {
+                // Move Randomly
+                this.angle += (Math.random()-0.5) * 2 * dt;
+                const speed = 8;
+                this.pos.x += Math.cos(this.angle) * speed * dt;
+                this.pos.z += Math.sin(this.angle) * speed * dt;
+            }
             this.pos.y = getHeight(this.pos.x, this.pos.z);
 
             this.mesh.position.copy(this.pos);
