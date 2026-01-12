@@ -2409,25 +2409,19 @@
                 }
 
                 // Check cooldown
-                if (clock.getElapsedTime() - this.lastBridgeTime > 10.0) {
+                if (clock.getElapsedTime() - this.lastBridgeTime > 2.0) {
                     // Check for water in path
                     const steps = 10;
-                    let waterFound = false;
                     const dir = target.mesh.position.clone().sub(myShaman.mesh.position).normalize();
 
                     for(let i=1; i<=steps; i++) {
                         const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, i * 4.0); // Check ahead 40 units
                         if (getHeight(checkPos.x, checkPos.z) < 2.0) {
-                            waterFound = true;
+                            // Raise land
+                            executeSpell('raise', checkPos.x, checkPos.z, myShaman);
+                            this.lastBridgeTime = clock.getElapsedTime();
                             break;
                         }
-                    }
-
-                    if (waterFound) {
-                        // Cast Bridge towards player (limited distance)
-                        const bridgeTarget = myShaman.mesh.position.clone().addScaledVector(dir, 30.0);
-                        castLandbridge(myShaman, bridgeTarget.x, bridgeTarget.z);
-                        this.lastBridgeTime = clock.getElapsedTime();
                     }
                 }
 
