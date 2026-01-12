@@ -1591,11 +1591,19 @@
                     const wz = ny * this.GRID_SIZE;
                     const h = getHeight(wx, wz);
 
+                    if(!isFlying && h < 1.0) continue; // Deep Water
+
                     // Building collision check
                     if(!isFlying && isBlocked(wx, wz)) continue;
 
                     // Diagonal corner cutting check
-                    // Relaxed for water walking
+                    if (Math.abs(offset.x) === 1 && Math.abs(offset.y) === 1) {
+                        if (!isFlying) {
+                            const h1 = getHeight((currentNode.x + offset.x) * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
+                            const h2 = getHeight(currentNode.x * this.GRID_SIZE, (currentNode.y + offset.y) * this.GRID_SIZE);
+                            if (h1 < 1.0 || h2 < 1.0) continue;
+                        }
+                    }
 
                     const dist = Math.sqrt(offset.x*offset.x + offset.y*offset.y);
                     const currentH = getHeight(currentNode.x * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
@@ -1796,12 +1804,15 @@
             if(this.state === 'dead' || this.state === 'stunned') return;
             const speed = this.moveSpeed;
 
-            // Check collision
+            // Check collision and water
             let allowed = true;
             if(this.type !== 'airship') {
                  // Simple lookahead
                  const futureX = this.mesh.position.x + vec.x * speed * 0.1;
                  const futureZ = this.mesh.position.z + vec.z * speed * 0.1;
+                 if(getHeight(futureX, futureZ) < 1.0 && getHeight(this.mesh.position.x, this.mesh.position.z) >= 1.0) {
+                     allowed = false;
+                 }
                  if(isBlocked(futureX, futureZ)) {
                       allowed = false;
                  }
@@ -1906,7 +1917,13 @@
                 } else if (this.mesh.position.y > groundH + 0.35) { this.isGrounded = false; }
             }
 
-            // Water constraint removed (Walking through water allowed)
+            // Deep Water Damage
+            if (this.type !== 'airship' && this.state !== 'dead') {
+                const h = getHeight(this.mesh.position.x, this.mesh.position.z);
+                if (h < 1.0) {
+                    this.takeDamage(this.maxHp * 0.10 * dt);
+                }
+            }
 
             // Building Entry Check for Training
             if(this.type === 'wild' && this.state !== 'dead' && this.faction === 0) {
@@ -2134,6 +2151,12 @@
                     const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
 
                     let canMove = true;
+                    if(this.type !== 'airship') {
+                        const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                        if (nextH < 1.0 && currentH >= 1.0) {
+                             if(!this.targetBoat) canMove = false;
+                        }
+                    }
 
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
@@ -2683,10 +2706,18 @@
         }
         update(dt) {
             if(!this.active) return false;
-            this.mesh.position.addScaledVector(this.dir, this.speed * dt); this.trailTimer += dt;
+            const moveDist = this.speed * dt;
+            const distToTarget = this.mesh.position.distanceTo(this.target);
+
+            if (distToTarget <= moveDist || getHeight(this.mesh.position.x, this.mesh.position.z) > this.mesh.position.y) {
+                 this.mesh.position.copy(this.target); // Snap to target for visual
+                 this.explode();
+                 return false;
+            }
+
+            this.mesh.position.addScaledVector(this.dir, moveDist); this.trailTimer += dt;
             if(this.trailTimer > 0.05) { particles.push(new Particle(this.mesh.position, 0xFFA500, 0.05, 0.5)); this.trailTimer = 0; }
-            const dist = this.mesh.position.distanceTo(this.target);
-            if(dist < 1.0 || getHeight(this.mesh.position.x, this.mesh.position.z) > this.mesh.position.y) { this.explode(); return false; } return true;
+            return true;
         }
         explode() {
             scene.remove(this.mesh); this.active = false;
