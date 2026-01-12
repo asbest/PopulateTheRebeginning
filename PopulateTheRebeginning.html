@@ -333,7 +333,7 @@
     
     // Game State
     const chunks = {}; 
-    const terrainMods = new Map();
+    const terrainMods = new Map(); window.terrainMods = terrainMods;
     const units = []; window.units = units;
     const particles = [];
     const projectiles = [];
@@ -428,6 +428,8 @@
         h += getTerrainMod(x, z);
         return h;
     }
+    window.getHeight = getHeight;
+    window.getBaseHeight = getBaseHeight;
 
     // --- INITIALIZATION ---
     window.onload = () => setTimeout(init, 100);
@@ -1554,7 +1556,7 @@
             openSet.set(`${startNode.x},${startNode.y}`, startNode);
 
             let iterations = 0;
-            const MAX_ITER = 2000;
+            const MAX_ITER = 10000;
 
             while(openHeap.size() > 0) {
                 iterations++;
@@ -1591,7 +1593,7 @@
                     const wz = ny * this.GRID_SIZE;
                     const h = getHeight(wx, wz);
 
-                    if(!isFlying && h < 1.0) continue; // Deep Water
+                    if(!isFlying && h < 2.0) continue; // Deep Water
 
                     // Building collision check
                     if(!isFlying && isBlocked(wx, wz)) continue;
@@ -1601,7 +1603,7 @@
                         if (!isFlying) {
                             const h1 = getHeight((currentNode.x + offset.x) * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
                             const h2 = getHeight(currentNode.x * this.GRID_SIZE, (currentNode.y + offset.y) * this.GRID_SIZE);
-                            if (h1 < 1.0 || h2 < 1.0) continue;
+                            if (h1 < 2.0 || h2 < 2.0) continue;
                         }
                     }
 
@@ -1631,6 +1633,45 @@
         }
     };
     window.Pathfinder = Pathfinder;
+
+    function isWalkableLine(start, end, isFlying) {
+        const dist = start.distanceTo(end);
+        const steps = Math.ceil(dist / 1.0);
+        if (steps <= 1) return true;
+
+        const dir = end.clone().sub(start).normalize();
+        const checkPos = start.clone();
+
+        for(let i=1; i<steps; i++) {
+            checkPos.add(dir);
+            const h = getHeight(checkPos.x, checkPos.z);
+            if(!isFlying) {
+                if(h < 2.0) return false;
+                if(isBlocked(checkPos.x, checkPos.z)) return false;
+            }
+        }
+        return true;
+    }
+
+    function smoothPath(path, isFlying) {
+        if(path.length < 3) return path;
+        const newPath = [path[0]];
+        let current = path[0];
+
+        for(let i=1; i<path.length-1; i++) {
+            // Check if we can go from current to path[i+1] directly
+            if(isWalkableLine(current, path[i+1], isFlying)) {
+                // Can skip path[i]
+                continue;
+            } else {
+                // Cannot skip, add path[i]
+                newPath.push(path[i]);
+                current = path[i];
+            }
+        }
+        newPath.push(path[path.length-1]);
+        return newPath;
+    }
 
     // --- CHARACTER & PHYSICS ---
     class Humanoid {
@@ -1810,7 +1851,7 @@
                  // Simple lookahead
                  const futureX = this.mesh.position.x + vec.x * speed * 0.1;
                  const futureZ = this.mesh.position.z + vec.z * speed * 0.1;
-                 if(getHeight(futureX, futureZ) < 1.0 && getHeight(this.mesh.position.x, this.mesh.position.z) >= 1.0) {
+                 if(getHeight(futureX, futureZ) < 2.0 && getHeight(this.mesh.position.x, this.mesh.position.z) >= 2.0) {
                      allowed = false;
                  }
                  if(isBlocked(futureX, futureZ)) {
@@ -1839,7 +1880,8 @@
             const end = new THREE.Vector3(x, 0, z);
             this.finalDest = end.clone();
             const isFlying = (this.type === 'airship');
-            this.path = Pathfinder.findPath(this.mesh.position, end, isFlying);
+            const rawPath = Pathfinder.findPath(this.mesh.position, end, isFlying);
+            this.path = smoothPath(rawPath, isFlying);
             this.pathIndex = 0;
             if(this.path.length > 0) {
                 this.target = this.path[0];
@@ -2069,16 +2111,28 @@
 
                     // Slope check
                     const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
-                    const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
+                    const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                    const dh = nextH - currentH;
 
                     let canMove = true;
+                    if (this.type !== 'airship' && nextH < 2.0 && currentH >= 2.0) canMove = false;
+
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
                         const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
-                        this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
-                        this.mesh.rotation.y = Math.atan2(dx, dz);
+                        const targetVelX = dir.x * speed;
+                        const targetVelZ = dir.z * speed;
+                        this.velocity.x += (targetVelX - this.velocity.x) * 10 * dt;
+                        this.velocity.z += (targetVelZ - this.velocity.z) * 10 * dt;
+
+                        const targetRot = Math.atan2(dx, dz);
+                        let rotDiff = targetRot - this.mesh.rotation.y;
+                        while(rotDiff > Math.PI) rotDiff -= Math.PI*2;
+                        while(rotDiff < -Math.PI) rotDiff += Math.PI*2;
+                        this.mesh.rotation.y += rotDiff * 10 * dt;
                     } else {
-                        this.velocity.set(0,0,0);
+                        this.velocity.x *= 0.9;
+                        this.velocity.z *= 0.9;
                     }
 
                     // Walk Anim
@@ -2153,7 +2207,7 @@
                     let canMove = true;
                     if(this.type !== 'airship') {
                         const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
-                        if (nextH < 1.0 && currentH >= 1.0) {
+                        if (nextH < 2.0 && currentH >= 2.0) {
                              if(!this.targetBoat) canMove = false;
                         }
                     }
@@ -2161,12 +2215,22 @@
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
                         const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
-                        this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
-                        this.mesh.rotation.y = Math.atan2(dx, dz);
+                        const targetVelX = dir.x * speed;
+                        const targetVelZ = dir.z * speed;
+                        this.velocity.x += (targetVelX - this.velocity.x) * 10 * dt;
+                        this.velocity.z += (targetVelZ - this.velocity.z) * 10 * dt;
+
+                        const targetRot = Math.atan2(dx, dz);
+                        let rotDiff = targetRot - this.mesh.rotation.y;
+                        while(rotDiff > Math.PI) rotDiff -= Math.PI*2;
+                        while(rotDiff < -Math.PI) rotDiff += Math.PI*2;
+                        this.mesh.rotation.y += rotDiff * 10 * dt;
                     } else {
-                         this.velocity.set(0,0,0);
-                         this.state = 'idle'; // Stop moving if hit water
-                         this.resetAnim();
+                         this.velocity.x *= 0.9; this.velocity.z *= 0.9;
+                         if(this.velocity.lengthSq() < 0.1) {
+                             this.state = 'idle'; // Stop moving if hit water/stuck
+                             this.resetAnim();
+                         }
                     }
                     this.mesh.rotation.x = 0; this.mesh.rotation.z = 0;
                     if(this.legL) {
@@ -2310,6 +2374,35 @@
                 this.timer = 0;
                 this.think();
             }
+            this.updateShaman(dt);
+        }
+
+        updateShaman(dt) {
+            const myShaman = units.find(u => u.faction === 1 && u.isShaman && u.state !== 'dead');
+            const playerShaman = units.find(u => u.faction === 0 && u.isShaman); // or just shaman global
+
+            if (myShaman && playerShaman && playerShaman.state !== 'dead') {
+                // Bridge Logic - Frequent check
+                if (clock.getElapsedTime() - this.lastBridgeTime > 1.0) {
+                    const dir = playerShaman.mesh.position.clone().sub(myShaman.mesh.position).normalize();
+                    const distToPlayer = myShaman.mesh.position.distanceTo(playerShaman.mesh.position);
+
+                    // Look ahead for water
+                    const checkDist = Math.min(distToPlayer, 20);
+                    // Check a few points ahead
+                    for(let d = 2; d <= checkDist; d += 2) {
+                        const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, d);
+                        if (getHeight(checkPos.x, checkPos.z) < 2.0) {
+                            // Found water, cast Landbridge
+                            // Target slightly past the water or towards player
+                            const bridgeTarget = myShaman.mesh.position.clone().addScaledVector(dir, 20); // Bridge length
+                            castLandbridge(myShaman, bridgeTarget.x, bridgeTarget.z);
+                            this.lastBridgeTime = clock.getElapsedTime();
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         think() {
@@ -2391,7 +2484,7 @@
                 }
             }
 
-            // 4. Shaman Logic (Landbridge & Spells)
+            // 4. Shaman Logic (Spells & Move)
             const myShaman = myUnits.find(u => u.isShaman);
             const target = shaman; // Player shaman
             if(myShaman && target && target.state !== 'dead') {
@@ -2408,30 +2501,7 @@
                     }
                 }
 
-                // Check cooldown
-                if (clock.getElapsedTime() - this.lastBridgeTime > 10.0) {
-                    // Check for water in path
-                    const steps = 10;
-                    let waterFound = false;
-                    const dir = target.mesh.position.clone().sub(myShaman.mesh.position).normalize();
-
-                    for(let i=1; i<=steps; i++) {
-                        const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, i * 4.0); // Check ahead 40 units
-                        if (getHeight(checkPos.x, checkPos.z) < 2.0) {
-                            waterFound = true;
-                            break;
-                        }
-                    }
-
-                    if (waterFound) {
-                        // Cast Bridge towards player (limited distance)
-                        const bridgeTarget = myShaman.mesh.position.clone().addScaledVector(dir, 30.0);
-                        castLandbridge(myShaman, bridgeTarget.x, bridgeTarget.z);
-                        this.lastBridgeTime = clock.getElapsedTime();
-                    }
-                }
-
-                // Also move shaman to attack if idle
+                // Move shaman to attack if idle
                 if (myShaman.state === 'idle' && dist > 20) {
                      myShaman.goto(target.mesh.position.x, target.mesh.position.z);
                 }
