@@ -553,8 +553,8 @@
         const keys = { w: false, a: false, s: false, d: false };
         const update = () => {
             keyboardVector.set(0, 0);
-            if(keys.w) keyboardVector.y += 1;
-            if(keys.s) keyboardVector.y -= 1;
+            if(keys.w) keyboardVector.y -= 1;
+            if(keys.s) keyboardVector.y += 1;
             if(keys.a) keyboardVector.x -= 1;
             if(keys.d) keyboardVector.x += 1;
         };
