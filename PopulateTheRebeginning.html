@@ -1634,6 +1634,45 @@
     };
     window.Pathfinder = Pathfinder;
 
+    function isWalkableLine(start, end, isFlying) {
+        const dist = start.distanceTo(end);
+        const steps = Math.ceil(dist / 1.0);
+        if (steps <= 1) return true;
+
+        const dir = end.clone().sub(start).normalize();
+        const checkPos = start.clone();
+
+        for(let i=1; i<steps; i++) {
+            checkPos.add(dir);
+            const h = getHeight(checkPos.x, checkPos.z);
+            if(!isFlying) {
+                if(h < 2.0) return false;
+                if(isBlocked(checkPos.x, checkPos.z)) return false;
+            }
+        }
+        return true;
+    }
+
+    function smoothPath(path, isFlying) {
+        if(path.length < 3) return path;
+        const newPath = [path[0]];
+        let current = path[0];
+
+        for(let i=1; i<path.length-1; i++) {
+            // Check if we can go from current to path[i+1] directly
+            if(isWalkableLine(current, path[i+1], isFlying)) {
+                // Can skip path[i]
+                continue;
+            } else {
+                // Cannot skip, add path[i]
+                newPath.push(path[i]);
+                current = path[i];
+            }
+        }
+        newPath.push(path[path.length-1]);
+        return newPath;
+    }
+
     // --- CHARACTER & PHYSICS ---
     class Humanoid {
         constructor(faction, type, x, z) {
@@ -1841,7 +1880,8 @@
             const end = new THREE.Vector3(x, 0, z);
             this.finalDest = end.clone();
             const isFlying = (this.type === 'airship');
-            this.path = Pathfinder.findPath(this.mesh.position, end, isFlying);
+            const rawPath = Pathfinder.findPath(this.mesh.position, end, isFlying);
+            this.path = smoothPath(rawPath, isFlying);
             this.pathIndex = 0;
             if(this.path.length > 0) {
                 this.target = this.path[0];
@@ -2080,10 +2120,19 @@
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
                         const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
-                        this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
-                        this.mesh.rotation.y = Math.atan2(dx, dz);
+                        const targetVelX = dir.x * speed;
+                        const targetVelZ = dir.z * speed;
+                        this.velocity.x += (targetVelX - this.velocity.x) * 10 * dt;
+                        this.velocity.z += (targetVelZ - this.velocity.z) * 10 * dt;
+
+                        const targetRot = Math.atan2(dx, dz);
+                        let rotDiff = targetRot - this.mesh.rotation.y;
+                        while(rotDiff > Math.PI) rotDiff -= Math.PI*2;
+                        while(rotDiff < -Math.PI) rotDiff += Math.PI*2;
+                        this.mesh.rotation.y += rotDiff * 10 * dt;
                     } else {
-                        this.velocity.set(0,0,0);
+                        this.velocity.x *= 0.9;
+                        this.velocity.z *= 0.9;
                     }
 
                     // Walk Anim
@@ -2166,12 +2215,22 @@
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
                         const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
-                        this.velocity.x = dir.x * speed; this.velocity.z = dir.z * speed;
-                        this.mesh.rotation.y = Math.atan2(dx, dz);
+                        const targetVelX = dir.x * speed;
+                        const targetVelZ = dir.z * speed;
+                        this.velocity.x += (targetVelX - this.velocity.x) * 10 * dt;
+                        this.velocity.z += (targetVelZ - this.velocity.z) * 10 * dt;
+
+                        const targetRot = Math.atan2(dx, dz);
+                        let rotDiff = targetRot - this.mesh.rotation.y;
+                        while(rotDiff > Math.PI) rotDiff -= Math.PI*2;
+                        while(rotDiff < -Math.PI) rotDiff += Math.PI*2;
+                        this.mesh.rotation.y += rotDiff * 10 * dt;
                     } else {
-                         this.velocity.set(0,0,0);
-                         this.state = 'idle'; // Stop moving if hit water
-                         this.resetAnim();
+                         this.velocity.x *= 0.9; this.velocity.z *= 0.9;
+                         if(this.velocity.lengthSq() < 0.1) {
+                             this.state = 'idle'; // Stop moving if hit water/stuck
+                             this.resetAnim();
+                         }
                     }
                     this.mesh.rotation.x = 0; this.mesh.rotation.z = 0;
                     if(this.legL) {
