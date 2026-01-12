@@ -2312,6 +2312,35 @@
                 this.timer = 0;
                 this.think();
             }
+            this.updateShaman(dt);
+        }
+
+        updateShaman(dt) {
+            const myShaman = units.find(u => u.faction === 1 && u.isShaman && u.state !== 'dead');
+            const playerShaman = units.find(u => u.faction === 0 && u.isShaman); // or just shaman global
+
+            if (myShaman && playerShaman && playerShaman.state !== 'dead') {
+                // Bridge Logic - Frequent check
+                if (clock.getElapsedTime() - this.lastBridgeTime > 1.0) {
+                    const dir = playerShaman.mesh.position.clone().sub(myShaman.mesh.position).normalize();
+                    const distToPlayer = myShaman.mesh.position.distanceTo(playerShaman.mesh.position);
+
+                    // Look ahead for water
+                    const checkDist = Math.min(distToPlayer, 20);
+                    // Check a few points ahead
+                    for(let d = 2; d <= checkDist; d += 2) {
+                        const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, d);
+                        if (getHeight(checkPos.x, checkPos.z) < 2.0) {
+                            // Found water, cast Landbridge
+                            // Target slightly past the water or towards player
+                            const bridgeTarget = myShaman.mesh.position.clone().addScaledVector(dir, 20); // Bridge length
+                            castLandbridge(myShaman, bridgeTarget.x, bridgeTarget.z);
+                            this.lastBridgeTime = clock.getElapsedTime();
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         think() {
@@ -2393,7 +2422,7 @@
                 }
             }
 
-            // 4. Shaman Logic (Landbridge & Spells)
+            // 4. Shaman Logic (Spells & Move)
             const myShaman = myUnits.find(u => u.isShaman);
             const target = shaman; // Player shaman
             if(myShaman && target && target.state !== 'dead') {
