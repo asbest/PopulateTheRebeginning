@@ -535,6 +535,7 @@
 
             setupJoystick();
             setupKeyboard();
+            setupCheats();
             // Default to Move
             selectAction('move');
             updateContextMenus();
@@ -549,6 +550,31 @@
     }
 
     // --- UI SYSTEM ---
+    function setupCheats() {
+        const el = document.getElementById('mana-bar');
+        let clicks = 0;
+        let lastTime = 0;
+        if(el) {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent propagation if needed
+                const now = Date.now();
+                if (now - lastTime < 500) {
+                    clicks++;
+                } else {
+                    clicks = 1;
+                }
+                lastTime = now;
+
+                if (clicks >= 10) {
+                    mana = 100000;
+                    updateUI();
+                    clicks = 0;
+                    SoundManager.playSound('magic');
+                }
+            });
+        }
+    }
+
     function setupKeyboard() {
         const keys = { w: false, a: false, s: false, d: false };
         const update = () => {
