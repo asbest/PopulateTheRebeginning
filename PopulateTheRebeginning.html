@@ -2502,6 +2502,24 @@
                 }
 
                 // Move shaman to attack if idle
+                // Check cooldown
+                if (clock.getElapsedTime() - this.lastBridgeTime > 2.0) {
+                    // Check for water in path
+                    const steps = 10;
+                    const dir = target.mesh.position.clone().sub(myShaman.mesh.position).normalize();
+
+                    for(let i=1; i<=steps; i++) {
+                        const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, i * 4.0); // Check ahead 40 units
+                        if (getHeight(checkPos.x, checkPos.z) < 2.0) {
+                            // Raise land
+                            executeSpell('raise', checkPos.x, checkPos.z, myShaman);
+                            this.lastBridgeTime = clock.getElapsedTime();
+                            break;
+                        }
+                    }
+                }
+
+                // Also move shaman to attack if idle
                 if (myShaman.state === 'idle' && dist > 20) {
                      myShaman.goto(target.mesh.position.x, target.mesh.position.z);
                 }
