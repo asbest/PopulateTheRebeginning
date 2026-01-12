@@ -2582,7 +2582,7 @@
             // Physics
             units.forEach(u => {
                 const d = u.mesh.position.distanceTo(this.pos);
-                if(d < 5 && !u.isShaman && u.faction !== this.faction) {
+                if(d < 5 && u.faction !== this.faction) {
                      u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 25, (Math.random()-0.5)*10));
                      u.takeDamage(2);
                 }
