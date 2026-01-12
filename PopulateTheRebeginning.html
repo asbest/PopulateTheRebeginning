@@ -1556,7 +1556,7 @@
             openSet.set(`${startNode.x},${startNode.y}`, startNode);
 
             let iterations = 0;
-            const MAX_ITER = 2000;
+            const MAX_ITER = 10000;
 
             while(openHeap.size() > 0) {
                 iterations++;
@@ -2071,9 +2071,12 @@
 
                     // Slope check
                     const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
-                    const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
+                    const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                    const dh = nextH - currentH;
 
                     let canMove = true;
+                    if (this.type !== 'airship' && nextH < 2.0 && currentH >= 2.0) canMove = false;
+
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
                         const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
@@ -2439,6 +2442,7 @@
                     }
                 }
 
+                // Move shaman to attack if idle
                 // Check cooldown
                 if (clock.getElapsedTime() - this.lastBridgeTime > 2.0) {
                     // Check for water in path
