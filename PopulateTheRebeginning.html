@@ -631,7 +631,7 @@
         'swarm': { icon: '🐝', label: 'Swrm', cost: 20 },
         'tornado': { icon: '🌪️', label: 'Torn', cost: 60 },
         'firestorm': { icon: '☄️', label: 'Fire', cost: 80 },
-        'volcano': { icon: '🌋', label: 'Volc', cost: 40 },
+        'volcano': { icon: '🌋', label: 'Volc', cost: 90 },
         'heal': { icon: '💖', label: 'Heal', cost: 10 },
         'create': { icon: '👶', label: 'Spwn', cost: 100 },
         'build_hut': { icon: '🏠', label: 'Hut', cost: 15 },
@@ -1043,7 +1043,7 @@
 
         const costs = {
             blast: 10, lightning: 30, raise: 5, lower: 5, flatten: 10, landbridge: 20,
-            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 40, heal: 10, create: 100,
+            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 90, heal: 10, create: 100,
             build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
             build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
         };
@@ -1565,19 +1565,11 @@
                     const wz = ny * this.GRID_SIZE;
                     const h = getHeight(wx, wz);
 
-                    if(!isFlying && h < 2.0) continue;
-
                     // Building collision check
                     if(!isFlying && isBlocked(wx, wz)) continue;
 
                     // Diagonal corner cutting check
-                    if (Math.abs(offset.x) === 1 && Math.abs(offset.y) === 1) {
-                        if (!isFlying) {
-                            const h1 = getHeight((currentNode.x + offset.x) * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
-                            const h2 = getHeight(currentNode.x * this.GRID_SIZE, (currentNode.y + offset.y) * this.GRID_SIZE);
-                            if (h1 < 2.0 || h2 < 2.0) continue;
-                        }
-                    }
+                    // Relaxed for water walking
 
                     const dist = Math.sqrt(offset.x*offset.x + offset.y*offset.y);
                     const currentH = getHeight(currentNode.x * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
@@ -1778,18 +1770,15 @@
             if(this.state === 'dead' || this.state === 'stunned') return;
             const speed = this.moveSpeed;
 
-            // Check water collision
+            // Check collision
             let allowed = true;
             if(this.type !== 'airship') {
                  // Simple lookahead
                  const futureX = this.mesh.position.x + vec.x * speed * 0.1;
                  const futureZ = this.mesh.position.z + vec.z * speed * 0.1;
-                 if(getHeight(futureX, futureZ) < 2.0 && getHeight(this.mesh.position.x, this.mesh.position.z) >= 2.0) {
-                     allowed = false;
-                 }
-                  if(isBlocked(futureX, futureZ)) {
+                 if(isBlocked(futureX, futureZ)) {
                       allowed = false;
-                  }
+                 }
             }
 
             if(allowed) {
@@ -1891,27 +1880,7 @@
                 } else if (this.mesh.position.y > groundH + 0.35) { this.isGrounded = false; }
             }
 
-            // Water constraint
-            const WATER_LEVEL = 2.0;
-            if (this.type !== 'airship' && this.state !== 'dead') {
-                const h = getHeight(this.mesh.position.x, this.mesh.position.z);
-                if (h < WATER_LEVEL) {
-                    // Units lose 10% HP per second in water
-                    this.takeDamage(this.maxHp * 0.10 * dt);
-
-                    // Automatically swim to land if not already moving
-                    // We set state to 'move' and target to nearest land
-                    // If target is null or not a land spot, find one.
-                    const isMovingToLand = (this.state === 'move' && this.target && getHeight(this.target.x, this.target.z) >= 2.0);
-
-                    if (!isMovingToLand) {
-                        const safe = findNearestLand(this.mesh.position.x, this.mesh.position.z, 30);
-                        if (safe.x !== this.mesh.position.x || safe.z !== this.mesh.position.z) {
-                            this.goto(safe.x, safe.z);
-                        }
-                    }
-                }
-            }
+            // Water constraint removed (Walking through water allowed)
 
             // Building Entry Check for Training
             if(this.type === 'wild' && this.state !== 'dead' && this.faction === 0) {
@@ -2060,13 +2029,6 @@
                     const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
 
                     let canMove = true;
-                    // Prevent entering water from land
-                    // But allow moving if already in water (swimming)
-                    if(this.type !== 'airship') {
-                        const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
-                        if(nextH < 2.0 && currentH >= 2.0) canMove = false;
-                    }
-
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
                         const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
@@ -2146,14 +2108,6 @@
                     const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
 
                     let canMove = true;
-                    // Prevent entering water from land unless targeting boat
-                    // Allow moving if already in water (swimming)
-                    if(this.type !== 'airship') {
-                        const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
-                        if (nextH < 2.0 && currentH >= 2.0) {
-                             if(!this.targetBoat) canMove = false;
-                        }
-                    }
 
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
