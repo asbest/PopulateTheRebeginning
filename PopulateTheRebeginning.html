@@ -1933,6 +1933,16 @@
             this.hpBar.position.x = -0.5; this.hpGroup.add(this.hpBar);
             this.mesh.add(this.hpGroup);
 
+            // Enemy Marker
+            if(this.faction === 1) {
+                const markerGeo = new THREE.ConeGeometry(0.3, 1.0, 4);
+                markerGeo.rotateX(Math.PI);
+                const markerMat = new THREE.MeshBasicMaterial({color: 0xFF0000});
+                this.marker = new THREE.Mesh(markerGeo, markerMat);
+                this.marker.position.set(0, 6, 0);
+                this.mesh.add(this.marker);
+            }
+
             // Body Parts
             if(type === 'airship') {
                  // Basket
@@ -2099,7 +2109,7 @@
         }
 
         die() {
-            this.state = 'dead'; this.hpGroup.visible = false; this.velocity.set(0, 0, 0);
+            this.state = 'dead'; this.hpGroup.visible = false; if(this.marker) this.marker.visible = false; this.velocity.set(0, 0, 0);
         }
         
         applyForce(vec) {
@@ -2644,6 +2654,8 @@
             this.baseZ = 0;
             this.lastBridgeTime = 0;
             this.lastSpellTime = 0;
+            this.lastPathCheckTime = 0;
+            this.hasPathToPlayer = false;
         }
 
         init(x, z) {
@@ -2685,6 +2697,12 @@
 
                 // Bridge Logic - Frequent check
                 if (clock.getElapsedTime() - this.lastBridgeTime > 1.0) {
+                    if (clock.getElapsedTime() - this.lastPathCheckTime > 1.0) {
+                        this.lastPathCheckTime = clock.getElapsedTime();
+                        this.hasPathToPlayer = !!Pathfinder.findPath(myShaman.mesh.position, playerShaman.mesh.position, false, myShaman.height);
+                    }
+                    if (this.hasPathToPlayer) return;
+
                     const dir = playerShaman.mesh.position.clone().sub(myShaman.mesh.position).normalize();
                     const distToPlayer = myShaman.mesh.position.distanceTo(playerShaman.mesh.position);
 
@@ -2805,17 +2823,20 @@
                 // Move shaman to attack if idle
                 // Check cooldown
                 if (clock.getElapsedTime() - this.lastBridgeTime > 2.0) {
-                    // Check for water in path
-                    const steps = 10;
-                    const dir = target.mesh.position.clone().sub(myShaman.mesh.position).normalize();
+                    // Check if path already exists
+                    if (!Pathfinder.findPath(myShaman.mesh.position, target.mesh.position, false, myShaman.height)) {
+                        // Check for water in path
+                        const steps = 10;
+                        const dir = target.mesh.position.clone().sub(myShaman.mesh.position).normalize();
 
-                    for(let i=1; i<=steps; i++) {
-                        const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, i * 4.0); // Check ahead 40 units
-                        if (getHeight(checkPos.x, checkPos.z) < 2.0) {
-                            // Raise land
-                            executeSpell('raise', checkPos.x, checkPos.z, myShaman);
-                            this.lastBridgeTime = clock.getElapsedTime();
-                            break;
+                        for(let i=1; i<=steps; i++) {
+                            const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, i * 4.0); // Check ahead 40 units
+                            if (getHeight(checkPos.x, checkPos.z) < 2.0) {
+                                // Raise land
+                                executeSpell('raise', checkPos.x, checkPos.z, myShaman);
+                                this.lastBridgeTime = clock.getElapsedTime();
+                                break;
+                            }
                         }
                     }
                 }
