@@ -3413,11 +3413,12 @@
         spawnCloud: function(randomPos=false) {
             const group = new THREE.Group();
             const chunks = 3 + Math.random() * 5;
+            const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.85, flatShading: false});
             const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.5, flatShading: true});
 
             for(let j=0; j<chunks; j++) {
                 const size = 2 + Math.random() * 3;
-                const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), mat);
+                const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 1), mat);
                 mesh.position.set((Math.random()-0.5)*10, (Math.random()-0.5)*2, (Math.random()-0.5)*6);
                 group.add(mesh);
             }
@@ -3436,7 +3437,7 @@
             group.scale.setScalar(1.5 + Math.random());
 
             scene.add(group);
-            this.clouds.push({ mesh: group, speed: 2 + Math.random() * 3 });
+            this.clouds.push({ mesh: group, speed: 1 + Math.random() * 2 });
         },
         update: function(dt) {
             for(let i = this.clouds.length - 1; i >= 0; i--) {
