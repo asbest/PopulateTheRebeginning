@@ -3414,6 +3414,7 @@
             const group = new THREE.Group();
             const chunks = 3 + Math.random() * 5;
             const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.85, flatShading: false});
+            const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.5, flatShading: true});
 
             for(let j=0; j<chunks; j++) {
                 const size = 2 + Math.random() * 3;
