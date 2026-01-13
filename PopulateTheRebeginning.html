@@ -184,6 +184,14 @@
         }
         #btn-pause:active { transform: scale(0.9); }
 
+        .menu-btn {
+            background: #444; color: white; border: 2px solid white;
+            padding: 10px 20px; font-size: 18px; margin: 10px;
+            cursor: pointer; width: 200px; border-radius: 5px;
+        }
+        .menu-btn:hover { background: #666; }
+        .menu-btn:active { background: #222; }
+
     </style>
 </head>
 <body>
@@ -191,6 +199,14 @@
 <div id="loading">Generating World...</div>
 
 <div id="ui-layer">
+    <div id="pause-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); flex-direction:column; align-items:center; justify-content:center; z-index:200; pointer-events:auto;">
+        <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">PAUSED</h1>
+        <button class="menu-btn" onclick="saveGame()">Save Game</button>
+        <button class="menu-btn" onclick="loadGame()">Load Game</button>
+        <button class="menu-btn" onclick="newGame()">New Game</button>
+        <button class="menu-btn" onclick="togglePause()">Resume</button>
+    </div>
+
     <div id="unit-list"></div>
     <div id="top-bar">
         <div id="mana-bar"><div id="mana-fill"></div></div>
@@ -367,6 +383,208 @@
         isPaused = !isPaused;
         const btn = document.getElementById('btn-pause');
         btn.innerText = isPaused ? '▶️' : '⏸️';
+        const menu = document.getElementById('pause-menu');
+        if(menu) menu.style.display = isPaused ? 'flex' : 'none';
+    }
+
+    window.saveGame = function() {
+        const data = {
+            mana: mana,
+            terrainMods: Array.from(terrainMods.entries()),
+            cameraLookAt: {x: cameraLookAt.x, y: cameraLookAt.y, z: cameraLookAt.z},
+            enemyAI: {
+                timer: enemyAI.timer,
+                state: enemyAI.state,
+                baseX: enemyAI.baseX,
+                baseZ: enemyAI.baseZ,
+                lastBridgeTime: enemyAI.lastBridgeTime,
+                lastSpellTime: enemyAI.lastSpellTime
+            },
+            units: units.map(u => ({
+                faction: u.faction,
+                type: u.type,
+                x: u.mesh.position.x,
+                z: u.mesh.position.z,
+                hp: u.hp,
+                state: u.state,
+                dead: u.state === 'dead',
+                deathTimer: u.deathTimer,
+                passengers: (u.passengers || []).map(p => ({
+                    faction: p.faction, type: p.type, hp: p.hp // Simplified passenger save
+                }))
+            })),
+            buildings: buildings.map(b => ({
+                type: b.type,
+                faction: b.faction,
+                x: b.mesh.position.x,
+                z: b.mesh.position.z,
+                hp: b.hp,
+                constructionTimer: b.constructionTimer,
+                underConstruction: b.underConstruction
+            }))
+        };
+        localStorage.setItem('populous_save', JSON.stringify(data));
+        alert('Game Saved!');
+    }
+
+    window.loadGame = function() {
+        const json = localStorage.getItem('populous_save');
+        if(!json) { alert("No save found!"); return; }
+
+        try {
+            const data = JSON.parse(json);
+
+            // Clear current state
+            units.forEach(u => scene.remove(u.mesh));
+            units.length = 0;
+            buildings.forEach(b => scene.remove(b.mesh));
+            buildings.length = 0;
+            activeEffects.forEach(e => { if(e.mesh) scene.remove(e.mesh); });
+            activeEffects.length = 0;
+            projectiles.forEach(p => scene.remove(p.mesh));
+            projectiles.length = 0;
+            particles.forEach(p => scene.remove(p.mesh));
+            particles.length = 0;
+            selectedUnits = [];
+
+            // Restore Global Vars
+            mana = data.mana;
+            updateUI();
+
+            cameraLookAt.set(data.cameraLookAt.x, data.cameraLookAt.y, data.cameraLookAt.z);
+            updateCameraPosition();
+
+            // Restore Terrain
+            terrainMods.clear();
+            const allMods = new Set();
+            data.terrainMods.forEach(([k, v]) => {
+                terrainMods.set(k, v);
+                const [ix, iz] = k.split(',').map(Number);
+                const cx = Math.round(ix / CHUNK_SIZE);
+                const cz = Math.round(iz / CHUNK_SIZE);
+                allMods.add(`${cx},${cz}`);
+            });
+            updateChunks(true, allMods);
+
+            // Restore Enemy AI
+            enemyAI.timer = data.enemyAI.timer || 0;
+            enemyAI.state = data.enemyAI.state || 'build';
+            enemyAI.baseX = data.enemyAI.baseX || 0;
+            enemyAI.baseZ = data.enemyAI.baseZ || 0;
+            enemyAI.lastBridgeTime = data.enemyAI.lastBridgeTime || 0;
+            enemyAI.lastSpellTime = data.enemyAI.lastSpellTime || 0;
+
+            // Restore Buildings
+            data.buildings.forEach(bData => {
+                 // Re-create building logic manually or via createBuilding but skipping array push if possible?
+                 // createBuilding pushes to array. We can use it but we need to override properties.
+                 // Actually better to manually reconstruct to ensure no side effects like sound/particles.
+
+                 const group = new THREE.Group();
+                 const baseH = getHeight(bData.x, bData.z);
+                 group.position.set(bData.x, baseH, bData.z);
+
+                 let mesh, maxHp;
+                 if (bData.type === 'hut') { mesh = buildHut(); maxHp = 100; }
+                 else if (bData.type === 'tower') { mesh = buildTower(); maxHp = 150; }
+                 else if (bData.type === 'warrior') { mesh = buildBarracks(); maxHp = 250; }
+                 else if (bData.type === 'fire') { mesh = buildFireTemple(); maxHp = 300; }
+                 else if (bData.type === 'spy') { mesh = buildSpyHut(); maxHp = 200; }
+                 else if (bData.type === 'shipyard') { mesh = buildShipyard(); maxHp = 350; }
+
+                 if(mesh) {
+                    group.add(mesh);
+                    const hpGroup = new THREE.Group(); hpGroup.position.set(0, 5, 0);
+                    const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.3), new THREE.MeshBasicMaterial({color: 0x880000}));
+                    hpGroup.add(bgMesh);
+                    const fgGeo = new THREE.PlaneGeometry(2.0, 0.3); fgGeo.translate(1.0, 0, 0);
+                    const hpBar = new THREE.Mesh(fgGeo, new THREE.MeshBasicMaterial({color: 0x00FF00}));
+                    hpBar.position.x = -1.0; hpGroup.add(hpBar); group.add(hpGroup);
+                    scene.add(group);
+
+                    const building = {
+                        mesh: group, visualMesh: mesh, hpBar: hpBar, hpGroup: hpGroup,
+                        type: bData.type, faction: bData.faction,
+                        hp: bData.hp, maxHp: maxHp,
+                        constructionTimer: bData.constructionTimer,
+                        totalBuildTime: BUILDING_COSTS[bData.type] || 5,
+                        underConstruction: bData.underConstruction,
+                        takeDamage: function(amount) {
+                            this.hp -= amount; this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
+                            spawnPulse(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z, 0xFF4500);
+                            if(this.hp <= 0) this.destroy();
+                        },
+                        destroy: function() {
+                            this.dead = true; scene.remove(this.mesh);
+                            spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, COLORS.wood, 20);
+                        },
+                        update: function(dt) {
+                            this.hpGroup.lookAt(camera.position);
+                            if(this.underConstruction) {
+                                this.constructionTimer -= dt;
+                                const progress = 1.0 - (this.constructionTimer / this.totalBuildTime);
+                                this.visualMesh.scale.y = Math.max(0.01, progress);
+                                if(this.constructionTimer <= 0) {
+                                    this.underConstruction = false; this.visualMesh.scale.y = 1.0;
+                                    spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFFFFFF, 10);
+                                    if(this.type === 'hut') { // Hut spawn logic
+                                        const safe = findNearestLand(this.mesh.position.x + 2, this.mesh.position.z + 2, 10);
+                                        const u = new Humanoid(this.faction, 'wild', safe.x, safe.z);
+                                        units.push(u);
+                                    }
+                                }
+                                return;
+                            }
+                            // Training logic omitted for save simplicity or could be added
+                        }
+                    };
+                    buildings.push(building);
+                    building.hpBar.scale.x = Math.max(0, building.hp / building.maxHp);
+                    if(building.underConstruction) {
+                         const progress = 1.0 - (building.constructionTimer / building.totalBuildTime);
+                         building.visualMesh.scale.y = Math.max(0.01, progress);
+                    }
+                 }
+            });
+
+            // Restore Units
+            data.units.forEach(uData => {
+                if(uData.dead) return; // Don't restore dead bodies for simplicity or restore as dead?
+                // Restore as alive
+                const u = new Humanoid(uData.faction, uData.type, uData.x, uData.z);
+                u.hp = uData.hp;
+                u.state = uData.state === 'dead' ? 'idle' : uData.state; // Reset state to idle to avoid glitch
+                u.hpBar.scale.x = Math.max(0, u.hp / u.maxHp);
+                units.push(u);
+                if(u.isShaman && u.faction === 0) shaman = u;
+
+                // Passengers?
+                if(uData.passengers && uData.passengers.length > 0) {
+                    uData.passengers.forEach(pData => {
+                        const p = new Humanoid(pData.faction, pData.type, uData.x, uData.z);
+                        p.hp = pData.hp;
+                        units.push(p); // Must be in units list to update?
+                        u.loadUnit(p);
+                    });
+                }
+            });
+
+            if(!shaman || shaman.state === 'dead') {
+                // If shaman missing/dead in save, handle?
+            }
+
+            togglePause(); // Unpause
+            alert("Game Loaded!");
+        } catch(e) {
+            console.error(e);
+            alert("Failed to load save: " + e.message);
+        }
+    }
+
+    window.newGame = function() {
+        if(confirm("Are you sure? Unsaved progress will be lost.")) {
+            location.reload();
+        }
     }
 
     window.toggleMultiSelect = function() {
@@ -3157,8 +3375,14 @@
                  isFPV = false; camera = orthoCamera;
              } else {
                  const u = selectedUnits[0];
-                 const headH = (u.isShaman ? 2.5 : 1.7);
+                 const headH = (u.isShaman ? 2.1 : 1.4);
                  const pos = u.mesh.position.clone().add(new THREE.Vector3(0, headH, 0));
+
+                 // Position in front of face based on yaw
+                 const offsetDist = 0.5;
+                 pos.x -= Math.sin(fpvYaw) * offsetDist;
+                 pos.z -= Math.cos(fpvYaw) * offsetDist;
+
                  perspectiveCamera.position.copy(pos);
                  perspectiveCamera.rotation.set(fpvPitch, fpvYaw, 0, 'YXZ');
              }
@@ -3189,11 +3413,11 @@
         spawnCloud: function(randomPos=false) {
             const group = new THREE.Group();
             const chunks = 3 + Math.random() * 5;
-            const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.8, flatShading: true});
+            const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.85, flatShading: false});
 
             for(let j=0; j<chunks; j++) {
                 const size = 2 + Math.random() * 3;
-                const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 0), mat);
+                const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 1), mat);
                 mesh.position.set((Math.random()-0.5)*10, (Math.random()-0.5)*2, (Math.random()-0.5)*6);
                 group.add(mesh);
             }
@@ -3212,7 +3436,7 @@
             group.scale.setScalar(1.5 + Math.random());
 
             scene.add(group);
-            this.clouds.push({ mesh: group, speed: 2 + Math.random() * 3 });
+            this.clouds.push({ mesh: group, speed: 1 + Math.random() * 2 });
         },
         update: function(dt) {
             for(let i = this.clouds.length - 1; i >= 0; i--) {
