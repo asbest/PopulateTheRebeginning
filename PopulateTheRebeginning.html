@@ -1933,6 +1933,16 @@
             this.hpBar.position.x = -0.5; this.hpGroup.add(this.hpBar);
             this.mesh.add(this.hpGroup);
 
+            // Enemy Marker
+            if(this.faction === 1) {
+                const markerGeo = new THREE.ConeGeometry(0.3, 1.0, 4);
+                markerGeo.rotateX(Math.PI);
+                const markerMat = new THREE.MeshBasicMaterial({color: 0xFF0000});
+                this.marker = new THREE.Mesh(markerGeo, markerMat);
+                this.marker.position.set(0, 6, 0);
+                this.mesh.add(this.marker);
+            }
+
             // Body Parts
             if(type === 'airship') {
                  // Basket
@@ -2099,7 +2109,7 @@
         }
 
         die() {
-            this.state = 'dead'; this.hpGroup.visible = false; this.velocity.set(0, 0, 0);
+            this.state = 'dead'; this.hpGroup.visible = false; if(this.marker) this.marker.visible = false; this.velocity.set(0, 0, 0);
         }
         
         applyForce(vec) {
