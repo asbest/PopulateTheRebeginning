@@ -1832,7 +1832,9 @@
                     const dh = Math.abs(h - currentH);
                     if(!isFlying && dh > 2.0) continue;
 
-                    const gScore = currentNode.g + dist + dh * 0.5;
+                    let cost = dist + dh * 0.5;
+                    if (h < 2.0) cost += 10.0; // Penalty for water
+                    const gScore = currentNode.g + cost;
 
                     let neighbor = openSet.get(nKey);
                     if(!neighbor) {
@@ -1849,7 +1851,7 @@
                     }
                 }
             }
-            return [endPos];
+            return null;
         }
     };
     window.Pathfinder = Pathfinder;
@@ -2149,13 +2151,25 @@
             this.finalDest = end.clone();
             const isFlying = (this.type === 'airship');
             const rawPath = Pathfinder.findPath(this.mesh.position, end, isFlying, this.height);
-            this.path = smoothPath(rawPath, isFlying, this.height);
-            this.pathIndex = 0;
-            if(this.path.length > 0) {
-                this.target = this.path[0];
-                this.state = 'move';
+
+            if (rawPath) {
+                this.path = smoothPath(rawPath, isFlying, this.height);
+                this.pathIndex = 0;
+                if(this.path.length > 0) {
+                    this.target = this.path[0];
+                    this.state = 'move';
+                } else {
+                    this.target = end; this.state = 'move';
+                }
             } else {
-                this.target = end; this.state = 'move';
+                if (isFlying) {
+                    this.target = end; this.state = 'move';
+                    this.path = [];
+                } else {
+                    this.state = 'idle';
+                    this.target = null;
+                    this.path = [];
+                }
             }
         }
         
@@ -2431,9 +2445,12 @@
                         if(this.stuckTimer > 2.0 && this.finalDest) {
                             this.stuckTimer = 0;
                             const isFlying = (this.type === 'airship');
-                            this.path = Pathfinder.findPath(this.mesh.position, this.finalDest, isFlying, this.height);
-                            this.pathIndex = 0;
-                            if(this.path.length > 0) this.target = this.path[0];
+                            const newPath = Pathfinder.findPath(this.mesh.position, this.finalDest, isFlying, this.height);
+                            if (newPath) {
+                                this.path = newPath;
+                                this.pathIndex = 0;
+                                if(this.path.length > 0) this.target = this.path[0];
+                            }
                         }
                     } else {
                         this.stuckTimer = 0;
@@ -2663,6 +2680,9 @@
             const playerShaman = units.find(u => u.faction === 0 && u.isShaman); // or just shaman global
 
             if (myShaman && playerShaman && playerShaman.state !== 'dead') {
+                // If moving along a valid path, don't bridge (prefer land path)
+                if (myShaman.state === 'move' && myShaman.path && myShaman.path.length > 0) return;
+
                 // Bridge Logic - Frequent check
                 if (clock.getElapsedTime() - this.lastBridgeTime > 1.0) {
                     const dir = playerShaman.mesh.position.clone().sub(myShaman.mesh.position).normalize();
