@@ -1760,7 +1760,7 @@
 
     const Pathfinder = {
         GRID_SIZE: 2.0,
-        findPath: function(startPos, endPos, isFlying = false) {
+        findPath: function(startPos, endPos, isFlying = false, unitHeight = 1.5) {
             const startNode = { x: Math.round(startPos.x / this.GRID_SIZE), y: Math.round(startPos.z / this.GRID_SIZE) };
             const endNode = { x: Math.round(endPos.x / this.GRID_SIZE), y: Math.round(endPos.z / this.GRID_SIZE) };
 
@@ -1776,6 +1776,7 @@
 
             let iterations = 0;
             const MAX_ITER = 10000;
+            const safeH = 2.0 - unitHeight;
 
             while(openHeap.size() > 0) {
                 iterations++;
@@ -1812,7 +1813,7 @@
                     const wz = ny * this.GRID_SIZE;
                     const h = getHeight(wx, wz);
 
-                    if(!isFlying && h < 2.0) continue; // Deep Water
+                    if(!isFlying && h < safeH) continue; // Too Deep
 
                     // Building collision check
                     if(!isFlying && isBlocked(wx, wz)) continue;
@@ -1822,7 +1823,7 @@
                         if (!isFlying) {
                             const h1 = getHeight((currentNode.x + offset.x) * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
                             const h2 = getHeight(currentNode.x * this.GRID_SIZE, (currentNode.y + offset.y) * this.GRID_SIZE);
-                            if (h1 < 2.0 || h2 < 2.0) continue;
+                            if (h1 < safeH || h2 < safeH) continue;
                         }
                     }
 
@@ -1853,33 +1854,34 @@
     };
     window.Pathfinder = Pathfinder;
 
-    function isWalkableLine(start, end, isFlying) {
+    function isWalkableLine(start, end, isFlying, unitHeight = 1.5) {
         const dist = start.distanceTo(end);
         const steps = Math.ceil(dist / 1.0);
         if (steps <= 1) return true;
 
         const dir = end.clone().sub(start).normalize();
         const checkPos = start.clone();
+        const safeH = 2.0 - unitHeight;
 
         for(let i=1; i<steps; i++) {
             checkPos.add(dir);
             const h = getHeight(checkPos.x, checkPos.z);
             if(!isFlying) {
-                if(h < 2.0) return false;
+                if(h < safeH) return false;
                 if(isBlocked(checkPos.x, checkPos.z)) return false;
             }
         }
         return true;
     }
 
-    function smoothPath(path, isFlying) {
+    function smoothPath(path, isFlying, unitHeight) {
         if(path.length < 3) return path;
         const newPath = [path[0]];
         let current = path[0];
 
         for(let i=1; i<path.length-1; i++) {
             // Check if we can go from current to path[i+1] directly
-            if(isWalkableLine(current, path[i+1], isFlying)) {
+            if(isWalkableLine(current, path[i+1], isFlying, unitHeight)) {
                 // Can skip path[i]
                 continue;
             } else {
@@ -1900,11 +1902,11 @@
             this.isShaman = (type === 'shaman');
 
             // Stats
-            this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6;
+            this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6; this.height = 1.5;
             if(type === 'warrior') { this.maxHp = 200; this.damage = 15; }
             if(type === 'firewarrior') { this.maxHp = 120; this.damage = 25; this.range = 12; this.attackSpeed = 2.0; }
-            if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; }
-            if(type === 'airship') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; }
+            if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; this.height = 2.2; }
+            if(type === 'airship') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; this.height = 2.0; }
 
             this.hp = this.maxHp; this.recoverTimer = 0;
             this.shielded = false;
@@ -2044,7 +2046,7 @@
                 this.mesh.add(this.legL); this.mesh.add(this.legR);
             }
 
-            this.mesh.position.set(x, getHeight(x,z), z);
+            this.mesh.position.set(x, getHeight(x,z) - 0.1 * this.mesh.scale.y, z);
             scene.add(this.mesh);
             this.velocity = new THREE.Vector3(0,0,0);
             this.isGrounded = true; this.target = null; this.attackTarget = null; this.state = 'idle'; this.animTime = Math.random() * 100;
@@ -2113,7 +2115,11 @@
                  // Simple lookahead
                  const futureX = this.mesh.position.x + vec.x * speed * 0.1;
                  const futureZ = this.mesh.position.z + vec.z * speed * 0.1;
-                 if(getHeight(futureX, futureZ) < 2.0 && getHeight(this.mesh.position.x, this.mesh.position.z) >= 2.0) {
+                 const futureH = getHeight(futureX, futureZ);
+                 const safeH = 2.0 - this.height;
+
+                 // If moving into water deeper than unit height
+                 if(futureH < safeH && getHeight(this.mesh.position.x, this.mesh.position.z) >= safeH) {
                      allowed = false;
                  }
                  if(isBlocked(futureX, futureZ)) {
@@ -2142,8 +2148,8 @@
             const end = new THREE.Vector3(x, 0, z);
             this.finalDest = end.clone();
             const isFlying = (this.type === 'airship');
-            const rawPath = Pathfinder.findPath(this.mesh.position, end, isFlying);
-            this.path = smoothPath(rawPath, isFlying);
+            const rawPath = Pathfinder.findPath(this.mesh.position, end, isFlying, this.height);
+            this.path = smoothPath(rawPath, isFlying, this.height);
             this.pathIndex = 0;
             if(this.path.length > 0) {
                 this.target = this.path[0];
@@ -2206,6 +2212,8 @@
             this.mesh.position.addScaledVector(this.velocity, dt);
 
             const groundH = getHeight(this.mesh.position.x, this.mesh.position.z);
+            const feetOffset = 0.1 * this.mesh.scale.y;
+
             if (this.type === 'airship') {
                 const targetAlt = Math.max(groundH, 2.0) + 8.0; // Fly above water or ground
                 const diff = targetAlt - this.mesh.position.y;
@@ -2213,18 +2221,20 @@
                 this.velocity.y *= 0.9;
                 this.isGrounded = false;
             } else {
-                if (this.mesh.position.y < groundH) {
+                const targetY = groundH - feetOffset;
+                if (this.mesh.position.y < targetY) {
                     if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(10);
-                    this.mesh.position.y = groundH + 0.35;
+                    this.mesh.position.y = targetY;
                     this.isGrounded = true; this.velocity.y = 0;
                     if(this.state === 'stunned' && this.velocity.length() < 1) { this.state = 'idle'; this.mesh.rotation.z = 0; this.mesh.rotation.x = 0; }
-                } else if (this.mesh.position.y > groundH + 0.35) { this.isGrounded = false; }
+                } else if (this.mesh.position.y > targetY + 0.1) { this.isGrounded = false; }
             }
 
             // Deep Water Damage
             if (this.type !== 'airship' && this.state !== 'dead') {
                 const h = getHeight(this.mesh.position.x, this.mesh.position.z);
-                if (h < 1.0) {
+                const safeH = 2.0 - this.height;
+                if (h < safeH) {
                     this.takeDamage(this.maxHp * 0.10 * dt);
                 }
             }
@@ -2358,7 +2368,7 @@
                     if(this.pathTimer > 1.0) {
                          this.pathTimer = 0;
                          const isFlying = (this.type === 'airship');
-                         this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying);
+                         this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying, this.height);
                          this.pathIndex = 0;
                     }
 
@@ -2381,7 +2391,8 @@
                     const dh = nextH - currentH;
 
                     let canMove = true;
-                    if (this.type !== 'airship' && nextH < 2.0 && currentH >= 2.0) canMove = false;
+                    const safeH = 2.0 - this.height;
+                    if (this.type !== 'airship' && nextH < safeH && currentH >= safeH) canMove = false;
 
                     if(canMove) {
                         const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
@@ -2420,7 +2431,7 @@
                         if(this.stuckTimer > 2.0 && this.finalDest) {
                             this.stuckTimer = 0;
                             const isFlying = (this.type === 'airship');
-                            this.path = Pathfinder.findPath(this.mesh.position, this.finalDest, isFlying);
+                            this.path = Pathfinder.findPath(this.mesh.position, this.finalDest, isFlying, this.height);
                             this.pathIndex = 0;
                             if(this.path.length > 0) this.target = this.path[0];
                         }
@@ -2473,7 +2484,8 @@
                     let canMove = true;
                     if(this.type !== 'airship') {
                         const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
-                        if (nextH < 2.0 && currentH >= 2.0) {
+                        const safeH = 2.0 - this.height;
+                        if (nextH < safeH && currentH >= safeH) {
                              if(!this.targetBoat) canMove = false;
                         }
                     }
