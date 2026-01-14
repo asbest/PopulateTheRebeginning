@@ -1950,6 +1950,29 @@
     }
 
     // --- CHARACTER & PHYSICS ---
+    const AssetCache = {
+        geos: {
+            ring: new THREE.RingGeometry(0.5, 0.6, 16),
+            hpBack: new THREE.PlaneGeometry(1.0, 0.15),
+            hpFront: new THREE.PlaneGeometry(1.0, 0.15).translate(0.5, 0, 0),
+            marker: new THREE.ConeGeometry(0.3, 1.0, 4).rotateX(Math.PI),
+            torso: new THREE.BoxGeometry(0.4, 0.5, 0.25),
+            head: new THREE.BoxGeometry(0.25, 0.3, 0.3),
+            arm: new THREE.BoxGeometry(0.12, 0.45, 0.12),
+            leg: new THREE.BoxGeometry(0.13, 0.55, 0.13)
+        },
+        mats: {
+            skin: new THREE.MeshLambertMaterial({color: COLORS.skin}),
+            blueShirt: new THREE.MeshLambertMaterial({color: COLORS.blue}),
+            redShirt: new THREE.MeshLambertMaterial({color: COLORS.red}),
+            hpBack: new THREE.MeshBasicMaterial({color: 0x880000}),
+            hpGreen: new THREE.MeshBasicMaterial({color: 0x00FF00}),
+            hpRed: new THREE.MeshBasicMaterial({color: 0xFF0000}),
+            selectRing: new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}),
+            marker: new THREE.MeshBasicMaterial({color: 0xFF0000})
+        }
+    };
+
     class Humanoid {
         constructor(faction, type, x, z) {
             this.faction = faction; // 0 = Player, 1 = Enemy
@@ -1970,28 +1993,24 @@
 
             // Visuals
             this.mesh = new THREE.Group();
-            const color = faction === 0 ? COLORS.blue : COLORS.red;
-            const skinMat = new THREE.MeshLambertMaterial({color: COLORS.skin});
-            const shirtMat = new THREE.MeshLambertMaterial({color: color});
+            const skinMat = AssetCache.mats.skin;
+            const shirtMat = (faction === 0) ? AssetCache.mats.blueShirt : AssetCache.mats.redShirt;
             
             // Selection Ring
-            this.selectRing = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.6, 16), new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}));
+            this.selectRing = new THREE.Mesh(AssetCache.geos.ring, AssetCache.mats.selectRing);
             this.selectRing.rotation.x = -Math.PI/2; this.selectRing.visible = false; this.mesh.add(this.selectRing);
 
             // HP Bar
             this.hpGroup = new THREE.Group(); this.hpGroup.position.set(0, 2.3, 0);
-            this.hpGroup.add(new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.15), new THREE.MeshBasicMaterial({color: 0x880000})));
-            const fgGeo = new THREE.PlaneGeometry(1.0, 0.15); fgGeo.translate(0.5, 0, 0); 
-            this.hpBar = new THREE.Mesh(fgGeo, new THREE.MeshBasicMaterial({color: faction === 0 ? 0x00FF00 : 0xFF0000}));
+            this.hpGroup.add(new THREE.Mesh(AssetCache.geos.hpBack, AssetCache.mats.hpBack));
+            const hpMat = (faction === 0) ? AssetCache.mats.hpGreen : AssetCache.mats.hpRed;
+            this.hpBar = new THREE.Mesh(AssetCache.geos.hpFront, hpMat);
             this.hpBar.position.x = -0.5; this.hpGroup.add(this.hpBar);
             this.mesh.add(this.hpGroup);
 
             // Enemy Marker
             if(this.faction === 1) {
-                const markerGeo = new THREE.ConeGeometry(0.3, 1.0, 4);
-                markerGeo.rotateX(Math.PI);
-                const markerMat = new THREE.MeshBasicMaterial({color: 0xFF0000});
-                this.marker = new THREE.Mesh(markerGeo, markerMat);
+                this.marker = new THREE.Mesh(AssetCache.geos.marker, AssetCache.mats.marker);
                 this.marker.position.set(0, 6, 0);
                 this.mesh.add(this.marker);
             }
@@ -2018,9 +2037,9 @@
                  this.mesh.add(balloon);
             } else {
                 this.torso = new THREE.Group(); this.torso.position.y = 0.9; this.mesh.add(this.torso);
-                this.torso.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.25), shirtMat));
+                this.torso.add(new THREE.Mesh(AssetCache.geos.torso, shirtMat));
                 this.head = new THREE.Group(); this.head.position.y = 0.4; this.torso.add(this.head);
-                this.head.add(new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.3), skinMat));
+                this.head.add(new THREE.Mesh(AssetCache.geos.head, skinMat));
             }
 
             // Props
@@ -2076,17 +2095,17 @@
             }
 
             if (type !== 'airship') {
-                const createLimb = (w, h, mat, px, py, pz) => {
+                const createLimb = (geo, mat, px, py, pz, h) => {
                     const group = new THREE.Group(); group.position.set(px, py, pz);
-                    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mat); mesh.position.y = -h / 2; mesh.castShadow = true;
+                    const mesh = new THREE.Mesh(geo, mat); mesh.position.y = -h / 2; mesh.castShadow = true;
                     group.add(mesh); return group;
                 };
                 let armMat = skinMat;
                 if(this.type === 'firewarrior') armMat = new THREE.MeshLambertMaterial({color: 0xFF4500, emissive: 0xFF2200});
                 if(this.type === 'spy') armMat = new THREE.MeshLambertMaterial({color: 0x222222});
 
-                this.armL = createLimb(0.12, 0.45, armMat, 0.26, 0.15, 0);
-                this.armR = createLimb(0.12, 0.45, armMat, -0.26, 0.15, 0);
+                this.armL = createLimb(AssetCache.geos.arm, armMat, 0.26, 0.15, 0, 0.45);
+                this.armR = createLimb(AssetCache.geos.arm, armMat, -0.26, 0.15, 0, 0.45);
                 this.torso.add(this.armL); this.torso.add(this.armR);
 
                 // Weapons / Tools
@@ -2106,8 +2125,8 @@
                     this.armR.children[0].add(tool);
                 }
 
-                this.legL = createLimb(0.13, 0.55, shirtMat, 0.1, 0.65, 0);
-                this.legR = createLimb(0.13, 0.55, shirtMat, -0.1, 0.65, 0);
+                this.legL = createLimb(AssetCache.geos.leg, shirtMat, 0.1, 0.65, 0, 0.55);
+                this.legR = createLimb(AssetCache.geos.leg, shirtMat, -0.1, 0.65, 0, 0.55);
                 this.mesh.add(this.legL); this.mesh.add(this.legR);
             }
 
@@ -2623,13 +2642,6 @@
                 if(Math.abs(this.mesh.rotation.z) < 0.01) this.mesh.rotation.z = 0;
             }
 
-            if(this.isShaman && this.state !== 'dead') {
-                if(Math.random() < 0.1) {
-                    const p = new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1+Math.random(), (Math.random()-0.5))), 0xFFD700, 0.15, 1.0);
-                    p.vel.set(0, 2, 0);
-                    particles.push(p);
-                }
-            }
             if(this.type === 'firewarrior' && this.state !== 'dead') {
                 if(Math.random() < 0.3) {
                      const spawnFire = (limb) => {
