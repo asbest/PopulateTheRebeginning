@@ -2759,9 +2759,14 @@
                     const dir = playerShaman.mesh.position.clone().sub(myShaman.mesh.position).normalize();
                     const distToPlayer = myShaman.mesh.position.distanceTo(playerShaman.mesh.position);
 
-                    // Cast Land Rise in front
+                    // Cast Bridge or Raise
                     const castPos = myShaman.mesh.position.clone().addScaledVector(dir, 5.0);
-                    executeSpell('raise', castPos.x, castPos.z, myShaman);
+                    const h = getHeight(castPos.x, castPos.z);
+                    if (h < 2.0) {
+                        executeSpell('raise', castPos.x, castPos.z, myShaman);
+                    } else {
+                        executeSpell('landbridge', castPos.x, castPos.z, myShaman);
+                    }
                     this.lastBridgeTime = clock.getElapsedTime();
                 }
             }
