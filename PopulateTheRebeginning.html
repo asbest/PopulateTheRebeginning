@@ -380,7 +380,7 @@
     let simplex;
     
     // Game State
-    const chunks = {}; 
+    const chunks = {}; window.chunks = chunks;
     const terrainMods = new Map(); window.terrainMods = terrainMods;
     const units = []; window.units = units;
     const particles = [];
@@ -1675,16 +1675,24 @@
                 activeKeys.add(key);
                 if(!chunks[key] || (force && (!specificChunks || specificChunks.has(key)))) {
 
-                    if (!chunks[key] && createdCount >= MAX_CHUNKS_PER_FRAME) continue;
+                    if(chunks[key] && force) {
+                        // Reuse existing chunk geometry
+                        if(chunks[key].children[0]) {
+                            updateChunkGeometry(chunks[key].children[0], cx+x, cz+z);
+                        }
+                        updateChunkTrees(chunks[key], cx+x, cz+z);
+                    } else {
+                        if (!chunks[key] && createdCount >= MAX_CHUNKS_PER_FRAME) continue;
 
-                    if(chunks[key]) {
-                        scene.remove(chunks[key]);
-                        // Only dispose terrain geometry (child 0), water (child 1) is shared
-                        if(chunks[key].children[0] && chunks[key].children[0].geometry) chunks[key].children[0].geometry.dispose();
+                        if(chunks[key]) {
+                            scene.remove(chunks[key]);
+                            // Only dispose terrain geometry (child 0), water (child 1) is shared
+                            if(chunks[key].children[0] && chunks[key].children[0].geometry) chunks[key].children[0].geometry.dispose();
+                        }
+                        chunks[key] = createChunk(cx+x, cz+z);
+                        scene.add(chunks[key]);
+                        createdCount++;
                     }
-                    chunks[key] = createChunk(cx+x, cz+z); 
-                    scene.add(chunks[key]); 
-                    createdCount++;
                 }
             }
         }
@@ -1702,13 +1710,13 @@
 
     let chunkTerrainMat, chunkWaterGeo, chunkWaterMat;
 
-    function createChunk(cx, cz) {
-        const grp = new THREE.Group();
-        const geo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES, CHUNK_RES);
-        geo.rotateX(-Math.PI/2);
+    function updateChunkGeometry(mesh, cx, cz) {
+        const geo = mesh.geometry;
         const pos = geo.attributes.position;
-        const colors = []; const col = new THREE.Color();
-        const offX = cx * CHUNK_SIZE; const offZ = cz * CHUNK_SIZE;
+        const colAttr = geo.attributes.color;
+
+        const offX = cx * CHUNK_SIZE;
+        const offZ = cz * CHUNK_SIZE;
 
         const cWater = new THREE.Color(COLORS.water);
         const cSand = new THREE.Color(COLORS.sand);
@@ -1716,30 +1724,66 @@
         const cRock = new THREE.Color(COLORS.rock);
         const cSnow = new THREE.Color(COLORS.snow);
         const cLava = new THREE.Color(COLORS.lava);
+        const col = new THREE.Color();
 
         for(let i=0; i<pos.count; i++) {
-            const wx = pos.getX(i) + offX; const wz = pos.getZ(i) + offZ;
-            let h = getHeight(wx, wz);
-            pos.setY(i, h);
+             const wx = pos.getX(i) + offX;
+             const wz = pos.getZ(i) + offZ;
+             let h = getHeight(wx, wz);
+             pos.setY(i, h);
 
-            if (h < 2.0) col.copy(cSand);
-            else if (h < 3.0) col.copy(cSand).lerp(cGrass, h - 2.0);
-            else if (h < 8.0) col.copy(cGrass);
-            else if (h < 9.0) col.copy(cGrass).lerp(cRock, h - 8.0);
-            else if (h < 13.0) col.copy(cRock);
-            else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
-            else if (h < 19.0) col.copy(cSnow);
-            else if (h < 21.0) col.copy(cSnow).lerp(cLava, (h - 19.0) / 2.0);
-            else col.copy(cLava);
+             if (h < 2.0) col.copy(cSand);
+             else if (h < 3.0) col.copy(cSand).lerp(cGrass, h - 2.0);
+             else if (h < 8.0) col.copy(cGrass);
+             else if (h < 9.0) col.copy(cGrass).lerp(cRock, h - 8.0);
+             else if (h < 13.0) col.copy(cRock);
+             else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
+             else if (h < 19.0) col.copy(cSnow);
+             else if (h < 21.0) col.copy(cSnow).lerp(cLava, (h - 19.0) / 2.0);
+             else col.copy(cLava);
 
-            if(h > 2.5) col.offsetHSL(0, 0, (Math.random()-0.5)*0.03);
-            colors.push(col.r, col.g, col.b);
+             if(h > 2.5) col.offsetHSL(0, 0, (Math.random()-0.5)*0.03);
+
+             colAttr.setXYZ(i, col.r, col.g, col.b);
         }
-        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+        pos.needsUpdate = true;
+        colAttr.needsUpdate = true;
         geo.computeVertexNormals();
+    }
+
+    function updateChunkTrees(chunk, cx, cz) {
+        if (!chunk.userData || !chunk.userData.trees) return;
+        const trees = chunk.userData.trees;
+
+        for (let i = trees.length - 1; i >= 0; i--) {
+            const treeData = trees[i];
+            const tMesh = treeData.mesh;
+            const h = getHeight(tMesh.position.x, tMesh.position.z);
+            tMesh.position.y = h;
+
+            // Hide if underwater
+            tMesh.visible = (h >= 2.0);
+        }
+    }
+
+    function createChunk(cx, cz) {
+        const grp = new THREE.Group();
+        const geo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES, CHUNK_RES);
+        geo.rotateX(-Math.PI/2);
+
+        // Init colors buffer
+        const count = geo.attributes.position.count;
+        const colors = new Float32Array(count * 3);
+        geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const offX = cx * CHUNK_SIZE; const offZ = cz * CHUNK_SIZE;
         const mesh = new THREE.Mesh(geo, chunkTerrainMat);
         mesh.position.set(offX, 0, offZ); mesh.receiveShadow = true;
         grp.add(mesh);
+
+        // Fill data
+        updateChunkGeometry(mesh, cx, cz);
 
         const wMesh = new THREE.Mesh(chunkWaterGeo, chunkWaterMat);
         wMesh.rotation.x = -Math.PI/2; wMesh.position.set(offX, 0.5, offZ);
