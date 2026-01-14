@@ -45,21 +45,35 @@
         #unit-list::-webkit-scrollbar-track { background: transparent; }
         #unit-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 1px; }
 
-        #enemy-spell-icon {
+        #enemy-spell-queue {
             position: absolute;
             top: 70px;
             left: 55px;
             width: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .enemy-spell-item {
+            width: 30px;
             height: 30px;
             font-size: 24px;
-            display: none;
+            display: flex;
             align-items: center;
             justify-content: center;
             background: rgba(0,0,0,0.5);
             border-radius: 5px;
             border: 2px solid #FF0000;
-            z-index: 10;
-            pointer-events: none;
+            flex-shrink: 0;
+            animation: fadeIn 0.2s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.5); }
+            to { opacity: 1; transform: scale(1); }
         }
 
         .unit-item {
@@ -225,7 +239,7 @@
     </div>
 
     <div id="unit-list"></div>
-    <div id="enemy-spell-icon"></div>
+    <div id="enemy-spell-queue"></div>
     <div id="top-bar">
         <div id="mana-bar"><div id="mana-fill"></div></div>
         <p>Mana: <span id="mana-text">100</span></p>
@@ -936,17 +950,20 @@
     window.UNIT_ICONS = UNIT_ICONS;
 
     let lastAliveCount = -1;
-    let enemySpellTimeout;
 
     window.showEnemySpellIcon = function(spellType) {
-        const el = document.getElementById('enemy-spell-icon');
+        const queue = document.getElementById('enemy-spell-queue');
         const action = ACTIONS[spellType];
-        if(el && action) {
-            el.innerHTML = action.icon;
-            el.style.display = 'flex';
-            if(enemySpellTimeout) clearTimeout(enemySpellTimeout);
-            enemySpellTimeout = setTimeout(() => {
-                el.style.display = 'none';
+        if(queue && action) {
+            const item = document.createElement('div');
+            item.className = 'enemy-spell-item';
+            item.innerHTML = action.icon;
+            queue.appendChild(item);
+
+            setTimeout(() => {
+                if(item.parentNode === queue) {
+                    queue.removeChild(item);
+                }
             }, 5000);
         }
     }
@@ -2742,9 +2759,14 @@
                     const dir = playerShaman.mesh.position.clone().sub(myShaman.mesh.position).normalize();
                     const distToPlayer = myShaman.mesh.position.distanceTo(playerShaman.mesh.position);
 
-                    // Cast Land Rise in front
+                    // Cast Bridge or Raise
                     const castPos = myShaman.mesh.position.clone().addScaledVector(dir, 5.0);
-                    executeSpell('raise', castPos.x, castPos.z, myShaman);
+                    const h = getHeight(castPos.x, castPos.z);
+                    if (h < 2.0) {
+                        executeSpell('raise', castPos.x, castPos.z, myShaman);
+                    } else {
+                        executeSpell('landbridge', castPos.x, castPos.z, myShaman);
+                    }
                     this.lastBridgeTime = clock.getElapsedTime();
                 }
             }
