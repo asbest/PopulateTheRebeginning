@@ -1958,7 +1958,7 @@
 
             // Stats
             this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6; this.height = 1.5;
-            if(type === 'warrior') { this.maxHp = 200; this.damage = 35; }
+            if(type === 'warrior') { this.maxHp = 200; this.damage = 52.5; }
             if(type === 'firewarrior') { this.maxHp = 120; this.damage = 25; this.range = 12; this.attackSpeed = 2.0; }
             if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; this.height = 2.2; }
             if(type === 'airship') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; this.height = 2.0; }
@@ -3066,7 +3066,7 @@
             super();
             this.pos = new THREE.Vector3(x, getHeight(x,z)+3, z);
             this.faction = faction;
-            this.timer = 20.0;
+            this.timer = 14.0;
             this.particles = [];
             for(let i=0; i<30; i++) {
                 const p = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial({color: 0x000000}));
@@ -3103,7 +3103,7 @@
             units.forEach(u => {
                 const d = u.mesh.position.distanceTo(this.pos);
                 if(d < 4 && u.faction !== this.faction) {
-                    u.takeDamage(50 * dt);
+                    u.takeDamage(25 * dt);
                 }
             });
 
