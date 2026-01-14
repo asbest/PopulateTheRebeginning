@@ -267,7 +267,7 @@
 <script>
     // --- CONFIGURATION ---
     const CHUNK_SIZE = 40; 
-    const CHUNK_RES = 50;
+    const CHUNK_RES = 40;
     const RENDER_DISTANCE = 3;
     const NOISE_SCALE = 0.02;
     const MIN_ZOOM = 3;
@@ -383,6 +383,43 @@
     const chunks = {}; window.chunks = chunks;
     const terrainMods = new Map(); window.terrainMods = terrainMods;
     const units = []; window.units = units;
+
+    const SpatialHash = {
+        cellSize: 20,
+        cells: new Map(),
+        update: function() {
+            this.cells.clear();
+            for(let i=0; i<units.length; i++) {
+                const u = units[i];
+                if(u.state !== 'dead') {
+                    const cx = Math.floor(u.mesh.position.x / this.cellSize);
+                    const cz = Math.floor(u.mesh.position.z / this.cellSize);
+                    const key = `${cx},${cz}`;
+                    if (!this.cells.has(key)) this.cells.set(key, []);
+                    this.cells.get(key).push(u);
+                }
+            }
+        },
+        query: function(x, z, radius) {
+            const results = [];
+            const cx = Math.floor(x / this.cellSize);
+            const cz = Math.floor(z / this.cellSize);
+            const r = Math.ceil(radius / this.cellSize);
+            for(let i = cx - r; i <= cx + r; i++) {
+                for(let j = cz - r; j <= cz + r; j++) {
+                    const key = `${i},${j}`;
+                    if (this.cells.has(key)) {
+                        const cellUnits = this.cells.get(key);
+                        for(let k=0; k<cellUnits.length; k++) {
+                             results.push(cellUnits[k]);
+                        }
+                    }
+                }
+            }
+            return results;
+        }
+    };
+
     const particles = [];
     const projectiles = [];
     const buildings = []; window.buildings = buildings;
@@ -765,7 +802,7 @@
             const sun = new THREE.DirectionalLight(0xffffff, 0.7);
             sun.position.set(50, 100, 40);
             sun.castShadow = true;
-            sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
+            sun.shadow.mapSize.width = 1024; sun.shadow.mapSize.height = 1024;
             sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
             sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
             sun.shadow.bias = -0.0005;
@@ -1994,8 +2031,18 @@
     }
 
     // --- CHARACTER & PHYSICS ---
+    const MaterialCache = new Map();
+    function getBasicMaterial(color) {
+        if (!MaterialCache.has(color)) {
+            MaterialCache.set(color, new THREE.MeshBasicMaterial({color: color}));
+        }
+        return MaterialCache.get(color);
+    }
+
     const AssetCache = {
         geos: {
+            particle: new THREE.BoxGeometry(1, 1, 1),
+            cloud: new THREE.DodecahedronGeometry(1, 1),
             ring: new THREE.RingGeometry(0.5, 0.6, 16),
             hpBack: new THREE.PlaneGeometry(1.0, 0.15),
             hpFront: new THREE.PlaneGeometry(1.0, 0.15).translate(0.5, 0, 0),
@@ -2003,7 +2050,22 @@
             torso: new THREE.BoxGeometry(0.4, 0.5, 0.25),
             head: new THREE.BoxGeometry(0.25, 0.3, 0.3),
             arm: new THREE.BoxGeometry(0.12, 0.45, 0.12),
-            leg: new THREE.BoxGeometry(0.13, 0.55, 0.13)
+            leg: new THREE.BoxGeometry(0.13, 0.55, 0.13),
+            airshipBasket: new THREE.BoxGeometry(2, 1, 3),
+            airshipRope: new THREE.CylinderGeometry(0.05, 0.05, 3),
+            airshipBalloon: new THREE.SphereGeometry(2.5, 16, 16),
+            shamanMask: new THREE.BoxGeometry(0.3, 0.35, 0.1),
+            shamanHorn: new THREE.ConeGeometry(0.04, 0.3, 4),
+            cape: new THREE.BoxGeometry(0.4, 0.6, 0.05),
+            backpack: new THREE.BoxGeometry(0.3, 0.3, 0.15),
+            warriorHelm: new THREE.SphereGeometry(0.22, 8, 8, 0, Math.PI * 2, 0, Math.PI/2),
+            warriorCrest: new THREE.BoxGeometry(0.05, 0.15, 0.3),
+            fireMask: new THREE.BoxGeometry(0.25, 0.25, 0.1),
+            fireEye: new THREE.SphereGeometry(0.03, 4, 4),
+            spyHood: new THREE.ConeGeometry(0.25, 0.4, 4),
+            sword: new THREE.BoxGeometry(0.05, 0.6, 0.1),
+            shield: new THREE.CylinderGeometry(0.25, 0.25, 0.05, 8),
+            tool: new THREE.BoxGeometry(0.05, 0.4, 0.05)
         },
         mats: {
             skin: new THREE.MeshLambertMaterial({color: COLORS.skin}),
@@ -2062,20 +2124,21 @@
             // Body Parts
             if(type === 'airship') {
                  // Basket
-                 const basket = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 3), new THREE.MeshLambertMaterial({color: COLORS.wood}));
+                 const basket = new THREE.Mesh(AssetCache.geos.airshipBasket, new THREE.MeshLambertMaterial({color: COLORS.wood}));
                  basket.position.y = 0.5;
                  this.mesh.add(basket);
                  // Ropes
-                 const rope1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshLambertMaterial({color: 0x888888}));
+                 const ropeMat = new THREE.MeshLambertMaterial({color: 0x888888});
+                 const rope1 = new THREE.Mesh(AssetCache.geos.airshipRope, ropeMat);
                  rope1.position.set(0.9, 2, 1.4); this.mesh.add(rope1);
-                 const rope2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshLambertMaterial({color: 0x888888}));
+                 const rope2 = new THREE.Mesh(AssetCache.geos.airshipRope, ropeMat);
                  rope2.position.set(-0.9, 2, 1.4); this.mesh.add(rope2);
-                 const rope3 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshLambertMaterial({color: 0x888888}));
+                 const rope3 = new THREE.Mesh(AssetCache.geos.airshipRope, ropeMat);
                  rope3.position.set(0.9, 2, -1.4); this.mesh.add(rope3);
-                 const rope4 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshLambertMaterial({color: 0x888888}));
+                 const rope4 = new THREE.Mesh(AssetCache.geos.airshipRope, ropeMat);
                  rope4.position.set(-0.9, 2, -1.4); this.mesh.add(rope4);
                  // Balloon
-                 const balloon = new THREE.Mesh(new THREE.SphereGeometry(2.5, 16, 16), new THREE.MeshLambertMaterial({color: 0xEEEEEE}));
+                 const balloon = new THREE.Mesh(AssetCache.geos.airshipBalloon, new THREE.MeshLambertMaterial({color: 0xEEEEEE}));
                  balloon.scale.set(1, 0.8, 1.5);
                  balloon.position.set(0, 4.5, 0);
                  this.mesh.add(balloon);
@@ -2089,14 +2152,15 @@
             // Props
             if(this.isShaman) {
                 this.mesh.scale.set(1.5, 1.5, 1.5);
-                const mask = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.35, 0.1), new THREE.MeshLambertMaterial({color: 0xFFD700, emissive: 0x443300}));
+                const mask = new THREE.Mesh(AssetCache.geos.shamanMask, new THREE.MeshLambertMaterial({color: 0xFFD700, emissive: 0x443300}));
                 mask.position.z = 0.16; this.head.add(mask);
-                const hornGeo = new THREE.ConeGeometry(0.04, 0.3, 4);
-                const h1 = new THREE.Mesh(hornGeo, new THREE.MeshLambertMaterial({color:0xFFFFFF, emissive: 0x333333})); h1.position.set(0.15, 0.2, 0); h1.rotation.z = -0.3;
-                const h2 = h1.clone(); h2.position.set(-0.15, 0.2, 0); h2.rotation.z = 0.3; this.head.add(h1); this.head.add(h2);
+
+                const hornMat = new THREE.MeshLambertMaterial({color:0xFFFFFF, emissive: 0x333333});
+                const h1 = new THREE.Mesh(AssetCache.geos.shamanHorn, hornMat); h1.position.set(0.15, 0.2, 0); h1.rotation.z = -0.3;
+                const h2 = new THREE.Mesh(AssetCache.geos.shamanHorn, hornMat); h2.position.set(-0.15, 0.2, 0); h2.rotation.z = 0.3; this.head.add(h1); this.head.add(h2);
 
                 // Cape for Shaman
-                const cape = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.05), new THREE.MeshLambertMaterial({color: 0x330000}));
+                const cape = new THREE.Mesh(AssetCache.geos.cape, new THREE.MeshLambertMaterial({color: 0x330000}));
                 cape.position.set(0, -0.1, -0.15); cape.rotation.x = 0.2;
                 this.torso.add(cape);
 
@@ -2106,34 +2170,33 @@
             }
             else if (type === 'wild') {
                 // Backpack
-                const bag = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.15), new THREE.MeshLambertMaterial({color: 0x8B4513}));
+                const bag = new THREE.Mesh(AssetCache.geos.backpack, new THREE.MeshLambertMaterial({color: 0x8B4513}));
                 bag.position.set(0, 0, -0.15);
                 this.torso.add(bag);
             }
             else if (type === 'warrior') {
-                const helm = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8, 0, Math.PI * 2, 0, Math.PI/2), new THREE.MeshLambertMaterial({color: 0x888888}));
+                const helm = new THREE.Mesh(AssetCache.geos.warriorHelm, new THREE.MeshLambertMaterial({color: 0x888888}));
                 helm.position.y = 0.1; this.head.add(helm);
-                const crest = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.15, 0.3), new THREE.MeshLambertMaterial({color: 0xCC0000}));
+                const crest = new THREE.Mesh(AssetCache.geos.warriorCrest, new THREE.MeshLambertMaterial({color: 0xCC0000}));
                 crest.position.y = 0.25;
                 this.head.add(crest);
             }
             else if (type === 'firewarrior') {
-                const mask = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.1), new THREE.MeshLambertMaterial({color: 0xFF4500}));
+                const mask = new THREE.Mesh(AssetCache.geos.fireMask, new THREE.MeshLambertMaterial({color: 0xFF4500}));
                 mask.position.z = 0.16; this.head.add(mask);
                 // Glowing eyes
-                const eyeGeo = new THREE.SphereGeometry(0.03, 4, 4);
                 const eyeMat = new THREE.MeshBasicMaterial({color: 0xFFFF00});
-                const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(0.08, 0.05, 0.22);
-                const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(-0.08, 0.05, 0.22);
+                const eyeL = new THREE.Mesh(AssetCache.geos.fireEye, eyeMat); eyeL.position.set(0.08, 0.05, 0.22);
+                const eyeR = new THREE.Mesh(AssetCache.geos.fireEye, eyeMat); eyeR.position.set(-0.08, 0.05, 0.22);
                 this.head.add(eyeL); this.head.add(eyeR);
             }
             else if (type === 'spy') {
                  // Hood
-                 const hood = new THREE.Mesh(new THREE.ConeGeometry(0.25, 0.4, 4), new THREE.MeshLambertMaterial({color: 0x111111}));
+                 const hood = new THREE.Mesh(AssetCache.geos.spyHood, new THREE.MeshLambertMaterial({color: 0x111111}));
                  hood.position.y = 0.1;
                  this.head.add(hood);
                  // Cape
-                 const cape = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.05), new THREE.MeshLambertMaterial({color: 0x111111}));
+                 const cape = new THREE.Mesh(AssetCache.geos.cape, new THREE.MeshLambertMaterial({color: 0x111111}));
                  cape.position.set(0, -0.1, -0.15); cape.rotation.x = 0.1;
                  this.torso.add(cape);
             }
@@ -2154,17 +2217,17 @@
 
                 // Weapons / Tools
                 if(type === 'warrior') {
-                    const sword = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.6, 0.1), new THREE.MeshLambertMaterial({color: 0xDDDDDD}));
+                    const sword = new THREE.Mesh(AssetCache.geos.sword, new THREE.MeshLambertMaterial({color: 0xDDDDDD}));
                     sword.position.y = -0.3; sword.position.z = 0.1; sword.rotation.x = Math.PI/2;
                     this.armR.children[0].add(sword);
                     // Shield
-                    const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.05, 8), new THREE.MeshLambertMaterial({color: 0x8B4513}));
+                    const shield = new THREE.Mesh(AssetCache.geos.shield, new THREE.MeshLambertMaterial({color: 0x8B4513}));
                     shield.rotation.z = Math.PI/2; shield.rotation.y = Math.PI/2;
                     shield.position.x = 0.15; shield.position.y = -0.2;
                     this.armL.children[0].add(shield);
                 }
                 else if (type === 'wild') {
-                    const tool = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.05), new THREE.MeshLambertMaterial({color: 0x666666}));
+                    const tool = new THREE.Mesh(AssetCache.geos.tool, new THREE.MeshLambertMaterial({color: 0x666666}));
                     tool.position.y = -0.3; tool.position.z = 0.1; tool.rotation.x = Math.PI/2;
                     this.armR.children[0].add(tool);
                 }
@@ -2182,6 +2245,7 @@
             this.path = []; this.pathIndex = 0; this.pathTimer = 0;
             this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
             this.deathTimer = 0;
+            this.nextTargetCheck = Math.random() * 2.0;
         }
 
         lookAtTarget(pos) {
@@ -2300,18 +2364,20 @@
         }
         
         findTarget() {
-             // Find closest enemy
              let minDist = 1000;
              let closest = null;
-             units.forEach(u => {
+             const range = 30;
+             const candidates = SpatialHash.query(this.mesh.position.x, this.mesh.position.z, range);
+
+             for(let i=0; i<candidates.length; i++) {
+                 const u = candidates[i];
                  if(u.faction !== this.faction && u.state !== 'dead' && !u.invisible) {
                      const d = this.mesh.position.distanceTo(u.mesh.position);
-                     if(d < 30 && d < minDist) {
+                     if(d < range && d < minDist) {
                          minDist = d; closest = u;
                      }
                  }
-             });
-             // Also check for buildings?
+             }
              return closest;
         }
 
@@ -2667,10 +2733,13 @@
                 // Idle Check Aggro
                 // All unselected units auto aggro
                 if (!selectedUnits.includes(this)) {
-                    const target = this.findTarget();
-                    if(target) {
-                        this.attackTarget = target;
-                        this.state = 'combat';
+                    if (clock.getElapsedTime() > this.nextTargetCheck) {
+                        this.nextTargetCheck = clock.getElapsedTime() + 0.5 + Math.random() * 0.5;
+                        const target = this.findTarget();
+                        if(target) {
+                            this.attackTarget = target;
+                            this.state = 'combat';
+                        }
                     }
                 }
 
@@ -3067,7 +3136,8 @@
 
             // Visuals
             for(let i=0; i<20; i++) {
-                const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({color: 0xAAAAAA}));
+                const p = new THREE.Mesh(AssetCache.geos.particle, getBasicMaterial(0xAAAAAA));
+                p.scale.set(0.5, 0.5, 0.5);
                 p.userData = { yOff: i * 0.5, r: 1 + i*0.2, ang: i };
                 this.mesh.add(p);
             }
@@ -3125,7 +3195,8 @@
             this.timer = 14.0;
             this.particles = [];
             for(let i=0; i<30; i++) {
-                const p = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial({color: 0x000000}));
+                const p = new THREE.Mesh(AssetCache.geos.particle, getBasicMaterial(0x000000));
+                p.scale.set(0.2, 0.2, 0.2);
                 p.position.set((Math.random()-0.5)*4, (Math.random()-0.5)*2, (Math.random()-0.5)*4);
                 // this.pos.add(p.position); // Removed erroneous accumulation
                 this.particles.push({mesh: p, off: p.position.clone()});
@@ -3197,8 +3268,9 @@
 
     class Particle {
         constructor(pos, color, size, life, gravity = 20) {
-            this.mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshBasicMaterial({color: color}));
+            this.mesh = new THREE.Mesh(AssetCache.geos.particle, getBasicMaterial(color));
             this.mesh.position.copy(pos);
+            this.mesh.scale.set(size, size, size);
             this.vel = new THREE.Vector3((Math.random()-0.5)*10, Math.random()*10+5, (Math.random()-0.5)*10);
             this.life = life; this.gravity = gravity; scene.add(this.mesh);
         }
@@ -3574,7 +3646,8 @@
 
             for(let j=0; j<chunks; j++) {
                 const size = 2 + Math.random() * 3;
-                const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(size, 1), mat);
+                const mesh = new THREE.Mesh(AssetCache.geos.cloud, mat);
+                mesh.scale.set(size, size, size);
                 mesh.position.set((Math.random()-0.5)*10, (Math.random()-0.5)*2, (Math.random()-0.5)*6);
                 group.add(mesh);
             }
@@ -3612,6 +3685,7 @@
         requestAnimationFrame(animate); const dt = Math.min(clock.getDelta(), 0.1);
 
         if(!isPaused) {
+        SpatialHash.update();
         CloudManager.update(dt);
         // Joystick & Keyboard Logic
         const inputVector = joystickVector.clone().add(keyboardVector).clampLength(0, 1);
