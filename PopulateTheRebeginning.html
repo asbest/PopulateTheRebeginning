@@ -45,6 +45,23 @@
         #unit-list::-webkit-scrollbar-track { background: transparent; }
         #unit-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 1px; }
 
+        #enemy-spell-icon {
+            position: absolute;
+            top: 70px;
+            left: 55px;
+            width: 30px;
+            height: 30px;
+            font-size: 24px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.5);
+            border-radius: 5px;
+            border: 2px solid #FF0000;
+            z-index: 10;
+            pointer-events: none;
+        }
+
         .unit-item {
             width: 29px;
             height: 29px;
@@ -208,6 +225,7 @@
     </div>
 
     <div id="unit-list"></div>
+    <div id="enemy-spell-icon"></div>
     <div id="top-bar">
         <div id="mana-bar"><div id="mana-fill"></div></div>
         <p>Mana: <span id="mana-text">100</span></p>
@@ -918,6 +936,20 @@
     window.UNIT_ICONS = UNIT_ICONS;
 
     let lastAliveCount = -1;
+    let enemySpellTimeout;
+
+    window.showEnemySpellIcon = function(spellType) {
+        const el = document.getElementById('enemy-spell-icon');
+        const action = ACTIONS[spellType];
+        if(el && action) {
+            el.innerHTML = action.icon;
+            el.style.display = 'flex';
+            if(enemySpellTimeout) clearTimeout(enemySpellTimeout);
+            enemySpellTimeout = setTimeout(() => {
+                el.style.display = 'none';
+            }, 5000);
+        }
+    }
 
     function updateUnitList() {
         const list = document.getElementById('unit-list');
@@ -1086,6 +1118,10 @@
     window.executeSpell = executeSpell;
     function executeSpell(type, x, z, caster) {
         if (!caster || !caster.mesh) return;
+
+        if (caster.faction === 1 && caster.isShaman) {
+            showEnemySpellIcon(type);
+        }
 
         if (type === 'blast') {
             const startPos = caster.mesh.position.clone().add(new THREE.Vector3(0, 2, 0));
@@ -2706,20 +2742,10 @@
                     const dir = playerShaman.mesh.position.clone().sub(myShaman.mesh.position).normalize();
                     const distToPlayer = myShaman.mesh.position.distanceTo(playerShaman.mesh.position);
 
-                    // Look ahead for water
-                    const checkDist = Math.min(distToPlayer, 20);
-                    // Check a few points ahead
-                    for(let d = 2; d <= checkDist; d += 2) {
-                        const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, d);
-                        if (getHeight(checkPos.x, checkPos.z) < 2.0) {
-                            // Found water, cast Landbridge
-                            // Target slightly past the water or towards player
-                            const bridgeTarget = myShaman.mesh.position.clone().addScaledVector(dir, 20); // Bridge length
-                            castLandbridge(myShaman, bridgeTarget.x, bridgeTarget.z);
-                            this.lastBridgeTime = clock.getElapsedTime();
-                            break;
-                        }
-                    }
+                    // Cast Land Rise in front
+                    const castPos = myShaman.mesh.position.clone().addScaledVector(dir, 5.0);
+                    executeSpell('raise', castPos.x, castPos.z, myShaman);
+                    this.lastBridgeTime = clock.getElapsedTime();
                 }
             }
         }
