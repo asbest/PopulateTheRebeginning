@@ -935,7 +935,7 @@
     const ACTIONS = {
         'move': { icon: '👣', label: 'Walk', cost: 0 },
         'blast': { icon: '🔥', label: 'Blast', cost: 10 },
-        'lightning': { icon: '⚡', label: 'Lght', cost: 30 },
+        'lightning': { icon: '⚡', label: 'Lght', cost: 50 },
         'raise': { icon: '▲', label: 'Rais', cost: 5 },
         'lower': { icon: '▼', label: 'Lowr', cost: 5 },
         'flatten': { icon: '➖', label: 'Flat', cost: 10 },
@@ -1336,7 +1336,7 @@
             units.forEach(u => {
                  const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                  if(dist < 4 && u.faction !== caster.faction) {
-                     u.takeDamage(1000);
+                     u.takeDamage(500);
                      hit = true;
                  }
             });
@@ -1379,7 +1379,7 @@
         }
 
         const costs = {
-            blast: 10, lightning: 30, raise: 5, lower: 5, flatten: 10, landbridge: 20,
+            blast: 10, lightning: 50, raise: 5, lower: 5, flatten: 10, landbridge: 20,
             swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 90, heal: 10, create: 100,
             build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
             build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
@@ -3171,7 +3171,7 @@
                 const d = u.mesh.position.distanceTo(this.pos);
                 if(d < 5 && u.faction !== this.faction) {
                      u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 25, (Math.random()-0.5)*10));
-                     u.takeDamage(2);
+                     u.takeDamage(5);
                 }
             });
             buildings.forEach(b => {
