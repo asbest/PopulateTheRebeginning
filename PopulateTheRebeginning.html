@@ -1059,6 +1059,7 @@
                              u.selectRing.visible = true;
                          }
                      }
+                     selectAction('move');
                      updateContextMenus();
                 }
                 updateUnitListSelection();
@@ -1114,7 +1115,7 @@
              const btn = document.createElement('div');
              btn.className = 'action-btn';
              btn.id = `btn-${act}`;
-             btn.innerHTML = `${data.icon}<span class="label">${data.label}</span>`;
+             btn.innerHTML = `${data.icon}<span class="label">${data.label} (${data.cost})</span>`;
              if(currentAction === act) btn.classList.add('active');
 
              btn.onclick = (e) => {
