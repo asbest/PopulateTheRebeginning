@@ -273,6 +273,9 @@
     const MIN_ZOOM = 3;
     const MAX_ZOOM = 70;
 
+    const WATER_LEVEL = 1.805;
+    const VISUAL_WATER_LEVEL = 0.45125;
+
     const COLORS = {
         water: 0x1E90FF, sand: 0xEEDC82, grass: 0x228B22, rock: 0x696969, snow: 0xFFFFFF,
         lava: 0xCF1020, skin: 0xD2B48C, shirt_wild: 0x8B4513, shirt_shaman: 0xFF4500,
@@ -684,7 +687,7 @@
         y += simplex.noise2D(x * NOISE_SCALE * 4, z * NOISE_SCALE * 4) * 1.5; 
 
         // Continuous smoothing
-        if (y < 2.0) y -= (2.0 - y) * 0.2;
+        if (y < WATER_LEVEL) y -= (WATER_LEVEL - y) * 0.2;
         if (y > 8.0) y += (y - 8.0) * 0.5;
         return y;
     }
@@ -1364,7 +1367,7 @@
         }
 
         // Prevent building on water
-        if (action.startsWith('build_') && getHeight(x, z) < 2.0) return;
+        if (action.startsWith('build_') && getHeight(x, z) < WATER_LEVEL) return;
 
         // Prevent building if no brave nearby
         if (action.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
@@ -1431,7 +1434,7 @@
 
     // --- BUILDING SYSTEM ---
     function createBuilding(type, x, z, faction = 0, autoUpdate = true) {
-        if(getHeight(x, z) < 2.0) return;
+        if(getHeight(x, z) < WATER_LEVEL) return;
 
         SoundManager.playSound('construct');
         const baseH = getHeight(x, z);
@@ -1624,7 +1627,7 @@
     }
 
     function findNearestLand(x, z, maxRadius = 20) {
-        if(getHeight(x, z) >= 2.0) return {x, z};
+        if(getHeight(x, z) >= WATER_LEVEL) return {x, z};
 
         // Spiral search
         for(let r = 2; r <= maxRadius; r += 2) {
@@ -1633,7 +1636,7 @@
                 const angle = (i / steps) * Math.PI * 2;
                 const nx = x + Math.cos(angle) * r;
                 const nz = z + Math.sin(angle) * r;
-                if(getHeight(nx, nz) >= 2.0) return {x: nx, z: nz};
+                if(getHeight(nx, nz) >= WATER_LEVEL) return {x: nx, z: nz};
             }
         }
         return {x, z}; // Fallback
@@ -1770,8 +1773,8 @@
              let h = getHeight(wx, wz);
              pos.setY(i, h);
 
-             if (h < 2.0) col.copy(cSand);
-             else if (h < 3.0) col.copy(cSand).lerp(cGrass, h - 2.0);
+             if (h < WATER_LEVEL) col.copy(cSand);
+             else if (h < WATER_LEVEL + 1.0) col.copy(cSand).lerp(cGrass, h - WATER_LEVEL);
              else if (h < 8.0) col.copy(cGrass);
              else if (h < 9.0) col.copy(cGrass).lerp(cRock, h - 8.0);
              else if (h < 13.0) col.copy(cRock);
@@ -1801,7 +1804,7 @@
             tMesh.position.y = h;
 
             // Hide if underwater
-            tMesh.visible = (h >= 2.0);
+            tMesh.visible = (h >= WATER_LEVEL);
         }
     }
 
@@ -1824,7 +1827,7 @@
         updateChunkGeometry(mesh, cx, cz);
 
         const wMesh = new THREE.Mesh(chunkWaterGeo, chunkWaterMat);
-        wMesh.rotation.x = -Math.PI/2; wMesh.position.set(offX, 0.5, offZ);
+        wMesh.rotation.x = -Math.PI/2; wMesh.position.set(offX, VISUAL_WATER_LEVEL, offZ);
         grp.add(wMesh);
 
         grp.userData = { trees: [] };
@@ -1911,7 +1914,7 @@
 
             let iterations = 0;
             const MAX_ITER = 10000;
-            const safeH = 2.0 - unitHeight;
+            const safeH = WATER_LEVEL - unitHeight;
 
             while(openHeap.size() > 0) {
                 iterations++;
@@ -1968,7 +1971,7 @@
                     if(!isFlying && dh > 2.0) continue;
 
                     let cost = dist + dh * 0.5;
-                    if (h < 2.0) cost += 10.0; // Penalty for water
+                    if (h < WATER_LEVEL) cost += 10.0; // Penalty for water
                     const gScore = currentNode.g + cost;
 
                     let neighbor = openSet.get(nKey);
@@ -1998,7 +2001,7 @@
 
         const dir = end.clone().sub(start).normalize();
         const checkPos = start.clone();
-        const safeH = 2.0 - unitHeight;
+        const safeH = WATER_LEVEL - unitHeight;
 
         for(let i=1; i<steps; i++) {
             checkPos.add(dir);
@@ -2309,7 +2312,7 @@
                  const futureX = this.mesh.position.x + vec.x * speed * 0.1;
                  const futureZ = this.mesh.position.z + vec.z * speed * 0.1;
                  const futureH = getHeight(futureX, futureZ);
-                 const safeH = 2.0 - this.height;
+                 const safeH = WATER_LEVEL - this.height;
 
                  // If moving into water deeper than unit height
                  if(futureH < safeH && getHeight(this.mesh.position.x, this.mesh.position.z) >= safeH) {
@@ -2422,7 +2425,7 @@
             const feetOffset = 0.1 * this.mesh.scale.y;
 
             if (this.type === 'airship') {
-                const targetAlt = Math.max(groundH, 2.0) + 8.0; // Fly above water or ground
+                const targetAlt = Math.max(groundH, WATER_LEVEL) + 8.0; // Fly above water or ground
                 const diff = targetAlt - this.mesh.position.y;
                 this.velocity.y += diff * dt * 5.0;
                 this.velocity.y *= 0.9;
@@ -2440,7 +2443,7 @@
             // Deep Water Damage
             if (this.type !== 'airship' && this.state !== 'dead') {
                 const h = getHeight(this.mesh.position.x, this.mesh.position.z);
-                const safeH = 2.0 - this.height;
+                const safeH = WATER_LEVEL - this.height;
                 if (h < safeH) {
                     this.takeDamage(this.maxHp * 0.10 * dt);
                 }
@@ -2598,7 +2601,7 @@
                     const dh = nextH - currentH;
 
                     let canMove = true;
-                    const safeH = 2.0 - this.height;
+                    const safeH = WATER_LEVEL - this.height;
                     if (this.type !== 'airship' && nextH < safeH && currentH >= safeH) canMove = false;
 
                     if(canMove) {
@@ -2694,7 +2697,7 @@
                     let canMove = true;
                     if(this.type !== 'airship') {
                         const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
-                        const safeH = 2.0 - this.height;
+                        const safeH = WATER_LEVEL - this.height;
                         if (nextH < safeH && currentH >= safeH) {
                              if(!this.targetBoat) canMove = false;
                         }
@@ -2798,14 +2801,14 @@
                 // Check directly below first
                 let tx = this.mesh.position.x;
                 let tz = this.mesh.position.z;
-                if (getHeight(tx, tz) < 2.0) {
+                if (getHeight(tx, tz) < WATER_LEVEL) {
                     // Try find land in radius
                     let found = false;
                     for(let dist=1; dist<=r; dist+=1) {
                         for(let angle=0; angle<Math.PI*2; angle+=0.5) {
                             const scanX = this.mesh.position.x + Math.cos(angle)*dist;
                             const scanZ = this.mesh.position.z + Math.sin(angle)*dist;
-                            if(getHeight(scanX, scanZ) >= 2.0) {
+                            if(getHeight(scanX, scanZ) >= WATER_LEVEL) {
                                 tx = scanX; tz = scanZ; found = true; break;
                             }
                         }
@@ -2888,7 +2891,7 @@
                     // Cast Bridge or Raise
                     const castPos = myShaman.mesh.position.clone().addScaledVector(dir, 5.0);
                     const h = getHeight(castPos.x, castPos.z);
-                    if (h < 2.0) {
+                    if (h < WATER_LEVEL) {
                         executeSpell('raise', castPos.x, castPos.z, myShaman);
                     } else {
                         executeSpell('landbridge', castPos.x, castPos.z, myShaman);
@@ -2932,7 +2935,7 @@
                     tx = safe.x; tz = safe.z;
 
                     // Check land validity again (just in case)
-                    if (getHeight(tx, tz) >= 2.0) {
+                    if (getHeight(tx, tz) >= WATER_LEVEL) {
                         // Check spacing
                         let clear = true;
                         for (let b of buildings) {
@@ -3005,7 +3008,7 @@
 
                         for(let i=1; i<=steps; i++) {
                             const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, i * 4.0); // Check ahead 40 units
-                            if (getHeight(checkPos.x, checkPos.z) < 2.0) {
+                            if (getHeight(checkPos.x, checkPos.z) < WATER_LEVEL) {
                                 // Raise land
                                 executeSpell('raise', checkPos.x, checkPos.z, myShaman);
                                 this.lastBridgeTime = clock.getElapsedTime();
