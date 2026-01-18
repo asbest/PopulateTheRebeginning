@@ -377,6 +377,23 @@
                 case 'rumble':
                     this.playTone(80, 'sawtooth', 0.5, 0.2);
                     break;
+                case 'pain':
+                    {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(250, this.ctx.currentTime);
+                        osc.frequency.linearRampToValueAtTime(100, this.ctx.currentTime + 0.15);
+
+                        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start();
+                        osc.stop(this.ctx.currentTime + 0.15);
+                    }
+                    break;
             }
         }
     };
@@ -2333,6 +2350,7 @@
             }
             this.hp -= amount;
             this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
+            SoundManager.playSound('pain');
             spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0xFF0000);
             if(this.hp <= 0) this.die();
         }
