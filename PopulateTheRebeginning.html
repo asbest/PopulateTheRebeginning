@@ -236,6 +236,13 @@
         <button class="menu-btn" onclick="loadGame()">Load Game</button>
         <button class="menu-btn" onclick="newGame()">New Game</button>
         <button class="menu-btn" onclick="togglePause()">Resume</button>
+        <div id="cheat-menu" style="display:none; flex-direction:column; align-items:center; margin-top:20px; border-top: 1px solid white; padding-top:10px;">
+            <h2 style="color:gold; font-size:16px;">CHEATS</h2>
+            <button class="menu-btn" onclick="cheatMana()">Set Mana 10000</button>
+            <button class="menu-btn" onclick="cheatRange()">Unlimited Range</button>
+            <button class="menu-btn" onclick="cheatImmortal()">God Mode</button>
+            <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
+        </div>
     </div>
 
     <div id="unit-list"></div>
@@ -481,6 +488,8 @@
                 state: u.state,
                 dead: u.state === 'dead',
                 deathTimer: u.deathTimer,
+                conversionTimer: u.conversionTimer,
+                originalFaction: u.originalFaction,
                 passengers: (u.passengers || []).map(p => ({
                     faction: p.faction, type: p.type, hp: p.hp // Simplified passenger save
                 }))
@@ -627,6 +636,8 @@
                 u.hp = uData.hp;
                 u.state = uData.state === 'dead' ? 'idle' : uData.state; // Reset state to idle to avoid glitch
                 u.hpBar.scale.x = Math.max(0, u.hp / u.maxHp);
+                if (uData.conversionTimer !== undefined) u.conversionTimer = uData.conversionTimer;
+                if (uData.originalFaction !== undefined) u.originalFaction = uData.originalFaction;
                 units.push(u);
                 if(u.isShaman && u.faction === 0) shaman = u;
 
@@ -843,6 +854,28 @@
     }
 
     // --- UI SYSTEM ---
+    let cheatUnlimitedRange = false;
+    let cheatImmortal = false;
+
+    window.cheatMana = function() {
+        mana = 10000;
+        updateUI();
+        alert("Mana set to 10000");
+    }
+    window.cheatRange = function() {
+        cheatUnlimitedRange = true;
+        alert("Unlimited Spell Range Enabled");
+    }
+    window.cheatImmortal = function() {
+        cheatImmortal = true;
+        alert("God Mode Enabled");
+    }
+    window.cheatDisable = function() {
+        cheatUnlimitedRange = false;
+        cheatImmortal = false;
+        alert("Cheats Disabled");
+    }
+
     function setupCheats() {
         const el = document.getElementById('mana-bar');
         let clicks = 0;
@@ -859,10 +892,10 @@
                 lastTime = now;
 
                 if (clicks >= 10) {
-                    mana = 100000;
-                    updateUI();
+                    document.getElementById('cheat-menu').style.display = 'flex';
                     clicks = 0;
                     SoundManager.playSound('magic');
+                    alert("Cheats Unlocked! Check Pause Menu.");
                 }
             });
         }
@@ -1271,14 +1304,9 @@
                 if(u.faction !== caster.faction && !u.isShaman) {
                      const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                      if(dist < 8) {
-                         u.faction = caster.faction;
-                         u.mesh.traverse(c => {
-                             if(c.material && c.material.color) {
-                                  if(c.material.color.getHex() === COLORS.red && caster.faction === 0) c.material.color.setHex(COLORS.blue);
-                                  if(c.material.color.getHex() === COLORS.blue && caster.faction === 1) c.material.color.setHex(COLORS.red);
-                             }
-                         });
-                         u.hpBar.material.color.setHex(caster.faction === 0 ? 0x00FF00 : 0xFF0000);
+                         if (u.originalFaction === null) u.originalFaction = u.faction;
+                         u.setFaction(caster.faction);
+                         u.conversionTimer = 10.0;
                          u.state = 'idle'; u.attackTarget = null;
                          spawnPulse(u.mesh.position.x, u.mesh.position.y+2, u.mesh.position.z, 0xFF00FF);
                      }
@@ -1377,9 +1405,11 @@
         // Range Check for Spells
         if (spells.includes(action)) {
             if (!shaman || shaman.state === 'dead') return;
-            const maxRange = 10.0 + shaman.mesh.position.y;
-            const dist = Math.sqrt((x - shaman.mesh.position.x)**2 + (z - shaman.mesh.position.z)**2);
-            if (dist > maxRange) return;
+            if (!cheatUnlimitedRange) {
+                const maxRange = 10.0 + shaman.mesh.position.y;
+                const dist = Math.sqrt((x - shaman.mesh.position.x)**2 + (z - shaman.mesh.position.z)**2);
+                if (dist > maxRange) return;
+            }
         }
 
         const costs = {
@@ -2250,6 +2280,42 @@
             this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
             this.deathTimer = 0;
             this.nextTargetCheck = Math.random() * 2.0;
+            this.conversionTimer = 0;
+            this.originalFaction = null;
+        }
+
+        setFaction(newFaction) {
+            if (this.faction === newFaction) return;
+            this.faction = newFaction;
+
+            // Shirt Color
+            const newMat = (this.faction === 0) ? AssetCache.mats.blueShirt : AssetCache.mats.redShirt;
+            this.mesh.traverse(c => {
+                if(c.isMesh && c.material) {
+                     if(c.material === AssetCache.mats.blueShirt || c.material === AssetCache.mats.redShirt) {
+                         c.material = newMat;
+                     }
+                     else if(c.material.color && (c.material.color.getHex() === COLORS.red || c.material.color.getHex() === COLORS.blue)) {
+                         c.material = newMat;
+                     }
+                }
+            });
+
+            // HP Bar
+            const hpMat = (this.faction === 0) ? AssetCache.mats.hpGreen : AssetCache.mats.hpRed;
+            if(this.hpBar) this.hpBar.material = hpMat;
+
+            // Marker
+            if(this.faction === 1) {
+                if(!this.marker) {
+                    this.marker = new THREE.Mesh(AssetCache.geos.marker, AssetCache.mats.marker);
+                    this.marker.position.set(0, 6, 0);
+                    this.mesh.add(this.marker);
+                }
+                this.marker.visible = true;
+            } else {
+                if(this.marker) this.marker.visible = false;
+            }
         }
 
         lookAtTarget(pos) {
@@ -2260,6 +2326,7 @@
 
         takeDamage(amount) {
             if(this.state === 'dead') return;
+            if(this.faction === 0 && cheatImmortal) return;
             if(this.shielded) {
                 spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0x00FFFF);
                 return;
@@ -2416,6 +2483,21 @@
 
         update(dt) {
             if(this.state === 'transported') return;
+
+            if (this.conversionTimer > 0) {
+                this.conversionTimer -= dt;
+                if (this.conversionTimer <= 0) {
+                    if (this.originalFaction !== null) {
+                        this.setFaction(this.originalFaction);
+                        this.originalFaction = null;
+                        this.state = 'idle'; // Reset state on revert
+                        this.attackTarget = null;
+                        spawnPulse(this.mesh.position.x, this.mesh.position.y+2, this.mesh.position.z, 0xFF00FF);
+                    }
+                    this.conversionTimer = 0;
+                }
+            }
+
             this.hpGroup.lookAt(camera.position); this.animTime += dt;
             if(!this.isGrounded) this.velocity.y -= 30 * dt; 
             else { this.velocity.x *= 0.9; this.velocity.z *= 0.9; }
@@ -3722,8 +3804,12 @@
             const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create'];
             if (spells.includes(currentAction)) {
                 rangeRing.visible = true;
-                const r = 10.0 + shaman.mesh.position.y;
-                rangeRing.scale.set(r, 60, r);
+                if (cheatUnlimitedRange) {
+                    rangeRing.scale.set(1000, 1, 1000);
+                } else {
+                    const r = 10.0 + shaman.mesh.position.y;
+                    rangeRing.scale.set(r, 60, r);
+                }
                 rangeRing.position.set(shaman.mesh.position.x, shaman.mesh.position.y - 30, shaman.mesh.position.z);
             } else {
                 rangeRing.visible = false;
