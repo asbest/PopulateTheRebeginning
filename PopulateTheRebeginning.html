@@ -985,6 +985,7 @@
         'firestorm': { icon: '☄️', label: 'Fire', cost: 80 },
         'volcano': { icon: '🌋', label: 'Volc', cost: 90 },
         'heal': { icon: '💖', label: 'Heal', cost: 10 },
+        'teleport': { icon: '🌌', label: 'Tele', cost: 90 },
         'create': { icon: '👶', label: 'Spwn', cost: 100 },
         'build_hut': { icon: '🏠', label: 'Hut', cost: 15 },
         'build_tower': { icon: '🗼', label: 'Towr', cost: 20 },
@@ -1139,7 +1140,7 @@
         let visibleActions = [];
 
         if (hasShaman) {
-            visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create'];
+            visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create'];
         } else if (hasBrave) {
             visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy', 'build_shipyard', 'build_airship'];
         }
@@ -1262,6 +1263,16 @@
             units.push(u);
             spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFFFFF);
         }
+        else if (type === 'teleport') {
+            SoundManager.playSound('magic');
+            const h = getHeight(x, z);
+            spawnPulse(x, h, z, 0x0000FF);
+            caster.mesh.position.set(x, h, z);
+            caster.state = 'idle';
+            caster.velocity.set(0, 0, 0);
+            caster.path = [];
+            caster.isGrounded = true;
+        }
         else if (type === 'tornado') {
             activeEffects.push(new Tornado(x, z, caster.faction));
         }
@@ -1368,14 +1379,14 @@
             units.forEach(u => {
                  const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                  if(dist < 4 && u.faction !== caster.faction) {
-                     u.takeDamage(500);
+                     u.takeDamage(400);
                      hit = true;
                  }
             });
             buildings.forEach(b => {
                  const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
                  if(dist < 4 && b.faction !== caster.faction) {
-                     b.takeDamage(500);
+                     b.takeDamage(400);
                      hit = true;
                  }
             });
@@ -1400,7 +1411,7 @@
         // Prevent building if no brave nearby
         if (action.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
 
-        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create'];
+        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create'];
 
         // Range Check for Spells
         if (spells.includes(action)) {
@@ -1414,7 +1425,7 @@
 
         const costs = {
             blast: 10, lightning: 50, raise: 5, lower: 5, flatten: 10, landbridge: 20,
-            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 90, heal: 10, create: 100,
+            swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 90, heal: 10, teleport: 90, create: 100,
             build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
             build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
         };
@@ -2515,7 +2526,7 @@
             } else {
                 const targetY = groundH - feetOffset;
                 if (this.mesh.position.y < targetY) {
-                    if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(10);
+                    if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(20);
                     this.mesh.position.y = targetY;
                     this.isGrounded = true; this.velocity.y = 0;
                     if(this.state === 'stunned' && this.velocity.length() < 1) { this.state = 'idle'; this.mesh.rotation.z = 0; this.mesh.rotation.x = 0; }
