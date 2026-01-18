@@ -855,7 +855,7 @@
 
     // --- UI SYSTEM ---
     let cheatUnlimitedRange = false;
-    let cheatImmortal = false;
+    let isGodMode = false;
 
     window.cheatMana = function() {
         mana = 10000;
@@ -867,12 +867,12 @@
         alert("Unlimited Spell Range Enabled");
     }
     window.cheatImmortal = function() {
-        cheatImmortal = true;
+        isGodMode = true;
         alert("God Mode Enabled");
     }
     window.cheatDisable = function() {
         cheatUnlimitedRange = false;
-        cheatImmortal = false;
+        isGodMode = false;
         alert("Cheats Disabled");
     }
 
@@ -2337,7 +2337,7 @@
 
         takeDamage(amount) {
             if(this.state === 'dead') return;
-            if(this.faction === 0 && cheatImmortal) return;
+            if(this.faction === 0 && isGodMode) return;
             if(this.shielded) {
                 spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0x00FFFF);
                 return;
