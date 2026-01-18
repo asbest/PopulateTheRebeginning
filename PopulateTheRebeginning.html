@@ -481,6 +481,8 @@
                 state: u.state,
                 dead: u.state === 'dead',
                 deathTimer: u.deathTimer,
+                conversionTimer: u.conversionTimer,
+                originalFaction: u.originalFaction,
                 passengers: (u.passengers || []).map(p => ({
                     faction: p.faction, type: p.type, hp: p.hp // Simplified passenger save
                 }))
@@ -627,6 +629,8 @@
                 u.hp = uData.hp;
                 u.state = uData.state === 'dead' ? 'idle' : uData.state; // Reset state to idle to avoid glitch
                 u.hpBar.scale.x = Math.max(0, u.hp / u.maxHp);
+                if (uData.conversionTimer !== undefined) u.conversionTimer = uData.conversionTimer;
+                if (uData.originalFaction !== undefined) u.originalFaction = uData.originalFaction;
                 units.push(u);
                 if(u.isShaman && u.faction === 0) shaman = u;
 
@@ -1271,14 +1275,9 @@
                 if(u.faction !== caster.faction && !u.isShaman) {
                      const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                      if(dist < 8) {
-                         u.faction = caster.faction;
-                         u.mesh.traverse(c => {
-                             if(c.material && c.material.color) {
-                                  if(c.material.color.getHex() === COLORS.red && caster.faction === 0) c.material.color.setHex(COLORS.blue);
-                                  if(c.material.color.getHex() === COLORS.blue && caster.faction === 1) c.material.color.setHex(COLORS.red);
-                             }
-                         });
-                         u.hpBar.material.color.setHex(caster.faction === 0 ? 0x00FF00 : 0xFF0000);
+                         if (u.originalFaction === null) u.originalFaction = u.faction;
+                         u.setFaction(caster.faction);
+                         u.conversionTimer = 10.0;
                          u.state = 'idle'; u.attackTarget = null;
                          spawnPulse(u.mesh.position.x, u.mesh.position.y+2, u.mesh.position.z, 0xFF00FF);
                      }
@@ -2250,6 +2249,42 @@
             this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
             this.deathTimer = 0;
             this.nextTargetCheck = Math.random() * 2.0;
+            this.conversionTimer = 0;
+            this.originalFaction = null;
+        }
+
+        setFaction(newFaction) {
+            if (this.faction === newFaction) return;
+            this.faction = newFaction;
+
+            // Shirt Color
+            const newMat = (this.faction === 0) ? AssetCache.mats.blueShirt : AssetCache.mats.redShirt;
+            this.mesh.traverse(c => {
+                if(c.isMesh && c.material) {
+                     if(c.material === AssetCache.mats.blueShirt || c.material === AssetCache.mats.redShirt) {
+                         c.material = newMat;
+                     }
+                     else if(c.material.color && (c.material.color.getHex() === COLORS.red || c.material.color.getHex() === COLORS.blue)) {
+                         c.material = newMat;
+                     }
+                }
+            });
+
+            // HP Bar
+            const hpMat = (this.faction === 0) ? AssetCache.mats.hpGreen : AssetCache.mats.hpRed;
+            if(this.hpBar) this.hpBar.material = hpMat;
+
+            // Marker
+            if(this.faction === 1) {
+                if(!this.marker) {
+                    this.marker = new THREE.Mesh(AssetCache.geos.marker, AssetCache.mats.marker);
+                    this.marker.position.set(0, 6, 0);
+                    this.mesh.add(this.marker);
+                }
+                this.marker.visible = true;
+            } else {
+                if(this.marker) this.marker.visible = false;
+            }
         }
 
         lookAtTarget(pos) {
@@ -2416,6 +2451,21 @@
 
         update(dt) {
             if(this.state === 'transported') return;
+
+            if (this.conversionTimer > 0) {
+                this.conversionTimer -= dt;
+                if (this.conversionTimer <= 0) {
+                    if (this.originalFaction !== null) {
+                        this.setFaction(this.originalFaction);
+                        this.originalFaction = null;
+                        this.state = 'idle'; // Reset state on revert
+                        this.attackTarget = null;
+                        spawnPulse(this.mesh.position.x, this.mesh.position.y+2, this.mesh.position.z, 0xFF00FF);
+                    }
+                    this.conversionTimer = 0;
+                }
+            }
+
             this.hpGroup.lookAt(camera.position); this.animTime += dt;
             if(!this.isGrounded) this.velocity.y -= 30 * dt; 
             else { this.velocity.x *= 0.9; this.velocity.z *= 0.9; }
