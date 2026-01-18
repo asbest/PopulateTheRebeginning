@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Populate the Rebeginning</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="loading">Generating World...</div>
+
+<div id="ui-layer">
+    <div id="pause-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); flex-direction:column; align-items:center; justify-content:center; z-index:200; pointer-events:auto;">
+        <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">PAUSED</h1>
+        <button class="menu-btn" onclick="saveGame()">Save Game</button>
+        <button class="menu-btn" onclick="loadGame()">Load Game</button>
+        <button class="menu-btn" onclick="newGame()">New Game</button>
+        <button class="menu-btn" onclick="togglePause()">Resume</button>
+        <div id="cheat-menu" style="display:none; flex-direction:column; align-items:center; margin-top:20px; border-top: 1px solid white; padding-top:10px;">
+            <h2 style="color:gold; font-size:16px;">CHEATS</h2>
+            <button class="menu-btn" onclick="cheatMana()">Set Mana 10000</button>
+            <button class="menu-btn" onclick="cheatRange()">Unlimited Range</button>
+            <button class="menu-btn" onclick="cheatImmortal()">God Mode</button>
+            <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
+        </div>
+    </div>
+
+    <div id="unit-list"></div>
+    <div id="enemy-spell-queue"></div>
+    <div id="top-bar">
+        <div id="mana-bar"><div id="mana-fill"></div></div>
+        <p>Mana: <span id="mana-text">100</span></p>
+    </div>
+
+    <!-- Right Side Action Menu -->
+    <div id="right-menu">
+        <!-- Filled dynamically by JS -->
+    </div>
+
+    <!-- Joystick Left -->
+    <div id="joystick-area">
+        <div id="joystick-bg"></div>
+        <div id="joystick-knob"></div>
+    </div>
+
+    <div id="btn-multiselect" class="multi-select-btn" onclick="toggleMultiSelect()">⊕</div>
+    <div id="btn-unload" class="unload-btn" onclick="unloadSelected()">⬇️</div>
+    <div id="btn-pause" onclick="togglePause()">⏸️</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+<script type="module" src="js/main.js"></script>
+
+</body>
+</html>
