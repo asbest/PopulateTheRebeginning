@@ -855,7 +855,7 @@
 
     // --- UI SYSTEM ---
     let cheatUnlimitedRange = false;
-    let cheatImmortal = false;
+    let isGodMode = false;
 
     window.cheatMana = function() {
         mana = 10000;
@@ -867,12 +867,12 @@
         alert("Unlimited Spell Range Enabled");
     }
     window.cheatImmortal = function() {
-        cheatImmortal = true;
+        isGodMode = true;
         alert("God Mode Enabled");
     }
     window.cheatDisable = function() {
         cheatUnlimitedRange = false;
-        cheatImmortal = false;
+        isGodMode = false;
         alert("Cheats Disabled");
     }
 
@@ -1379,14 +1379,14 @@
             units.forEach(u => {
                  const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                  if(dist < 4 && u.faction !== caster.faction) {
-                     u.takeDamage(500);
+                     u.takeDamage(400);
                      hit = true;
                  }
             });
             buildings.forEach(b => {
                  const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
                  if(dist < 4 && b.faction !== caster.faction) {
-                     b.takeDamage(500);
+                     b.takeDamage(400);
                      hit = true;
                  }
             });
@@ -2337,7 +2337,7 @@
 
         takeDamage(amount) {
             if(this.state === 'dead') return;
-            if(this.faction === 0 && cheatImmortal) return;
+            if(this.faction === 0 && isGodMode) return;
             if(this.shielded) {
                 spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0x00FFFF);
                 return;
