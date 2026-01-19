@@ -426,6 +426,7 @@ window.buildings = state.buildings;
 window.activeEffects = state.activeEffects;
 window.joystickVector = state.joystickVector;
 window.keyboardVector = state.keyboardVector;
+window.state = state;
 
 
 // --- js/audio.js ---
@@ -3033,6 +3034,7 @@ function updateUnitList() {
         item.ondblclick = (e) => {
             e.stopPropagation();
             state.cameraLookAt.copy(u.mesh.position);
+            updateCameraPosition();
         };
 
         u.listItem = item;
@@ -3761,6 +3763,7 @@ function updateCameraZoom() {
     state.perspectiveCamera.updateProjectionMatrix();
 }
 
+window.updateCameraPosition = updateCameraPosition;
 function updateCameraPosition() {
     if(state.isFPV) {
          if(state.selectedUnits.length === 0 || state.selectedUnits[0].state === 'dead') {
@@ -3937,6 +3940,15 @@ function animate() {
     if(currentAlive !== lastAliveCount) {
         updateUnitList();
         lastAliveCount = currentAlive;
+    }
+
+    // Win Condition
+    const enemyCount = state.units.filter(u => u.faction === 1 && u.state !== 'dead').length;
+    if (enemyCount === 0 && state.units.some(u => u.faction === 0)) {
+         if (!window.gameWonAlertShown) {
+             alert("VICTORY! All enemy units defeated!");
+             window.gameWonAlertShown = true;
+         }
     }
 
     for(let i = state.projectiles.length-1; i>=0; i--) { if(!state.projectiles[i].update(dt)) state.projectiles.splice(i, 1); }
