@@ -1051,6 +1051,11 @@ class BinaryHeap {
     }
 }
 
+const PF_NEIGHBORS = [
+    {x:0,y:1}, {x:1,y:0}, {x:0,y:-1}, {x:-1,y:0},
+    {x:1,y:1}, {x:1,y:-1}, {x:-1,y:1}, {x:-1,y:-1}
+];
+
 const Pathfinder = {
     GRID_SIZE: 2.0,
     findPath: function(startPos, endPos, isFlying = false, unitHeight = 1.5) {
@@ -1063,9 +1068,11 @@ const Pathfinder = {
         const openSet = new Map();
         const closedSet = new Set();
 
+        const getKey = (x, y) => (x & 0xFFFF) << 16 | (y & 0xFFFF);
+
         startNode.g = 0; startNode.f = 0;
         openHeap.push(startNode);
-        openSet.set(`${startNode.x},${startNode.y}`, startNode);
+        openSet.set(getKey(startNode.x, startNode.y), startNode);
 
         let iterations = 0;
         const MAX_ITER = 10000;
@@ -1076,7 +1083,11 @@ const Pathfinder = {
             if(iterations > MAX_ITER) break;
 
             const currentNode = openHeap.pop();
-            const key = `${currentNode.x},${currentNode.y}`;
+            const key = getKey(currentNode.x, currentNode.y);
+
+            // Check if already closed (handling duplicate nodes in heap)
+            if (closedSet.has(key)) continue;
+
             openSet.delete(key);
             closedSet.add(key);
 
@@ -1090,15 +1101,10 @@ const Pathfinder = {
                 return path.reverse();
             }
 
-            const neighbors = [
-                {x:0,y:1}, {x:1,y:0}, {x:0,y:-1}, {x:-1,y:0},
-                {x:1,y:1}, {x:1,y:-1}, {x:-1,y:1}, {x:-1,y:-1}
-            ];
-
-            for(let offset of neighbors) {
+            for(let offset of PF_NEIGHBORS) {
                 const nx = currentNode.x + offset.x;
                 const ny = currentNode.y + offset.y;
-                const nKey = `${nx},${ny}`;
+                const nKey = getKey(nx, ny);
 
                 if(closedSet.has(nKey)) continue;
 
@@ -1399,16 +1405,17 @@ class Tornado extends ActiveEffect {
         });
 
         // Physics
+        const damagePerSecond = 300;
         state.units.forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 5 && u.faction !== this.faction) {
                  u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 25, (Math.random()-0.5)*10));
-                 u.takeDamage(5);
+                 u.takeDamage(damagePerSecond * dt);
             }
         });
         state.buildings.forEach(b => {
              const d = b.mesh.position.distanceTo(this.pos);
-             if(d < 5 && b.faction !== this.faction) b.takeDamage(5);
+             if(d < 5 && b.faction !== this.faction) b.takeDamage(damagePerSecond * dt);
         });
 
         if(this.timer <= 0) {
