@@ -538,10 +538,10 @@ const AssetCache = {
         hpBack: new THREE.PlaneGeometry(1.0, 0.15),
         hpFront: new THREE.PlaneGeometry(1.0, 0.15).translate(0.5, 0, 0),
         marker: new THREE.ConeGeometry(0.3, 1.0, 4).rotateX(Math.PI),
-        torso: new THREE.BoxGeometry(0.4, 0.5, 0.25),
-        head: new THREE.BoxGeometry(0.25, 0.3, 0.3),
-        arm: new THREE.BoxGeometry(0.12, 0.45, 0.12),
-        leg: new THREE.BoxGeometry(0.13, 0.55, 0.13),
+        torso: new THREE.CylinderGeometry(0.25, 0.18, 0.5, 8),
+        head: new THREE.SphereGeometry(0.2, 12, 12),
+        arm: new THREE.CylinderGeometry(0.07, 0.05, 0.45, 8),
+        leg: new THREE.CylinderGeometry(0.08, 0.06, 0.55, 8),
         airshipBasket: new THREE.BoxGeometry(2, 1, 3),
         airshipRope: new THREE.CylinderGeometry(0.05, 0.05, 3),
         airshipBalloon: new THREE.SphereGeometry(2.5, 16, 16),
@@ -1051,6 +1051,11 @@ class BinaryHeap {
     }
 }
 
+const PF_NEIGHBORS = [
+    {x:0,y:1}, {x:1,y:0}, {x:0,y:-1}, {x:-1,y:0},
+    {x:1,y:1}, {x:1,y:-1}, {x:-1,y:1}, {x:-1,y:-1}
+];
+
 const Pathfinder = {
     GRID_SIZE: 2.0,
     findPath: function(startPos, endPos, isFlying = false, unitHeight = 1.5) {
@@ -1063,9 +1068,11 @@ const Pathfinder = {
         const openSet = new Map();
         const closedSet = new Set();
 
+        const getKey = (x, y) => (x & 0xFFFF) << 16 | (y & 0xFFFF);
+
         startNode.g = 0; startNode.f = 0;
         openHeap.push(startNode);
-        openSet.set(`${startNode.x},${startNode.y}`, startNode);
+        openSet.set(getKey(startNode.x, startNode.y), startNode);
 
         let iterations = 0;
         const MAX_ITER = 10000;
@@ -1076,7 +1083,11 @@ const Pathfinder = {
             if(iterations > MAX_ITER) break;
 
             const currentNode = openHeap.pop();
-            const key = `${currentNode.x},${currentNode.y}`;
+            const key = getKey(currentNode.x, currentNode.y);
+
+            // Check if already closed (handling duplicate nodes in heap)
+            if (closedSet.has(key)) continue;
+
             openSet.delete(key);
             closedSet.add(key);
 
@@ -1090,15 +1101,10 @@ const Pathfinder = {
                 return path.reverse();
             }
 
-            const neighbors = [
-                {x:0,y:1}, {x:1,y:0}, {x:0,y:-1}, {x:-1,y:0},
-                {x:1,y:1}, {x:1,y:-1}, {x:-1,y:1}, {x:-1,y:-1}
-            ];
-
-            for(let offset of neighbors) {
+            for(let offset of PF_NEIGHBORS) {
                 const nx = currentNode.x + offset.x;
                 const ny = currentNode.y + offset.y;
-                const nKey = `${nx},${ny}`;
+                const nKey = getKey(nx, ny);
 
                 if(closedSet.has(nKey)) continue;
 
@@ -1399,16 +1405,17 @@ class Tornado extends ActiveEffect {
         });
 
         // Physics
+        const damagePerSecond = 300;
         state.units.forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 5 && u.faction !== this.faction) {
                  u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 25, (Math.random()-0.5)*10));
-                 u.takeDamage(5);
+                 u.takeDamage(damagePerSecond * dt);
             }
         });
         state.buildings.forEach(b => {
              const d = b.mesh.position.distanceTo(this.pos);
-             if(d < 5 && b.faction !== this.faction) b.takeDamage(5);
+             if(d < 5 && b.faction !== this.faction) b.takeDamage(damagePerSecond * dt);
         });
 
         if(this.timer <= 0) {
@@ -1812,7 +1819,7 @@ class Humanoid {
 
             // Cape for Shaman
             const cape = new THREE.Mesh(AssetCache.geos.cape, new THREE.MeshLambertMaterial({color: 0x330000}));
-            cape.position.set(0, -0.1, -0.15); cape.rotation.x = 0.2;
+            cape.position.set(0, -0.1, -0.22); cape.rotation.x = 0.2;
             this.torso.add(cape);
 
             const light = new THREE.PointLight(0xFFD700, 1, 8);
@@ -1822,7 +1829,7 @@ class Humanoid {
         else if (type === 'wild') {
             // Backpack
             const bag = new THREE.Mesh(AssetCache.geos.backpack, new THREE.MeshLambertMaterial({color: 0x8B4513}));
-            bag.position.set(0, 0, -0.15);
+            bag.position.set(0, 0, -0.22);
             this.torso.add(bag);
         }
         else if (type === 'warrior') {
@@ -1848,7 +1855,7 @@ class Humanoid {
              this.head.add(hood);
              // Cape
              const cape = new THREE.Mesh(AssetCache.geos.cape, new THREE.MeshLambertMaterial({color: 0x111111}));
-             cape.position.set(0, -0.1, -0.15); cape.rotation.x = 0.1;
+             cape.position.set(0, -0.1, -0.22); cape.rotation.x = 0.1;
              this.torso.add(cape);
         }
 
