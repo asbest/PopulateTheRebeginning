@@ -1204,13 +1204,23 @@ class Fireball {
         const moveDist = this.speed * dt;
         const distToTarget = this.mesh.position.distanceTo(this.target);
 
-        if (distToTarget <= moveDist || getHeight(this.mesh.position.x, this.mesh.position.z) > this.mesh.position.y) {
+        if (distToTarget <= moveDist) {
              this.mesh.position.copy(this.target); // Snap to target for visual
              this.explode();
              return false;
         }
 
-        this.mesh.position.addScaledVector(this.dir, moveDist); this.trailTimer += dt;
+        this.mesh.position.addScaledVector(this.dir, moveDist);
+
+        // Terrain Collision Check
+        const h = getHeight(this.mesh.position.x, this.mesh.position.z);
+        if (h > this.mesh.position.y) {
+             this.mesh.position.y = h; // Snap to surface
+             this.explode();
+             return false;
+        }
+
+        this.trailTimer += dt;
         if(this.trailTimer > 0.05) {
             state.particles.push(new Particle(this.mesh.position, 0xFFA500, 0.05, 0.5));
             this.trailTimer = 0;
