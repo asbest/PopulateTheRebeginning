@@ -2124,8 +2124,8 @@ class Humanoid {
 
         if (this.burnTimer > 0) {
             this.burnTimer -= dt;
-            if(Math.random() < 0.2) {
-                state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1, (Math.random()-0.5))), 0xFF4500, 0.2, 0.5));
+            if(Math.random() < 0.5) {
+                state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1, (Math.random()-0.5))), 0xFF4500, 0.1, 0.5));
             }
             // Optional: DOT
             // this.takeDamage(5 * dt);
@@ -2655,8 +2655,8 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
                 if(this.burnTimer > 0) {
                     this.burnTimer -= dt;
-                    if(Math.random() < 0.2) {
-                        state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5)*2, 2, (Math.random()-0.5)*2)), 0xFF4500, 0.3, 0.5));
+                    if(Math.random() < 0.5) {
+                        state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5)*2, 2, (Math.random()-0.5)*2)), 0xFF4500, 0.15, 0.5));
                     }
                 }
 
