@@ -1993,7 +1993,7 @@ class Humanoid {
 
     applyForce(vec) {
         if(this.state === 'dead') return;
-        this.velocity.add(vec); this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 2.0; this.target = null;
+        this.velocity.add(vec); this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 5.0; this.target = null;
     }
 
     manualMove(vec, dt = 0.016) {
