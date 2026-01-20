@@ -691,7 +691,7 @@ const CloudManager = {
     spawnCloud: function(randomPos=false) {
         const group = new THREE.Group();
         const chunks = 3 + Math.random() * 5;
-        const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.85, flatShading: false});
+        const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.425, flatShading: false});
 
         for(let j=0; j<chunks; j++) {
             const size = 2 + Math.random() * 3;
@@ -1248,6 +1248,7 @@ class Fireball {
                     const forceDir = u.mesh.position.clone().sub(impactPos).normalize(); const force = (8 - d) * 3;
                     forceDir.multiplyScalar(force); forceDir.y += force * 0.5;
                     u.applyForce(forceDir); u.takeDamage(27);
+                    u.burnTimer = 3.0;
                 }
             }
         });
@@ -1256,6 +1257,7 @@ class Fireball {
             const d = b.mesh.position.distanceTo(impactPos);
             if(d < 8 && b.faction !== this.faction) {
                 b.takeDamage(75); // Fireball deals 75 damage to buildings
+                b.burnTimer = 3.0;
             }
         });
     }
@@ -1907,6 +1909,7 @@ class Humanoid {
         this.nextTargetCheck = Math.random() * 2.0;
         this.conversionTimer = 0;
         this.originalFaction = null;
+        this.burnTimer = 0;
     }
 
     setFaction(newFaction) {
@@ -1990,7 +1993,7 @@ class Humanoid {
 
     applyForce(vec) {
         if(this.state === 'dead') return;
-        this.velocity.add(vec); this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 2.0; this.target = null;
+        this.velocity.add(vec); this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 5.0; this.target = null;
     }
 
     manualMove(vec, dt = 0.016) {
@@ -2119,6 +2122,15 @@ class Humanoid {
     update(dt) {
         if(this.state === 'transported') return;
 
+        if (this.burnTimer > 0) {
+            this.burnTimer -= dt;
+            if(Math.random() < 0.5) {
+                state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1, (Math.random()-0.5))), 0xFF4500, 0.1, 0.5));
+            }
+            // Optional: DOT
+            // this.takeDamage(5 * dt);
+        }
+
         if (this.conversionTimer > 0) {
             this.conversionTimer -= dt;
             if (this.conversionTimer <= 0) {
@@ -2147,6 +2159,12 @@ class Humanoid {
             this.velocity.y += diff * dt * 5.0;
             this.velocity.y *= 0.9;
             this.isGrounded = false;
+            // Always fly above terrain
+            const minAlt = Math.max(groundH, WATER_LEVEL) + 2.0;
+            if(this.mesh.position.y < minAlt) {
+                this.mesh.position.y = minAlt;
+                this.velocity.y = Math.max(0, this.velocity.y);
+            }
         } else {
             const targetY = groundH - feetOffset;
             if (this.mesh.position.y < targetY) {
@@ -2617,6 +2635,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             constructionTimer: buildTime,
             totalBuildTime: buildTime,
             underConstruction: true,
+            burnTimer: 0,
             takeDamage: function(amount) {
                 this.hp -= amount;
                 this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
@@ -2633,6 +2652,13 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             },
             update: function(dt) {
                 this.hpGroup.lookAt(state.camera.position);
+
+                if(this.burnTimer > 0) {
+                    this.burnTimer -= dt;
+                    if(Math.random() < 0.5) {
+                        state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5)*2, 2, (Math.random()-0.5)*2)), 0xFF4500, 0.15, 0.5));
+                    }
+                }
 
                 if(this.underConstruction) {
                     this.constructionTimer -= dt;
@@ -3502,7 +3528,7 @@ window.loadGame = function() {
             if(uData.dead) return;
             const u = new Humanoid(uData.faction, uData.type, uData.x, uData.z);
             u.hp = uData.hp;
-            u.state = uData.state === 'dead' ? 'idle' : uData.state;
+            u.state = 'idle';
             u.hpBar.scale.x = Math.max(0, u.hp / u.maxHp);
             if (uData.conversionTimer !== undefined) u.conversionTimer = uData.conversionTimer;
             if (uData.originalFaction !== undefined) u.originalFaction = uData.originalFaction;
