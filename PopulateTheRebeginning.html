@@ -234,6 +234,7 @@
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">PAUSED</h1>
         <button class="menu-btn" onclick="saveGame()">Save Game</button>
         <button class="menu-btn" onclick="loadGame()">Load Game</button>
+        <button class="menu-btn" onclick="openMultiplayer()">Multiplayer</button>
         <button class="menu-btn" onclick="newGame()">New Game</button>
         <button class="menu-btn" onclick="togglePause()">Resume</button>
         <div id="cheat-menu" style="display:none; flex-direction:column; align-items:center; margin-top:20px; border-top: 1px solid white; padding-top:10px;">
@@ -243,6 +244,24 @@
             <button class="menu-btn" onclick="cheatImmortal()">God Mode</button>
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
         </div>
+    </div>
+
+    <div id="multiplayer-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:201; color:white; pointer-events:auto;">
+        <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">MULTIPLAYER</h1>
+
+        <div id="mp-lobby" style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+            <button class="menu-btn" onclick="startHost()">Host Game</button>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <input type="text" id="join-id" placeholder="Enter Game ID" style="padding:10px; font-size:16px;">
+                <button class="menu-btn" style="width:auto;" onclick="joinGame()">Join</button>
+            </div>
+            <div id="mp-status" style="min-height:20px; color:#00FF00; margin:10px; text-align:center;"></div>
+            <div id="mp-id-display" style="font-size:20px; font-weight:bold; color:gold; display:none;">
+                Game ID: <span id="my-game-id" style="user-select:text; cursor:text; background:#333; padding:5px;">...</span>
+            </div>
+        </div>
+
+        <button class="menu-btn" onclick="closeMultiplayer()">Back</button>
     </div>
 
     <div id="unit-list"></div>
@@ -268,6 +287,7 @@
     <div id="btn-pause" onclick="togglePause()">⏸️</div>
 </div>
 
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
 <script type="module">
 import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
@@ -378,7 +398,15 @@ const state = {
 
     // Cheats
     cheatUnlimitedRange: false,
-    isGodMode: false
+    isGodMode: false,
+
+    // Network
+    network: {
+        peer: null,
+        conn: null,
+        role: 'none', // 'host', 'client', 'none'
+        id: null
+    }
 };
 
 // SpatialHash
@@ -427,6 +455,202 @@ window.activeEffects = state.activeEffects;
 window.joystickVector = state.joystickVector;
 window.keyboardVector = state.keyboardVector;
 window.state = state;
+
+
+// --- js/network.js ---
+const NetworkManager = {
+    startHost: function() {
+        if(state.network.peer) return;
+        state.network.role = 'host';
+        state.network.peer = new Peer(generateUUID().substr(0, 5), {
+             debug: 2
+        });
+
+        state.network.peer.on('open', (id) => {
+            state.network.id = id;
+            const el = document.getElementById('my-game-id');
+            if(el) el.innerText = id;
+            document.getElementById('mp-id-display').style.display = 'block';
+            document.getElementById('mp-status').innerText = "Waiting for player...";
+        });
+
+        state.network.peer.on('connection', (conn) => {
+             if(state.network.conn) {
+                 conn.close();
+                 return;
+             }
+             state.network.conn = conn;
+             document.getElementById('mp-status').innerText = "Player Connected!";
+
+             conn.on('data', (data) => {
+                 this.handleData(data);
+             });
+
+             conn.on('close', () => {
+                 state.network.conn = null;
+                 document.getElementById('mp-status').innerText = "Player Disconnected.";
+             });
+        });
+    },
+
+    joinGame: function(hostId) {
+        if(state.network.peer) return;
+        state.network.role = 'client';
+        state.network.peer = new Peer(generateUUID().substr(0, 5));
+
+        state.network.peer.on('open', (id) => {
+             state.network.id = id;
+             const conn = state.network.peer.connect(hostId);
+
+             conn.on('open', () => {
+                 state.network.conn = conn;
+                 document.getElementById('mp-status').innerText = "Connected to Host!";
+                 document.getElementById('mp-lobby').style.display = 'none';
+                 togglePause(); // Unpause locally
+                 state.isPaused = false;
+                 document.getElementById('pause-menu').style.display = 'none';
+                 document.getElementById('multiplayer-menu').style.display = 'none';
+             });
+
+             conn.on('data', (data) => {
+                 this.handleData(data);
+             });
+
+             conn.on('close', () => {
+                  alert("Disconnected from Host");
+                  location.reload();
+             });
+        });
+
+        state.network.peer.on('error', (err) => {
+             document.getElementById('mp-status').innerText = "Error: " + err.type;
+        });
+    },
+
+    sendFullState: function() {
+        if(!state.network.conn) return;
+        const data = {
+            type: 'sync',
+            units: state.units.map(u => ({
+                id: u.id,
+                type: u.type,
+                faction: u.faction,
+                x: u.mesh.position.x,
+                y: u.mesh.position.y,
+                z: u.mesh.position.z,
+                rot: u.mesh.rotation.y,
+                hp: u.hp,
+                state: u.state,
+                animTime: u.animTime
+            })),
+            buildings: state.buildings.map(b => ({
+                id: b.id,
+                type: b.type,
+                faction: b.faction,
+                x: b.mesh.position.x,
+                z: b.mesh.position.z,
+                hp: b.hp,
+                underConstruction: b.underConstruction,
+                constructionTimer: b.constructionTimer
+            }))
+        };
+        state.network.conn.send(data);
+    },
+
+    sendInput: function(inputData) {
+        if(state.network.conn) {
+            state.network.conn.send({
+                type: 'input',
+                data: inputData
+            });
+        }
+    },
+
+    handleData: function(data) {
+        if(state.network.role === 'host') {
+             if(data.type === 'input') {
+                 const d = data.data;
+                 let units = null;
+                 if(d.unitIds) {
+                     units = state.units.filter(u => d.unitIds.includes(u.id));
+                 }
+                 performAction(d.x, d.z, d.action, units);
+             }
+        } else {
+             if(data.type === 'sync') {
+                 this.applySync(data);
+             }
+        }
+    },
+
+    applySync: function(data) {
+        const unitIds = new Set(data.units.map(u => u.id));
+
+        data.units.forEach(uData => {
+             let u = state.units.find(unit => unit.id === uData.id);
+             if(!u) {
+                 u = new Humanoid(uData.faction, uData.type, uData.x, uData.z, uData.id);
+                 state.units.push(u);
+             }
+
+             u.mesh.position.set(uData.x, uData.y, uData.z);
+             u.mesh.rotation.y = uData.rot;
+             u.hp = uData.hp;
+             if(u.hpBar) u.hpBar.scale.x = Math.max(0, u.hp / u.maxHp);
+             u.state = uData.state;
+             u.animTime = uData.animTime;
+        });
+
+        for(let i = state.units.length-1; i>=0; i--) {
+            if(!unitIds.has(state.units[i].id)) {
+                 state.scene.remove(state.units[i].mesh);
+                 state.units.splice(i, 1);
+            }
+        }
+
+        const buildIds = new Set(data.buildings.map(b => b.id));
+        data.buildings.forEach(bData => {
+            let b = state.buildings.find(build => build.id === bData.id);
+            if(!b) {
+                b = createBuilding(bData.type, bData.x, bData.z, bData.faction, false, true, bData.id);
+            }
+            if(b) {
+                b.hp = bData.hp;
+                b.underConstruction = bData.underConstruction;
+                b.constructionTimer = bData.constructionTimer;
+                if(b.hpBar) b.hpBar.scale.x = Math.max(0, b.hp / b.maxHp);
+                if(b.underConstruction) {
+                     const progress = 1.0 - (b.constructionTimer / 5.0);
+                     b.visualMesh.scale.y = Math.max(0.01, progress);
+                } else {
+                     b.visualMesh.scale.y = 1.0;
+                }
+            }
+        });
+
+        for(let i = state.buildings.length-1; i>=0; i--) {
+            if(!buildIds.has(state.buildings[i].id)) {
+                 state.scene.remove(state.buildings[i].mesh);
+                 state.buildings.splice(i, 1);
+            }
+        }
+    }
+};
+
+window.NetworkManager = NetworkManager;
+window.startHost = () => NetworkManager.startHost();
+window.joinGame = () => {
+    const id = document.getElementById('join-id').value;
+    if(id) NetworkManager.joinGame(id);
+};
+window.openMultiplayer = () => {
+    document.getElementById('multiplayer-menu').style.display = 'flex';
+    document.getElementById('pause-menu').style.display = 'none';
+};
+window.closeMultiplayer = () => {
+    document.getElementById('multiplayer-menu').style.display = 'none';
+    document.getElementById('pause-menu').style.display = 'flex';
+};
 
 
 // --- js/audio.js ---
@@ -573,6 +797,13 @@ const AssetCache = {
 
 
 // --- js/utils.js ---
+
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
 
 function mulberry32(a) {
     return function() {
@@ -1741,7 +1972,8 @@ window.castLandbridge = castLandbridge;
 // --- js/humanoid.js ---
 
 class Humanoid {
-    constructor(faction, type, x, z) {
+    constructor(faction, type, x, z, id = null) {
+        this.id = id || generateUUID();
         this.faction = faction; // 0 = Player, 1 = Enemy
         this.type = type; // 'wild', 'warrior', 'firewarrior', 'spy', 'shaman'
         this.isShaman = (type === 'shaman');
@@ -2121,6 +2353,11 @@ class Humanoid {
 
     update(dt) {
         if(this.state === 'transported') return;
+
+        if (state.network.role === 'client') {
+            this.hpGroup.lookAt(state.camera.position);
+            return;
+        }
 
         if (this.burnTimer > 0) {
             this.burnTimer -= dt;
@@ -2565,7 +2802,7 @@ class Humanoid {
 
 // --- js/building.js ---
 
-function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = false) {
+function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = false, id = null) {
     if(!isLoading && getHeight(x, z) < WATER_LEVEL) return null;
 
     if(!isLoading) SoundManager.playSound('construct');
@@ -2624,6 +2861,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
         if(!isLoading) mesh.scale.y = 0.01; // Start flat only if new
 
         const building = {
+            id: id || generateUUID(),
             mesh: group,
             visualMesh: mesh,
             hpBar: hpBar,
@@ -2652,6 +2890,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             },
             update: function(dt) {
                 this.hpGroup.lookAt(state.camera.position);
+                if (state.network.role === 'client') return;
 
                 if(this.burnTimer > 0) {
                     this.burnTimer -= dt;
@@ -3119,10 +3358,19 @@ function updateContextMenus() {
     });
 }
 
-function performAction(x, z, action = state.currentAction) {
+function performAction(x, z, action = state.currentAction, overrideUnits = null) {
+    const actingUnits = overrideUnits || state.selectedUnits;
+
+    if(state.network.role === 'client') {
+        const unitIds = actingUnits.map(u => u.id);
+        NetworkManager.sendInput({x, z, action, unitIds});
+        spawnPulse(x, getHeight(x, z), z, 0x888888);
+        return;
+    }
+
     if(action === 'move') {
-        if(state.selectedUnits.length > 0) {
-            state.selectedUnits.forEach(u => {
+        if(actingUnits.length > 0) {
+            actingUnits.forEach(u => {
                 u.goto(x, z);
                 u.attackTarget = null;
             });
@@ -3189,8 +3437,8 @@ function performAction(x, z, action = state.currentAction) {
         }
     }
     else if (action === 'unload') {
-        if(state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'airship') {
-            state.selectedUnits[0].unload();
+        if(actingUnits.length === 1 && actingUnits[0].type === 'airship') {
+            actingUnits[0].unload();
         }
     }
     else if (action.startsWith('build_')) {
@@ -3893,7 +4141,9 @@ function animate() {
 
     updateChunks();
     if(!state.isPaused) {
-    enemyAI.update(dt);
+    if (state.network.role === 'host') NetworkManager.sendFullState();
+
+    if (state.network.role !== 'client') enemyAI.update(dt);
     state.units.forEach(u => u.update(dt));
     state.buildings.forEach(b => b.update(dt));
 
