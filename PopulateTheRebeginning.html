@@ -691,7 +691,7 @@ const CloudManager = {
     spawnCloud: function(randomPos=false) {
         const group = new THREE.Group();
         const chunks = 3 + Math.random() * 5;
-        const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.85, flatShading: false});
+        const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.425, flatShading: false});
 
         for(let j=0; j<chunks; j++) {
             const size = 2 + Math.random() * 3;
@@ -3502,7 +3502,7 @@ window.loadGame = function() {
             if(uData.dead) return;
             const u = new Humanoid(uData.faction, uData.type, uData.x, uData.z);
             u.hp = uData.hp;
-            u.state = uData.state === 'dead' ? 'idle' : uData.state;
+            u.state = 'idle';
             u.hpBar.scale.x = Math.max(0, u.hp / u.maxHp);
             if (uData.conversionTimer !== undefined) u.conversionTimer = uData.conversionTimer;
             if (uData.originalFaction !== undefined) u.originalFaction = uData.originalFaction;
