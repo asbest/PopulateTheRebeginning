@@ -2761,6 +2761,7 @@ class EnemyAI {
         this.lastSpellTime = 0;
         this.lastPathCheckTime = 0;
         this.hasPathToPlayer = false;
+        this.myShaman = null;
     }
 
     init(x, z) {
@@ -2773,7 +2774,8 @@ class EnemyAI {
         createBuilding('hut', this.baseX, this.baseZ, 1);
         // Create Enemy Shaman
         const shamanSafe = findNearestLand(this.baseX - 5, this.baseZ - 5, 20);
-        state.units.push(new Humanoid(1, 'shaman', shamanSafe.x, shamanSafe.z));
+        this.myShaman = new Humanoid(1, 'shaman', shamanSafe.x, shamanSafe.z);
+        state.units.push(this.myShaman);
         // Create initial Brave
         const braveSafe = findNearestLand(this.baseX + 2, this.baseZ + 2, 10);
         state.units.push(new Humanoid(1, 'wild', braveSafe.x, braveSafe.z));
@@ -2793,8 +2795,12 @@ class EnemyAI {
     }
 
     updateShaman(dt) {
-        const myShaman = state.units.find(u => u.faction === 1 && u.isShaman && u.state !== 'dead');
-        const playerShaman = state.units.find(u => u.faction === 0 && u.isShaman);
+        if (!this.myShaman || this.myShaman.state === 'dead') {
+            this.myShaman = state.units.find(u => u.faction === 1 && u.isShaman && u.state !== 'dead');
+        }
+
+        const myShaman = this.myShaman;
+        const playerShaman = state.shaman;
 
         if (myShaman && playerShaman && playerShaman.state !== 'dead') {
             // If moving along a valid path, don't bridge (prefer land path)
