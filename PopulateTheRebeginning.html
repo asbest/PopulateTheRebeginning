@@ -2414,7 +2414,7 @@ class Humanoid {
 
         // Deep Water Damage
         if (this.type !== 'airship' && this.state !== 'dead') {
-            const h = getHeight(this.mesh.position.x, this.mesh.position.z);
+            const h = groundH;
             const safeH = WATER_LEVEL - this.height;
             if (h < safeH) {
                 this.takeDamage(this.maxHp * 0.10 * dt);
@@ -2569,7 +2569,7 @@ class Humanoid {
 
                 // Slope check
                 const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
-                const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                const currentH = groundH;
                 const dh = nextH - currentH;
 
                 let canMove = true;
@@ -2664,11 +2664,11 @@ class Humanoid {
 
                 // Slope check
                 const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
-                const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
+                const dh = nextH - groundH;
 
                 let canMove = true;
                 if(this.type !== 'airship') {
-                    const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                    const currentH = groundH;
                     const safeH = WATER_LEVEL - this.height;
                     if (nextH < safeH && currentH >= safeH) {
                          if(!this.targetBoat) canMove = false;
