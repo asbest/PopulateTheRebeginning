@@ -1308,7 +1308,7 @@ const Pathfinder = {
 
         let iterations = 0;
         const MAX_ITER = 10000;
-        const safeH = WATER_LEVEL - unitHeight;
+        const safeH = WATER_LEVEL - 2.2; // All units use Shaman height for water
 
         while(openHeap.size() > 0) {
             iterations++;
@@ -1393,7 +1393,7 @@ function isWalkableLine(start, end, isFlying, unitHeight = 1.5) {
 
     const dir = end.clone().sub(start).normalize();
     const checkPos = start.clone();
-    const safeH = WATER_LEVEL - unitHeight;
+    const safeH = WATER_LEVEL - 2.2; // All units use Shaman height for water
 
     for(let i=1; i<steps; i++) {
         checkPos.add(dir);
@@ -2240,10 +2240,11 @@ class Humanoid {
              const futureX = this.mesh.position.x + vec.x * speed * 0.1;
              const futureZ = this.mesh.position.z + vec.z * speed * 0.1;
              const futureH = getHeight(futureX, futureZ);
-             const safeH = WATER_LEVEL - this.height;
+             const safeH = WATER_LEVEL - 2.2; // Use Shaman height
 
              // If moving into water deeper than unit height
-             if(futureH < safeH && getHeight(this.mesh.position.x, this.mesh.position.z) >= safeH) {
+             const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+             if(futureH < safeH && currentH >= safeH) {
                  allowed = false;
              }
              if(isBlocked(futureX, futureZ)) {
@@ -2430,7 +2431,7 @@ class Humanoid {
         // Deep Water Damage
         if (this.type !== 'airship' && this.state !== 'dead') {
             const h = groundH;
-            const safeH = WATER_LEVEL - this.height;
+            const safeH = WATER_LEVEL - 2.2; // Use Shaman height
             if (h < safeH) {
                 this.takeDamage(this.maxHp * 0.10 * dt);
             }
@@ -2588,7 +2589,7 @@ class Humanoid {
                 const dh = nextH - currentH;
 
                 let canMove = true;
-                const safeH = WATER_LEVEL - this.height;
+                const safeH = WATER_LEVEL - 2.2; // Use Shaman height
                 if (this.type !== 'airship' && nextH < safeH && currentH >= safeH) canMove = false;
 
                 if(canMove) {
@@ -2684,7 +2685,7 @@ class Humanoid {
                 let canMove = true;
                 if(this.type !== 'airship') {
                     const currentH = groundH;
-                    const safeH = WATER_LEVEL - this.height;
+                    const safeH = WATER_LEVEL - 2.2; // Use Shaman height
                     if (nextH < safeH && currentH >= safeH) {
                          if(!this.targetBoat) canMove = false;
                     }
