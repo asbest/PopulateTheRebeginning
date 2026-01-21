@@ -294,7 +294,7 @@ import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/thr
 
 // --- js/constants.js ---
 const CHUNK_SIZE = 40;
-const CHUNK_RES = 40;
+const CHUNK_RES = 80;
 const RENDER_DISTANCE = 5;
 const NOISE_SCALE = 0.02;
 const MIN_ZOOM = 3;
@@ -921,14 +921,35 @@ const CloudManager = {
     },
     spawnCloud: function(randomPos=false) {
         const group = new THREE.Group();
-        const chunks = 3 + Math.random() * 5;
-        const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.425, flatShading: false});
+        const chunks = 6 + Math.floor(Math.random() * 6);
+        const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.5, flatShading: false});
+
+        // Main center puff
+        const centerSize = 3.5 + Math.random() * 2;
+        const centerMesh = new THREE.Mesh(AssetCache.geos.cloud, mat);
+        centerMesh.scale.set(centerSize, centerSize * 0.8, centerSize);
+        group.add(centerMesh);
 
         for(let j=0; j<chunks; j++) {
-            const size = 2 + Math.random() * 3;
+            const size = 1.5 + Math.random() * 2.5;
             const mesh = new THREE.Mesh(AssetCache.geos.cloud, mat);
-            mesh.scale.set(size, size, size);
-            mesh.position.set((Math.random()-0.5)*10, (Math.random()-0.5)*2, (Math.random()-0.5)*6);
+            mesh.scale.set(size, size * 0.8, size);
+
+            // Cluster around center
+            const angle = Math.random() * Math.PI * 2;
+            const dist = (centerSize * 0.5) + Math.random() * 3.0;
+            const yOff = (Math.random() - 0.5) * 1.5;
+
+            mesh.position.set(
+                Math.cos(angle) * dist,
+                yOff,
+                Math.sin(angle) * dist
+            );
+
+            // Flatten bottom slightly by shifting lower puffs up or scaling
+            // Actually just random rotation helps realism
+            mesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+
             group.add(mesh);
         }
 
@@ -1308,7 +1329,7 @@ const Pathfinder = {
 
         let iterations = 0;
         const MAX_ITER = 10000;
-        const safeH = WATER_LEVEL - unitHeight;
+        const safeH = WATER_LEVEL - 2.2; // All units use Shaman height for water
 
         while(openHeap.size() > 0) {
             iterations++;
@@ -1393,7 +1414,7 @@ function isWalkableLine(start, end, isFlying, unitHeight = 1.5) {
 
     const dir = end.clone().sub(start).normalize();
     const checkPos = start.clone();
-    const safeH = WATER_LEVEL - unitHeight;
+    const safeH = WATER_LEVEL - 2.2; // All units use Shaman height for water
 
     for(let i=1; i<steps; i++) {
         checkPos.add(dir);
@@ -1982,6 +2003,7 @@ class Humanoid {
         this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6; this.height = 1.5;
         if(type === 'warrior') { this.maxHp = 200; this.damage = 52.5; }
         if(type === 'firewarrior') { this.maxHp = 120; this.damage = 25; this.range = 12; this.attackSpeed = 2.0; }
+        if(type === 'spy') { this.damage = 0; }
         if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; this.height = 2.2; }
         if(type === 'airship') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; this.height = 2.0; }
 
@@ -2239,10 +2261,11 @@ class Humanoid {
              const futureX = this.mesh.position.x + vec.x * speed * 0.1;
              const futureZ = this.mesh.position.z + vec.z * speed * 0.1;
              const futureH = getHeight(futureX, futureZ);
-             const safeH = WATER_LEVEL - this.height;
+             const safeH = WATER_LEVEL - 2.2; // Use Shaman height
 
              // If moving into water deeper than unit height
-             if(futureH < safeH && getHeight(this.mesh.position.x, this.mesh.position.z) >= safeH) {
+             const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+             if(futureH < safeH && currentH >= safeH) {
                  allowed = false;
              }
              if(isBlocked(futureX, futureZ)) {
@@ -2343,6 +2366,20 @@ class Humanoid {
                  const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
                  state.projectiles.push(new Fireball(startPos, targetPos, this.faction));
                  SoundManager.playSound('fireball');
+            } else if (this.type === 'spy') {
+                // Spy Conversion
+                const target = this.attackTarget;
+                if (!target.isShaman) {
+                    if (target.originalFaction === null || target.originalFaction === undefined) target.originalFaction = target.faction;
+                    if (target.faction !== this.faction) {
+                        target.setFaction(this.faction);
+                        target.attackTarget = null; // Stop attacking
+                        target.state = 'idle';
+                    }
+                    target.conversionTimer = 3.0; // Refresh timer
+                    spawnPulse(target.mesh.position.x, target.mesh.position.y + 2, target.mesh.position.z, 0xFF00FF);
+                    SoundManager.playSound('magic');
+                }
             } else {
                 // Melee
                 this.attackTarget.takeDamage(this.damage);
@@ -2414,8 +2451,8 @@ class Humanoid {
 
         // Deep Water Damage
         if (this.type !== 'airship' && this.state !== 'dead') {
-            const h = getHeight(this.mesh.position.x, this.mesh.position.z);
-            const safeH = WATER_LEVEL - this.height;
+            const h = groundH;
+            const safeH = WATER_LEVEL - 2.2; // Use Shaman height
             if (h < safeH) {
                 this.takeDamage(this.maxHp * 0.10 * dt);
             }
@@ -2569,11 +2606,11 @@ class Humanoid {
 
                 // Slope check
                 const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
-                const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                const currentH = groundH;
                 const dh = nextH - currentH;
 
                 let canMove = true;
-                const safeH = WATER_LEVEL - this.height;
+                const safeH = WATER_LEVEL - 2.2; // Use Shaman height
                 if (this.type !== 'airship' && nextH < safeH && currentH >= safeH) canMove = false;
 
                 if(canMove) {
@@ -2664,12 +2701,12 @@ class Humanoid {
 
                 // Slope check
                 const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
-                const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
+                const dh = nextH - groundH;
 
                 let canMove = true;
                 if(this.type !== 'airship') {
-                    const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
-                    const safeH = WATER_LEVEL - this.height;
+                    const currentH = groundH;
+                    const safeH = WATER_LEVEL - 2.2; // Use Shaman height
                     if (nextH < safeH && currentH >= safeH) {
                          if(!this.targetBoat) canMove = false;
                     }
@@ -3331,6 +3368,7 @@ function updateContextMenus() {
 
     const hasShaman = state.selectedUnits.some(u => u.isShaman);
     const hasBrave = state.selectedUnits.some(u => u.type === 'wild');
+    const hasSpy = state.selectedUnits.some(u => u.type === 'spy');
     const hasSelection = state.selectedUnits.length > 0;
     const hasAirship = state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'airship';
 
@@ -3344,6 +3382,8 @@ function updateContextMenus() {
         visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create'];
     } else if (hasBrave) {
         visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy', 'build_shipyard', 'build_airship'];
+    } else if (hasSpy) {
+        visibleActions = ['hypnotise'];
     }
 
     visibleActions.forEach(act => {
@@ -3394,11 +3434,19 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create'];
 
     // Range Check for Spells
+    let caster = state.shaman;
+    const isSpyCast = (action === 'hypnotise' && actingUnits.length === 1 && actingUnits[0].type === 'spy');
+    if (isSpyCast) {
+        caster = actingUnits[0];
+    }
+
     if (spells.includes(action)) {
-        if (!state.shaman || state.shaman.state === 'dead') return;
+        if (!isSpyCast && (!state.shaman || state.shaman.state === 'dead')) return;
+
         if (!state.cheatUnlimitedRange) {
-            const maxRange = 10.0 + state.shaman.mesh.position.y;
-            const dist = Math.sqrt((x - state.shaman.mesh.position.x)**2 + (z - state.shaman.mesh.position.z)**2);
+            let maxRange = 10.0 + caster.mesh.position.y;
+            if (isSpyCast) maxRange = 5.0; // Very small range for Spy
+            const dist = Math.sqrt((x - caster.mesh.position.x)**2 + (z - caster.mesh.position.z)**2);
             if (dist > maxRange) return;
         }
     }
@@ -3416,7 +3464,7 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     updateUI();
 
     if (spells.includes(action)) {
-        executeSpell(action, x, z, state.shaman);
+        executeSpell(action, x, z, caster);
     }
     else if (action === 'build_airship') {
         // Build Airship
