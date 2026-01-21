@@ -921,14 +921,35 @@ const CloudManager = {
     },
     spawnCloud: function(randomPos=false) {
         const group = new THREE.Group();
-        const chunks = 3 + Math.random() * 5;
-        const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.425, flatShading: false});
+        const chunks = 6 + Math.floor(Math.random() * 6);
+        const mat = new THREE.MeshLambertMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.5, flatShading: false});
+
+        // Main center puff
+        const centerSize = 3.5 + Math.random() * 2;
+        const centerMesh = new THREE.Mesh(AssetCache.geos.cloud, mat);
+        centerMesh.scale.set(centerSize, centerSize * 0.8, centerSize);
+        group.add(centerMesh);
 
         for(let j=0; j<chunks; j++) {
-            const size = 2 + Math.random() * 3;
+            const size = 1.5 + Math.random() * 2.5;
             const mesh = new THREE.Mesh(AssetCache.geos.cloud, mat);
-            mesh.scale.set(size, size, size);
-            mesh.position.set((Math.random()-0.5)*10, (Math.random()-0.5)*2, (Math.random()-0.5)*6);
+            mesh.scale.set(size, size * 0.8, size);
+
+            // Cluster around center
+            const angle = Math.random() * Math.PI * 2;
+            const dist = (centerSize * 0.5) + Math.random() * 3.0;
+            const yOff = (Math.random() - 0.5) * 1.5;
+
+            mesh.position.set(
+                Math.cos(angle) * dist,
+                yOff,
+                Math.sin(angle) * dist
+            );
+
+            // Flatten bottom slightly by shifting lower puffs up or scaling
+            // Actually just random rotation helps realism
+            mesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+
             group.add(mesh);
         }
 
