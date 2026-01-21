@@ -294,7 +294,7 @@ import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/thr
 
 // --- js/constants.js ---
 const CHUNK_SIZE = 40;
-const CHUNK_RES = 40;
+const CHUNK_RES = 80;
 const RENDER_DISTANCE = 5;
 const NOISE_SCALE = 0.02;
 const MIN_ZOOM = 3;
@@ -1982,6 +1982,7 @@ class Humanoid {
         this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6; this.height = 1.5;
         if(type === 'warrior') { this.maxHp = 200; this.damage = 52.5; }
         if(type === 'firewarrior') { this.maxHp = 120; this.damage = 25; this.range = 12; this.attackSpeed = 2.0; }
+        if(type === 'spy') { this.damage = 0; }
         if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; this.height = 2.2; }
         if(type === 'airship') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; this.height = 2.0; }
 
@@ -2343,6 +2344,20 @@ class Humanoid {
                  const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
                  state.projectiles.push(new Fireball(startPos, targetPos, this.faction));
                  SoundManager.playSound('fireball');
+            } else if (this.type === 'spy') {
+                // Spy Conversion
+                const target = this.attackTarget;
+                if (!target.isShaman) {
+                    if (target.originalFaction === null || target.originalFaction === undefined) target.originalFaction = target.faction;
+                    if (target.faction !== this.faction) {
+                        target.setFaction(this.faction);
+                        target.attackTarget = null; // Stop attacking
+                        target.state = 'idle';
+                    }
+                    target.conversionTimer = 3.0; // Refresh timer
+                    spawnPulse(target.mesh.position.x, target.mesh.position.y + 2, target.mesh.position.z, 0xFF00FF);
+                    SoundManager.playSound('magic');
+                }
             } else {
                 // Melee
                 this.attackTarget.takeDamage(this.damage);
@@ -2414,7 +2429,7 @@ class Humanoid {
 
         // Deep Water Damage
         if (this.type !== 'airship' && this.state !== 'dead') {
-            const h = getHeight(this.mesh.position.x, this.mesh.position.z);
+            const h = groundH;
             const safeH = WATER_LEVEL - this.height;
             if (h < safeH) {
                 this.takeDamage(this.maxHp * 0.10 * dt);
@@ -2569,7 +2584,7 @@ class Humanoid {
 
                 // Slope check
                 const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
-                const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                const currentH = groundH;
                 const dh = nextH - currentH;
 
                 let canMove = true;
@@ -2664,11 +2679,11 @@ class Humanoid {
 
                 // Slope check
                 const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
-                const dh = nextH - getHeight(this.mesh.position.x, this.mesh.position.z);
+                const dh = nextH - groundH;
 
                 let canMove = true;
                 if(this.type !== 'airship') {
-                    const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
+                    const currentH = groundH;
                     const safeH = WATER_LEVEL - this.height;
                     if (nextH < safeH && currentH >= safeH) {
                          if(!this.targetBoat) canMove = false;
