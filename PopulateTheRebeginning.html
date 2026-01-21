@@ -3368,6 +3368,7 @@ function updateContextMenus() {
 
     const hasShaman = state.selectedUnits.some(u => u.isShaman);
     const hasBrave = state.selectedUnits.some(u => u.type === 'wild');
+    const hasSpy = state.selectedUnits.some(u => u.type === 'spy');
     const hasSelection = state.selectedUnits.length > 0;
     const hasAirship = state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'airship';
 
@@ -3381,6 +3382,8 @@ function updateContextMenus() {
         visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create'];
     } else if (hasBrave) {
         visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy', 'build_shipyard', 'build_airship'];
+    } else if (hasSpy) {
+        visibleActions = ['hypnotise'];
     }
 
     visibleActions.forEach(act => {
@@ -3431,11 +3434,19 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create'];
 
     // Range Check for Spells
+    let caster = state.shaman;
+    const isSpyCast = (action === 'hypnotise' && actingUnits.length === 1 && actingUnits[0].type === 'spy');
+    if (isSpyCast) {
+        caster = actingUnits[0];
+    }
+
     if (spells.includes(action)) {
-        if (!state.shaman || state.shaman.state === 'dead') return;
+        if (!isSpyCast && (!state.shaman || state.shaman.state === 'dead')) return;
+
         if (!state.cheatUnlimitedRange) {
-            const maxRange = 10.0 + state.shaman.mesh.position.y;
-            const dist = Math.sqrt((x - state.shaman.mesh.position.x)**2 + (z - state.shaman.mesh.position.z)**2);
+            let maxRange = 10.0 + caster.mesh.position.y;
+            if (isSpyCast) maxRange = 5.0; // Very small range for Spy
+            const dist = Math.sqrt((x - caster.mesh.position.x)**2 + (z - caster.mesh.position.z)**2);
             if (dist > maxRange) return;
         }
     }
@@ -3453,7 +3464,7 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     updateUI();
 
     if (spells.includes(action)) {
-        executeSpell(action, x, z, state.shaman);
+        executeSpell(action, x, z, caster);
     }
     else if (action === 'build_airship') {
         // Build Airship
