@@ -1108,11 +1108,21 @@ function modifyTerrain(centerX, centerZ, radius, amount) {
     return modifiedChunks;
 }
 
+let lastChunkX = null;
+let lastChunkZ = null;
+let chunksLoadingPending = false;
+
 function updateChunks(force = false, specificChunks = null) {
     if (!chunkTerrainMat) initTerrainResources();
 
     const cx = Math.round(state.cameraLookAt.x / CHUNK_SIZE);
     const cz = Math.round(state.cameraLookAt.z / CHUNK_SIZE);
+
+    if (!force && !specificChunks && cx === lastChunkX && cz === lastChunkZ && !chunksLoadingPending) return;
+    lastChunkX = cx;
+    lastChunkZ = cz;
+    chunksLoadingPending = false;
+
     const activeKeys = new Set();
     let createdCount = 0;
     const MAX_CHUNKS_PER_FRAME = 10;
@@ -1130,7 +1140,10 @@ function updateChunks(force = false, specificChunks = null) {
                     }
                     updateChunkTrees(state.chunks[key], cx+x, cz+z);
                 } else {
-                    if (!state.chunks[key] && createdCount >= MAX_CHUNKS_PER_FRAME) continue;
+                    if (!state.chunks[key] && createdCount >= MAX_CHUNKS_PER_FRAME) {
+                        chunksLoadingPending = true;
+                        continue;
+                    }
 
                     if(state.chunks[key]) {
                         state.scene.remove(state.chunks[key]);
