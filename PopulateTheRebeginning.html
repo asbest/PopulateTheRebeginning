@@ -446,6 +446,44 @@ const SpatialHash = {
     }
 };
 
+// Building SpatialHash for optimized isBlocked queries
+const BuildingSpatialHash = {
+    cellSize: 20,
+    cells: new Map(),
+
+    update: function() {
+        this.cells.clear();
+        for(let b of state.buildings) {
+             if(!b.dead && !b.underConstruction) {
+                this.add(b);
+             }
+        }
+    },
+
+    add: function(b) {
+        const r = 2.0;
+        const minX = Math.floor((b.mesh.position.x - r) / this.cellSize);
+        const maxX = Math.floor((b.mesh.position.x + r) / this.cellSize);
+        const minZ = Math.floor((b.mesh.position.z - r) / this.cellSize);
+        const maxZ = Math.floor((b.mesh.position.z + r) / this.cellSize);
+
+        for(let x = minX; x <= maxX; x++) {
+            for(let z = minZ; z <= maxZ; z++) {
+                const key = `${x},${z}`;
+                if(!this.cells.has(key)) this.cells.set(key, []);
+                this.cells.get(key).push(b);
+            }
+        }
+    },
+
+    query: function(x, z) {
+         const cx = Math.floor(x / this.cellSize);
+         const cz = Math.floor(z / this.cellSize);
+         const key = `${cx},${cz}`;
+         return this.cells.get(key);
+    }
+};
+
 // Expose to window for compatibility and debug
 window.chunks = state.chunks;
 window.terrainMods = state.terrainMods;
@@ -855,12 +893,12 @@ function getHeight(x, z) {
 }
 
 function isBlocked(x, z) {
-    for(let b of state.buildings) {
-        if(!b.dead && !b.underConstruction) {
-             const dx = x - b.mesh.position.x;
-             const dz = z - b.mesh.position.z;
-             if (dx*dx + dz*dz < 4.0) return true; // Radius 2.0 squared
-        }
+    const candidates = BuildingSpatialHash.query(x, z);
+    if (!candidates) return false;
+    for(let b of candidates) {
+         const dx = x - b.mesh.position.x;
+         const dz = z - b.mesh.position.z;
+         if (dx*dx + dz*dz < 4.0) return true;
     }
     return false;
 }
@@ -4162,6 +4200,7 @@ function animate() {
 
     if(!state.isPaused) {
     SpatialHash.update();
+    BuildingSpatialHash.update();
     CloudManager.update(dt);
 
     const inputVector = state.joystickVector.clone().add(state.keyboardVector).clampLength(0, 1);
