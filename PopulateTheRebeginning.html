@@ -450,8 +450,14 @@ const SpatialHash = {
 const BuildingSpatialHash = {
     cellSize: 20,
     cells: new Map(),
+    dirty: true,
+
+    markDirty: function() { this.dirty = true; },
 
     update: function() {
+        if (!this.dirty) return;
+        this.dirty = false;
+
         this.cells.clear();
         for(let b of state.buildings) {
              if(!b.dead && !b.underConstruction) {
@@ -2975,6 +2981,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                 state.scene.remove(this.mesh);
                 spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, COLORS.wood, 20);
                 SoundManager.playSound('explosion');
+                BuildingSpatialHash.markDirty();
             },
             update: function(dt) {
                 this.hpGroup.lookAt(state.camera.position);
@@ -2994,6 +3001,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
                     if(this.constructionTimer <= 0) {
                         this.underConstruction = false;
+                        BuildingSpatialHash.markDirty();
                         this.visualMesh.scale.y = 1.0;
                         spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFFFFFF, 10);
 
@@ -3876,6 +3884,7 @@ window.loadGame = function() {
                  }
              }
         });
+        BuildingSpatialHash.markDirty();
 
         data.units.forEach(uData => {
             if(uData.dead) return;
