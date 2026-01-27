@@ -4203,6 +4203,7 @@ function createShaman(x, z) {
 }
 
 let lastAliveCount = -1;
+const _inputVector = new THREE.Vector2();
 
 function animate() {
     requestAnimationFrame(animate); const dt = Math.min(state.clock.getDelta(), 0.1);
@@ -4212,7 +4213,8 @@ function animate() {
     BuildingSpatialHash.update();
     CloudManager.update(dt);
 
-    const inputVector = state.joystickVector.clone().add(state.keyboardVector).clampLength(0, 1);
+    _inputVector.copy(state.joystickVector).add(state.keyboardVector).clampLength(0, 1);
+    const inputVector = _inputVector;
     if(inputVector.lengthSq() > 0.001 && state.selectedUnits.length > 0) {
          const camDir = new THREE.Vector3();
          state.camera.getWorldDirection(camDir);
@@ -4262,7 +4264,8 @@ function animate() {
     state.units.forEach(u => u.update(dt));
     state.buildings.forEach(b => b.update(dt));
 
-    const inputVector = state.joystickVector.clone().add(state.keyboardVector).clampLength(0, 1);
+    _inputVector.copy(state.joystickVector).add(state.keyboardVector).clampLength(0, 1);
+    const inputVector = _inputVector;
     if(inputVector.lengthSq() > 0.001 && state.selectedUnits.length > 0) {
         const center = new THREE.Vector3();
         state.selectedUnits.forEach(u => center.add(u.mesh.position));
