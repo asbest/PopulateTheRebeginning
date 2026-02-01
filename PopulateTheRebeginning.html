@@ -1333,6 +1333,7 @@ class BinaryHeap {
         return result;
     }
     size() { return this.content.length; }
+    clear() { this.content.length = 0; }
     siftUp(n) {
         const element = this.content[n];
         while (n > 0) {
@@ -1368,15 +1369,22 @@ const PF_NEIGHBORS = [
 
 const Pathfinder = {
     GRID_SIZE: 2.0,
+    openHeap: new BinaryHeap(node => node.f),
+    openSet: new Map(),
+    closedSet: new Set(),
     findPath: function(startPos, endPos, isFlying = false, unitHeight = 1.5) {
         const startNode = { x: Math.round(startPos.x / this.GRID_SIZE), y: Math.round(startPos.z / this.GRID_SIZE) };
         const endNode = { x: Math.round(endPos.x / this.GRID_SIZE), y: Math.round(endPos.z / this.GRID_SIZE) };
 
         if(startNode.x === endNode.x && startNode.y === endNode.y) return [];
 
-        const openHeap = new BinaryHeap(node => node.f);
-        const openSet = new Map();
-        const closedSet = new Set();
+        this.openHeap.clear();
+        this.openSet.clear();
+        this.closedSet.clear();
+
+        const openHeap = this.openHeap;
+        const openSet = this.openSet;
+        const closedSet = this.closedSet;
 
         const getKey = (x, y) => (x & 0xFFFF) << 16 | (y & 0xFFFF);
 
