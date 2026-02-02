@@ -4115,6 +4115,14 @@ function handleTap(x, y, isRightClick) {
                     return;
                 }
              }
+
+             if(hitUnit && hitUnit.faction === 0 && state.selectedUnits.length === 0) {
+                 state.selectedUnits = [hitUnit];
+                 hitUnit.selectRing.visible = true;
+                 updateContextMenus();
+                 updateUnitListSelection();
+                 return;
+             }
         }
 
         if(terrainHits.length > 0) {
