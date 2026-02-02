@@ -1441,7 +1441,9 @@ const Pathfinder = {
                     h = getHeight(wx, wz);
 
                     if(!isFlying && h < safeH) continue; // Too Deep
-                    if(!isFlying && isBlocked(wx, wz)) continue; // Building collision
+
+                    const isTarget = (nx === endNode.x && ny === endNode.y);
+                    if(!isFlying && !isTarget && isBlocked(wx, wz)) continue; // Building collision
                 }
 
                 // Diagonal corner cutting check
