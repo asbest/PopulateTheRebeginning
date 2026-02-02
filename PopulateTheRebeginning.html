@@ -2529,7 +2529,7 @@ class Humanoid {
                  // Check if building is ready to train?
                  // For now instant training logic
                  const dist = this.mesh.position.distanceTo(b.mesh.position);
-                 if(dist < 2.0 && b.hp > 0) {
+                 if(dist < 4.0 && b.hp > 0) {
                      let newType = null;
                      if(b.type === 'warrior') newType = 'warrior';
                      if(b.type === 'fire') newType = 'firewarrior';
