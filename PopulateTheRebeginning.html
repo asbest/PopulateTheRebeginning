@@ -1396,7 +1396,7 @@ const Pathfinder = {
         openSet.set(getKey(startNode.x, startNode.y), startNode);
 
         let iterations = 0;
-        const MAX_ITER = 10000;
+        const MAX_ITER = 2500; // Optimization: reduced iter
         const safeH = WATER_LEVEL - 2.2; // All units use Shaman height for water
 
         while(openHeap.size() > 0) {
