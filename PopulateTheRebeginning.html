@@ -1388,6 +1388,9 @@ const Pathfinder = {
 
         const getKey = (x, y) => (x & 0xFFFF) << 16 | (y & 0xFFFF);
 
+        // Precompute start height
+        startNode.h = getHeight(startNode.x * this.GRID_SIZE, startNode.y * this.GRID_SIZE);
+
         startNode.g = 0; startNode.f = 0;
         openHeap.push(startNode);
         openSet.set(getKey(startNode.x, startNode.y), startNode);
@@ -1426,14 +1429,22 @@ const Pathfinder = {
 
                 if(closedSet.has(nKey)) continue;
 
-                const wx = nx * this.GRID_SIZE;
-                const wz = ny * this.GRID_SIZE;
-                const h = getHeight(wx, wz);
+                let neighbor = openSet.get(nKey);
+                let h;
 
-                if(!isFlying && h < safeH) continue; // Too Deep
+                // Optimization: Use cached height if available
+                if (neighbor) {
+                    h = neighbor.h;
+                } else {
+                    const wx = nx * this.GRID_SIZE;
+                    const wz = ny * this.GRID_SIZE;
+                    h = getHeight(wx, wz);
 
-                // Building collision check
-                if(!isFlying && isBlocked(wx, wz)) continue;
+                    if(!isFlying && h < safeH) continue; // Too Deep
+
+                    const isTarget = (nx === endNode.x && ny === endNode.y);
+                    if(!isFlying && !isTarget && isBlocked(wx, wz)) continue; // Building collision
+                }
 
                 // Diagonal corner cutting check
                 if (Math.abs(offset.x) === 1 && Math.abs(offset.y) === 1) {
@@ -1445,7 +1456,7 @@ const Pathfinder = {
                 }
 
                 const dist = Math.sqrt(offset.x*offset.x + offset.y*offset.y);
-                const currentH = getHeight(currentNode.x * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
+                const currentH = currentNode.h; // Optimization: Use cached height
                 const dh = Math.abs(h - currentH);
                 if(!isFlying && dh > 2.0) continue;
 
@@ -1453,18 +1464,12 @@ const Pathfinder = {
                 if (h < WATER_LEVEL) cost += 10.0; // Penalty for water
                 const gScore = currentNode.g + cost;
 
-                let neighbor = openSet.get(nKey);
-                if(!neighbor) {
-                    neighbor = { x: nx, y: ny, parent: currentNode, g: gScore, f: 0 };
+                if(!neighbor || gScore < neighbor.g) {
+                    const newNode = { x: nx, y: ny, parent: currentNode, g: gScore, f: 0, h: h }; // Cache h
                     const hScore = Math.sqrt((nx - endNode.x)**2 + (ny - endNode.y)**2);
-                    neighbor.f = neighbor.g + hScore;
-                    openHeap.push(neighbor);
-                    openSet.set(nKey, neighbor);
-                } else if(gScore < neighbor.g) {
-                    neighbor.g = gScore;
-                    neighbor.parent = currentNode;
-                    neighbor.f = neighbor.g + Math.sqrt((nx - endNode.x)**2 + (ny - endNode.y)**2);
-                    openHeap.push(neighbor);
+                    newNode.f = newNode.g + hScore;
+                    openHeap.push(newNode);
+                    openSet.set(nKey, newNode);
                 }
             }
         }
@@ -2224,6 +2229,7 @@ class Humanoid {
         this.lastAttackTime = 0;
         this.path = []; this.pathIndex = 0; this.pathTimer = 0;
         this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
+        this.stuckThreshold = 2.0 + Math.random();
         this.deathTimer = 0;
         this.nextTargetCheck = Math.random() * 2.0;
         this.conversionTimer = 0;
@@ -2714,8 +2720,9 @@ class Humanoid {
             if(dt > 0.001) {
                 if(movedDist < this.moveSpeed * dt * 0.2) {
                     this.stuckTimer += dt;
-                    if(this.stuckTimer > 2.0 && this.finalDest) {
+                    if(this.stuckTimer > this.stuckThreshold && this.finalDest) {
                         this.stuckTimer = 0;
+                        this.stuckThreshold = 2.0 + Math.random();
                         const isFlying = (this.type === 'airship');
                         const newPath = Pathfinder.findPath(this.mesh.position, this.finalDest, isFlying, this.height);
                         if (newPath) {
