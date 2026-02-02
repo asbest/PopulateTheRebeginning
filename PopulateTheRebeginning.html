@@ -1396,7 +1396,7 @@ const Pathfinder = {
         openSet.set(getKey(startNode.x, startNode.y), startNode);
 
         let iterations = 0;
-        const MAX_ITER = 2500; // Optimization: reduced iter
+        const MAX_ITER = 10000;
         const safeH = WATER_LEVEL - 2.2; // All units use Shaman height for water
 
         while(openHeap.size() > 0) {
@@ -1442,8 +1442,9 @@ const Pathfinder = {
 
                     if(!isFlying && h < safeH) continue; // Too Deep
 
-                    const isTarget = (nx === endNode.x && ny === endNode.y);
-                    if(!isFlying && !isTarget && isBlocked(wx, wz)) continue; // Building collision
+                    // Allow entry if close to target (within 3 units / ~1.5 grid cells) to handle large buildings
+                    const distToTarget = Math.sqrt((nx - endNode.x)**2 + (ny - endNode.y)**2);
+                    if(!isFlying && distToTarget > 1.5 && isBlocked(wx, wz)) continue; // Building collision
                 }
 
                 // Diagonal corner cutting check
