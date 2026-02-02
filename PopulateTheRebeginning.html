@@ -2529,7 +2529,7 @@ class Humanoid {
                  // Check if building is ready to train?
                  // For now instant training logic
                  const dist = this.mesh.position.distanceTo(b.mesh.position);
-                 if(dist < 2.0 && b.hp > 0 && !b.training) {
+                 if(dist < 2.0 && b.hp > 0) {
                      let newType = null;
                      if(b.type === 'warrior') newType = 'warrior';
                      if(b.type === 'fire') newType = 'firewarrior';
@@ -2542,10 +2542,12 @@ class Humanoid {
                          this.hp = 0; // Ensure cleaned up
 
                          // Start training timer on building
-                         b.training = true;
-                         b.trainTimer = 2.0;
-                         b.trainType = newType;
-                         b.trainFaction = this.faction;
+                         if(!b.trainingQueue) b.trainingQueue = [];
+                         b.trainingQueue.push({
+                             timer: 2.0,
+                             type: newType,
+                             faction: this.faction
+                         });
                          spawnPulse(b.mesh.position.x, b.mesh.position.y+2, b.mesh.position.z, 0x00FF00);
                      }
                  }
@@ -2976,6 +2978,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             totalBuildTime: buildTime,
             underConstruction: true,
             burnTimer: 0,
+            trainingQueue: [],
             takeDamage: function(amount) {
                 this.hp -= amount;
                 this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
@@ -3025,14 +3028,18 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                     return; // Skip other updates while building
                 }
 
-                if(this.training) {
-                    this.trainTimer -= dt;
-                    if(this.trainTimer <= 0) {
-                        this.training = false;
-                        const safe = findNearestLand(this.mesh.position.x + 2, this.mesh.position.z + 2, 10);
-                        const u = new Humanoid(this.trainFaction, this.trainType, safe.x, safe.z);
-                        state.units.push(u);
-                        spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFD700);
+                // Handle Training Queue
+                if(this.trainingQueue && this.trainingQueue.length > 0) {
+                    for(let i = this.trainingQueue.length - 1; i >= 0; i--) {
+                        const task = this.trainingQueue[i];
+                        task.timer -= dt;
+                        if(task.timer <= 0) {
+                            const safe = findNearestLand(this.mesh.position.x + 2, this.mesh.position.z + 2, 10);
+                            const u = new Humanoid(task.faction, task.type, safe.x, safe.z);
+                            state.units.push(u);
+                            spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFD700);
+                            this.trainingQueue.splice(i, 1);
+                        }
                     }
                 }
             }
@@ -4114,6 +4121,14 @@ function handleTap(x, y, isRightClick) {
                     spawnPulse(hitUnit.mesh.position.x, hitUnit.mesh.position.y, hitUnit.mesh.position.z, 0xFF0000);
                     return;
                 }
+             }
+
+             if(hitUnit && hitUnit.faction === 0 && state.selectedUnits.length === 0) {
+                 state.selectedUnits = [hitUnit];
+                 hitUnit.selectRing.visible = true;
+                 updateContextMenus();
+                 updateUnitListSelection();
+                 return;
              }
         }
 
