@@ -3111,46 +3111,107 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 // --- BUILDING MODELS ---
 function buildHut() {
     const g = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 1.5, 8), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.7, metalness: 0.1})); base.position.y = 0.75; base.castShadow = true; g.add(base);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 1.5, 8), new THREE.MeshStandardMaterial({color: COLORS.straw, roughness: 0.7, metalness: 0.1})); roof.position.y = 1.5 + 0.75; roof.castShadow = true; g.add(roof);
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.2), new THREE.MeshStandardMaterial({color: 0x220000, roughness: 0.7, metalness: 0.1})); door.position.set(0, 0.5, 1.2); g.add(door);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 1.5, 16), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.8, metalness: 0.0}));
+    base.position.y = 0.75; base.castShadow = true; base.receiveShadow = true; g.add(base);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 1.5, 16), new THREE.MeshStandardMaterial({color: COLORS.straw, roughness: 1.0, metalness: 0.0}));
+    roof.position.y = 1.5 + 0.75; roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.2), new THREE.MeshStandardMaterial({color: 0x220000, roughness: 0.8, metalness: 0.0}));
+    door.position.set(0, 0.5, 1.35); door.castShadow = true; door.receiveShadow = true; g.add(door);
+
+    // Add small window
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.2), new THREE.MeshStandardMaterial({color: 0x88CCFF, emissive: 0x112233, roughness: 0.2, metalness: 0.8}));
+    win.position.set(1.0, 1.0, 0.8); win.rotation.y = Math.PI / 4; win.castShadow = true; win.receiveShadow = true; g.add(win);
     return g;
 }
 function buildTower() {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.0, 4, 6), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.7, metalness: 0.1})); body.position.y = 2; body.castShadow = true; g.add(body);
-    const plat = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.2, 0.5, 6), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.7, metalness: 0.1})); plat.position.y = 3.8; g.add(plat);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.0, 6), new THREE.MeshStandardMaterial({color: COLORS.straw, roughness: 0.7, metalness: 0.1})); roof.position.y = 4.5; g.add(roof);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.0, 4, 12), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.8, metalness: 0.0}));
+    body.position.y = 2; body.castShadow = true; body.receiveShadow = true; g.add(body);
+    const plat = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.2, 0.5, 12), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.8, metalness: 0.0}));
+    plat.position.y = 3.8; plat.castShadow = true; plat.receiveShadow = true; g.add(plat);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.0, 12), new THREE.MeshStandardMaterial({color: COLORS.straw, roughness: 1.0, metalness: 0.0}));
+    roof.position.y = 4.5; roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
+
+    // Add supports
+    for(let i=0; i<4; i++) {
+        const support = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.2, 8), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.9, metalness: 0.0}));
+        const angle = (i / 4) * Math.PI * 2;
+        support.position.set(Math.cos(angle)*1.0, 3.4, Math.sin(angle)*1.0);
+        support.rotation.x = Math.sin(angle) * 0.4;
+        support.rotation.z = -Math.cos(angle) * 0.4;
+        support.castShadow = true; support.receiveShadow = true;
+        g.add(support);
+    }
     return g;
 }
 function buildBarracks() {
     const g = new THREE.Group();
-    const walls = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 2), new THREE.MeshStandardMaterial({color: COLORS.stone, roughness: 0.7, metalness: 0.1})); walls.position.y = 0.75; walls.castShadow = true; g.add(walls);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.2, 1.5, 4), new THREE.MeshStandardMaterial({color: COLORS.red, roughness: 0.7, metalness: 0.1})); roof.position.y = 1.5 + 0.75; roof.rotation.y = Math.PI/4; roof.scale.set(1, 1, 0.7); g.add(roof);
+    const walls = new THREE.Mesh(new THREE.BoxGeometry(3, 1.5, 2), new THREE.MeshStandardMaterial({color: COLORS.stone, roughness: 0.9, metalness: 0.0}));
+    walls.position.y = 0.75; walls.castShadow = true; walls.receiveShadow = true; g.add(walls);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.2, 1.5, 4), new THREE.MeshStandardMaterial({color: COLORS.red, roughness: 0.8, metalness: 0.1}));
+    roof.position.y = 1.5 + 0.75; roof.rotation.y = Math.PI/4; roof.scale.set(1, 1, 0.7);
+    roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
+
+    // Door and Weapon Rack
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.2), new THREE.MeshStandardMaterial({color: 0x331100, roughness: 0.9, metalness: 0.0}));
+    door.position.set(0, 0.6, 1.0); door.castShadow = true; door.receiveShadow = true; g.add(door);
+
+    const rack = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 0.3), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.8, metalness: 0.0}));
+    rack.position.set(-1.0, 0.4, 1.1); rack.castShadow = true; rack.receiveShadow = true; g.add(rack);
+
+    const sword = new THREE.Mesh(AssetCache.geos.sword, new THREE.MeshStandardMaterial({color: 0xDDDDDD, roughness: 0.4, metalness: 0.8}));
+    sword.position.set(-1.0, 0.6, 1.2); sword.rotation.z = Math.PI/4; sword.castShadow = true; sword.receiveShadow = true; g.add(sword);
+
     return g;
 }
 function buildFireTemple() {
     const g = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 1.2, 8), new THREE.MeshStandardMaterial({color: 0x444444, roughness: 0.7, metalness: 0.1})); base.position.y = 0.6; g.add(base);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2, 8), new THREE.MeshStandardMaterial({color: COLORS.yellow, roughness: 0.7, metalness: 0.1})); roof.position.y = 1.2 + 1; g.add(roof);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 1.2, 16), new THREE.MeshStandardMaterial({color: 0x444444, roughness: 0.9, metalness: 0.0}));
+    base.position.y = 0.6; base.castShadow = true; base.receiveShadow = true; g.add(base);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2, 16), new THREE.MeshStandardMaterial({color: COLORS.yellow, roughness: 0.4, metalness: 0.6}));
+    roof.position.y = 1.2 + 1; roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
+
+    // Top Fire effect base
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.3, 0.4, 8), new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.8, metalness: 0.2}));
+    bowl.position.y = 3.3; bowl.castShadow = true; bowl.receiveShadow = true; g.add(bowl);
+
+    const flameCore = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), new THREE.MeshStandardMaterial({color: 0xFF4500, emissive: 0xFF2200, roughness: 0.8, metalness: 0.1}));
+    flameCore.position.y = 3.5; flameCore.scale.set(1, 1.5, 1); g.add(flameCore);
+
     return g;
 }
 function buildSpyHut() {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.7, metalness: 0.1})); body.position.y = 1.5; g.add(body);
-    const roof = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), new THREE.MeshStandardMaterial({color: COLORS.blue, emissive: 0x000044, roughness: 0.7, metalness: 0.1})); roof.position.y = 3.2; g.add(roof);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.8, metalness: 0.2}));
+    body.position.y = 1.5; body.castShadow = true; body.receiveShadow = true; g.add(body);
+    const roof = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), new THREE.MeshStandardMaterial({color: COLORS.blue, emissive: 0x000044, roughness: 0.5, metalness: 0.5}));
+    roof.position.y = 3.2; roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
+
+    // Tiny slit window
+    const slit = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.1), new THREE.MeshStandardMaterial({color: 0x000000, emissive: 0x110000, roughness: 0.9, metalness: 0.0}));
+    slit.position.set(0, 2.0, 0.6); slit.castShadow = true; slit.receiveShadow = true; g.add(slit);
     return g;
 }
 function buildShipyard() {
     const g = new THREE.Group();
     // Dock platform
-    const dock = new THREE.Mesh(new THREE.BoxGeometry(3, 0.5, 4), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.7, metalness: 0.1}));
-    dock.position.y = 0.25; g.add(dock);
+    const dock = new THREE.Mesh(new THREE.BoxGeometry(3, 0.5, 4), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.9, metalness: 0.0}));
+    dock.position.y = 0.25; dock.castShadow = true; dock.receiveShadow = true; g.add(dock);
+
+    // Floating barrels
+    const b1 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.6, 8), new THREE.MeshStandardMaterial({color: 0x553311, roughness: 0.8, metalness: 0.0}));
+    b1.position.set(-1.0, 0.6, 1.0); b1.castShadow = true; b1.receiveShadow = true; g.add(b1);
+
     // Small crane/post
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3), new THREE.MeshStandardMaterial({color: COLORS.stone, roughness: 0.7, metalness: 0.1}));
-    post.position.set(1, 1.5, 1); g.add(post);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 0.2), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.7, metalness: 0.1}));
-    arm.position.set(0, 3, 1); g.add(arm);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 3, 12), new THREE.MeshStandardMaterial({color: COLORS.stone, roughness: 0.8, metalness: 0.2}));
+    post.position.set(1, 1.5, 1); post.castShadow = true; post.receiveShadow = true; g.add(post);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 0.2), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.8, metalness: 0.0}));
+    arm.position.set(0, 3, 1); arm.castShadow = true; arm.receiveShadow = true; g.add(arm);
+
+    // Crane rope
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 2, 8), new THREE.MeshStandardMaterial({color: 0xDDDDDD, roughness: 1.0, metalness: 0.0}));
+    rope.position.set(-0.8, 2.0, 1); rope.castShadow = true; rope.receiveShadow = true; g.add(rope);
+
     return g;
 }
 
