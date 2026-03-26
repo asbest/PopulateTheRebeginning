@@ -3246,10 +3246,6 @@ class EnemyAI {
         // Create initial Brave
         const braveSafe = findNearestLand(this.baseX + 2, this.baseZ + 2, 10);
         state.units.push(new Humanoid(1, 'wild', braveSafe.x, braveSafe.z));
-
-        // Create a tower
-        const towerSafe = findNearestLand(this.baseX + 5, this.baseZ + 5, 20);
-        createBuilding('tower', towerSafe.x, towerSafe.z, 1);
     }
 
     update(dt) {
@@ -3302,55 +3298,93 @@ class EnemyAI {
         const myBuildings = state.buildings.filter(b => b.faction === 1 && !b.dead);
 
         // 1. Train Units
-        // If I have Braves and Buildings, train.
-        // Simplified: Just spawn occasionally for challenge.
-        if(Math.random() < 0.3) {
-             const type = Math.random() > 0.5 ? 'warrior' : 'firewarrior';
-             const spawnX = this.baseX + (Math.random()-0.5)*10;
-             const spawnZ = this.baseZ + (Math.random()-0.5)*10;
-             const safe = findNearestLand(spawnX, spawnZ);
-             state.units.push(new Humanoid(1, type, safe.x, safe.z));
+        const myBraves = myUnits.filter(u => u.type === 'wild');
+        const trainingBuildings = myBuildings.filter(b => ['warrior', 'fire', 'spy', 'shipyard'].includes(b.type));
+
+        // Count my units by type
+        const unitCounts = { warrior: 0, firewarrior: 0, spy: 0, airship: 0 };
+        myUnits.forEach(u => { if(unitCounts[u.type] !== undefined) unitCounts[u.type]++; });
+
+        // Decide if we should train something. If we have a brave and a building.
+        const idleBraves = myBraves.filter(u => u.state === 'idle');
+        // Only train if we have more than 1 idle brave, to keep at least 1 builder available
+        if (idleBraves.length > 1 && trainingBuildings.length > 0) {
+            // Pick a building that we want to train at
+            // Simple priority: warrior < firewarrior < spy < airship
+            let targetType = 'warrior';
+            let targetBuildingType = 'warrior';
+            if (unitCounts.warrior > 3 && myBuildings.some(b => b.type === 'fire')) {
+                targetType = 'firewarrior'; targetBuildingType = 'fire';
+            }
+            if (unitCounts.firewarrior > 2 && myBuildings.some(b => b.type === 'spy')) {
+                targetType = 'spy'; targetBuildingType = 'spy';
+            }
+            if (unitCounts.spy > 1 && myBuildings.some(b => b.type === 'shipyard')) {
+                targetType = 'airship'; targetBuildingType = 'shipyard';
+            }
+
+            const targetBuilding = trainingBuildings.find(b => b.type === targetBuildingType);
+            if (targetBuilding) {
+                const brave = idleBraves[0];
+                brave.goto(targetBuilding.mesh.position.x, targetBuilding.mesh.position.z);
+                // Also manually tell it to 'train' state or similar if needed,
+                // but just moving it near the building will trigger the collision check in Humanoid.update
+            }
         }
 
+
         // 2. Expand Base
-        const myBraves = myUnits.filter(u => u.type === 'wild');
         // Aggressive expansion: always try if we have at least one building and one brave (busy or idle)
         if (myBuildings.length < 15 && myBraves.length > 0) {
-            // Try up to 10 times to find a spot per think cycle
-            for(let attempt=0; attempt<10; attempt++) {
-                // Pick a brave as reference to satisfy "build only near brave"
-                const ref = myBraves[Math.floor(Math.random() * myBraves.length)];
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 2 + Math.random() * 6; // Closer range (2-8) to ensure brave is "nearby" (within 10)
-                let tx = ref.mesh.position.x + Math.cos(angle) * dist;
-                let tz = ref.mesh.position.z + Math.sin(angle) * dist;
+            // Determine which building to build next
+            const targetCounts = { hut: 4, tower: 3, warrior: 1, fire: 1, spy: 1, shipyard: 1 };
+            const currentCounts = { hut: 0, tower: 0, warrior: 0, fire: 0, spy: 0, shipyard: 0 };
+            myBuildings.forEach(b => { if(currentCounts[b.type] !== undefined) currentCounts[b.type]++; });
 
-                // Snap to land (function is hoisted and available)
-                const safe = findNearestLand(tx, tz, 20);
-                tx = safe.x; tz = safe.z;
+            let typeToBuild = null;
+            // Always prioritize huts first to build up a population of braves
+            if (currentCounts.hut < targetCounts.hut) typeToBuild = 'hut';
+            else if (currentCounts.warrior < targetCounts.warrior) typeToBuild = 'warrior';
+            else if (currentCounts.fire < targetCounts.fire) typeToBuild = 'fire';
+            else if (currentCounts.spy < targetCounts.spy) typeToBuild = 'spy';
+            else if (currentCounts.shipyard < targetCounts.shipyard) typeToBuild = 'shipyard';
+            else if (currentCounts.tower < targetCounts.tower) typeToBuild = 'tower';
 
-                // Check land validity again (just in case)
-                if (getHeight(tx, tz) >= WATER_LEVEL) {
-                    // Check spacing
-                    let clear = true;
-                    for (let b of state.buildings) {
-                        if (!b.dead && b.mesh.position.distanceTo(new THREE.Vector3(tx, b.mesh.position.y, tz)) < 6.0) {
-                            clear = false; break;
+            if (typeToBuild) {
+                // Try up to 10 times to find a spot per think cycle
+                for(let attempt=0; attempt<10; attempt++) {
+                    // Pick a brave as reference to satisfy "build only near brave"
+                    const ref = myBraves[Math.floor(Math.random() * myBraves.length)];
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 2 + Math.random() * 6; // Closer range (2-8) to ensure brave is "nearby" (within 10)
+                    let tx = ref.mesh.position.x + Math.cos(angle) * dist;
+                    let tz = ref.mesh.position.z + Math.sin(angle) * dist;
+
+                    // Snap to land (function is hoisted and available)
+                    const safe = findNearestLand(tx, tz, 20);
+                    tx = safe.x; tz = safe.z;
+
+                    // Check land validity again (just in case)
+                    if (getHeight(tx, tz) >= WATER_LEVEL) {
+                        // Check spacing
+                        let clear = true;
+                        for (let b of state.buildings) {
+                            if (!b.dead && b.mesh.position.distanceTo(new THREE.Vector3(tx, b.mesh.position.y, tz)) < 6.0) {
+                                clear = false; break;
+                            }
                         }
-                    }
-                    if (clear) {
-                        const types = ['hut', 'tower', 'warrior', 'fire', 'spy', 'shipyard'];
-                        const type = types[Math.floor(Math.random() * types.length)];
-                        createBuilding(type, tx, tz, 1);
-                        break; // Built one, stop trying this frame
+                        if (clear) {
+                            createBuilding(typeToBuild, tx, tz, 1);
+                            break; // Built one, stop trying this frame
+                        }
                     }
                 }
             }
         }
 
         // 4. Random Movement for Expansion (Braves)
-        const idleBraves = myUnits.filter(u => u.type === 'wild');
-        idleBraves.forEach(u => {
+        const myIdleBraves = myUnits.filter(u => u.type === 'wild');
+        myIdleBraves.forEach(u => {
             if(u.state === 'idle' && Math.random() < 0.5) { // 50% chance to move if idle
                  const dist = 10 + Math.random() * 20;
                  const angle = Math.random() * Math.PI * 2;
