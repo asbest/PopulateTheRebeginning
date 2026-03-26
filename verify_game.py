@@ -9,6 +9,7 @@ def verify_pathfinding():
 
         # Capture console messages
         page.on("console", lambda msg: print(f"Console {msg.type}: {msg.text}"))
+        page.on("pageerror", lambda exc: print(f"Page error: {exc}"))
 
         # Load the HTML file directly
         file_path = os.path.abspath("PopulateTheRebeginning.html")
