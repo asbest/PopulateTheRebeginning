@@ -2579,8 +2579,10 @@ class Humanoid {
         }
 
         // Building Entry Check for Training
-        if(this.type === 'wild' && this.state !== 'dead' && this.faction === 0) {
+        if(this.type === 'wild' && this.state !== 'dead') {
              state.buildings.forEach(b => {
+                 // Only train in buildings of the same faction
+                 if (this.faction !== b.faction) return;
                  // Check if building is ready to train?
                  // For now instant training logic
                  const dist = this.mesh.position.distanceTo(b.mesh.position);
@@ -3307,37 +3309,42 @@ class EnemyAI {
 
         // Decide if we should train something. If we have a brave and a building.
         const idleBraves = myBraves.filter(u => u.state === 'idle');
-        // Only train if we have more than 1 idle brave, to keep at least 1 builder available
-        if (idleBraves.length > 1 && trainingBuildings.length > 0) {
-            // Pick a building that we want to train at
-            // Simple priority: warrior < firewarrior < spy < airship
-            let targetType = 'warrior';
-            let targetBuildingType = 'warrior';
-            if (unitCounts.warrior > 3 && myBuildings.some(b => b.type === 'fire')) {
-                targetType = 'firewarrior'; targetBuildingType = 'fire';
-            }
-            if (unitCounts.firewarrior > 2 && myBuildings.some(b => b.type === 'spy')) {
-                targetType = 'spy'; targetBuildingType = 'spy';
-            }
-            if (unitCounts.spy > 1 && myBuildings.some(b => b.type === 'shipyard')) {
-                targetType = 'airship'; targetBuildingType = 'shipyard';
-            }
+        // Train as many units as we can, keeping at least 2 builders available
+        let bravesToTrain = idleBraves.slice(2);
 
-            const targetBuilding = trainingBuildings.find(b => b.type === targetBuildingType);
-            if (targetBuilding) {
-                const brave = idleBraves[0];
-                brave.goto(targetBuilding.mesh.position.x, targetBuilding.mesh.position.z);
-                // Also manually tell it to 'train' state or similar if needed,
-                // but just moving it near the building will trigger the collision check in Humanoid.update
-            }
+        if (bravesToTrain.length > 0 && trainingBuildings.length > 0) {
+            bravesToTrain.forEach(brave => {
+                // Determine what to train next based on missing unit counts
+                let targetBuildingType = 'warrior'; // fallback
+
+                // Keep an even mix of units
+                if (unitCounts.warrior >= unitCounts.firewarrior + 2 && myBuildings.some(b => b.type === 'fire')) {
+                    targetBuildingType = 'fire';
+                } else if (unitCounts.firewarrior >= unitCounts.spy + 1 && myBuildings.some(b => b.type === 'spy')) {
+                    targetBuildingType = 'spy';
+                } else if (unitCounts.spy >= unitCounts.airship + 1 && myBuildings.some(b => b.type === 'shipyard')) {
+                    targetBuildingType = 'shipyard';
+                } else {
+                    // Randomly choose from available training buildings to keep it varied
+                    const availableTypes = [...new Set(trainingBuildings.map(b => b.type))];
+                    targetBuildingType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+                }
+
+                const targetBuilding = trainingBuildings.find(b => b.type === targetBuildingType);
+                if (targetBuilding) {
+                    brave.goto(targetBuilding.mesh.position.x, targetBuilding.mesh.position.z);
+                    // Also manually tell it to 'train' state or similar if needed,
+                    // but just moving it near the building will trigger the collision check in Humanoid.update
+                }
+            });
         }
 
 
         // 2. Expand Base
         // Aggressive expansion: always try if we have at least one building and one brave (busy or idle)
-        if (myBuildings.length < 15 && myBraves.length > 0) {
+        if (myBuildings.length < 25 && myBraves.length > 0) {
             // Determine which building to build next
-            const targetCounts = { hut: 4, tower: 3, warrior: 1, fire: 1, spy: 1, shipyard: 1 };
+            const targetCounts = { hut: 5, tower: 5, warrior: 2, fire: 2, spy: 2, shipyard: 1 };
             const currentCounts = { hut: 0, tower: 0, warrior: 0, fire: 0, spy: 0, shipyard: 0 };
             myBuildings.forEach(b => { if(currentCounts[b.type] !== undefined) currentCounts[b.type]++; });
 
@@ -3349,6 +3356,11 @@ class EnemyAI {
             else if (currentCounts.spy < targetCounts.spy) typeToBuild = 'spy';
             else if (currentCounts.shipyard < targetCounts.shipyard) typeToBuild = 'shipyard';
             else if (currentCounts.tower < targetCounts.tower) typeToBuild = 'tower';
+            // If we have met the target counts, start building more huts and towers
+            else {
+                const extraTypes = ['hut', 'tower', 'warrior', 'fire'];
+                typeToBuild = extraTypes[Math.floor(Math.random() * extraTypes.length)];
+            }
 
             if (typeToBuild) {
                 // Try up to 10 times to find a spot per think cycle
