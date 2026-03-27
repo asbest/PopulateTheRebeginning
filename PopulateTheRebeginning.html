@@ -3355,8 +3355,9 @@ class EnemyAI {
 
             let typeToBuild = null;
 
-            // Core initial phase: ensure we have at least 1 of everything critical
-            if (currentCounts.hut < 1) typeToBuild = 'hut';
+            // Core initial phase: ensure we have at least 5 huts first (1 for each training building type + 1 extra)
+            if (currentCounts.hut < 5) typeToBuild = 'hut';
+            // Then ensure we have at least 1 of everything critical
             else if (currentCounts.warrior < 1) typeToBuild = 'warrior';
             else if (currentCounts.fire < 1) typeToBuild = 'fire';
             else if (currentCounts.spy < 1) typeToBuild = 'spy';
