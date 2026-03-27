@@ -3326,6 +3326,15 @@ class EnemyAI {
         const currentCounts = { hut: 0, tower: 0, warrior: 0, fire: 0, spy: 0, shipyard: 0 };
         myBuildings.forEach(b => { if(currentCounts[b.type] !== undefined) currentCounts[b.type]++; });
 
+        // If we lost all our braves, have the shaman cast create to respawn one
+        if (myBraves.length === 0 && this.myShaman && this.myShaman.state !== 'dead') {
+             // Only attempt if spell is off a reasonable internal cooldown
+             if (state.clock.getElapsedTime() - this.lastSpellTime > 5.0) {
+                 executeSpell('create', this.myShaman.mesh.position.x, this.myShaman.mesh.position.z, this.myShaman);
+                 this.lastSpellTime = state.clock.getElapsedTime();
+             }
+        }
+
         // Decide if we should train something. If we have a brave and a building.
         const idleBraves = myBraves.filter(u => u.state === 'idle');
         // Train as many units as we can, keeping at least 2 builders available
