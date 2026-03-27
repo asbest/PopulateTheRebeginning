@@ -3313,8 +3313,8 @@ class EnemyAI {
 
         // Decide if we should train something. If we have a brave and a building.
         const idleBraves = myBraves.filter(u => u.state === 'idle');
-        // Train as many units as we can, keeping at least 1 builder available
-        let bravesToTrain = idleBraves.slice(1);
+        // Train as many units as we can, keeping at least 2 builders available
+        let bravesToTrain = idleBraves.slice(2);
 
         // Only start training once all training buildings are built
         const hasAllTrainingBuildings = currentCounts.warrior > 0 && currentCounts.fire > 0 && currentCounts.spy > 0 && currentCounts.shipyard > 0;
