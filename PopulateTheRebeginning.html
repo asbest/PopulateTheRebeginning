@@ -3231,6 +3231,11 @@ class EnemyAI {
         this.lastPathCheckTime = 0;
         this.hasPathToPlayer = false;
         this.myShaman = null;
+
+        // Track losses for rebuilding
+        this.targetHutCount = 5;
+        this.knownUnitCounts = { warrior: 0, firewarrior: 0, spy: 0, airship: 0 };
+        this.lossQueue = [];
     }
 
     init(x, z) {
@@ -3307,6 +3312,16 @@ class EnemyAI {
         const unitCounts = { warrior: 0, firewarrior: 0, spy: 0, airship: 0 };
         myUnits.forEach(u => { if(unitCounts[u.type] !== undefined) unitCounts[u.type]++; });
 
+        // Check for losses and update target hut counts
+        Object.keys(this.knownUnitCounts).forEach(type => {
+            if (unitCounts[type] < this.knownUnitCounts[type]) {
+                const losses = this.knownUnitCounts[type] - unitCounts[type];
+                this.targetHutCount += losses;
+                for(let i=0; i<losses; i++) this.lossQueue.push(type);
+            }
+            this.knownUnitCounts[type] = unitCounts[type];
+        });
+
         // Count our current buildings
         const currentCounts = { hut: 0, tower: 0, warrior: 0, fire: 0, spy: 0, shipyard: 0 };
         myBuildings.forEach(b => { if(currentCounts[b.type] !== undefined) currentCounts[b.type]++; });
@@ -3321,20 +3336,28 @@ class EnemyAI {
 
         if (hasAllTrainingBuildings && bravesToTrain.length > 0 && trainingBuildings.length > 0) {
             bravesToTrain.forEach(brave => {
-                // Determine what to train next based on missing unit counts
                 let targetBuildingType = 'warrior'; // fallback
 
-                // Keep an even mix of units
-                if (unitCounts.warrior >= unitCounts.firewarrior + 2 && myBuildings.some(b => b.type === 'fire')) {
-                    targetBuildingType = 'fire';
-                } else if (unitCounts.firewarrior >= unitCounts.spy + 1 && myBuildings.some(b => b.type === 'spy')) {
-                    targetBuildingType = 'spy';
-                } else if (unitCounts.spy >= unitCounts.airship + 1 && myBuildings.some(b => b.type === 'shipyard')) {
-                    targetBuildingType = 'shipyard';
+                // Prioritize replacing lost units
+                if (this.lossQueue.length > 0) {
+                    const lostType = this.lossQueue.shift();
+                    if (lostType === 'warrior') targetBuildingType = 'warrior';
+                    else if (lostType === 'firewarrior') targetBuildingType = 'fire';
+                    else if (lostType === 'spy') targetBuildingType = 'spy';
+                    else if (lostType === 'airship') targetBuildingType = 'shipyard';
                 } else {
-                    // Randomly choose from available training buildings to keep it varied
-                    const availableTypes = [...new Set(trainingBuildings.map(b => b.type))];
-                    targetBuildingType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+                    // Keep an even mix of units
+                    if (unitCounts.warrior >= unitCounts.firewarrior + 2 && myBuildings.some(b => b.type === 'fire')) {
+                        targetBuildingType = 'fire';
+                    } else if (unitCounts.firewarrior >= unitCounts.spy + 1 && myBuildings.some(b => b.type === 'spy')) {
+                        targetBuildingType = 'spy';
+                    } else if (unitCounts.spy >= unitCounts.airship + 1 && myBuildings.some(b => b.type === 'shipyard')) {
+                        targetBuildingType = 'shipyard';
+                    } else {
+                        // Randomly choose from available training buildings to keep it varied
+                        const availableTypes = [...new Set(trainingBuildings.map(b => b.type))];
+                        targetBuildingType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+                    }
                 }
 
                 const targetBuilding = trainingBuildings.find(b => b.type === targetBuildingType);
@@ -3342,6 +3365,12 @@ class EnemyAI {
                     brave.goto(targetBuilding.mesh.position.x, targetBuilding.mesh.position.z);
                     // Also manually tell it to 'train' state or similar if needed,
                     // but just moving it near the building will trigger the collision check in Humanoid.update
+                } else {
+                    // If the building was destroyed, push the loss back to the queue
+                    if (this.lossQueue.length > 0) {
+                       // Try to infer what we lost (approximation)
+                       this.lossQueue.push('warrior');
+                    }
                 }
             });
         }
@@ -3349,14 +3378,15 @@ class EnemyAI {
 
         // 2. Expand Base
         // Aggressive expansion: always try if we have at least one building and one brave (busy or idle)
-        if (myBuildings.length < 25 && myBraves.length > 0) {
+        const buildingLimit = 15 + this.targetHutCount;
+        if (myBuildings.length < buildingLimit && myBraves.length > 0) {
             // Determine which building to build next
-            const targetCounts = { hut: 5, tower: 5, warrior: 2, fire: 2, spy: 2, shipyard: 1 };
+            const targetCounts = { hut: this.targetHutCount, tower: 5, warrior: 2, fire: 2, spy: 2, shipyard: 1 };
 
             let typeToBuild = null;
 
-            // Core initial phase: ensure we have at least 5 huts first (1 for each training building type + 1 extra)
-            if (currentCounts.hut < 5) typeToBuild = 'hut';
+            // Core initial phase: ensure we have at least enough huts to support our base and losses
+            if (currentCounts.hut < this.targetHutCount) typeToBuild = 'hut';
             // Then ensure we have at least 1 of everything critical
             else if (currentCounts.warrior < 1) typeToBuild = 'warrior';
             else if (currentCounts.fire < 1) typeToBuild = 'fire';
