@@ -1034,12 +1034,116 @@ const CloudManager = {
     }
 };
 
-function spawnExplosion(x, y, z, color, count) { for(let i=0; i<count; i++) state.particles.push(new Particle(new THREE.Vector3(x, y, z), color, 0.1+Math.random()*0.1, 1.0+Math.random())); }
-function spawnPulse(x, y, z, color) { state.particles.push(new Particle(new THREE.Vector3(x, y+0.5, z), color, 0.05, 0.5)); }
+class VisualEffect {
+    constructor(mesh, life, updateFn) {
+        this.mesh = mesh;
+        this.life = life;
+        this.maxLife = life;
+        this.updateFn = updateFn;
+        state.scene.add(this.mesh);
+    }
+    update(dt) {
+        this.life -= dt;
+        if(this.updateFn) this.updateFn(this, dt);
+        if(this.life <= 0) {
+            state.scene.remove(this.mesh);
+            if (this.mesh.geometry) this.mesh.geometry.dispose();
+            if (this.mesh.material) {
+                if(Array.isArray(this.mesh.material)) this.mesh.material.forEach(m=>m.dispose());
+                else this.mesh.material.dispose();
+            }
+            if (this.mesh.children) {
+                this.mesh.children.forEach(c => {
+                    if (c.geometry) c.geometry.dispose();
+                    if (c.material) c.material.dispose();
+                    if (c.isLight) c.dispose();
+                });
+            }
+            return false;
+        }
+        return true;
+    }
+}
+
+function spawnExplosion(x, y, z, color, count) {
+    const pos = new THREE.Vector3(x, y, z);
+    // Dynamic particles
+    for(let i=0; i<count; i++) {
+        const p = new Particle(pos.clone(), color, 0.1+Math.random()*0.2, 1.0+Math.random()*0.5);
+        p.vel.set((Math.random()-0.5)*15, Math.random()*15+5, (Math.random()-0.5)*15);
+        state.particles.push(p);
+    }
+
+    // Expanding core sphere
+    const coreGeo = new THREE.SphereGeometry(0.5, 16, 16);
+    const coreMat = new THREE.MeshBasicMaterial({color: color, transparent: true, opacity: 0.8});
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    coreMesh.position.copy(pos);
+
+    // Light
+    const light = new THREE.PointLight(color, 2, 10);
+    coreMesh.add(light);
+
+    state.particles.push(new VisualEffect(coreMesh, 0.5, (eff, dt) => {
+        const progress = 1.0 - (eff.life / eff.maxLife);
+        eff.mesh.scale.setScalar(1.0 + progress * 4.0);
+        eff.mesh.material.opacity = 0.8 * (eff.life / eff.maxLife);
+        light.intensity = 2 * (eff.life / eff.maxLife);
+    }));
+}
+
+function spawnPulse(x, y, z, color) {
+    const geo = new THREE.RingGeometry(0.1, 0.5, 32);
+    const mat = new THREE.MeshBasicMaterial({color: color, transparent: true, opacity: 1.0, side: THREE.DoubleSide, depthWrite: false});
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI/2;
+    mesh.position.set(x, y + 0.1, z); // Slightly above ground
+
+    state.particles.push(new VisualEffect(mesh, 0.6, (eff, dt) => {
+        const progress = 1.0 - (eff.life / eff.maxLife);
+        eff.mesh.scale.setScalar(1.0 + progress * 10.0);
+        eff.mesh.material.opacity = eff.life / eff.maxLife;
+    }));
+}
+
 function spawnHealing(x, y, z) {
-    const p = new Particle(new THREE.Vector3(x, y, z), 0x00FF00, 0.1, 1.0, -2);
-    p.vel.set((Math.random()-0.5)*2, 1.0, (Math.random()-0.5)*2);
-    state.particles.push(p);
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+
+    // Cross shape
+    const mat = new THREE.MeshBasicMaterial({color: 0x00FF00, transparent: true, opacity: 0.8});
+    const vGeo = new THREE.BoxGeometry(0.1, 0.6, 0.1);
+    const hGeo = new THREE.BoxGeometry(0.6, 0.1, 0.1);
+    const vMesh = new THREE.Mesh(vGeo, mat);
+    const hMesh = new THREE.Mesh(hGeo, mat);
+    group.add(vMesh); group.add(hMesh);
+
+    // Light
+    const light = new THREE.PointLight(0x00FF00, 1, 5);
+    group.add(light);
+
+    state.particles.push(new VisualEffect(group, 1.5, (eff, dt) => {
+        eff.mesh.position.y += 2.0 * dt;
+        eff.mesh.rotation.y += 3.0 * dt;
+        const opacity = eff.life / eff.maxLife;
+        vMesh.material.opacity = opacity;
+        hMesh.material.opacity = opacity;
+        light.intensity = opacity;
+    }));
+}
+
+function spawnDust(x, y, z, color, radius) {
+    const numDust = Math.floor(radius * 5);
+    for(let i=0; i<numDust; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * radius;
+        const dx = Math.cos(angle) * dist;
+        const dz = Math.sin(angle) * dist;
+        const p = new Particle(new THREE.Vector3(x + dx, y, z + dz), color, 0.2 + Math.random() * 0.4, 1.0 + Math.random());
+        p.vel.set((Math.random()-0.5)*5, Math.random()*10, (Math.random()-0.5)*5);
+        p.gravity = 5;
+        state.particles.push(p);
+    }
 }
 
 
@@ -1535,6 +1639,11 @@ class Fireball {
         this.mesh.position.copy(start); this.target = end; this.dir = end.clone().sub(start).normalize();
         this.faction = faction;
         this.speed = 25; this.active = true; this.trailTimer = 0;
+
+        // Add light
+        this.light = new THREE.PointLight(0xFF4500, 1.5, 15);
+        this.mesh.add(this.light);
+
         state.scene.add(this.mesh);
     }
     update(dt) {
@@ -1559,14 +1668,28 @@ class Fireball {
         }
 
         this.trailTimer += dt;
-        if(this.trailTimer > 0.05) {
-            state.particles.push(new Particle(this.mesh.position, 0xFFA500, 0.05, 0.5));
+        if(this.trailTimer > 0.02) {
+            // High quality trail
+            const trailMat = new THREE.MeshBasicMaterial({color: 0xFF4500, transparent: true, opacity: 0.8});
+            const trailMesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), trailMat);
+            trailMesh.position.copy(this.mesh.position);
+            trailMesh.position.add(new THREE.Vector3((Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2));
+
+            state.particles.push(new VisualEffect(trailMesh, 0.4, (eff, dt) => {
+                const prog = eff.life / eff.maxLife;
+                eff.mesh.scale.setScalar(prog);
+                eff.mesh.material.opacity = prog;
+            }));
             this.trailTimer = 0;
         }
         return true;
     }
     explode() {
-        state.scene.remove(this.mesh); this.active = false;
+        state.scene.remove(this.mesh);
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
+        this.light.dispose();
+        this.active = false;
         spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFF4500, 20);
         SoundManager.playSound('explosion');
         const impactPos = this.mesh.position;
@@ -1610,6 +1733,12 @@ class Volcano extends ActiveEffect {
         this.timer = 15.0;
         this.interval = 0;
         SoundManager.playSound('explosion');
+
+        // Add persistent light
+        this.light = new THREE.PointLight(0xFF4500, 2, 20);
+        this.light.position.set(x, getHeight(x, z) + 5, z);
+        state.scene.add(this.light);
+
         // Initial rise
         const mods = modifyTerrain(x, z, 8, 5);
         updateChunks(true, mods);
@@ -1618,7 +1747,10 @@ class Volcano extends ActiveEffect {
         this.timer -= dt;
         this.interval += dt;
 
-        // Visuals
+        this.light.position.y = getHeight(this.x, this.z) + 2;
+        this.light.intensity = 2 + Math.sin(this.timer * 10) * 0.5;
+
+        // Visuals: Lava Particles
         if(Math.random() < 0.5) {
             const dist = Math.random() * 4;
             const angle = Math.random() * Math.PI * 2;
@@ -1628,6 +1760,25 @@ class Volcano extends ActiveEffect {
             const p = new Particle(new THREE.Vector3(px, h, pz), COLORS.lava, 0.3 + Math.random()*0.3, 1.5);
             p.vel.set((Math.random()-0.5)*4, Math.random()*8+4, (Math.random()-0.5)*4);
             state.particles.push(p);
+        }
+
+        // Visuals: Smoke Clouds
+        if(Math.random() < 0.2) {
+            const size = 1 + Math.random() * 2;
+            const smokeMesh = new THREE.Mesh(AssetCache.geos.cloud, new THREE.MeshBasicMaterial({color: 0x222222, transparent: true, opacity: 0.8}));
+            smokeMesh.position.set(this.x + (Math.random()-0.5)*2, getHeight(this.x, this.z), this.z + (Math.random()-0.5)*2);
+            smokeMesh.scale.set(size, size, size);
+            smokeMesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+
+            state.particles.push(new VisualEffect(smokeMesh, 3.0, (eff, dt) => {
+                eff.mesh.position.y += dt * 3.0;
+                eff.mesh.position.x += (Math.random() - 0.5) * dt;
+                eff.mesh.position.z += (Math.random() - 0.5) * dt;
+                eff.mesh.rotation.y += dt;
+                const prog = eff.life / eff.maxLife;
+                eff.mesh.scale.setScalar(size * (1.0 + (1.0 - prog) * 2.0));
+                eff.mesh.material.opacity = 0.8 * prog;
+            }));
         }
 
         if(this.interval > 0.2) {
@@ -1652,7 +1803,12 @@ class Volcano extends ActiveEffect {
                  if(dist < 10 && b.faction !== this.faction) b.takeDamage(10);
             });
         }
-        return this.timer > 0;
+        if(this.timer <= 0) {
+            state.scene.remove(this.light);
+            this.light.dispose();
+            return false;
+        }
+        return true;
     }
 }
 
@@ -1665,7 +1821,7 @@ class Swamp extends ActiveEffect {
         this.radius = 4.0;
 
         const geo = new THREE.CylinderGeometry(this.radius, this.radius, 0.2, 16);
-        const mat = new THREE.MeshBasicMaterial({color: 0x2F4F4F, transparent: true, opacity: 0.8});
+        const mat = new THREE.MeshBasicMaterial({color: 0x113311, transparent: true, opacity: 0.6});
         this.mesh = new THREE.Mesh(geo, mat);
         this.mesh.position.copy(this.pos);
         state.scene.add(this.mesh);
@@ -1676,6 +1832,21 @@ class Swamp extends ActiveEffect {
 
         // Visual pulse
         this.mesh.scale.setScalar(1.0 + Math.sin(this.timer * 2) * 0.05);
+        this.mesh.material.opacity = 0.6 + Math.sin(this.timer * 3) * 0.2;
+
+        // Bubbles
+        if(Math.random() < 0.2) {
+            const angle = Math.random() * Math.PI * 2;
+            const r = Math.random() * this.radius * 0.8;
+            const bubbleMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), new THREE.MeshBasicMaterial({color: 0x224422, transparent: true, opacity: 0.8}));
+            bubbleMesh.position.set(this.pos.x + Math.cos(angle)*r, this.pos.y, this.pos.z + Math.sin(angle)*r);
+
+            state.particles.push(new VisualEffect(bubbleMesh, 0.5 + Math.random()*0.5, (eff, dt) => {
+                eff.mesh.position.y += dt;
+                eff.mesh.scale.setScalar(1.0 + (1.0 - (eff.life/eff.maxLife)) * 1.5);
+                eff.mesh.material.opacity = eff.life / eff.maxLife;
+            }));
+        }
 
         // Kill units
         for(let i = state.units.length-1; i>=0; i--) {
@@ -1691,6 +1862,8 @@ class Swamp extends ActiveEffect {
 
         if(this.timer <= 0) {
             state.scene.remove(this.mesh);
+            this.mesh.geometry.dispose();
+            this.mesh.material.dispose();
             return false;
         }
         return true;
@@ -1707,10 +1880,15 @@ class Tornado extends ActiveEffect {
         this.angle = Math.random() * Math.PI * 2;
         this.mesh = new THREE.Group();
 
-        for(let i=0; i<20; i++) {
-            const p = new THREE.Mesh(AssetCache.geos.particle, getBasicMaterial(0xAAAAAA));
-            p.scale.set(0.5, 0.5, 0.5);
-            p.userData = { yOff: i * 0.5, r: 1 + i*0.2, ang: i };
+        // Use overlapping clouds for funnel
+        const cloudMat = new THREE.MeshBasicMaterial({color: 0x999999, transparent: true, opacity: 0.6});
+        for(let i=0; i<15; i++) {
+            const p = new THREE.Mesh(AssetCache.geos.cloud, cloudMat);
+            const scale = 1.0 + (i * 0.4);
+            p.scale.set(scale, scale*0.5, scale);
+            p.position.set(0, i * 1.5, 0);
+            p.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+            p.userData = { rotSpeed: (15 - i)*0.5 + 2.0 };
             this.mesh.add(p);
         }
         state.scene.add(this.mesh);
@@ -1733,9 +1911,10 @@ class Tornado extends ActiveEffect {
         this.mesh.position.copy(this.pos);
 
         // Animate Visuals
+        this.mesh.rotation.y += dt * 5.0; // Rotate whole group
         this.mesh.children.forEach(c => {
-             c.userData.ang += dt * 10;
-             c.position.set(Math.cos(c.userData.ang)*c.userData.r, c.userData.yOff, Math.sin(c.userData.ang)*c.userData.r);
+             c.rotation.y += c.userData.rotSpeed * dt;
+             c.rotation.z += dt;
         });
 
         // Physics
@@ -1754,6 +1933,7 @@ class Tornado extends ActiveEffect {
 
         if(this.timer <= 0) {
             state.scene.remove(this.mesh);
+            this.mesh.children.forEach(c => c.material.dispose()); // Clean up shared material
             return false;
         }
         return true;
@@ -1767,11 +1947,15 @@ class Swarm extends ActiveEffect {
         this.faction = faction;
         this.timer = 14.0;
         this.particles = [];
+        const geo = new THREE.ConeGeometry(0.1, 0.4, 4);
+        geo.rotateX(Math.PI/2); // Point forward
+        const mat = new THREE.MeshBasicMaterial({color: 0x222222});
+
         for(let i=0; i<30; i++) {
-            const p = new THREE.Mesh(AssetCache.geos.particle, getBasicMaterial(0x000000));
-            p.scale.set(0.2, 0.2, 0.2);
-            p.position.set((Math.random()-0.5)*4, (Math.random()-0.5)*2, (Math.random()-0.5)*4);
-            this.particles.push({mesh: p, off: p.position.clone()});
+            const p = new THREE.Mesh(geo, mat);
+            p.position.set(this.pos.x + (Math.random()-0.5)*4, this.pos.y + (Math.random()-0.5)*2, this.pos.z + (Math.random()-0.5)*4);
+            const targetOffset = new THREE.Vector3((Math.random()-0.5)*4, (Math.random()-0.5)*4, (Math.random()-0.5)*4);
+            this.particles.push({mesh: p, targetOffset: targetOffset, vel: new THREE.Vector3()});
             state.scene.add(p);
         }
     }
@@ -1790,12 +1974,33 @@ class Swarm extends ActiveEffect {
         if(closest) {
              const dir = closest.mesh.position.clone().add(new THREE.Vector3(0,2,0)).sub(this.pos).normalize();
              this.pos.addScaledVector(dir, 10 * dt);
+        } else {
+             // Mill around
+             this.pos.y = Math.max(getHeight(this.pos.x, this.pos.z) + 2, this.pos.y + Math.sin(this.timer) * dt);
         }
 
-        // Update particles
+        // Update particles (boids like)
         this.particles.forEach(p => {
-            p.off.applyAxisAngle(new THREE.Vector3(0,1,0), dt * 2);
-            p.mesh.position.copy(this.pos).add(p.off);
+            // Update offset targets randomly
+            if(Math.random() < 0.05) {
+                p.targetOffset.set((Math.random()-0.5)*6, (Math.random()-0.5)*4, (Math.random()-0.5)*6);
+            }
+            const targetPos = this.pos.clone().add(p.targetOffset);
+
+            // Steer
+            const dir = targetPos.sub(p.mesh.position).normalize();
+            p.vel.addScaledVector(dir, 20 * dt);
+
+            // Speed limit
+            if(p.vel.length() > 10) p.vel.normalize().multiplyScalar(10);
+
+            p.mesh.position.addScaledVector(p.vel, dt);
+
+            if(p.vel.lengthSq() > 0.1) {
+                // Look in direction of travel
+                const lookTarget = p.mesh.position.clone().add(p.vel);
+                p.mesh.lookAt(lookTarget);
+            }
         });
 
         // Damage
@@ -1807,7 +2012,13 @@ class Swarm extends ActiveEffect {
         });
 
         if(this.timer <= 0) {
-            this.particles.forEach(p => state.scene.remove(p.mesh));
+            this.particles.forEach(p => {
+                 state.scene.remove(p.mesh);
+            });
+            if(this.particles.length > 0) {
+                 this.particles[0].mesh.geometry.dispose();
+                 this.particles[0].mesh.material.dispose();
+            }
             return false;
         }
         return true;
@@ -1901,13 +2112,13 @@ function executeSpell(type, x, z, caster) {
     else if (type === 'raise') {
         const mods = modifyTerrain(x, z, 5, 2.0);
         updateChunks(true, mods);
-        spawnExplosion(x, getHeight(x, z), z, 0x00FF00, 10);
+        spawnDust(x, getHeight(x, z), z, 0x696969, 5);
         SoundManager.playSound('rumble');
     }
     else if (type === 'lower') {
         const mods = modifyTerrain(x, z, 5, -2.0);
         updateChunks(true, mods);
-        spawnExplosion(x, getHeight(x, z), z, 0x0000FF, 10);
+        spawnDust(x, getHeight(x, z), z, 0xEEDC82, 5);
         SoundManager.playSound('rumble');
     }
     else if (type === 'volcano') {
@@ -1938,7 +2149,14 @@ function executeSpell(type, x, z, caster) {
     else if (type === 'teleport') {
         SoundManager.playSound('magic');
         const h = getHeight(x, z);
-        spawnPulse(x, h, z, 0x0000FF);
+
+        // Departure effect
+        spawnExplosion(caster.mesh.position.x, caster.mesh.position.y, caster.mesh.position.z, 0x0000FF, 10);
+
+        // Arrival effect
+        spawnExplosion(x, h, z, 0x0000FF, 10);
+        spawnPulse(x, h, z, 0x00FFFF);
+
         caster.mesh.position.set(x, h, z);
         caster.state = 'idle';
         caster.velocity.set(0, 0, 0);
@@ -1982,7 +2200,23 @@ function executeSpell(type, x, z, caster) {
     }
     else if (type === 'hypnotise') {
         SoundManager.playSound('magic');
-        spawnPulse(x, getHeight(x, z), z, 0xFF00FF);
+
+        const h = getHeight(x, z);
+
+        // Swirling Torus effect
+        const ringGeo = new THREE.TorusGeometry(8, 0.5, 8, 32);
+        const ringMat = new THREE.MeshBasicMaterial({color: 0xFF00FF, transparent: true, opacity: 0.8});
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.position.set(x, h + 1, z);
+        ringMesh.rotation.x = Math.PI/2;
+
+        state.particles.push(new VisualEffect(ringMesh, 1.5, (eff, dt) => {
+             eff.mesh.rotation.z += dt * 5.0; // Spin
+             const prog = eff.life / eff.maxLife;
+             eff.mesh.scale.setScalar(prog); // Shrink
+             eff.mesh.material.opacity = prog;
+        }));
+
         state.units.forEach(u => {
             if(u.faction !== caster.faction && !u.isShaman) {
                  const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
@@ -2024,6 +2258,7 @@ function executeSpell(type, x, z, caster) {
                 }
             }
             updateChunks(true, modifiedChunks);
+            spawnDust(x, getHeight(x, z), z, 0x696969, r);
             SoundManager.playSound('rumble');
         }
     }
@@ -2036,14 +2271,49 @@ function executeSpell(type, x, z, caster) {
     }
     else if (type === 'lightning') {
         SoundManager.playSound('explosion');
-        // Visual Line
-        const geo = new THREE.CylinderGeometry(0.5, 0.1, 30, 8);
-        const mat = new THREE.MeshBasicMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.8});
-        const bolt = new THREE.Mesh(geo, mat);
-        bolt.position.set(x, getHeight(x,z) + 15, z);
-        state.scene.add(bolt);
-        setTimeout(() => state.scene.remove(bolt), 100);
-        spawnExplosion(x, getHeight(x,z), z, 0xFFFFFF, 20);
+        const h = getHeight(x,z);
+
+        // Jagged Lightning Bolt
+        const boltGroup = new THREE.Group();
+        const mat = new THREE.MeshBasicMaterial({color: 0xFFFFFF, transparent: true, opacity: 1.0});
+
+        let currentY = h + 30;
+        let currentX = x;
+        let currentZ = z;
+
+        for(let i=0; i<10; i++) {
+             let nextY = currentY - 3;
+             let nextX = x + (Math.random()-0.5)*4;
+             let nextZ = z + (Math.random()-0.5)*4;
+
+             if(i===9) { nextX = x; nextZ = z; } // Snap to target at end
+
+             const diff = new THREE.Vector3(nextX - currentX, nextY - currentY, nextZ - currentZ);
+             const dist = diff.length();
+
+             const segGeo = new THREE.CylinderGeometry(0.2, 0.2, dist, 8);
+             const seg = new THREE.Mesh(segGeo, mat);
+             seg.position.set(currentX + diff.x/2, currentY + diff.y/2, currentZ + diff.z/2);
+
+             // Orient segment
+             seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), diff.normalize());
+             boltGroup.add(seg);
+
+             currentX = nextX; currentY = nextY; currentZ = nextZ;
+        }
+
+        const light = new THREE.PointLight(0xFFFFFF, 3, 30);
+        light.position.set(x, h + 2, z);
+        boltGroup.add(light);
+
+        state.particles.push(new VisualEffect(boltGroup, 0.2, (eff, dt) => {
+            eff.mesh.children.forEach(c => {
+                 if(c.material) c.material.opacity = eff.life / eff.maxLife;
+                 if(c.isLight) c.intensity = 3 * (eff.life / eff.maxLife);
+            });
+        }));
+
+        spawnExplosion(x, h, z, 0xFFFFFF, 20);
 
         // Damage
         let hit = false;
@@ -2342,23 +2612,57 @@ class Humanoid {
     setShield(active) {
         this.shielded = active;
         if(active && !this.shieldMesh) {
-            this.shieldMesh = new THREE.Mesh(new THREE.SphereGeometry(0.8, 8, 8), new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.3}));
+            this.shieldMesh = new THREE.Group();
+
+            // Inner glow
+            const inner = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.2, depthWrite: false}));
+            this.shieldMesh.add(inner);
+
+            // Outer wireframe pattern (Dodecahedron looks techy/magical)
+            const outer = new THREE.Mesh(new THREE.DodecahedronGeometry(0.9, 0), new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.8, wireframe: true}));
+            this.shieldMesh.add(outer);
+
             this.shieldMesh.position.y = 1.0;
             this.mesh.add(this.shieldMesh);
         } else if(!active && this.shieldMesh) {
             this.mesh.remove(this.shieldMesh);
+            this.shieldMesh.children.forEach(c => {
+                 c.geometry.dispose();
+                 c.material.dispose();
+            });
             this.shieldMesh = null;
         }
     }
 
     setInvisibility(active) {
         this.invisible = active;
-        this.mesh.traverse(c => {
-            if(c.isMesh) {
-                c.material.transparent = true;
-                c.material.opacity = active ? 0.2 : 1.0;
+
+        if (active) {
+            // Store originals and apply clone
+            if (!this.originalMats) this.originalMats = new Map();
+            this.mesh.traverse(c => {
+                if (c.isMesh && c.material) {
+                    if (!this.originalMats.has(c)) {
+                        this.originalMats.set(c, c.material);
+                    }
+                    const newMat = c.material.clone();
+                    newMat.transparent = true;
+                    newMat.opacity = 0.2;
+                    c.material = newMat;
+                }
+            });
+        } else {
+            // Restore
+            if (this.originalMats) {
+                this.mesh.traverse(c => {
+                    if (c.isMesh && this.originalMats.has(c)) {
+                        c.material.dispose(); // Free clone
+                        c.material = this.originalMats.get(c);
+                    }
+                });
+                this.originalMats.clear();
             }
-        });
+        }
     }
 
     die() {
@@ -2537,6 +2841,11 @@ class Humanoid {
                 }
                 this.conversionTimer = 0;
             }
+        }
+
+        if (this.shielded && this.shieldMesh) {
+             this.shieldMesh.children[1].rotation.x += dt * 1.5;
+             this.shieldMesh.children[1].rotation.y += dt * 2.0;
         }
 
         this.hpGroup.lookAt(state.camera.position); this.animTime += dt;
