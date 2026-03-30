@@ -830,7 +830,9 @@ const AssetCache = {
         spyHood: new THREE.ConeGeometry(0.25, 0.4, 4),
         sword: new THREE.BoxGeometry(0.05, 0.6, 0.1),
         shield: new THREE.CylinderGeometry(0.25, 0.25, 0.05, 8),
-        tool: new THREE.BoxGeometry(0.05, 0.4, 0.05)
+        tool: new THREE.BoxGeometry(0.05, 0.4, 0.05),
+        flowerStem: new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4),
+        flowerPetal: new THREE.SphereGeometry(0.08, 4, 4)
     },
     mats: {
         skin: new THREE.MeshStandardMaterial({color: COLORS.skin, roughness: 0.7, metalness: 0.1}),
@@ -843,10 +845,18 @@ const AssetCache = {
         hpGreen: new THREE.MeshBasicMaterial({color: 0x00FF00}),
         hpRed: new THREE.MeshBasicMaterial({color: 0xFF0000}),
         selectRing: new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}),
-        marker: new THREE.MeshBasicMaterial({color: 0xFF0000})
+        marker: new THREE.MeshBasicMaterial({color: 0xFF0000}),
+        flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1})
     }
 };
 
+const FlowerMaterials = [
+    new THREE.MeshStandardMaterial({color: 0xFF0000, roughness: 0.6, metalness: 0.1}), // Red
+    new THREE.MeshStandardMaterial({color: 0xFFD700, roughness: 0.6, metalness: 0.1}), // Yellow
+    new THREE.MeshStandardMaterial({color: 0xFF69B4, roughness: 0.6, metalness: 0.1}), // Pink
+    new THREE.MeshStandardMaterial({color: 0x4169E1, roughness: 0.6, metalness: 0.1}), // Blue
+    new THREE.MeshStandardMaterial({color: 0xFFFFFF, roughness: 0.6, metalness: 0.1})  // White
+];
 
 // --- js/utils.js ---
 
@@ -872,6 +882,8 @@ function getBaseHeight(x, z) {
     y += state.simplex.noise2D(x * NOISE_SCALE, z * NOISE_SCALE) * 12;
     y += state.simplex.noise2D(x * NOISE_SCALE * 2, z * NOISE_SCALE * 2) * 4;
     y += state.simplex.noise2D(x * NOISE_SCALE * 4, z * NOISE_SCALE * 4) * 1.5;
+    y += state.simplex.noise2D(x * NOISE_SCALE * 8, z * NOISE_SCALE * 8) * 0.75;
+    y += state.simplex.noise2D(x * NOISE_SCALE * 16, z * NOISE_SCALE * 16) * 0.375;
 
     // Continuous smoothing
     if (y < WATER_LEVEL) y -= (WATER_LEVEL - y) * 0.2;
@@ -1294,7 +1306,7 @@ function updateChunks(force = false, specificChunks = null) {
                     if(state.chunks[key].children[0]) {
                         updateChunkGeometry(state.chunks[key].children[0], cx+x, cz+z);
                     }
-                    updateChunkTrees(state.chunks[key], cx+x, cz+z);
+                    updateChunkDecorations(state.chunks[key], cx+x, cz+z);
                 } else {
                     if (!state.chunks[key] && createdCount >= MAX_CHUNKS_PER_FRAME) {
                         chunksLoadingPending = true;
@@ -1368,18 +1380,33 @@ function updateChunkGeometry(mesh, cx, cz) {
     geo.computeVertexNormals();
 }
 
-function updateChunkTrees(chunk, cx, cz) {
-    if (!chunk.userData || !chunk.userData.trees) return;
-    const trees = chunk.userData.trees;
+function updateChunkDecorations(chunk, cx, cz) {
+    if (!chunk.userData) return;
 
-    for (let i = trees.length - 1; i >= 0; i--) {
-        const treeData = trees[i];
-        const tMesh = treeData.mesh;
-        const h = getHeight(tMesh.position.x, tMesh.position.z);
-        tMesh.position.y = h;
+    if (chunk.userData.trees) {
+        const trees = chunk.userData.trees;
+        for (let i = trees.length - 1; i >= 0; i--) {
+            const treeData = trees[i];
+            const tMesh = treeData.mesh;
+            const h = getHeight(tMesh.position.x, tMesh.position.z);
+            tMesh.position.y = h;
 
-        // Hide if underwater
-        tMesh.visible = (h >= WATER_LEVEL);
+            // Hide if underwater
+            tMesh.visible = (h >= WATER_LEVEL);
+        }
+    }
+
+    if (chunk.userData.flowers) {
+        const flowers = chunk.userData.flowers;
+        for (let i = flowers.length - 1; i >= 0; i--) {
+            const flowerData = flowers[i];
+            const fMesh = flowerData.mesh;
+            const h = getHeight(fMesh.position.x, fMesh.position.z);
+            fMesh.position.y = h;
+
+            // Hide if underwater or too high up (not grassy)
+            fMesh.visible = (h > WATER_LEVEL + 0.5 && h < 7.0);
+        }
     }
 }
 
@@ -1405,7 +1432,7 @@ function createChunk(cx, cz) {
     wMesh.rotation.x = -Math.PI/2; wMesh.position.set(offX, VISUAL_WATER_LEVEL, offZ);
     grp.add(wMesh);
 
-    grp.userData = { trees: [] };
+    grp.userData = { trees: [], flowers: [] };
     for(let k=0; k<3; k++) {
         if(Math.random() > 0.5) {
              const lx = (Math.random()-0.5)*CHUNK_SIZE; const lz = (Math.random()-0.5)*CHUNK_SIZE;
@@ -1430,6 +1457,65 @@ function createChunk(cx, cz) {
              }
         }
     }
+
+    // Generate large coherent flower fields
+    const spacing = 1.0;
+    for(let x = -CHUNK_SIZE/2; x < CHUNK_SIZE/2; x += spacing) {
+        for(let z = -CHUNK_SIZE/2; z < CHUNK_SIZE/2; z += spacing) {
+            // Use simplex noise to determine if this spot is part of a flower field
+            const worldX = x + offX;
+            const worldZ = z + offZ;
+
+            // Generate field mask (low frequency for large fields)
+            const fieldNoise = state.simplex.noise2D(worldX * 0.03, worldZ * 0.03);
+
+            // ~20% coverage -> threshold around 0.3 for noise ranging [-1, 1] roughly
+            // Noise > 0.6 produces ~20% coverage area in typical simplex implementations
+            if(fieldNoise > 0.4) {
+                // Add some jitter to grid so they don't look perfectly aligned
+                const jx = worldX + (Math.random()-0.5) * spacing * 0.8;
+                const jz = worldZ + (Math.random()-0.5) * spacing * 0.8;
+
+                const h = getHeight(jx, jz);
+
+                // Only on grassy plains/hills
+                if(h > WATER_LEVEL + 0.5 && h < 7.0) {
+                    // Use another noise layer to determine color patches (coherent colors)
+                    const colorNoise = state.simplex.noise2D(jx * 0.05 + 100, jz * 0.05 + 100);
+                    // Map noise [-1, 1] to array index
+                    const normalizedColor = (colorNoise + 1.0) / 2.0; // 0 to 1
+                    let cIndex = Math.floor(normalizedColor * FlowerMaterials.length);
+                    cIndex = Math.max(0, Math.min(FlowerMaterials.length - 1, cIndex));
+
+                    const petalMat = FlowerMaterials[cIndex];
+
+                    const flowerGroup = new THREE.Group();
+                    flowerGroup.position.set(jx, h, jz);
+
+                    const stem = new THREE.Mesh(AssetCache.geos.flowerStem, AssetCache.mats.flowerStem);
+                    stem.position.y = 0.2;
+                    stem.castShadow = true;
+                    flowerGroup.add(stem);
+
+                    const petal = new THREE.Mesh(AssetCache.geos.flowerPetal, petalMat);
+                    petal.position.y = 0.4;
+                    petal.castShadow = true;
+                    flowerGroup.add(petal);
+
+                    // Add slight random rotation to flower for natural look
+                    flowerGroup.rotation.y = Math.random() * Math.PI * 2;
+                    flowerGroup.rotation.z = (Math.random() - 0.5) * 0.2;
+                    flowerGroup.rotation.x = (Math.random() - 0.5) * 0.2;
+
+                    grp.add(flowerGroup);
+                    grp.userData.flowers.push({
+                        mesh: flowerGroup
+                    });
+                }
+            }
+        }
+    }
+
     return grp;
 }
 
