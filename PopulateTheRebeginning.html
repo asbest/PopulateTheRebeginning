@@ -1459,7 +1459,7 @@ function createChunk(cx, cz) {
     }
 
     // Generate large coherent flower fields
-    const spacing = 1.0;
+    const spacing = 0.6;
     for(let x = -CHUNK_SIZE/2; x < CHUNK_SIZE/2; x += spacing) {
         for(let z = -CHUNK_SIZE/2; z < CHUNK_SIZE/2; z += spacing) {
             // Use simplex noise to determine if this spot is part of a flower field
@@ -1470,8 +1470,11 @@ function createChunk(cx, cz) {
             const fieldNoise = state.simplex.noise2D(worldX * 0.03, worldZ * 0.03);
 
             // ~20% coverage -> threshold around 0.3 for noise ranging [-1, 1] roughly
-            // Noise > 0.6 produces ~20% coverage area in typical simplex implementations
+            // Noise > 0.4 produces ~20% coverage area in typical simplex implementations
             if(fieldNoise > 0.4) {
+                // Skip occasionally for less uniform density
+                if(Math.random() > 0.8) continue;
+
                 // Add some jitter to grid so they don't look perfectly aligned
                 const jx = worldX + (Math.random()-0.5) * spacing * 0.8;
                 const jz = worldZ + (Math.random()-0.5) * spacing * 0.8;
@@ -1492,20 +1495,28 @@ function createChunk(cx, cz) {
                     const flowerGroup = new THREE.Group();
                     flowerGroup.position.set(jx, h, jz);
 
+                    // Randomly adjust size of individual flower
+                    const scaleFactor = 0.6 + Math.random() * 0.8; // 0.6x to 1.4x scale
+
                     const stem = new THREE.Mesh(AssetCache.geos.flowerStem, AssetCache.mats.flowerStem);
-                    stem.position.y = 0.2;
+                    stem.position.y = 0.2 * scaleFactor;
+                    stem.scale.set(1.0, scaleFactor, 1.0);
                     stem.castShadow = true;
                     flowerGroup.add(stem);
 
                     const petal = new THREE.Mesh(AssetCache.geos.flowerPetal, petalMat);
-                    petal.position.y = 0.4;
+                    petal.position.y = 0.4 * scaleFactor;
+
+                    // Random petal squashing for variation
+                    const squashY = 0.6 + Math.random() * 0.6;
+                    petal.scale.set(scaleFactor, scaleFactor * squashY, scaleFactor);
                     petal.castShadow = true;
                     flowerGroup.add(petal);
 
                     // Add slight random rotation to flower for natural look
                     flowerGroup.rotation.y = Math.random() * Math.PI * 2;
-                    flowerGroup.rotation.z = (Math.random() - 0.5) * 0.2;
-                    flowerGroup.rotation.x = (Math.random() - 0.5) * 0.2;
+                    flowerGroup.rotation.z = (Math.random() - 0.5) * 0.4;
+                    flowerGroup.rotation.x = (Math.random() - 0.5) * 0.4;
 
                     grp.add(flowerGroup);
                     grp.userData.flowers.push({
