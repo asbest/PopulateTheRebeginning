@@ -1945,7 +1945,7 @@ class Swarm extends ActiveEffect {
         super();
         this.pos = new THREE.Vector3(x, getHeight(x,z)+3, z);
         this.faction = faction;
-        this.timer = 7.0;
+        this.timer = 3.0;
         this.particles = [];
         const geo = new THREE.ConeGeometry(0.1, 0.4, 4);
         geo.rotateX(Math.PI/2); // Point forward
