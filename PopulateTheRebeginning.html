@@ -1412,6 +1412,8 @@ function updateChunkDecorations(chunk, cx, cz) {
             const stemMatrix = new THREE.Matrix4();
             const petalMatrix = new THREE.Matrix4();
 
+            const time = state.clock ? state.clock.getElapsedTime() : 0;
+
             for (let i = 0; i < dataList.length; i++) {
                 const data = dataList[i];
                 const h = getHeight(data.x, data.z);
@@ -1420,8 +1422,14 @@ function updateChunkDecorations(chunk, cx, cz) {
                 const visible = (h > WATER_LEVEL + 0.5 && h < 7.0);
                 const globalScale = visible ? 1 : 0;
 
+                // Virtual Wind Calculation
+                // Use the flower's world position to offset the sine wave so they don't sway perfectly in sync
+                const windOffset = (data.x * 0.5) + (data.z * 0.5);
+                const windX = Math.sin(time * 2.0 + windOffset) * 0.1;
+                const windZ = Math.cos(time * 1.5 + windOffset) * 0.1;
+
                 dummy.position.set(data.x, h, data.z);
-                dummy.rotation.set(data.rotX, data.rotY, data.rotZ);
+                dummy.rotation.set(data.rotX + windX, data.rotY, data.rotZ + windZ);
                 dummy.scale.set(globalScale, globalScale, globalScale);
                 dummy.updateMatrix();
 
