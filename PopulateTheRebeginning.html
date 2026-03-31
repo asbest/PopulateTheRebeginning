@@ -4982,6 +4982,13 @@ function animate() {
     BuildingSpatialHash.update();
     CloudManager.update(dt);
 
+    // Force flower wind animation updates every frame if not paused
+    for (let key in state.chunks) {
+        if (state.chunks[key] && state.chunks[key].userData && state.chunks[key].userData.flowers) {
+            updateChunkDecorations(state.chunks[key], 0, 0); // specific position isn't strictly needed for wind here since data has original coords
+        }
+    }
+
     _inputVector.copy(state.joystickVector).add(state.keyboardVector).clampLength(0, 1);
     const inputVector = _inputVector;
     if(inputVector.lengthSq() > 0.001 && state.selectedUnits.length > 0) {
