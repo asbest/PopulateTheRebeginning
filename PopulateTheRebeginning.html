@@ -416,15 +416,21 @@ const SpatialHash = {
     cellSize: 20,
     cells: new Map(),
     update: function() {
-        this.cells.clear();
+        for (let cell of this.cells.values()) {
+            cell.length = 0;
+        }
         for(let i=0; i<state.units.length; i++) {
             const u = state.units[i];
             if(u.state !== 'dead') {
                 const cx = Math.floor(u.mesh.position.x / this.cellSize);
                 const cz = Math.floor(u.mesh.position.z / this.cellSize);
-                const key = `${cx},${cz}`;
-                if (!this.cells.has(key)) this.cells.set(key, []);
-                this.cells.get(key).push(u);
+                const key = (cx << 16) | (cz & 0xFFFF);
+                let cell = this.cells.get(key);
+                if (!cell) {
+                    cell = [];
+                    this.cells.set(key, cell);
+                }
+                cell.push(u);
             }
         }
     },
@@ -435,9 +441,9 @@ const SpatialHash = {
         const r = Math.ceil(radius / this.cellSize);
         for(let i = cx - r; i <= cx + r; i++) {
             for(let j = cz - r; j <= cz + r; j++) {
-                const key = `${i},${j}`;
-                if (this.cells.has(key)) {
-                    const cellUnits = this.cells.get(key);
+                const key = (i << 16) | (j & 0xFFFF);
+                const cellUnits = this.cells.get(key);
+                if (cellUnits) {
                     for(let k=0; k<cellUnits.length; k++) {
                          results.push(cellUnits[k]);
                     }
@@ -460,7 +466,9 @@ const BuildingSpatialHash = {
         if (!this.dirty) return;
         this.dirty = false;
 
-        this.cells.clear();
+        for (let cell of this.cells.values()) {
+            cell.length = 0;
+        }
         for(let b of state.buildings) {
              if(!b.dead && !b.underConstruction) {
                 this.add(b);
@@ -477,9 +485,13 @@ const BuildingSpatialHash = {
 
         for(let x = minX; x <= maxX; x++) {
             for(let z = minZ; z <= maxZ; z++) {
-                const key = `${x},${z}`;
-                if(!this.cells.has(key)) this.cells.set(key, []);
-                this.cells.get(key).push(b);
+                const key = (x << 16) | (z & 0xFFFF);
+                let cell = this.cells.get(key);
+                if (!cell) {
+                    cell = [];
+                    this.cells.set(key, cell);
+                }
+                cell.push(b);
             }
         }
     },
@@ -487,7 +499,7 @@ const BuildingSpatialHash = {
     query: function(x, z) {
          const cx = Math.floor(x / this.cellSize);
          const cz = Math.floor(z / this.cellSize);
-         const key = `${cx},${cz}`;
+         const key = (cx << 16) | (cz & 0xFFFF);
          return this.cells.get(key);
     }
 };
@@ -1114,6 +1126,7 @@ class VisualEffect {
 }
 
 function spawnExplosion(x, y, z, color, count) {
+    count = Math.max(1, Math.floor(count / 2));
     const pos = new THREE.Vector3(x, y, z);
     // Dynamic particles
     for(let i=0; i<count; i++) {
@@ -1181,7 +1194,7 @@ function spawnHealing(x, y, z) {
 }
 
 function spawnDust(x, y, z, color, radius) {
-    const numDust = Math.floor(radius * 5);
+    const numDust = Math.floor(radius * 2.5);
     for(let i=0; i<numDust; i++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = Math.random() * radius;
@@ -1274,7 +1287,7 @@ function burnTreesAt(x, z, radius) {
                     l.scale.set(0.8, 0.5, 0.8); // Shriveled
 
                     // Smoke
-                    for(let i=0; i<3; i++) {
+                    for(let i=0; i<1; i++) {
                         const p = new Particle(tree.mesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 0x333333, 0.2, 2.0, -1);
                         state.particles.push(p);
                     }
@@ -1932,7 +1945,7 @@ class Fireball {
         const impactPos = this.mesh.position;
         burnTreesAt(impactPos.x, impactPos.z, 8); // Burn trees
         // Units
-        state.units.forEach(u => {
+        SpatialHash.query(impactPos.x, impactPos.z, 8).forEach(u => {
             const d = u.mesh.position.distanceTo(impactPos);
             if(d < 8) {
                 if (u.faction !== this.faction) {
@@ -1988,7 +2001,7 @@ class Volcano extends ActiveEffect {
         this.light.intensity = 2 + Math.sin(this.timer * 10) * 0.5;
 
         // Visuals: Lava Particles
-        if(Math.random() < 0.5) {
+        if(Math.random() < 0.25) {
             const dist = Math.random() * 4;
             const angle = Math.random() * Math.PI * 2;
             const px = this.x + Math.cos(angle) * dist;
@@ -2000,7 +2013,7 @@ class Volcano extends ActiveEffect {
         }
 
         // Visuals: Smoke Clouds
-        if(Math.random() < 0.2) {
+        if(Math.random() < 0.1) {
             const size = 1 + Math.random() * 2;
             const smokeMesh = new THREE.Mesh(AssetCache.geos.cloud, new THREE.MeshBasicMaterial({color: 0x222222, transparent: true, opacity: 0.8}));
             smokeMesh.position.set(this.x + (Math.random()-0.5)*2, getHeight(this.x, this.z), this.z + (Math.random()-0.5)*2);
@@ -2027,7 +2040,7 @@ class Volcano extends ActiveEffect {
             burnTreesAt(this.x, this.z, 10);
 
             // Push & Damage
-            state.units.forEach(u => {
+            SpatialHash.query(this.x, this.z, 10).forEach(u => {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(this.x, u.mesh.position.y, this.z));
                 if(dist < 10 && u.faction !== this.faction) {
                     const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
@@ -2072,7 +2085,7 @@ class Swamp extends ActiveEffect {
         this.mesh.material.opacity = 0.6 + Math.sin(this.timer * 3) * 0.2;
 
         // Bubbles
-        if(Math.random() < 0.2) {
+        if(Math.random() < 0.1) {
             const angle = Math.random() * Math.PI * 2;
             const r = Math.random() * this.radius * 0.8;
             const bubbleMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), new THREE.MeshBasicMaterial({color: 0x224422, transparent: true, opacity: 0.8}));
@@ -2086,8 +2099,7 @@ class Swamp extends ActiveEffect {
         }
 
         // Kill units
-        for(let i = state.units.length-1; i>=0; i--) {
-            const u = state.units[i];
+        SpatialHash.query(this.pos.x, this.pos.z, this.radius * 0.8).forEach(u => {
             if(u.state !== 'dead' && !u.isShaman && u.faction !== this.faction) {
                 const dist = Math.sqrt((u.mesh.position.x - this.pos.x)**2 + (u.mesh.position.z - this.pos.z)**2);
                 if(dist < this.radius * 0.8) {
@@ -2095,7 +2107,7 @@ class Swamp extends ActiveEffect {
                      spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0x000000);
                 }
             }
-        }
+        });
 
         if(this.timer <= 0) {
             state.scene.remove(this.mesh);
@@ -2119,7 +2131,7 @@ class Tornado extends ActiveEffect {
 
         // Use overlapping clouds for funnel
         const cloudMat = new THREE.MeshBasicMaterial({color: 0x999999, transparent: true, opacity: 0.6});
-        for(let i=0; i<15; i++) {
+        for(let i=0; i<7; i++) {
             const p = new THREE.Mesh(AssetCache.geos.cloud, cloudMat);
             const scale = 1.0 + (i * 0.4);
             p.scale.set(scale, scale*0.5, scale);
@@ -2156,7 +2168,7 @@ class Tornado extends ActiveEffect {
 
         // Physics
         const damagePerSecond = 300;
-        state.units.forEach(u => {
+        SpatialHash.query(this.pos.x, this.pos.z, 5).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 5 && u.faction !== this.faction) {
                  u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 25, (Math.random()-0.5)*10));
@@ -2188,7 +2200,7 @@ class Swarm extends ActiveEffect {
         geo.rotateX(Math.PI/2); // Point forward
         const mat = new THREE.MeshBasicMaterial({color: 0x222222});
 
-        for(let i=0; i<30; i++) {
+        for(let i=0; i<15; i++) {
             const p = new THREE.Mesh(geo, mat);
             p.position.set(this.pos.x + (Math.random()-0.5)*4, this.pos.y + (Math.random()-0.5)*2, this.pos.z + (Math.random()-0.5)*4);
             const targetOffset = new THREE.Vector3((Math.random()-0.5)*4, (Math.random()-0.5)*4, (Math.random()-0.5)*4);
@@ -2201,7 +2213,7 @@ class Swarm extends ActiveEffect {
 
         // Move towards nearest enemy
         let closest = null; let minDist = 50;
-        state.units.forEach(u => {
+        SpatialHash.query(this.pos.x, this.pos.z, 50).forEach(u => {
              if(u.faction !== this.faction && u.state !== 'dead') {
                  const d = u.mesh.position.distanceTo(this.pos);
                  if(d < minDist) { minDist = d; closest = u; }
@@ -2241,7 +2253,7 @@ class Swarm extends ActiveEffect {
         });
 
         // Damage
-        state.units.forEach(u => {
+        SpatialHash.query(this.pos.x, this.pos.z, 4).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 4 && u.faction !== this.faction) {
                 u.takeDamage(25 * dt);
@@ -2273,7 +2285,7 @@ class Firestorm extends ActiveEffect {
     update(dt) {
         this.timer -= dt;
         this.interval += dt;
-        if(this.interval > 0.5) {
+        if(this.interval > 1.0) {
             this.interval = 0;
             const rx = this.x + (Math.random()-0.5)*15;
             const rz = this.z + (Math.random()-0.5)*15;
@@ -2365,7 +2377,7 @@ function executeSpell(type, x, z, caster) {
     else if (type === 'heal') {
         SoundManager.playSound('magic');
         spawnPulse(x, getHeight(x, z), z, 0xFF69B4);
-        state.units.forEach(u => {
+        SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction === caster.faction && u.state !== 'dead') {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                 if(dist < 8) {
@@ -2413,7 +2425,7 @@ function executeSpell(type, x, z, caster) {
     else if (type === 'shield') {
         SoundManager.playSound('magic');
         spawnPulse(x, getHeight(x, z), z, 0x00FFFF);
-        state.units.forEach(u => {
+        SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction === caster.faction) {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                 if(dist < 8) {
@@ -2425,7 +2437,7 @@ function executeSpell(type, x, z, caster) {
     }
     else if (type === 'invisibility') {
         SoundManager.playSound('magic');
-        state.units.forEach(u => {
+        SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction === caster.faction) {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                 if(dist < 8) {
@@ -2454,7 +2466,7 @@ function executeSpell(type, x, z, caster) {
              eff.mesh.material.opacity = prog;
         }));
 
-        state.units.forEach(u => {
+        SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction !== caster.faction && !u.isShaman) {
                  const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                  if(dist < 8) {
@@ -2555,7 +2567,7 @@ function executeSpell(type, x, z, caster) {
         // Damage
         let hit = false;
         burnTreesAt(x, z, 5); // Burn trees
-        state.units.forEach(u => {
+        SpatialHash.query(x, z, 4).forEach(u => {
              const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
              if(dist < 4 && u.faction !== caster.faction) {
                  u.takeDamage(400);
@@ -3059,7 +3071,7 @@ class Humanoid {
 
         if (this.burnTimer > 0) {
             this.burnTimer -= dt;
-            if(Math.random() < 0.5) {
+            if(Math.random() < 0.25) {
                 state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1, (Math.random()-0.5))), 0xFF4500, 0.1, 0.5));
             }
             // Optional: DOT
@@ -3440,7 +3452,7 @@ class Humanoid {
         }
 
         if(this.type === 'firewarrior' && this.state !== 'dead') {
-            if(Math.random() < 0.3) {
+            if(Math.random() < 0.15) {
                  const spawnFire = (limb) => {
                      const pos = new THREE.Vector3();
                      limb.getWorldPosition(pos);
@@ -3604,7 +3616,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
                 if(this.burnTimer > 0) {
                     this.burnTimer -= dt;
-                    if(Math.random() < 0.5) {
+                    if(Math.random() < 0.25) {
                         state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5)*2, 2, (Math.random()-0.5)*2)), 0xFF4500, 0.15, 0.5));
                     }
                 }
