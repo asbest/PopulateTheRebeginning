@@ -879,8 +879,8 @@ function addWindShader(material) {
                 mvPosition = instanceMatrix * mvPosition;
                 float heightFromBase = max(0.0, mvPosition.y - aBasePos.y);
                 float windOffset = aBasePos.x * 0.5 + aBasePos.z * 0.5;
-                float windX = sin(uTime * 2.0 + windOffset) * 0.1;
-                float windZ = cos(uTime * 1.5 + windOffset) * 0.1;
+                float windX = sin(uTime * 2.0 + windOffset) * 0.05;
+                float windZ = cos(uTime * 1.5 + windOffset) * 0.05;
                 mvPosition.x += heightFromBase * windZ;
                 mvPosition.z -= heightFromBase * windX;
             #endif
