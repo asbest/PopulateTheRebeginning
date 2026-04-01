@@ -501,6 +501,7 @@ window.activeEffects = state.activeEffects;
 window.joystickVector = state.joystickVector;
 window.keyboardVector = state.keyboardVector;
 window.state = state;
+window.flowerUniforms = { uTime: { value: 0 } };
 
 
 // --- js/network.js ---
@@ -859,6 +860,39 @@ const FlowerMaterials = [
     new THREE.MeshStandardMaterial({color: 0x4169E1, roughness: 0.6, metalness: 0.1}), // Blue
     new THREE.MeshStandardMaterial({color: 0xFFFFFF, roughness: 0.6, metalness: 0.1})  // White
 ];
+
+AssetCache.mats.flowerPetalBase = FlowerMaterials[0].clone();
+AssetCache.mats.flowerPetalBase.color.setHex(0xffffff);
+
+function addWindShader(material) {
+    material.onBeforeCompile = function(shader) {
+        shader.uniforms.uTime = window.flowerUniforms.uTime;
+        shader.vertexShader = `
+            attribute vec3 aBasePos;
+            uniform float uTime;
+            ${shader.vertexShader}
+        `.replace(
+            `#include <project_vertex>`,
+            `
+            vec4 mvPosition = vec4( transformed, 1.0 );
+            #ifdef USE_INSTANCING
+                mvPosition = instanceMatrix * mvPosition;
+                float heightFromBase = max(0.0, mvPosition.y - aBasePos.y);
+                float windOffset = aBasePos.x * 0.5 + aBasePos.z * 0.5;
+                float windX = sin(uTime * 2.0 + windOffset) * 0.1;
+                float windZ = cos(uTime * 1.5 + windOffset) * 0.1;
+                mvPosition.x += heightFromBase * windZ;
+                mvPosition.z -= heightFromBase * windX;
+            #endif
+            mvPosition = modelViewMatrix * mvPosition;
+            gl_Position = projectionMatrix * mvPosition;
+            `
+        );
+    };
+}
+
+addWindShader(AssetCache.mats.flowerStem);
+addWindShader(AssetCache.mats.flowerPetalBase);
 
 // --- js/utils.js ---
 
@@ -1412,7 +1446,7 @@ function updateChunkDecorations(chunk, cx, cz) {
             const stemMatrix = new THREE.Matrix4();
             const petalMatrix = new THREE.Matrix4();
 
-            const time = state.clock ? state.clock.getElapsedTime() : 0;
+            const basePosArray = stems.geometry.attributes.aBasePos.array;
 
             for (let i = 0; i < dataList.length; i++) {
                 const data = dataList[i];
@@ -1422,14 +1456,12 @@ function updateChunkDecorations(chunk, cx, cz) {
                 const visible = (h > WATER_LEVEL + 0.5 && h < 7.0);
                 const globalScale = visible ? 1 : 0;
 
-                // Virtual Wind Calculation
-                // Use the flower's world position to offset the sine wave so they don't sway perfectly in sync
-                const windOffset = (data.x * 0.5) + (data.z * 0.5);
-                const windX = Math.sin(time * 2.0 + windOffset) * 0.1;
-                const windZ = Math.cos(time * 1.5 + windOffset) * 0.1;
+                basePosArray[i*3] = data.x;
+                basePosArray[i*3+1] = h;
+                basePosArray[i*3+2] = data.z;
 
                 dummy.position.set(data.x, h, data.z);
-                dummy.rotation.set(data.rotX + windX, data.rotY, data.rotZ + windZ);
+                dummy.rotation.set(data.rotX, data.rotY, data.rotZ);
                 dummy.scale.set(globalScale, globalScale, globalScale);
                 dummy.updateMatrix();
 
@@ -1451,6 +1483,8 @@ function updateChunkDecorations(chunk, cx, cz) {
             }
             stems.instanceMatrix.needsUpdate = true;
             petals.instanceMatrix.needsUpdate = true;
+            stems.geometry.attributes.aBasePos.needsUpdate = true;
+            petals.geometry.attributes.aBasePos.needsUpdate = true;
         } else if (Array.isArray(flowers)) {
             // Fallback for old save games / structure (if any remain)
             for (let i = flowers.length - 1; i >= 0; i--) {
@@ -1566,15 +1600,14 @@ function createChunk(cx, cz) {
 
     if (flowerDataList.length > 0) {
         const dummy = new THREE.Object3D();
-        const stemInstancedMesh = new THREE.InstancedMesh(AssetCache.geos.flowerStem, AssetCache.mats.flowerStem, flowerDataList.length);
+
+        const stemGeo = AssetCache.geos.flowerStem.clone();
+        const petalGeo = AssetCache.geos.flowerPetal.clone();
+
+        const stemInstancedMesh = new THREE.InstancedMesh(stemGeo, AssetCache.mats.flowerStem, flowerDataList.length);
         stemInstancedMesh.castShadow = true;
-        // The original petal used different materials, we need to handle that.
-        // For instanced meshes with different colors, we use a single material and setColorAt.
-        // We can just use the first FlowerMaterial as the base, it's a MeshStandardMaterial.
-        const basePetalMat = FlowerMaterials[0].clone();
-        basePetalMat.color.setHex(0xffffff); // Set to white so instance color displays correctly
-        // Cloning so we don't accidentally tint all other things using this material, though we only use it here.
-        const petalInstancedMesh = new THREE.InstancedMesh(AssetCache.geos.flowerPetal, basePetalMat, flowerDataList.length);
+
+        const petalInstancedMesh = new THREE.InstancedMesh(petalGeo, AssetCache.mats.flowerPetalBase, flowerDataList.length);
         petalInstancedMesh.castShadow = true;
 
         const tempColor = new THREE.Color();
@@ -1584,8 +1617,14 @@ function createChunk(cx, cz) {
         const stemMatrix = new THREE.Matrix4();
         const petalMatrix = new THREE.Matrix4();
 
+        const basePosArray = new Float32Array(flowerDataList.length * 3);
+
         for (let i = 0; i < flowerDataList.length; i++) {
             const data = flowerDataList[i];
+
+            basePosArray[i*3] = data.x;
+            basePosArray[i*3+1] = data.h;
+            basePosArray[i*3+2] = data.z;
 
             // Replicate the flowerGroup transform
             dummy.position.set(data.x, data.h, data.z);
@@ -1615,6 +1654,9 @@ function createChunk(cx, cz) {
             tempColor.copy(petalColor);
             petalInstancedMesh.setColorAt(i, tempColor);
         }
+
+        stemInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
+        petalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
 
         grp.add(stemInstancedMesh);
         grp.add(petalInstancedMesh);
@@ -4982,11 +5024,8 @@ function animate() {
     BuildingSpatialHash.update();
     CloudManager.update(dt);
 
-    // Force flower wind animation updates every frame if not paused
-    for (let key in state.chunks) {
-        if (state.chunks[key] && state.chunks[key].userData && state.chunks[key].userData.flowers) {
-            updateChunkDecorations(state.chunks[key], 0, 0); // specific position isn't strictly needed for wind here since data has original coords
-        }
+    if (state.clock) {
+        window.flowerUniforms.uTime.value = state.clock.getElapsedTime();
     }
 
     _inputVector.copy(state.joystickVector).add(state.keyboardVector).clampLength(0, 1);
