@@ -1126,6 +1126,7 @@ class VisualEffect {
 }
 
 function spawnExplosion(x, y, z, color, count) {
+    count = Math.max(1, Math.floor(count / 2));
     const pos = new THREE.Vector3(x, y, z);
     // Dynamic particles
     for(let i=0; i<count; i++) {
@@ -1193,7 +1194,7 @@ function spawnHealing(x, y, z) {
 }
 
 function spawnDust(x, y, z, color, radius) {
-    const numDust = Math.floor(radius * 5);
+    const numDust = Math.floor(radius * 2.5);
     for(let i=0; i<numDust; i++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = Math.random() * radius;
@@ -1286,7 +1287,7 @@ function burnTreesAt(x, z, radius) {
                     l.scale.set(0.8, 0.5, 0.8); // Shriveled
 
                     // Smoke
-                    for(let i=0; i<3; i++) {
+                    for(let i=0; i<1; i++) {
                         const p = new Particle(tree.mesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 0x333333, 0.2, 2.0, -1);
                         state.particles.push(p);
                     }
@@ -2000,7 +2001,7 @@ class Volcano extends ActiveEffect {
         this.light.intensity = 2 + Math.sin(this.timer * 10) * 0.5;
 
         // Visuals: Lava Particles
-        if(Math.random() < 0.5) {
+        if(Math.random() < 0.25) {
             const dist = Math.random() * 4;
             const angle = Math.random() * Math.PI * 2;
             const px = this.x + Math.cos(angle) * dist;
@@ -2012,7 +2013,7 @@ class Volcano extends ActiveEffect {
         }
 
         // Visuals: Smoke Clouds
-        if(Math.random() < 0.2) {
+        if(Math.random() < 0.1) {
             const size = 1 + Math.random() * 2;
             const smokeMesh = new THREE.Mesh(AssetCache.geos.cloud, new THREE.MeshBasicMaterial({color: 0x222222, transparent: true, opacity: 0.8}));
             smokeMesh.position.set(this.x + (Math.random()-0.5)*2, getHeight(this.x, this.z), this.z + (Math.random()-0.5)*2);
@@ -2084,7 +2085,7 @@ class Swamp extends ActiveEffect {
         this.mesh.material.opacity = 0.6 + Math.sin(this.timer * 3) * 0.2;
 
         // Bubbles
-        if(Math.random() < 0.2) {
+        if(Math.random() < 0.1) {
             const angle = Math.random() * Math.PI * 2;
             const r = Math.random() * this.radius * 0.8;
             const bubbleMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), new THREE.MeshBasicMaterial({color: 0x224422, transparent: true, opacity: 0.8}));
@@ -2130,7 +2131,7 @@ class Tornado extends ActiveEffect {
 
         // Use overlapping clouds for funnel
         const cloudMat = new THREE.MeshBasicMaterial({color: 0x999999, transparent: true, opacity: 0.6});
-        for(let i=0; i<15; i++) {
+        for(let i=0; i<7; i++) {
             const p = new THREE.Mesh(AssetCache.geos.cloud, cloudMat);
             const scale = 1.0 + (i * 0.4);
             p.scale.set(scale, scale*0.5, scale);
@@ -2199,7 +2200,7 @@ class Swarm extends ActiveEffect {
         geo.rotateX(Math.PI/2); // Point forward
         const mat = new THREE.MeshBasicMaterial({color: 0x222222});
 
-        for(let i=0; i<30; i++) {
+        for(let i=0; i<15; i++) {
             const p = new THREE.Mesh(geo, mat);
             p.position.set(this.pos.x + (Math.random()-0.5)*4, this.pos.y + (Math.random()-0.5)*2, this.pos.z + (Math.random()-0.5)*4);
             const targetOffset = new THREE.Vector3((Math.random()-0.5)*4, (Math.random()-0.5)*4, (Math.random()-0.5)*4);
@@ -2284,7 +2285,7 @@ class Firestorm extends ActiveEffect {
     update(dt) {
         this.timer -= dt;
         this.interval += dt;
-        if(this.interval > 0.5) {
+        if(this.interval > 1.0) {
             this.interval = 0;
             const rx = this.x + (Math.random()-0.5)*15;
             const rz = this.z + (Math.random()-0.5)*15;
@@ -3070,7 +3071,7 @@ class Humanoid {
 
         if (this.burnTimer > 0) {
             this.burnTimer -= dt;
-            if(Math.random() < 0.5) {
+            if(Math.random() < 0.25) {
                 state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1, (Math.random()-0.5))), 0xFF4500, 0.1, 0.5));
             }
             // Optional: DOT
@@ -3451,7 +3452,7 @@ class Humanoid {
         }
 
         if(this.type === 'firewarrior' && this.state !== 'dead') {
-            if(Math.random() < 0.3) {
+            if(Math.random() < 0.15) {
                  const spawnFire = (limb) => {
                      const pos = new THREE.Vector3();
                      limb.getWorldPosition(pos);
@@ -3615,7 +3616,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
                 if(this.burnTimer > 0) {
                     this.burnTimer -= dt;
-                    if(Math.random() < 0.5) {
+                    if(Math.random() < 0.25) {
                         state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5)*2, 2, (Math.random()-0.5)*2)), 0xFF4500, 0.15, 0.5));
                     }
                 }
