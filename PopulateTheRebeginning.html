@@ -238,7 +238,10 @@
         <button class="menu-btn" onclick="openMultiplayer()">Multiplayer</button>
         <button class="menu-btn" onclick="newGame()">New Game</button>
         <button class="menu-btn" onclick="toggleFps()">Toggle FPS</button>
+
+        <button class="menu-btn" onclick="openTribeMenu()">Tribes</button>
         <button class="menu-btn" onclick="togglePause()">Resume</button>
+
         <div id="cheat-menu" style="display:none; flex-direction:column; align-items:center; margin-top:20px; border-top: 1px solid white; padding-top:10px;">
             <h2 style="color:gold; font-size:16px;">CHEATS</h2>
             <button class="menu-btn" onclick="cheatMana()">Set Mana 10000</button>
@@ -246,6 +249,13 @@
             <button class="menu-btn" onclick="cheatImmortal()">God Mode</button>
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
         </div>
+    </div>
+
+    <div id="tribe-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto; overflow-y:auto;">
+        <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">TRIBES CONFIGURATION</h1>
+        <div id="tribe-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;"></div>
+        <button class="menu-btn" onclick="addTribe()">Add Tribe</button>
+        <button class="menu-btn" onclick="closeTribeMenu()">Back</button>
     </div>
 
     <div id="multiplayer-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:201; color:white; pointer-events:auto;">
@@ -312,6 +322,44 @@ const COLORS = {
 };
 
 const BUILDING_COSTS = { hut: 15, tower: 20, warrior: 30, fire: 40, spy: 40, shipyard: 50 };
+
+const FACTION_COLORS = [
+    0x4169E1, // 0: Player (Blue)
+    0xFF4500, // 1: Enemy 1 (Red)
+    0x228B22, // 2: Enemy 2 (Green)
+    0xFFD700, // 3: Enemy 3 (Yellow)
+    0x800080, // 4: Enemy 4 (Purple)
+    0xFF69B4, // 5: Enemy 5 (Pink)
+    0x00CED1, // 6: Enemy 6 (Cyan)
+    0xFF8C00, // 7: Enemy 7 (Orange)
+];
+
+function getFactionColor(faction) {
+    return FACTION_COLORS[faction % FACTION_COLORS.length];
+}
+
+function getFactionMaterial(faction) {
+    if (!AssetCache.mats.factionMats) AssetCache.mats.factionMats = {};
+    if (!AssetCache.mats.factionMats[faction]) {
+        AssetCache.mats.factionMats[faction] = new THREE.MeshStandardMaterial({color: getFactionColor(faction), roughness: 0.7, metalness: 0.1});
+    }
+    return AssetCache.mats.factionMats[faction];
+}
+
+function getHpMaterial(faction) {
+    if (!AssetCache.mats.hpMats) AssetCache.mats.hpMats = {};
+    if (!AssetCache.mats.hpMats[faction]) {
+        const color = faction === 0 ? 0x00FF00 : (faction === 1 ? 0xFF0000 : getFactionColor(faction));
+        AssetCache.mats.hpMats[faction] = new THREE.MeshBasicMaterial({color: color});
+    }
+    return AssetCache.mats.hpMats[faction];
+}
+
+window.isAllied = function(f1, f2) {
+    const t1 = state.teams && state.teams[f1] !== undefined ? state.teams[f1] : f1;
+    const t2 = state.teams && state.teams[f2] !== undefined ? state.teams[f2] : f2;
+    return t1 === t2;
+};
 
 const ACTIONS = {
     'move': { icon: '👣', label: 'Walk', cost: 0 },
@@ -403,7 +451,7 @@ const state = {
     isGodMode: false,
 
     // Network
-    network: {
+    teams: {}, network: {
         peer: null,
         conn: null,
         role: 'none', // 'host', 'client', 'none'
@@ -1971,7 +2019,7 @@ class Fireball {
 // --- js/spells.js ---
 
 class ActiveEffect {
-    constructor() {}
+    constructor(faction) { this.faction = faction;}
     update(dt) { return false; }
 }
 
@@ -2657,7 +2705,7 @@ class Humanoid {
              this.mesh.add(balloon);
         } else {
             this.torso = new THREE.Group(); this.torso.position.y = 0.9; this.mesh.add(this.torso);
-            const tMesh = new THREE.Mesh(AssetCache.geos.torso, shirtMat); tMesh.castShadow = true; tMesh.receiveShadow = true; this.torso.add(tMesh);
+            const tMesh = new THREE.Mesh(AssetCache.geos.torso, shirtMat); tMesh.userData.isFactionColored = true; tMesh.castShadow = true; tMesh.receiveShadow = true; this.torso.add(tMesh);
             this.head = new THREE.Group(); this.head.position.y = 0.4; this.torso.add(this.head);
             const headMesh = new THREE.Mesh(AssetCache.geos.head, skinMat);
             headMesh.castShadow = true;
@@ -2785,8 +2833,8 @@ class Humanoid {
                 this.armR.children[0].add(tool);
             }
 
-            this.legL = createLimb(AssetCache.geos.leg, shirtMat, 0.12, 0.65, 0, 0.55, false);
-            this.legR = createLimb(AssetCache.geos.leg, shirtMat, -0.12, 0.65, 0, 0.55, false);
+            this.legL = createLimb(AssetCache.geos.leg, shirtMat, 0.12, 0.65, 0, 0.55, false); this.legL.children[0].userData.isFactionColored = true;
+            this.legR = createLimb(AssetCache.geos.leg, shirtMat, -0.12, 0.65, 0, 0.55, false); this.legR.children[0].userData.isFactionColored = true;
             this.mesh.add(this.legL); this.mesh.add(this.legR);
         }
 
@@ -3008,7 +3056,7 @@ class Humanoid {
 
          for(let i=0; i<candidates.length; i++) {
              const u = candidates[i];
-             if(u.faction !== this.faction && u.state !== 'dead' && !u.invisible) {
+             if(!window.isAllied(u.faction, this.faction) && u.state !== 'dead' && !u.invisible) {
                  const d = this.mesh.position.distanceTo(u.mesh.position);
                  if(d < range && d < minDist) {
                      minDist = d; closest = u;
@@ -3044,7 +3092,7 @@ class Humanoid {
                 const target = this.attackTarget;
                 if (!target.isShaman) {
                     if (target.originalFaction === null || target.originalFaction === undefined) target.originalFaction = target.faction;
-                    if (target.faction !== this.faction) {
+                    if (!window.isAllied(target.faction, this.faction)) {
                         target.setFaction(this.faction);
                         target.attackTarget = null; // Stop attacking
                         target.state = 'idle';
@@ -3140,7 +3188,7 @@ class Humanoid {
         if(this.type === 'wild' && this.state !== 'dead') {
              state.buildings.forEach(b => {
                  // Only train in buildings of the same faction
-                 if (this.faction !== b.faction) return;
+                 if (!window.isAllied(this.faction, b.faction)) return;
                  // Check if building is ready to train?
                  // For now instant training logic
                  const dist = this.mesh.position.distanceTo(b.mesh.position);
@@ -3183,7 +3231,7 @@ class Humanoid {
         if(this.hp < this.maxHp && this.state !== 'combat') {
             let nearBuilding = false;
             for(let b of state.buildings) {
-                if(b.faction === this.faction && !b.dead) {
+                if(window.isAllied(b.faction, this.faction) && !b.dead) {
                     const dist = this.mesh.position.distanceTo(b.mesh.position);
                     if(dist < 8.0) {
                         nearBuilding = true;
@@ -3779,7 +3827,7 @@ function buildShipyard() {
 // --- js/ai.js ---
 
 class EnemyAI {
-    constructor() {
+    constructor(faction) { this.faction = faction;
         this.timer = 0;
         this.state = 'build'; // 'build', 'attack'
         this.baseX = 0;
@@ -3803,14 +3851,14 @@ class EnemyAI {
         this.baseZ = startSafe.z;
 
         // Create initial base
-        createBuilding('hut', this.baseX, this.baseZ, 1);
+        createBuilding('hut', this.baseX, this.baseZ, this.faction);
         // Create Enemy Shaman
         const shamanSafe = findNearestLand(this.baseX - 5, this.baseZ - 5, 20);
-        this.myShaman = new Humanoid(1, 'shaman', shamanSafe.x, shamanSafe.z);
+        this.myShaman = new Humanoid(this.faction, 'shaman', shamanSafe.x, shamanSafe.z);
         state.units.push(this.myShaman);
         // Create initial Brave
         const braveSafe = findNearestLand(this.baseX + 2, this.baseZ + 2, 10);
-        state.units.push(new Humanoid(1, 'wild', braveSafe.x, braveSafe.z));
+        state.units.push(new Humanoid(this.faction, 'wild', braveSafe.x, braveSafe.z));
     }
 
     update(dt) {
@@ -3824,7 +3872,7 @@ class EnemyAI {
 
     updateShaman(dt) {
         if (!this.myShaman || this.myShaman.state === 'dead') {
-            this.myShaman = state.units.find(u => u.faction === 1 && u.isShaman && u.state !== 'dead');
+            this.myShaman = state.units.find(u => u.faction === this.faction && u.isShaman && u.state !== 'dead');
         }
 
         const myShaman = this.myShaman;
@@ -3859,8 +3907,8 @@ class EnemyAI {
 
     think() {
         // Get Enemy Units
-        const myUnits = state.units.filter(u => u.faction === 1 && u.state !== 'dead');
-        const myBuildings = state.buildings.filter(b => b.faction === 1 && !b.dead);
+        const myUnits = state.units.filter(u => u.faction === this.faction && u.state !== 'dead');
+        const myBuildings = state.buildings.filter(b => b.faction === this.faction && !b.dead);
 
         // 1. Train Units
         const myBraves = myUnits.filter(u => u.type === 'wild');
@@ -4019,10 +4067,11 @@ class EnemyAI {
 
         // 3. Attack Player
         if(myUnits.length > 5) {
-            // Send some to attack player shaman
+            // Send some to attack enemy shaman
             const attackers = myUnits.filter(u => u.type !== 'wild' && u.state === 'idle');
-            const target = state.shaman;
-            if(target && target.state !== 'dead') {
+            // Find an enemy shaman
+            const target = state.units.find(u => u.isShaman && !window.isAllied(u.faction, this.faction) && u.state !== 'dead');
+            if(target) {
                 attackers.forEach(u => {
                     u.goto(target.mesh.position.x, target.mesh.position.z);
                     u.attackTarget = target;
@@ -4033,8 +4082,8 @@ class EnemyAI {
 
         // 4. Shaman Logic (Spells & Move)
         const myShaman = myUnits.find(u => u.isShaman);
-        const target = state.shaman; // Player shaman
-        if(myShaman && target && target.state !== 'dead') {
+        const target = state.units.find(u => u.isShaman && !window.isAllied(u.faction, this.faction) && u.state !== 'dead');
+        if(myShaman && target) {
             const dist = myShaman.mesh.position.distanceTo(target.mesh.position);
 
             // Offensive Spells
@@ -4485,7 +4534,7 @@ if(typeof SimplexNoise !== 'undefined') {
 
 window.onload = () => setTimeout(init, 100);
 
-const enemyAI = new EnemyAI();
+window.enemyAIs = [];
 
 function init() {
     try {
@@ -4558,6 +4607,91 @@ function init() {
     }
 }
 
+
+window.openTribeMenu = function() {
+    document.getElementById('pause-menu').style.display = 'none';
+    document.getElementById('tribe-menu').style.display = 'flex';
+    renderTribeMenu();
+};
+
+window.closeTribeMenu = function() {
+    document.getElementById('tribe-menu').style.display = 'none';
+    document.getElementById('pause-menu').style.display = 'flex';
+};
+
+window.renderTribeMenu = function() {
+    const list = document.getElementById('tribe-list');
+    list.innerHTML = '';
+
+    // Player
+    const pdiv = document.createElement('div');
+    pdiv.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; gap:10px;';
+    pdiv.innerHTML = `<span style="color:#${FACTION_COLORS[0].toString(16).padStart(6, '0')}">Player (Team: ${state.teams[0] !== undefined ? state.teams[0] : 0})</span>`;
+    const pteamInput = document.createElement('input');
+    pteamInput.type = 'number';
+    pteamInput.value = state.teams[0] !== undefined ? state.teams[0] : 0;
+    pteamInput.onchange = (e) => { state.teams[0] = parseInt(e.target.value); renderTribeMenu(); };
+    pdiv.appendChild(pteamInput);
+    list.appendChild(pdiv);
+
+    window.enemyAIs.forEach((ai, idx) => {
+        const div = document.createElement('div');
+        div.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; gap:10px;';
+        const c = FACTION_COLORS[ai.faction % FACTION_COLORS.length].toString(16).padStart(6, '0');
+        div.innerHTML = `<span style="color:#${c}">Enemy ${ai.faction} (Team: ${state.teams[ai.faction] !== undefined ? state.teams[ai.faction] : ai.faction})</span>`;
+
+        const teamInput = document.createElement('input');
+        teamInput.type = 'number';
+        teamInput.value = state.teams[ai.faction] !== undefined ? state.teams[ai.faction] : ai.faction;
+        teamInput.onchange = (e) => { state.teams[ai.faction] = parseInt(e.target.value); renderTribeMenu(); };
+        div.appendChild(teamInput);
+
+        const rmBtn = document.createElement('button');
+        rmBtn.innerText = 'Remove';
+        rmBtn.onclick = () => { removeTribe(ai.faction); };
+        div.appendChild(rmBtn);
+
+        list.appendChild(div);
+    });
+};
+
+window.addTribe = function() {
+    let nextFaction = 1;
+    while (window.enemyAIs.some(ai => ai.faction === nextFaction)) {
+        nextFaction++;
+    }
+    const ai = new EnemyAI(nextFaction);
+
+    // Find safe spot for new tribe
+    let r = 50 + nextFaction * 20;
+    const angle = nextFaction * 2.3; // Arbitrary angle
+    ai.init(state.cameraLookAt.x + Math.cos(angle)*r, state.cameraLookAt.z + Math.sin(angle)*r);
+
+    window.enemyAIs.push(ai);
+    renderTribeMenu();
+};
+
+window.removeTribe = function(faction) {
+    // Remove units and buildings of this faction
+    state.units = state.units.filter(u => {
+        if (u.faction === faction) {
+            state.scene.remove(u.mesh);
+            return false;
+        }
+        return true;
+    });
+    state.buildings = state.buildings.filter(b => {
+        if (b.faction === faction) {
+            state.scene.remove(b.mesh);
+            return false;
+        }
+        return true;
+    });
+    BuildingSpatialHash.markDirty();
+    window.enemyAIs = window.enemyAIs.filter(ai => ai.faction !== faction);
+    renderTribeMenu();
+};
+
 window.togglePause = function() {
     state.isPaused = !state.isPaused;
     const btn = document.getElementById('btn-pause');
@@ -4590,14 +4724,18 @@ window.saveGame = function() {
         mana: state.mana,
         terrainMods: Array.from(state.terrainMods.entries()),
         cameraLookAt: {x: state.cameraLookAt.x, y: state.cameraLookAt.y, z: state.cameraLookAt.z},
-        enemyAI: {
-            timer: enemyAI.timer,
-            state: enemyAI.state,
-            baseX: enemyAI.baseX,
-            baseZ: enemyAI.baseZ,
-            lastBridgeTime: enemyAI.lastBridgeTime,
-            lastSpellTime: enemyAI.lastSpellTime
-        },
+
+        enemyAIs: window.enemyAIs.map(ai => ({
+            faction: ai.faction,
+            timer: ai.timer,
+            state: ai.state,
+            baseX: ai.baseX,
+            baseZ: ai.baseZ,
+            lastBridgeTime: ai.lastBridgeTime,
+            lastSpellTime: ai.lastSpellTime
+        })),
+        teams: state.teams,
+
         units: state.units.map(u => ({
             faction: u.faction,
             type: u.type,
@@ -4663,12 +4801,20 @@ window.loadGame = function() {
         });
         updateChunks(true, allMods);
 
-        enemyAI.timer = data.enemyAI.timer || 0;
-        enemyAI.state = data.enemyAI.state || 'build';
-        enemyAI.baseX = data.enemyAI.baseX || 0;
-        enemyAI.baseZ = data.enemyAI.baseZ || 0;
-        enemyAI.lastBridgeTime = data.enemyAI.lastBridgeTime || 0;
-        enemyAI.lastSpellTime = data.enemyAI.lastSpellTime || 0;
+        if (data.teams) state.teams = data.teams;
+        window.enemyAIs = [];
+        if (data.enemyAIs) {
+            data.enemyAIs.forEach(aiData => {
+                const ai = new EnemyAI(aiData.faction);
+                ai.timer = aiData.timer;
+                ai.state = aiData.state;
+                ai.baseX = aiData.baseX;
+                ai.baseZ = aiData.baseZ;
+                ai.lastBridgeTime = aiData.lastBridgeTime;
+                ai.lastSpellTime = aiData.lastSpellTime;
+                window.enemyAIs.push(ai);
+            });
+        }
 
         data.buildings.forEach(bData => {
              const b = createBuilding(bData.type, bData.x, bData.z, bData.faction, false, true);
@@ -4854,7 +5000,7 @@ function handleTap(x, y, isRightClick) {
         if (unitHits.length > 0) {
             const hitUnit = meshToUnit.get(unitHits[0].object);
             if(hitUnit) {
-                if(hitUnit.faction === 0) {
+                if(window.isAllied(hitUnit.faction, 0)) {
                     if(state.multiSelectMode) {
                         if(state.selectedUnits.includes(hitUnit)) {
                              state.selectedUnits = state.selectedUnits.filter(x => x !== hitUnit);
@@ -4896,7 +5042,7 @@ function handleTap(x, y, isRightClick) {
                  }
              }
 
-             if(hitUnit && hitUnit.faction === 1) {
+             if(hitUnit && hitUnit.faction !== 0 && !window.isAllied(hitUnit.faction, 0)) {
                  if(state.selectedUnits.length > 0) {
                     state.selectedUnits.forEach(u => {
                         if(!u.isShaman) {
@@ -4909,7 +5055,7 @@ function handleTap(x, y, isRightClick) {
                 }
              }
 
-             if(hitUnit && hitUnit.faction === 0 && state.selectedUnits.length === 0) {
+             if(hitUnit && window.isAllied(hitUnit.faction, 0) && state.selectedUnits.length === 0) {
                  state.selectedUnits = [hitUnit];
                  hitUnit.selectRing.visible = true;
                  updateContextMenus();
@@ -5002,7 +5148,10 @@ function findSafeSpawnAndStart() {
     state.cameraLookAt.set(r, 0, r); updateCameraPosition(); updateChunks();
     createShaman(r, r);
 
-    enemyAI.init(-r - 40, -r - 40);
+
+    window.enemyAIs = [new EnemyAI(1)];
+    window.enemyAIs.forEach((ai, i) => { const angle = (i+1) * Math.PI*2 / (window.enemyAIs.length+1); ai.init(r + Math.cos(angle)*50, r + Math.sin(angle)*50); });
+
 }
 
 function createShaman(x, z) {
@@ -5087,7 +5236,7 @@ function animate() {
     if(!state.isPaused) {
     if (state.network.role === 'host') NetworkManager.sendFullState();
 
-    if (state.network.role !== 'client') enemyAI.update(dt);
+    if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
     state.units.forEach(u => u.update(dt));
     state.buildings.forEach(b => b.update(dt));
 
@@ -5163,12 +5312,15 @@ function animate() {
         lastAliveCount = currentAlive;
     }
 
-    // Win Condition
-    const enemyCount = state.units.filter(u => u.faction === 1 && u.state !== 'dead').length;
-    if (enemyCount === 0 && state.units.some(u => u.faction === 0)) {
-         if (!window.gameWonAlertShown) {
-             alert("VICTORY! All enemy units defeated!");
-             window.gameWonAlertShown = true;
+        // Win Condition
+    const hasEnemy = state.units.some(u => !window.isAllied(u.faction, 0) && u.state !== 'dead');
+    if (!hasEnemy && state.units.some(u => window.isAllied(u.faction, 0))) {
+         if (!window.gameWonAlertShown && window.enemyAIs && window.enemyAIs.length > 0) { // Don't win immediately if there are no tribes to start with
+             // Check if there ever were any non allied tribes
+             if (window.enemyAIs.some(ai => !window.isAllied(ai.faction, 0))) {
+                alert("VICTORY! All enemy units defeated!");
+                window.gameWonAlertShown = true;
+             }
          }
     }
 
