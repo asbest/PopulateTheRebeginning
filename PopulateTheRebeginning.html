@@ -2424,7 +2424,7 @@ function executeSpell(type, x, z, caster) {
     }
     else if (type === 'heal') {
         SoundManager.playSound('magic');
-        spawnPulse(x, getHeight(x, z), z, 0xFF69B4);
+
         SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction === caster.faction && u.state !== 'dead') {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
@@ -2441,7 +2441,7 @@ function executeSpell(type, x, z, caster) {
         const safe = findNearestLand(x, z);
         const u = new Humanoid(caster.faction, 'wild', safe.x, safe.z);
         state.units.push(u);
-        spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFFFFF);
+
     }
     else if (type === 'teleport') {
         SoundManager.playSound('magic');
@@ -2452,7 +2452,7 @@ function executeSpell(type, x, z, caster) {
 
         // Arrival effect
         spawnExplosion(x, h, z, 0x0000FF, 10);
-        spawnPulse(x, h, z, 0x00FFFF);
+
 
         caster.mesh.position.set(x, h, z);
         caster.state = 'idle';
@@ -2472,7 +2472,7 @@ function executeSpell(type, x, z, caster) {
     }
     else if (type === 'shield') {
         SoundManager.playSound('magic');
-        spawnPulse(x, getHeight(x, z), z, 0x00FFFF);
+
         SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction === caster.faction) {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
@@ -2522,7 +2522,7 @@ function executeSpell(type, x, z, caster) {
                      u.setFaction(caster.faction);
                      u.conversionTimer = 10.0;
                      u.state = 'idle'; u.attackTarget = null;
-                     spawnPulse(u.mesh.position.x, u.mesh.position.y+2, u.mesh.position.z, 0xFF00FF);
+
                  }
             }
         });
@@ -2661,7 +2661,7 @@ class Humanoid {
         // Visuals
         this.mesh = new THREE.Group();
         const skinMat = AssetCache.mats.skin;
-        const shirtMat = (faction === 0) ? AssetCache.mats.blueShirt : AssetCache.mats.redShirt;
+        const shirtMat = getFactionMaterial(faction);
 
         // Selection Ring
         this.selectRing = new THREE.Mesh(AssetCache.geos.ring, AssetCache.mats.selectRing);
@@ -2670,14 +2670,14 @@ class Humanoid {
         // HP Bar
         this.hpGroup = new THREE.Group(); this.hpGroup.position.set(0, 2.3, 0);
         this.hpGroup.add(new THREE.Mesh(AssetCache.geos.hpBack, AssetCache.mats.hpBack));
-        const hpMat = (faction === 0) ? AssetCache.mats.hpGreen : AssetCache.mats.hpRed;
+        const hpMat = getHpMaterial(faction);
         this.hpBar = new THREE.Mesh(AssetCache.geos.hpFront, hpMat);
         this.hpBar.position.x = -0.5; this.hpGroup.add(this.hpBar);
         this.mesh.add(this.hpGroup);
 
         // Enemy Marker
-        if(this.faction === 1) {
-            this.marker = new THREE.Mesh(AssetCache.geos.marker, AssetCache.mats.marker);
+        if(this.faction !== 0) {
+            this.marker = new THREE.Mesh(AssetCache.geos.marker, new THREE.MeshBasicMaterial({color: getFactionColor(faction)}));
             this.marker.position.set(0, 6, 0);
             this.mesh.add(this.marker);
         }
@@ -3098,7 +3098,7 @@ class Humanoid {
                         target.state = 'idle';
                     }
                     target.conversionTimer = 3.0; // Refresh timer
-                    spawnPulse(target.mesh.position.x, target.mesh.position.y + 2, target.mesh.position.z, 0xFF00FF);
+
                     SoundManager.playSound('magic');
                 }
             } else {
@@ -3134,7 +3134,7 @@ class Humanoid {
                     this.originalFaction = null;
                     this.state = 'idle'; // Reset state on revert
                     this.attackTarget = null;
-                    spawnPulse(this.mesh.position.x, this.mesh.position.y+2, this.mesh.position.z, 0xFF00FF);
+
                 }
                 this.conversionTimer = 0;
             }
@@ -3686,7 +3686,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                             const safe = findNearestLand(this.mesh.position.x + 2, this.mesh.position.z + 2, 10);
                             const u = new Humanoid(this.faction, 'wild', safe.x, safe.z);
                             state.units.push(u);
-                            spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFFFFF);
+
                         }
                     }
                     return; // Skip other updates while building
