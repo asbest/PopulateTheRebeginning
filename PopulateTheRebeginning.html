@@ -261,9 +261,25 @@
 
     <div id="land-gen-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto;">
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">LAND GENERATION</h1>
-        <div style="margin-bottom:20px;">
-            <label>Noise Scale: </label>
-            <input type="number" id="noise-scale-input" value="0.02" step="0.01" min="0.01" max="0.1" style="width:60px; color:black;">
+        <div style="margin-bottom:10px; display:flex; gap:10px; align-items:center;">
+            <label style="width:120px;">Noise Scale: </label>
+            <input type="number" id="noise-scale-input" value="0.02" step="0.01" min="0.001" max="0.1" style="width:60px; color:black;">
+        </div>
+        <div style="margin-bottom:10px; display:flex; gap:10px; align-items:center;">
+            <label style="width:120px;">Height Mult: </label>
+            <input type="number" id="height-mult-input" value="1.0" step="0.1" min="0.1" max="5.0" style="width:60px; color:black;">
+        </div>
+        <div style="margin-bottom:10px; display:flex; gap:10px; align-items:center;">
+            <label style="width:120px;">Water Level: </label>
+            <input type="number" id="water-level-input" value="1.805" step="0.1" min="-5.0" max="10.0" style="width:60px; color:black;">
+        </div>
+        <div style="margin-bottom:10px; display:flex; gap:10px; align-items:center;">
+            <label style="width:120px;">Bridge Height: </label>
+            <input type="number" id="bridge-height-input" value="3.0" step="0.5" min="0.0" max="10.0" style="width:60px; color:black;">
+        </div>
+        <div style="margin-bottom:20px; display:flex; gap:10px; align-items:center;">
+            <label style="width:120px;">Bridge Width: </label>
+            <input type="number" id="bridge-width-input" value="5.0" step="1.0" min="1.0" max="20.0" style="width:60px; color:black;">
         </div>
         <button class="menu-btn" onclick="applyLandGen()">Apply & Regenerate</button>
         <button class="menu-btn" onclick="closeLandGenMenu()">Back</button>
@@ -320,11 +336,14 @@ const CHUNK_SIZE = 40;
 const CHUNK_RES = 80;
 const RENDER_DISTANCE = 5;
 let NOISE_SCALE = 0.02;
+let HEIGHT_MULTIPLIER = 1.0;
+let BRIDGE_HEIGHT = 3.0;
+let BRIDGE_WIDTH = 5.0;
 const MIN_ZOOM = 3;
 const MAX_ZOOM = 70;
 
-const WATER_LEVEL = 1.805;
-const VISUAL_WATER_LEVEL = 0.45125;
+let WATER_LEVEL = 1.805;
+let VISUAL_WATER_LEVEL = 0.45125;
 
 const COLORS = {
     water: 0x1E90FF, sand: 0xEEDC82, grass: 0x228B22, rock: 0x696969, snow: 0xFFFFFF,
@@ -992,12 +1011,14 @@ function getBaseHeight(x, z) {
     y += state.simplex.noise2D(x * NOISE_SCALE * 8, z * NOISE_SCALE * 8) * 0.75;
     y += state.simplex.noise2D(x * NOISE_SCALE * 16, z * NOISE_SCALE * 16) * 0.375;
 
+    y *= HEIGHT_MULTIPLIER;
+
     // Land bridges using ridge noise
     // A value close to 0 in noise creates a ridge when inverted.
     const bridgeNoise = Math.abs(state.simplex.noise2D(x * NOISE_SCALE * 1.5 + 100, z * NOISE_SCALE * 1.5 + 100));
     // bridgeNoise is between 0 and 1. We want a sharp peak near 0.
-    const bridgeHeight = Math.max(0, 1.0 - bridgeNoise * 5.0) * 3.0; // 3.0 height boost on narrow lines
-    y += bridgeHeight;
+    const finalBridgeHeight = Math.max(0, 1.0 - bridgeNoise * BRIDGE_WIDTH) * BRIDGE_HEIGHT;
+    y += finalBridgeHeight;
 
     // Continuous smoothing
     if (y < WATER_LEVEL) y -= (WATER_LEVEL - y) * 0.2;
@@ -4641,6 +4662,10 @@ window.openLandGenMenu = function() {
     document.getElementById('pause-menu').style.display = 'none';
     document.getElementById('land-gen-menu').style.display = 'flex';
     document.getElementById('noise-scale-input').value = NOISE_SCALE;
+    document.getElementById('height-mult-input').value = HEIGHT_MULTIPLIER;
+    document.getElementById('water-level-input').value = WATER_LEVEL;
+    document.getElementById('bridge-height-input').value = BRIDGE_HEIGHT;
+    document.getElementById('bridge-width-input').value = BRIDGE_WIDTH;
 };
 
 window.closeLandGenMenu = function() {
@@ -4649,9 +4674,29 @@ window.closeLandGenMenu = function() {
 };
 
 window.applyLandGen = function() {
-    const val = parseFloat(document.getElementById('noise-scale-input').value);
-    if(val > 0) {
-        NOISE_SCALE = val;
+    const noiseVal = parseFloat(document.getElementById('noise-scale-input').value);
+    const heightVal = parseFloat(document.getElementById('height-mult-input').value);
+    const waterVal = parseFloat(document.getElementById('water-level-input').value);
+    const bridgeHeightVal = parseFloat(document.getElementById('bridge-height-input').value);
+    const bridgeWidthVal = parseFloat(document.getElementById('bridge-width-input').value);
+
+    if(!isNaN(noiseVal) && noiseVal > 0) {
+        NOISE_SCALE = noiseVal;
+        if(!isNaN(heightVal)) HEIGHT_MULTIPLIER = heightVal;
+        if(!isNaN(waterVal)) {
+            WATER_LEVEL = waterVal;
+            VISUAL_WATER_LEVEL = waterVal / 4;
+            // Find existing visual water mesh and update its Y pos
+            if (state.scene) {
+                state.scene.traverse(c => {
+                    if(c.material === AssetCache.mats.water) {
+                        c.position.y = VISUAL_WATER_LEVEL;
+                    }
+                });
+            }
+        }
+        if(!isNaN(bridgeHeightVal)) BRIDGE_HEIGHT = bridgeHeightVal;
+        if(!isNaN(bridgeWidthVal)) BRIDGE_WIDTH = bridgeWidthVal;
 
         // Regenerate world visually
         state.terrainMods.clear();
