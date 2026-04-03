@@ -1999,7 +1999,7 @@ class Fireball {
                 if (u.faction !== this.faction) {
                     const forceDir = u.mesh.position.clone().sub(impactPos).normalize(); const force = (8 - d) * 3;
                     forceDir.multiplyScalar(force); forceDir.y += force * 0.5;
-                    u.applyForce(forceDir); u.takeDamage(27);
+                    u.applyForce(forceDir); u.takeDamage(27, true);
                     u.burnTimer = 3.0;
                 }
             }
@@ -2008,7 +2008,7 @@ class Fireball {
         state.buildings.forEach(b => {
             const d = b.mesh.position.distanceTo(impactPos);
             if(d < 8 && b.faction !== this.faction) {
-                b.takeDamage(75); // Fireball deals 75 damage to buildings
+                b.takeDamage(75, true); // Fireball deals 75 damage to buildings
                 b.burnTimer = 3.0;
             }
         });
@@ -2093,12 +2093,12 @@ class Volcano extends ActiveEffect {
                 if(dist < 10 && u.faction !== this.faction) {
                     const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
                     u.applyForce(dir.multiplyScalar(20).add(new THREE.Vector3(0, 10, 0)));
-                    if (!u.isShaman) u.takeDamage(5);
+                    if (!u.isShaman) u.takeDamage(5, true);
                 }
             });
             state.buildings.forEach(b => {
                  const dist = b.mesh.position.distanceTo(new THREE.Vector3(this.x, b.mesh.position.y, this.z));
-                 if(dist < 10 && b.faction !== this.faction) b.takeDamage(10);
+                 if(dist < 10 && b.faction !== this.faction) b.takeDamage(10, true);
             });
         }
         if(this.timer <= 0) {
@@ -2151,7 +2151,7 @@ class Swamp extends ActiveEffect {
             if(u.state !== 'dead' && !u.isShaman && u.faction !== this.faction) {
                 const dist = Math.sqrt((u.mesh.position.x - this.pos.x)**2 + (u.mesh.position.z - this.pos.z)**2);
                 if(dist < this.radius * 0.8) {
-                     u.takeDamage(10000); // Instant death
+                 u.takeDamage(10000, true); // Instant death
                      spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0x000000);
                 }
             }
@@ -2219,13 +2219,13 @@ class Tornado extends ActiveEffect {
         SpatialHash.query(this.pos.x, this.pos.z, 5).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 5 && u.faction !== this.faction) {
-                 u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 25, (Math.random()-0.5)*10));
-                 u.takeDamage(damagePerSecond * dt);
+                 u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, MAX_ZOOM / 2, (Math.random()-0.5)*10));
+                 u.takeDamage(damagePerSecond * dt, true);
             }
         });
         state.buildings.forEach(b => {
              const d = b.mesh.position.distanceTo(this.pos);
-             if(d < 5 && b.faction !== this.faction) b.takeDamage(damagePerSecond * dt);
+             if(d < 5 && b.faction !== this.faction) b.takeDamage(damagePerSecond * dt, true);
         });
 
         if(this.timer <= 0) {
@@ -2304,7 +2304,7 @@ class Swarm extends ActiveEffect {
         SpatialHash.query(this.pos.x, this.pos.z, 4).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 4 && u.faction !== this.faction) {
-                u.takeDamage(25 * dt);
+                u.takeDamage(25 * dt, true);
             }
         });
 
@@ -2380,7 +2380,7 @@ function castLandbridge(caster, x, z) {
     state.buildings.forEach(b => {
         const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
         if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
-            b.takeDamage(100);
+            b.takeDamage(100, true);
         }
     });
 
@@ -2618,14 +2618,14 @@ function executeSpell(type, x, z, caster) {
         SpatialHash.query(x, z, 4).forEach(u => {
              const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
              if(dist < 4 && u.faction !== caster.faction) {
-                 u.takeDamage(400);
+                 u.takeDamage(400, true);
                  hit = true;
              }
         });
         state.buildings.forEach(b => {
              const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
              if(dist < 4 && b.faction !== caster.faction) {
-                 b.takeDamage(400);
+                 b.takeDamage(400, true);
                  hit = true;
              }
         });
@@ -2893,16 +2893,16 @@ class Humanoid {
         this.mesh.rotation.y = Math.atan2(dx, dz);
     }
 
-    takeDamage(amount) {
+    takeDamage(amount, silent = false) {
         if(this.state === 'dead') return;
         if(this.faction === 0 && state.isGodMode) return;
         if(this.shielded) {
-            spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0x00FFFF);
+            if (!silent) spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0x00FFFF);
             return;
         }
         this.hp -= amount;
         this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
-        spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0xFF0000);
+        if (!silent) spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0xFF0000);
         if(this.hp <= 0) this.die();
     }
 
@@ -3643,10 +3643,10 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             underConstruction: true,
             burnTimer: 0,
             trainingQueue: [],
-            takeDamage: function(amount) {
+            takeDamage: function(amount, silent = false) {
                 this.hp -= amount;
                 this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
-                spawnPulse(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z, 0xFF4500);
+                if (!silent) spawnPulse(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z, 0xFF4500);
                 if(this.hp <= 0) {
                     this.destroy();
                 }
@@ -5150,7 +5150,7 @@ function findSafeSpawnAndStart() {
 
 
     window.enemyAIs = [new EnemyAI(1)];
-    window.enemyAIs.forEach((ai, i) => { const angle = (i+1) * Math.PI*2 / (window.enemyAIs.length+1); ai.init(r + Math.cos(angle)*50, r + Math.sin(angle)*50); });
+    window.enemyAIs.forEach((ai, i) => { const angle = (i+1) * Math.PI*2 / (window.enemyAIs.length+1); ai.init(r + Math.cos(angle)*100, r + Math.sin(angle)*100); });
 
 }
 
