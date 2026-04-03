@@ -981,6 +981,13 @@ function getBaseHeight(x, z) {
     y += state.simplex.noise2D(x * NOISE_SCALE * 8, z * NOISE_SCALE * 8) * 0.75;
     y += state.simplex.noise2D(x * NOISE_SCALE * 16, z * NOISE_SCALE * 16) * 0.375;
 
+    // Land bridges using ridge noise
+    // A value close to 0 in noise creates a ridge when inverted.
+    const bridgeNoise = Math.abs(state.simplex.noise2D(x * NOISE_SCALE * 1.5 + 100, z * NOISE_SCALE * 1.5 + 100));
+    // bridgeNoise is between 0 and 1. We want a sharp peak near 0.
+    const bridgeHeight = Math.max(0, 1.0 - bridgeNoise * 5.0) * 3.0; // 3.0 height boost on narrow lines
+    y += bridgeHeight;
+
     // Continuous smoothing
     if (y < WATER_LEVEL) y -= (WATER_LEVEL - y) * 0.2;
     if (y > 8.0) y += (y - 8.0) * 0.5;
