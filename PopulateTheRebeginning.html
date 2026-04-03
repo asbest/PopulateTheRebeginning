@@ -2219,7 +2219,7 @@ class Tornado extends ActiveEffect {
         SpatialHash.query(this.pos.x, this.pos.z, 5).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 5 && u.faction !== this.faction) {
-                 u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 12.5, (Math.random()-0.5)*10));
+                 u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, MAX_ZOOM / 2, (Math.random()-0.5)*10));
                  u.takeDamage(damagePerSecond * dt, true);
             }
         });
@@ -5150,7 +5150,7 @@ function findSafeSpawnAndStart() {
 
 
     window.enemyAIs = [new EnemyAI(1)];
-    window.enemyAIs.forEach((ai, i) => { const angle = (i+1) * Math.PI*2 / (window.enemyAIs.length+1); ai.init(r + Math.cos(angle)*50, r + Math.sin(angle)*50); });
+    window.enemyAIs.forEach((ai, i) => { const angle = (i+1) * Math.PI*2 / (window.enemyAIs.length+1); ai.init(r + Math.cos(angle)*100, r + Math.sin(angle)*100); });
 
 }
 
