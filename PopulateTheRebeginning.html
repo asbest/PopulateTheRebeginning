@@ -1406,7 +1406,7 @@ function modifyTerrain(centerX, centerZ, radius, amount) {
     state.buildings.forEach(b => {
         const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
         if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
-            b.takeDamage(100); // Collapse damage
+            b.takeDamage(100, true); // Collapse damage
         }
     });
     return modifiedChunks;
@@ -2038,7 +2038,7 @@ class Fireball {
                 if (u.faction !== this.faction) {
                     const forceDir = u.mesh.position.clone().sub(impactPos).normalize(); const force = (8 - d) * 3;
                     forceDir.multiplyScalar(force); forceDir.y += force * 0.5;
-                    u.applyForce(forceDir); u.takeDamage(27, true);
+                    u.applyForce(forceDir); u.takeDamage(27);
                     u.burnTimer = 3.0;
                 }
             }
@@ -2047,7 +2047,7 @@ class Fireball {
         state.buildings.forEach(b => {
             const d = b.mesh.position.distanceTo(impactPos);
             if(d < 8 && b.faction !== this.faction) {
-                b.takeDamage(75, true); // Fireball deals 75 damage to buildings
+                b.takeDamage(75); // Fireball deals 75 damage to buildings
                 b.burnTimer = 3.0;
             }
         });
@@ -2132,12 +2132,12 @@ class Volcano extends ActiveEffect {
                 if(dist < 10 && u.faction !== this.faction) {
                     const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
                     u.applyForce(dir.multiplyScalar(20).add(new THREE.Vector3(0, 10, 0)));
-                    if (!u.isShaman) u.takeDamage(5, true);
+                    if (!u.isShaman) u.takeDamage(5);
                 }
             });
             state.buildings.forEach(b => {
                  const dist = b.mesh.position.distanceTo(new THREE.Vector3(this.x, b.mesh.position.y, this.z));
-                 if(dist < 10 && b.faction !== this.faction) b.takeDamage(10, true);
+                 if(dist < 10 && b.faction !== this.faction) b.takeDamage(10);
             });
         }
         if(this.timer <= 0) {
@@ -2190,7 +2190,7 @@ class Swamp extends ActiveEffect {
             if(u.state !== 'dead' && !u.isShaman && u.faction !== this.faction) {
                 const dist = Math.sqrt((u.mesh.position.x - this.pos.x)**2 + (u.mesh.position.z - this.pos.z)**2);
                 if(dist < this.radius * 0.8) {
-                 u.takeDamage(10000, true); // Instant death
+                 u.takeDamage(10000); // Instant death
                      spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0x000000);
                 }
             }
@@ -2259,12 +2259,12 @@ class Tornado extends ActiveEffect {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 5 && u.faction !== this.faction) {
                  u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 12.5, (Math.random()-0.5)*10));
-                 u.takeDamage(damagePerSecond * dt, true);
+                 u.takeDamage(damagePerSecond * dt);
             }
         });
         state.buildings.forEach(b => {
              const d = b.mesh.position.distanceTo(this.pos);
-             if(d < 5 && b.faction !== this.faction) b.takeDamage(damagePerSecond * dt, true);
+             if(d < 5 && b.faction !== this.faction) b.takeDamage(damagePerSecond * dt);
         });
 
         if(this.timer <= 0) {
@@ -2343,7 +2343,7 @@ class Swarm extends ActiveEffect {
         SpatialHash.query(this.pos.x, this.pos.z, 4).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 4 && u.faction !== this.faction) {
-                u.takeDamage(25 * dt, true);
+                u.takeDamage(25 * dt);
             }
         });
 
@@ -2657,14 +2657,14 @@ function executeSpell(type, x, z, caster) {
         SpatialHash.query(x, z, 4).forEach(u => {
              const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
              if(dist < 4 && u.faction !== caster.faction) {
-                 u.takeDamage(400, true);
+                 u.takeDamage(400);
                  hit = true;
              }
         });
         state.buildings.forEach(b => {
              const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
              if(dist < 4 && b.faction !== caster.faction) {
-                 b.takeDamage(400, true);
+                 b.takeDamage(400);
                  hit = true;
              }
         });
@@ -3142,7 +3142,7 @@ class Humanoid {
                 }
             } else {
                 // Melee
-                this.attackTarget.takeDamage(this.damage);
+                this.attackTarget.takeDamage(this.damage, true);
                 SoundManager.playSound('attack');
             }
         }
@@ -3207,7 +3207,7 @@ class Humanoid {
         } else {
             const targetY = groundH - feetOffset;
             if (this.mesh.position.y < targetY) {
-                if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(20);
+                if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(20, true);
                 this.mesh.position.y = targetY;
                 this.isGrounded = true; this.velocity.y = 0;
                 if(this.state === 'stunned' && this.velocity.length() < 1) { this.state = 'idle'; this.mesh.rotation.z = 0; this.mesh.rotation.x = 0; }
@@ -3219,7 +3219,7 @@ class Humanoid {
             const h = groundH;
             const safeH = WATER_LEVEL - 2.2; // Use Shaman height
             if (h < safeH) {
-                this.takeDamage(this.maxHp * 0.10 * dt);
+                this.takeDamage(this.maxHp * 0.10 * dt, true);
             }
         }
 
