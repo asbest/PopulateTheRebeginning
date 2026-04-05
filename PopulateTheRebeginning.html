@@ -238,6 +238,7 @@
         <button class="menu-btn" onclick="openMultiplayer()">Multiplayer</button>
         <button class="menu-btn" onclick="newGame()">New Game</button>
         <button class="menu-btn" onclick="toggleFps()">Toggle FPS</button>
+        <button class="menu-btn" onclick="toggleFullscreen()">Toggle Fullscreen</button>
 
         <button class="menu-btn" onclick="openTribeMenu()">Tribes</button>
         <button class="menu-btn" onclick="openLandGenMenu()">Land Generation</button>
@@ -4797,6 +4798,18 @@ window.togglePause = function() {
     if(btn) btn.innerText = state.isPaused ? '▶️' : '⏸️';
     const menu = document.getElementById('pause-menu');
     if(menu) menu.style.display = state.isPaused ? 'flex' : 'none';
+}
+
+window.toggleFullscreen = function() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.warn(`Error attempting to enable fullscreen: ${err.message}`);
+        });
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
 }
 
 window.toggleFps = function() {
