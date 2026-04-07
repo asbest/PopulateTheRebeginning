@@ -931,47 +931,7 @@ const AssetCache = {
         shield: new THREE.CylinderGeometry(0.25, 0.25, 0.05, 8),
         tool: new THREE.BoxGeometry(0.05, 0.4, 0.05),
         flowerStem: new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4),
-        flowerPetal: new THREE.SphereGeometry(0.08, 4, 4),
-        grassBlade: (function() {
-            const p1 = new THREE.PlaneGeometry(0.04, 0.2, 1, 1).translate(0, 0.1, 0);
-            const p2 = p1.clone().rotateY(Math.PI / 3);
-            const p3 = p1.clone().rotateY(Math.PI * 2 / 3);
-
-            // Merge the three planes into a bouquet shape using native BufferGeometry API
-            const geom = new THREE.BufferGeometry();
-
-            const positions = [];
-            const normals = [];
-            const uvs = [];
-            const indices = [];
-            let indexOffset = 0;
-
-            [p1, p2, p3].forEach(g => {
-                const pos = g.attributes.position.array;
-                const norm = g.attributes.normal.array;
-                const uv = g.attributes.uv.array;
-                const ind = g.index ? g.index.array : null;
-
-                for(let i=0; i<pos.length; i++) positions.push(pos[i]);
-                for(let i=0; i<norm.length; i++) normals.push(norm[i]);
-                for(let i=0; i<uv.length; i++) uvs.push(uv[i]);
-
-                if(ind) {
-                    for(let i=0; i<ind.length; i++) indices.push(ind[i] + indexOffset);
-                    indexOffset += pos.length / 3;
-                } else {
-                    for(let i=0; i<pos.length/3; i++) indices.push(i + indexOffset);
-                    indexOffset += pos.length / 3;
-                }
-            });
-
-            geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-            geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-            geom.setIndex(indices);
-
-            return geom;
-        })()
+        flowerPetal: new THREE.SphereGeometry(0.08, 4, 4)
     },
     mats: {
         skin: new THREE.MeshStandardMaterial({color: COLORS.skin, roughness: 0.7, metalness: 0.1}),
@@ -985,8 +945,7 @@ const AssetCache = {
         hpRed: new THREE.MeshBasicMaterial({color: 0xFF0000}),
         selectRing: new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}),
         marker: new THREE.MeshBasicMaterial({color: 0xFF0000}),
-        flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1}),
-        grassMat: new THREE.MeshStandardMaterial({color: 0x33AA33, roughness: 0.8, metalness: 0.1, side: THREE.DoubleSide})
+        flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1})
     }
 };
 
@@ -1030,7 +989,6 @@ function addWindShader(material) {
 
 addWindShader(AssetCache.mats.flowerStem);
 addWindShader(AssetCache.mats.flowerPetalBase);
-addWindShader(AssetCache.mats.grassMat);
 
 // --- js/utils.js ---
 
@@ -1647,36 +1605,6 @@ function updateChunkDecorations(chunk, cx, cz) {
         }
     }
 
-    if (chunk.userData.grass) {
-        const grass = chunk.userData.grass;
-        if (grass.data && grass.mesh) {
-            const dataList = grass.data;
-            const mesh = grass.mesh;
-            const dummy = new THREE.Object3D();
-            const basePosArray = mesh.geometry.attributes.aBasePos.array;
-
-            for (let i = 0; i < dataList.length; i++) {
-                const data = dataList[i];
-                const h = getHeight(data.x, data.z);
-
-                const visible = (h > WATER_LEVEL + 0.2 && h < 8.0);
-                const globalScale = visible ? data.scale : 0;
-
-                basePosArray[i*3] = data.x;
-                basePosArray[i*3+1] = h;
-                basePosArray[i*3+2] = data.z;
-
-                dummy.position.set(data.x, h, data.z);
-                dummy.rotation.set(data.rotX, data.rotY, data.rotZ);
-                dummy.scale.setScalar(globalScale);
-                dummy.updateMatrix();
-
-                mesh.setMatrixAt(i, dummy.matrix);
-            }
-            mesh.instanceMatrix.needsUpdate = true;
-            mesh.geometry.attributes.aBasePos.needsUpdate = true;
-        }
-    }
 }
 
 function createChunk(cx, cz) {
@@ -1843,74 +1771,6 @@ function createChunk(cx, cz) {
             data: flowerDataList,
             stems: stemInstancedMesh,
             petals: petalInstancedMesh
-        };
-    }
-
-    // Generate Grass
-    const grassSpacing = 0.2828;
-    const grassDataList = [];
-    for(let x = -CHUNK_SIZE/2; x < CHUNK_SIZE/2; x += grassSpacing) {
-        for(let z = -CHUNK_SIZE/2; z < CHUNK_SIZE/2; z += grassSpacing) {
-            const worldX = x + offX;
-            const worldZ = z + offZ;
-
-            // Fast deterministic scatter
-            const noise = state.simplex.noise2D(worldX * 0.1, worldZ * 0.1);
-            if(noise > -0.2) {
-                if(Math.random() > 0.85) continue; // Random thinning
-
-                const jx = worldX + (Math.random()-0.5) * grassSpacing;
-                const jz = worldZ + (Math.random()-0.5) * grassSpacing;
-                const h = getHeight(jx, jz);
-
-                // Only on grassy areas
-                if(h > WATER_LEVEL + 0.2 && h < 8.0) {
-                     grassDataList.push({
-                         x: jx, z: jz, h: h,
-                         scale: 0.5 + Math.random() * 0.8,
-                         rotY: Math.random() * Math.PI * 2,
-                         rotX: (Math.random() - 0.5) * 0.2,
-                         rotZ: (Math.random() - 0.5) * 0.2
-                     });
-                }
-            }
-        }
-    }
-
-    if (grassDataList.length > 0) {
-        const dummy = new THREE.Object3D();
-        const grassGeo = AssetCache.geos.grassBlade.clone();
-
-        const grassInstancedMesh = new THREE.InstancedMesh(grassGeo, AssetCache.mats.grassMat, grassDataList.length);
-        grassInstancedMesh.castShadow = true;
-
-        const basePosArray = new Float32Array(grassDataList.length * 3);
-        const tempColor = new THREE.Color();
-
-        for (let i = 0; i < grassDataList.length; i++) {
-             const data = grassDataList[i];
-             basePosArray[i*3] = data.x;
-             basePosArray[i*3+1] = data.h;
-             basePosArray[i*3+2] = data.z;
-
-             dummy.position.set(data.x, data.h, data.z);
-             dummy.rotation.set(data.rotX, data.rotY, data.rotZ);
-             dummy.scale.setScalar(data.scale);
-             dummy.updateMatrix();
-
-             grassInstancedMesh.setMatrixAt(i, dummy.matrix);
-
-             // Slight color variation
-             tempColor.setHex(0x33AA33);
-             tempColor.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
-             grassInstancedMesh.setColorAt(i, tempColor);
-        }
-
-        grassInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
-        grp.add(grassInstancedMesh);
-        grp.userData.grass = {
-             data: grassDataList,
-             mesh: grassInstancedMesh
         };
     }
 
