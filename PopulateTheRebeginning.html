@@ -901,10 +901,13 @@ const AssetCache = {
         hpBack: new THREE.PlaneGeometry(1.0, 0.15),
         hpFront: new THREE.PlaneGeometry(1.0, 0.15).translate(0.5, 0, 0),
         marker: new THREE.ConeGeometry(0.3, 1.0, 4).rotateX(Math.PI),
-        torso: new THREE.CylinderGeometry(0.25, 0.18, 0.5, 16),
+        torso: new THREE.CylinderGeometry(0.25, 0.18, 0.5, 16).scale(1.0, 1.0, 0.6),
         head: new THREE.SphereGeometry(0.2, 32, 32),
-        arm: new THREE.CylinderGeometry(0.07, 0.05, 0.45, 16),
-        leg: new THREE.CylinderGeometry(0.08, 0.06, 0.55, 16),
+        neck: new THREE.CylinderGeometry(0.06, 0.08, 0.15, 8),
+        upperArm: new THREE.CylinderGeometry(0.07, 0.06, 0.25, 16),
+        lowerArm: new THREE.CylinderGeometry(0.06, 0.05, 0.25, 16),
+        upperLeg: new THREE.CylinderGeometry(0.08, 0.07, 0.3, 16),
+        lowerLeg: new THREE.CylinderGeometry(0.07, 0.06, 0.3, 16),
         hand: new THREE.SphereGeometry(0.06, 16, 16),
         foot: new THREE.BoxGeometry(0.12, 0.1, 0.18),
         eye: new THREE.SphereGeometry(0.04, 16, 16),
@@ -926,7 +929,8 @@ const AssetCache = {
         shield: new THREE.CylinderGeometry(0.25, 0.25, 0.05, 8),
         tool: new THREE.BoxGeometry(0.05, 0.4, 0.05),
         flowerStem: new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4),
-        flowerPetal: new THREE.SphereGeometry(0.08, 4, 4)
+        flowerPetal: new THREE.SphereGeometry(0.08, 4, 4),
+        grassBlade: new THREE.PlaneGeometry(0.04, 0.4, 1, 1).translate(0, 0.2, 0)
     },
     mats: {
         skin: new THREE.MeshStandardMaterial({color: COLORS.skin, roughness: 0.7, metalness: 0.1}),
@@ -940,7 +944,8 @@ const AssetCache = {
         hpRed: new THREE.MeshBasicMaterial({color: 0xFF0000}),
         selectRing: new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}),
         marker: new THREE.MeshBasicMaterial({color: 0xFF0000}),
-        flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1})
+        flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1}),
+        grassMat: new THREE.MeshStandardMaterial({color: 0x33AA33, roughness: 0.8, metalness: 0.1, side: THREE.DoubleSide})
     }
 };
 
@@ -984,6 +989,7 @@ function addWindShader(material) {
 
 addWindShader(AssetCache.mats.flowerStem);
 addWindShader(AssetCache.mats.flowerPetalBase);
+addWindShader(AssetCache.mats.grassMat);
 
 // --- js/utils.js ---
 
@@ -1599,6 +1605,37 @@ function updateChunkDecorations(chunk, cx, cz) {
             }
         }
     }
+
+    if (chunk.userData.grass) {
+        const grass = chunk.userData.grass;
+        if (grass.data && grass.mesh) {
+            const dataList = grass.data;
+            const mesh = grass.mesh;
+            const dummy = new THREE.Object3D();
+            const basePosArray = mesh.geometry.attributes.aBasePos.array;
+
+            for (let i = 0; i < dataList.length; i++) {
+                const data = dataList[i];
+                const h = getHeight(data.x, data.z);
+
+                const visible = (h > WATER_LEVEL + 0.2 && h < 8.0);
+                const globalScale = visible ? data.scale : 0;
+
+                basePosArray[i*3] = data.x;
+                basePosArray[i*3+1] = h;
+                basePosArray[i*3+2] = data.z;
+
+                dummy.position.set(data.x, h, data.z);
+                dummy.rotation.set(data.rotX, data.rotY, data.rotZ);
+                dummy.scale.setScalar(globalScale);
+                dummy.updateMatrix();
+
+                mesh.setMatrixAt(i, dummy.matrix);
+            }
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.geometry.attributes.aBasePos.needsUpdate = true;
+        }
+    }
 }
 
 function createChunk(cx, cz) {
@@ -1765,6 +1802,74 @@ function createChunk(cx, cz) {
             data: flowerDataList,
             stems: stemInstancedMesh,
             petals: petalInstancedMesh
+        };
+    }
+
+    // Generate Grass
+    const grassSpacing = 0.4;
+    const grassDataList = [];
+    for(let x = -CHUNK_SIZE/2; x < CHUNK_SIZE/2; x += grassSpacing) {
+        for(let z = -CHUNK_SIZE/2; z < CHUNK_SIZE/2; z += grassSpacing) {
+            const worldX = x + offX;
+            const worldZ = z + offZ;
+
+            // Fast deterministic scatter
+            const noise = state.simplex.noise2D(worldX * 0.1, worldZ * 0.1);
+            if(noise > -0.2) {
+                if(Math.random() > 0.85) continue; // Random thinning
+
+                const jx = worldX + (Math.random()-0.5) * grassSpacing;
+                const jz = worldZ + (Math.random()-0.5) * grassSpacing;
+                const h = getHeight(jx, jz);
+
+                // Only on grassy areas
+                if(h > WATER_LEVEL + 0.2 && h < 8.0) {
+                     grassDataList.push({
+                         x: jx, z: jz, h: h,
+                         scale: 0.5 + Math.random() * 0.8,
+                         rotY: Math.random() * Math.PI * 2,
+                         rotX: (Math.random() - 0.5) * 0.2,
+                         rotZ: (Math.random() - 0.5) * 0.2
+                     });
+                }
+            }
+        }
+    }
+
+    if (grassDataList.length > 0) {
+        const dummy = new THREE.Object3D();
+        const grassGeo = AssetCache.geos.grassBlade.clone();
+
+        const grassInstancedMesh = new THREE.InstancedMesh(grassGeo, AssetCache.mats.grassMat, grassDataList.length);
+        grassInstancedMesh.castShadow = true;
+
+        const basePosArray = new Float32Array(grassDataList.length * 3);
+        const tempColor = new THREE.Color();
+
+        for (let i = 0; i < grassDataList.length; i++) {
+             const data = grassDataList[i];
+             basePosArray[i*3] = data.x;
+             basePosArray[i*3+1] = data.h;
+             basePosArray[i*3+2] = data.z;
+
+             dummy.position.set(data.x, data.h, data.z);
+             dummy.rotation.set(data.rotX, data.rotY, data.rotZ);
+             dummy.scale.setScalar(data.scale);
+             dummy.updateMatrix();
+
+             grassInstancedMesh.setMatrixAt(i, dummy.matrix);
+
+             // Slight color variation
+             tempColor.setHex(0x33AA33);
+             tempColor.offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
+             grassInstancedMesh.setColorAt(i, tempColor);
+        }
+
+        grassInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
+        grp.add(grassInstancedMesh);
+        grp.userData.grass = {
+             data: grassDataList,
+             mesh: grassInstancedMesh
         };
     }
 
@@ -2746,6 +2851,9 @@ class Humanoid {
         } else {
             this.torso = new THREE.Group(); this.torso.position.y = 0.9; this.mesh.add(this.torso);
             const tMesh = new THREE.Mesh(AssetCache.geos.torso, shirtMat); tMesh.userData.isFactionColored = true; tMesh.castShadow = true; tMesh.receiveShadow = true; this.torso.add(tMesh);
+
+            const neck = new THREE.Mesh(AssetCache.geos.neck, skinMat); neck.position.y = 0.25; neck.castShadow = true; this.torso.add(neck);
+
             this.head = new THREE.Group(); this.head.position.y = 0.4; this.torso.add(this.head);
             const headMesh = new THREE.Mesh(AssetCache.geos.head, skinMat);
             headMesh.castShadow = true;
@@ -2828,53 +2936,59 @@ class Humanoid {
         }
 
         if (type !== 'airship') {
-            const createLimb = (geo, mat, px, py, pz, h, isArm) => {
-                const group = new THREE.Group(); group.position.set(px, py, pz);
-                const mesh = new THREE.Mesh(geo, mat); mesh.position.y = -h / 2; mesh.castShadow = true;
-                group.add(mesh);
+            const createLimb = (upperGeo, lowerGeo, mat, px, py, pz, upperH, lowerH, isArm) => {
+                const upperGroup = new THREE.Group(); upperGroup.position.set(px, py, pz);
+                const upperMesh = new THREE.Mesh(upperGeo, mat); upperMesh.position.y = -upperH / 2; upperMesh.castShadow = true;
+                upperGroup.add(upperMesh);
+
+                const lowerGroup = new THREE.Group(); lowerGroup.position.y = -upperH;
+                const lowerMesh = new THREE.Mesh(lowerGeo, mat); lowerMesh.position.y = -lowerH / 2; lowerMesh.castShadow = true;
+                lowerGroup.add(lowerMesh);
+                upperGroup.add(lowerGroup);
+                upperGroup.userData.lower = lowerGroup;
 
                 if (isArm) {
                     const hand = new THREE.Mesh(AssetCache.geos.hand, AssetCache.mats.skin);
-                    hand.position.y = -h;
+                    hand.position.y = -lowerH;
                     hand.castShadow = true;
-                    group.add(hand);
+                    lowerGroup.add(hand);
                 } else {
                     const foot = new THREE.Mesh(AssetCache.geos.foot, AssetCache.mats.shoe);
-                    foot.position.y = -h;
+                    foot.position.y = -lowerH;
                     foot.position.z = 0.05;
                     foot.castShadow = true;
-                    group.add(foot);
+                    lowerGroup.add(foot);
                 }
 
-                return group;
+                return upperGroup;
             };
             let armMat = skinMat;
             if(this.type === 'firewarrior') armMat = new THREE.MeshStandardMaterial({color: 0xFF4500, emissive: 0xFF2200, roughness: 0.7, metalness: 0.1});
             if(this.type === 'spy') armMat = new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.7, metalness: 0.1});
 
-            this.armL = createLimb(AssetCache.geos.arm, armMat, 0.28, 0.15, 0, 0.45, true);
-            this.armR = createLimb(AssetCache.geos.arm, armMat, -0.28, 0.15, 0, 0.45, true);
+            this.armL = createLimb(AssetCache.geos.upperArm, AssetCache.geos.lowerArm, armMat, 0.28, 0.15, 0, 0.25, 0.25, true);
+            this.armR = createLimb(AssetCache.geos.upperArm, AssetCache.geos.lowerArm, armMat, -0.28, 0.15, 0, 0.25, 0.25, true);
             this.torso.add(this.armL); this.torso.add(this.armR);
 
             // Weapons / Tools
             if(type === 'warrior') {
                 const sword = new THREE.Mesh(AssetCache.geos.sword, new THREE.MeshStandardMaterial({color: 0xDDDDDD, roughness: 0.7, metalness: 0.1}));
-                sword.position.y = -0.3; sword.position.z = 0.1; sword.rotation.x = Math.PI/2;
-                this.armR.children[0].add(sword);
+                sword.position.y = -0.15; sword.position.z = 0.1; sword.rotation.x = Math.PI/2;
+                this.armR.userData.lower.add(sword);
                 // Shield
                 const shield = new THREE.Mesh(AssetCache.geos.shield, new THREE.MeshStandardMaterial({color: 0x8B4513, roughness: 0.7, metalness: 0.1}));
                 shield.rotation.z = Math.PI/2; shield.rotation.y = Math.PI/2;
-                shield.position.x = 0.15; shield.position.y = -0.2;
-                this.armL.children[0].add(shield);
+                shield.position.x = 0.15; shield.position.y = -0.1;
+                this.armL.userData.lower.add(shield);
             }
             else if (type === 'wild') {
                 const tool = new THREE.Mesh(AssetCache.geos.tool, new THREE.MeshStandardMaterial({color: 0x666666, roughness: 0.7, metalness: 0.1}));
-                tool.position.y = -0.3; tool.position.z = 0.1; tool.rotation.x = Math.PI/2;
-                this.armR.children[0].add(tool);
+                tool.position.y = -0.15; tool.position.z = 0.1; tool.rotation.x = Math.PI/2;
+                this.armR.userData.lower.add(tool);
             }
 
-            this.legL = createLimb(AssetCache.geos.leg, shirtMat, 0.12, 0.65, 0, 0.55, false); this.legL.children[0].userData.isFactionColored = true;
-            this.legR = createLimb(AssetCache.geos.leg, shirtMat, -0.12, 0.65, 0, 0.55, false); this.legR.children[0].userData.isFactionColored = true;
+            this.legL = createLimb(AssetCache.geos.upperLeg, AssetCache.geos.lowerLeg, shirtMat, 0.12, 0.65, 0, 0.3, 0.3, false); this.legL.children[0].userData.isFactionColored = true; this.legL.userData.lower.children[0].userData.isFactionColored = true;
+            this.legR = createLimb(AssetCache.geos.upperLeg, AssetCache.geos.lowerLeg, shirtMat, -0.12, 0.65, 0, 0.3, 0.3, false); this.legR.children[0].userData.isFactionColored = true; this.legR.userData.lower.children[0].userData.isFactionColored = true;
             this.mesh.add(this.legL); this.mesh.add(this.legR);
         }
 
@@ -3296,8 +3410,7 @@ class Humanoid {
             if(this.velocity.length() > 2 || !this.isGrounded) {
                  this.mesh.rotation.x += dt * 5; this.mesh.rotation.z += dt * 3;
                  if(this.legL) {
-                    this.legL.rotation.x = Math.sin(this.animTime * 15); this.legR.rotation.x = Math.sin(this.animTime * 15 + Math.PI);
-                    this.armL.rotation.x = Math.sin(this.animTime * 15); this.armR.rotation.x = Math.sin(this.animTime * 15 + Math.PI);
+                    this.updateWalkAnim(15, 1.0);
                  }
             } else {
                 this.recoverTimer -= dt;
@@ -3327,11 +3440,7 @@ class Humanoid {
         else if(this.state === 'manual') {
             if(this.velocity.lengthSq() > 0.1) {
                 if(this.legL) {
-                    const walkSpeed = 10; const amp = 0.8;
-                    this.legL.rotation.x = Math.sin(this.animTime * walkSpeed) * amp;
-                    this.legR.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp;
-                    this.armL.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp * 0.6;
-                    this.armR.rotation.x = Math.sin(this.animTime * walkSpeed) * amp * 0.6;
+                    this.updateWalkAnim(10, 0.8);
                 }
             } else {
                 this.resetAnim();
@@ -3403,11 +3512,7 @@ class Humanoid {
 
                 // Walk Anim
                 if(this.legL) {
-                    const walkSpeed = 10; const amp = 0.8;
-                    this.legL.rotation.x = Math.sin(this.animTime * walkSpeed) * amp;
-                    this.legR.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp;
-                    this.armL.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp * 0.6;
-                    this.armR.rotation.x = Math.sin(this.animTime * walkSpeed) * amp * 0.6;
+                    this.updateWalkAnim(10, 0.8);
                 }
             }
         }
@@ -3505,12 +3610,8 @@ class Humanoid {
                 }
                 this.mesh.rotation.x = 0; this.mesh.rotation.z = 0;
                 if(this.legL) {
-                    const walkSpeed = 10; const amp = 0.8;
-                    this.legL.rotation.x = Math.sin(this.animTime * walkSpeed) * amp;
-                    this.legR.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp;
-                    this.armL.rotation.x = Math.sin(this.animTime * walkSpeed + Math.PI) * amp * 0.6;
-                    this.armR.rotation.x = Math.sin(this.animTime * walkSpeed) * amp * 0.6;
-                    this.torso.position.y = 0.9 + Math.abs(Math.sin(this.animTime * walkSpeed)) * 0.05;
+                    this.updateWalkAnim(10, 0.8);
+                    this.torso.position.y = 0.9 + Math.abs(Math.sin(this.animTime * 10)) * 0.05;
                 }
             }
         } else {
@@ -3554,12 +3655,40 @@ class Humanoid {
             }
         }
     }
+    updateWalkAnim(speed, amp) {
+        const t = this.animTime * speed;
+        // Shoulders & Hips
+        this.legL.rotation.x = Math.sin(t) * amp;
+        this.legR.rotation.x = Math.sin(t + Math.PI) * amp;
+        this.armL.rotation.x = Math.sin(t + Math.PI) * amp * 0.6;
+        this.armR.rotation.x = Math.sin(t) * amp * 0.6;
+
+        // Knees (bend when leg swings backward/upward)
+        if (this.legL.userData.lower) {
+             const kneeL = Math.sin(t);
+             this.legL.userData.lower.rotation.x = (kneeL > 0) ? kneeL * 1.2 : 0;
+             const kneeR = Math.sin(t + Math.PI);
+             this.legR.userData.lower.rotation.x = (kneeR > 0) ? kneeR * 1.2 : 0;
+        }
+
+        // Elbows (slight bend)
+        if (this.armL.userData.lower) {
+             this.armL.userData.lower.rotation.x = -Math.abs(Math.sin(t + Math.PI)) * 0.5;
+             this.armR.userData.lower.rotation.x = -Math.abs(Math.sin(t)) * 0.5;
+        }
+    }
+
     resetAnim() {
         const lerp = 0.1;
         if(this.legL) this.legL.rotation.x += (0 - this.legL.rotation.x) * lerp;
         if(this.legR) this.legR.rotation.x += (0 - this.legR.rotation.x) * lerp;
         if(this.armL) this.armL.rotation.x += (0 - this.armL.rotation.x) * lerp;
         if(this.armR) this.armR.rotation.x += (0 - this.armR.rotation.x) * lerp;
+
+        if(this.legL && this.legL.userData.lower) this.legL.userData.lower.rotation.x += (0 - this.legL.userData.lower.rotation.x) * lerp;
+        if(this.legR && this.legR.userData.lower) this.legR.userData.lower.rotation.x += (0 - this.legR.userData.lower.rotation.x) * lerp;
+        if(this.armL && this.armL.userData.lower) this.armL.userData.lower.rotation.x += (0 - this.armL.userData.lower.rotation.x) * lerp;
+        if(this.armR && this.armR.userData.lower) this.armR.userData.lower.rotation.x += (0 - this.armR.userData.lower.rotation.x) * lerp;
     }
 
     loadUnit(u) {
