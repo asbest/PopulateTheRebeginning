@@ -901,7 +901,7 @@ const AssetCache = {
         hpBack: new THREE.PlaneGeometry(1.0, 0.15),
         hpFront: new THREE.PlaneGeometry(1.0, 0.15).translate(0.5, 0, 0),
         marker: new THREE.ConeGeometry(0.3, 1.0, 4).rotateX(Math.PI),
-        torso: new THREE.CylinderGeometry(0.25, 0.18, 0.5, 16),
+        torso: new THREE.CylinderGeometry(0.25, 0.18, 0.5, 16).scale(1.0, 1.0, 0.6),
         head: new THREE.SphereGeometry(0.2, 32, 32),
         neck: new THREE.CylinderGeometry(0.06, 0.08, 0.15, 8),
         upperArm: new THREE.CylinderGeometry(0.07, 0.06, 0.25, 16),
@@ -930,7 +930,7 @@ const AssetCache = {
         tool: new THREE.BoxGeometry(0.05, 0.4, 0.05),
         flowerStem: new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4),
         flowerPetal: new THREE.SphereGeometry(0.08, 4, 4),
-        grassBlade: new THREE.ConeGeometry(0.05, 0.4, 3).translate(0, 0.2, 0)
+        grassBlade: new THREE.PlaneGeometry(0.1, 0.4).translate(0, 0.2, 0)
     },
     mats: {
         skin: new THREE.MeshStandardMaterial({color: COLORS.skin, roughness: 0.7, metalness: 0.1}),
@@ -945,7 +945,7 @@ const AssetCache = {
         selectRing: new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}),
         marker: new THREE.MeshBasicMaterial({color: 0xFF0000}),
         flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1}),
-        grassMat: new THREE.MeshStandardMaterial({color: 0x33AA33, roughness: 0.8, metalness: 0.1})
+        grassMat: new THREE.MeshStandardMaterial({color: 0x33AA33, roughness: 0.8, metalness: 0.1, side: THREE.DoubleSide})
     }
 };
 
