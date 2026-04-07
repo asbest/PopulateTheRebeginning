@@ -1663,7 +1663,7 @@ function createChunk(cx, cz) {
     grp.add(wMesh);
 
     grp.userData = { trees: [], flowers: [] };
-    for(let k=0; k<3; k++) {
+    for(let k=0; k<6; k++) {
         if(Math.random() > 0.5) {
              const lx = (Math.random()-0.5)*CHUNK_SIZE; const lz = (Math.random()-0.5)*CHUNK_SIZE;
              const h = getHeight(lx+offX, lz+offZ);
@@ -1808,7 +1808,7 @@ function createChunk(cx, cz) {
     }
 
     // Generate Grass
-    const grassSpacing = 0.4;
+    const grassSpacing = 0.2828;
     const grassDataList = [];
     for(let x = -CHUNK_SIZE/2; x < CHUNK_SIZE/2; x += grassSpacing) {
         for(let z = -CHUNK_SIZE/2; z < CHUNK_SIZE/2; z += grassSpacing) {
@@ -5447,8 +5447,8 @@ function findSafeSpawnAndStart() {
     window.enemyAIs = [new EnemyAI(1)];
     window.enemyAIs.forEach((ai, i) => {
         const angle = (i+1) * Math.PI*2 / (window.enemyAIs.length+1);
-        const startX = r + Math.cos(angle)*100;
-        const startZ = r + Math.sin(angle)*100;
+        const startX = r + Math.cos(angle)*150;
+        const startZ = r + Math.sin(angle)*150;
         ai.init(startX, startZ);
         forceLandConnection(r, r, startX, startZ);
     });

@@ -30,7 +30,7 @@ def verify_pathfinding():
         # Take screenshot
         os.makedirs("verification", exist_ok=True)
         screenshot_path = os.path.abspath("verification/game_screen.png")
-        page.screenshot(path=screenshot_path)
+        page.screenshot(path=screenshot_path, animations="disabled", timeout=0)
         print(f"Screenshot saved to {screenshot_path}")
 
         browser.close()
