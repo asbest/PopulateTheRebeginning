@@ -908,6 +908,8 @@ const AssetCache = {
         lowerArm: new THREE.CylinderGeometry(0.06, 0.05, 0.25, 16),
         upperLeg: new THREE.CylinderGeometry(0.08, 0.07, 0.3, 16),
         lowerLeg: new THREE.CylinderGeometry(0.07, 0.06, 0.3, 16),
+        armJoint: new THREE.SphereGeometry(0.065, 16, 16),
+        legJoint: new THREE.SphereGeometry(0.075, 16, 16),
         hand: new THREE.SphereGeometry(0.06, 16, 16),
         foot: new THREE.BoxGeometry(0.12, 0.1, 0.18),
         eye: new THREE.SphereGeometry(0.04, 16, 16),
@@ -930,7 +932,7 @@ const AssetCache = {
         tool: new THREE.BoxGeometry(0.05, 0.4, 0.05),
         flowerStem: new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4),
         flowerPetal: new THREE.SphereGeometry(0.08, 4, 4),
-        grassBlade: new THREE.PlaneGeometry(0.04, 0.4, 1, 1).translate(0, 0.2, 0)
+        grassBlade: new THREE.PlaneGeometry(0.04, 0.2, 1, 1).translate(0, 0.1, 0)
     },
     mats: {
         skin: new THREE.MeshStandardMaterial({color: COLORS.skin, roughness: 0.7, metalness: 0.1}),
@@ -2938,10 +2940,19 @@ class Humanoid {
         if (type !== 'airship') {
             const createLimb = (upperGeo, lowerGeo, mat, px, py, pz, upperH, lowerH, isArm) => {
                 const upperGroup = new THREE.Group(); upperGroup.position.set(px, py, pz);
+
+                const topJointGeo = isArm ? AssetCache.geos.armJoint : AssetCache.geos.legJoint;
+                const topJoint = new THREE.Mesh(topJointGeo, mat);
+                upperGroup.add(topJoint);
+
                 const upperMesh = new THREE.Mesh(upperGeo, mat); upperMesh.position.y = -upperH / 2; upperMesh.castShadow = true;
                 upperGroup.add(upperMesh);
 
                 const lowerGroup = new THREE.Group(); lowerGroup.position.y = -upperH;
+
+                const middleJoint = new THREE.Mesh(topJointGeo, mat);
+                lowerGroup.add(middleJoint);
+
                 const lowerMesh = new THREE.Mesh(lowerGeo, mat); lowerMesh.position.y = -lowerH / 2; lowerMesh.castShadow = true;
                 lowerGroup.add(lowerMesh);
                 upperGroup.add(lowerGroup);
