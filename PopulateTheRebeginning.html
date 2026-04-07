@@ -932,7 +932,46 @@ const AssetCache = {
         tool: new THREE.BoxGeometry(0.05, 0.4, 0.05),
         flowerStem: new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4),
         flowerPetal: new THREE.SphereGeometry(0.08, 4, 4),
-        grassBlade: new THREE.PlaneGeometry(0.04, 0.2, 1, 1).translate(0, 0.1, 0)
+        grassBlade: (function() {
+            const p1 = new THREE.PlaneGeometry(0.04, 0.2, 1, 1).translate(0, 0.1, 0);
+            const p2 = p1.clone().rotateY(Math.PI / 3);
+            const p3 = p1.clone().rotateY(Math.PI * 2 / 3);
+
+            // Merge the three planes into a bouquet shape using native BufferGeometry API
+            const geom = new THREE.BufferGeometry();
+
+            const positions = [];
+            const normals = [];
+            const uvs = [];
+            const indices = [];
+            let indexOffset = 0;
+
+            [p1, p2, p3].forEach(g => {
+                const pos = g.attributes.position.array;
+                const norm = g.attributes.normal.array;
+                const uv = g.attributes.uv.array;
+                const ind = g.index ? g.index.array : null;
+
+                for(let i=0; i<pos.length; i++) positions.push(pos[i]);
+                for(let i=0; i<norm.length; i++) normals.push(norm[i]);
+                for(let i=0; i<uv.length; i++) uvs.push(uv[i]);
+
+                if(ind) {
+                    for(let i=0; i<ind.length; i++) indices.push(ind[i] + indexOffset);
+                    indexOffset += pos.length / 3;
+                } else {
+                    for(let i=0; i<pos.length/3; i++) indices.push(i + indexOffset);
+                    indexOffset += pos.length / 3;
+                }
+            });
+
+            geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+            geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            geom.setIndex(indices);
+
+            return geom;
+        })()
     },
     mats: {
         skin: new THREE.MeshStandardMaterial({color: COLORS.skin, roughness: 0.7, metalness: 0.1}),
@@ -4765,7 +4804,7 @@ function init() {
         c.addEventListener('mousedown', onPointerDown);
         window.addEventListener('mousemove', onPointerMove);
         window.addEventListener('mouseup', onPointerUp);
-        c.addEventListener('touchstart', onTouchStart, {passive: false});
+        window.addEventListener('touchstart', onTouchStart, {passive: false});
         window.addEventListener('touchmove', onTouchMove, {passive: false});
         window.addEventListener('touchend', onPointerUp);
         c.addEventListener('wheel', onWheel, {passive: false});
@@ -5124,7 +5163,8 @@ function onPointerDown(e) {
 }
 
 function onTouchStart(e) {
-    e.preventDefault();
+    if (e.target !== state.renderer.domElement && e.target !== document.body) return;
+    if(e.cancelable) e.preventDefault();
     if(e.targetTouches.length === 1) onPointerDown(e.targetTouches[0]);
     else if(e.targetTouches.length === 2) {
         SoundManager.init();
@@ -5176,7 +5216,7 @@ function onPointerMove(e) {
 }
 
 function onTouchMove(e) {
-    if (e.target !== state.renderer.domElement) return;
+    if (e.target !== state.renderer.domElement && e.target !== document.body) return;
     if(e.targetTouches.length === 1) {
         e.preventDefault();
         onPointerMove(e.targetTouches[0]);
@@ -5216,7 +5256,7 @@ function onTouchMove(e) {
 }
 
 function onPointerUp(e) {
-    if (e.type === 'touchend' && e.target !== state.renderer.domElement) return;
+    if (e.type === 'touchend' && e.target !== state.renderer.domElement && e.target !== document.body) return;
     state.isDragging = false;
     let x = e.clientX || (e.changedTouches ? e.changedTouches[0].clientX : 0);
     let y = e.clientY || (e.changedTouches ? e.changedTouches[0].clientY : 0);
