@@ -4493,7 +4493,7 @@ function setupCheats() {
     let clicks = 0;
     let lastTime = 0;
     if(el) {
-        el.addEventListener('click', (e) => {
+        el.addEventListener('pointerdown', (e) => {
             e.stopPropagation(); // Prevent propagation if needed
             const now = Date.now();
             if (now - lastTime < 500) {
