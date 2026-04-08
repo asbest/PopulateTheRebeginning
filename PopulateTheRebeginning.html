@@ -4489,11 +4489,11 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
 
 // Input Handling
 function setupCheats() {
-    const el = document.getElementById('mana-bar');
+    const el = document.getElementById('top-bar');
     let clicks = 0;
     let lastTime = 0;
     if(el) {
-        el.addEventListener('pointerdown', (e) => {
+        el.addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent propagation if needed
             const now = Date.now();
             if (now - lastTime < 500) {
