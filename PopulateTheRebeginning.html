@@ -5490,7 +5490,26 @@ function animate() {
                     const braves = state.units.filter(b => b.faction === u.faction && b.type === 'wild' && b.state !== 'dead');
                     if (braves.length > 0) {
                         const brave = braves[Math.floor(Math.random() * braves.length)];
-                        const safe = findNearestLand(brave.mesh.position.x, brave.mesh.position.z);
+                        let safe = {x: brave.mesh.position.x, z: brave.mesh.position.z};
+
+                        // Spiral search for an empty area nearby (2 to 10 units away)
+                        let foundEmpty = false;
+                        for(let r = 2; r <= 10; r += 2) {
+                            const steps = Math.floor(2 * Math.PI * r / 2);
+                            for(let i = 0; i < steps; i++) {
+                                const angle = (i / steps) * Math.PI * 2;
+                                const nx = brave.mesh.position.x + Math.cos(angle) * r;
+                                const nz = brave.mesh.position.z + Math.sin(angle) * r;
+                                if(getHeight(nx, nz) >= WATER_LEVEL && !isBlocked(nx, nz)) {
+                                    safe = {x: nx, z: nz};
+                                    foundEmpty = true;
+                                    break;
+                                }
+                            }
+                            if (foundEmpty) break;
+                        }
+                        // Fallback to findNearestLand if no unblocked area found
+                        if (!foundEmpty) safe = findNearestLand(brave.mesh.position.x, brave.mesh.position.z);
 
                         const newShaman = new Humanoid(u.faction, 'shaman', safe.x, safe.z);
                         state.units.push(newShaman);
