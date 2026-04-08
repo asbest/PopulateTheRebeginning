@@ -3378,6 +3378,12 @@ class Humanoid {
                      const isFlying = (this.type === 'airship');
                      this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying, this.height);
                      this.pathIndex = 0;
+                     if (!this.path) {
+                         this.state = 'idle';
+                         this.attackTarget = null;
+                         this.path = [];
+                         return;
+                     }
                 }
 
                 if(this.path && this.path.length > 0 && this.pathIndex < this.path.length) {
@@ -3441,6 +3447,11 @@ class Humanoid {
                             this.path = newPath;
                             this.pathIndex = 0;
                             if(this.path.length > 0) this.target = this.path[0];
+                        } else {
+                            this.state = 'idle';
+                            this.target = null;
+                            this.finalDest = null;
+                            this.path = [];
                         }
                     }
                 } else {
