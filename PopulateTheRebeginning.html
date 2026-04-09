@@ -3417,11 +3417,13 @@ class Humanoid {
                     this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
                     this.velocity.z += (targetVelZ - this.velocity.z) * 5.0 * dt;
 
-                    const targetRot = Math.atan2(dx, dz);
-                    let rotDiff = targetRot - this.mesh.rotation.y;
-                    while(rotDiff > Math.PI) rotDiff -= Math.PI*2;
-                    while(rotDiff < -Math.PI) rotDiff += Math.PI*2;
-                    this.mesh.rotation.y += rotDiff * 5.0 * dt;
+                    if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
+                        const targetRot = Math.atan2(dx, dz);
+                        let rotDiff = targetRot - this.mesh.rotation.y;
+                        while(rotDiff > Math.PI) rotDiff -= Math.PI*2;
+                        while(rotDiff < -Math.PI) rotDiff += Math.PI*2;
+                        this.mesh.rotation.y += rotDiff * 5.0 * dt;
+                    }
                 } else {
                     this.velocity.x *= 0.9;
                     this.velocity.z *= 0.9;
@@ -3518,11 +3520,13 @@ class Humanoid {
                     this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
                     this.velocity.z += (targetVelZ - this.velocity.z) * 5.0 * dt;
 
-                    const targetRot = Math.atan2(dx, dz);
-                    let rotDiff = targetRot - this.mesh.rotation.y;
-                    while(rotDiff > Math.PI) rotDiff -= Math.PI*2;
-                    while(rotDiff < -Math.PI) rotDiff += Math.PI*2;
-                    this.mesh.rotation.y += rotDiff * 5.0 * dt;
+                    if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
+                        const targetRot = Math.atan2(dx, dz);
+                        let rotDiff = targetRot - this.mesh.rotation.y;
+                        while(rotDiff > Math.PI) rotDiff -= Math.PI*2;
+                        while(rotDiff < -Math.PI) rotDiff += Math.PI*2;
+                        this.mesh.rotation.y += rotDiff * 5.0 * dt;
+                    }
                 } else {
                      this.velocity.x *= 0.9; this.velocity.z *= 0.9;
                      if(this.velocity.lengthSq() < 0.1) {
