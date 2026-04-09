@@ -3592,7 +3592,7 @@ class Humanoid {
         // Accumulate walk animation time based on actual speed
         // If not grounded, keep animation going slightly so legs flail when stunned/falling
         const speedFactor = this.isGrounded ? normalizedSpeed : 1.0;
-        this.walkAnimTime = (this.walkAnimTime || 0) + dt * speed * speedFactor;
+        this.walkAnimTime = (this.walkAnimTime || 0) + dt * speed * speedFactor * 1.5;
 
         const t = this.walkAnimTime;
 
