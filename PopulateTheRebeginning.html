@@ -3589,7 +3589,8 @@ class Humanoid {
         // Fallback to 6.0 if this.moveSpeed is somehow undefined to avoid NaN corruption
         const maxSpeed = this.moveSpeed || 6.0;
         const normalizedSpeed = Math.min(currentSpeed / maxSpeed, 1.5);
-        const dynamicAmp = amp * (normalizedSpeed > 0.1 ? normalizedSpeed : 0.1);
+        // Increase the amplitude multiplier significantly to make the steps wider
+        const dynamicAmp = amp * (normalizedSpeed > 0.1 ? normalizedSpeed : 0.1) * 1.5;
 
         // Accumulate walk animation time based on actual speed
         // If not grounded, keep animation going slightly so legs flail when stunned/falling
