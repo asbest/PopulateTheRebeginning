@@ -3320,7 +3320,7 @@ class Humanoid {
             if(this.velocity.length() > 2 || !this.isGrounded) {
                  this.mesh.rotation.x += dt * 5; this.mesh.rotation.z += dt * 3;
                  if(this.legL) {
-                    this.updateWalkAnim(15, 1.0);
+                    this.updateWalkAnim(15, 1.0, dt);
                  }
             } else {
                 this.recoverTimer -= dt;
@@ -3350,7 +3350,7 @@ class Humanoid {
         else if(this.state === 'manual') {
             if(this.velocity.lengthSq() > 0.1) {
                 if(this.legL) {
-                    this.updateWalkAnim(10, 0.8);
+                    this.updateWalkAnim(10, 0.8, dt);
                 }
             } else {
                 this.resetAnim();
@@ -3428,7 +3428,7 @@ class Humanoid {
 
                 // Walk Anim
                 if(this.legL) {
-                    this.updateWalkAnim(10, 0.8);
+                    this.updateWalkAnim(10, 0.8, dt);
                 }
             }
         }
@@ -3531,8 +3531,8 @@ class Humanoid {
                 }
                 this.mesh.rotation.x = 0; this.mesh.rotation.z = 0;
                 if(this.legL) {
-                    this.updateWalkAnim(10, 0.8);
-                    this.torso.position.y = 0.9 + Math.abs(Math.sin(this.animTime * 10)) * 0.05;
+                    this.updateWalkAnim(10, 0.8, dt);
+                    this.torso.position.y = 0.9 + Math.abs(Math.sin(this.walkAnimTime)) * 0.05;
                 }
             }
         } else {
@@ -3576,31 +3576,44 @@ class Humanoid {
             }
         }
     }
-    updateWalkAnim(speed, amp) {
-        const t = this.animTime * speed;
+    updateWalkAnim(speed, amp, dt = 0.016) {
+        // Compute current movement speed (magnitude of X and Z velocity)
+        const currentSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
+
+        // Calculate dynamic amplitude and speed based on movement
+        const normalizedSpeed = Math.min(currentSpeed / this.moveSpeed, 1.5);
+        const dynamicAmp = amp * (normalizedSpeed > 0.1 ? normalizedSpeed : 0.1);
+
+        // Accumulate walk animation time based on actual speed
+        // If not grounded, keep animation going slightly so legs flail when stunned/falling
+        const speedFactor = this.isGrounded ? normalizedSpeed : 1.0;
+        this.walkAnimTime = (this.walkAnimTime || 0) + dt * speed * speedFactor;
+
+        const t = this.walkAnimTime;
+
         // Shoulders & Hips
-        this.legL.rotation.x = Math.sin(t) * amp;
-        this.legR.rotation.x = Math.sin(t + Math.PI) * amp;
-        this.armL.rotation.x = Math.sin(t + Math.PI) * amp * 0.6;
-        this.armR.rotation.x = Math.sin(t) * amp * 0.6;
+        this.legL.rotation.x = Math.sin(t) * dynamicAmp;
+        this.legR.rotation.x = Math.sin(t + Math.PI) * dynamicAmp;
+        this.armL.rotation.x = Math.sin(t + Math.PI) * dynamicAmp * 0.6;
+        this.armR.rotation.x = Math.sin(t) * dynamicAmp * 0.6;
 
         // Knees (bend when leg swings backward/upward)
         if (this.legL.userData.lower) {
              const kneeL = Math.sin(t);
-             this.legL.userData.lower.rotation.x = (kneeL > 0) ? kneeL * 1.2 : 0;
+             this.legL.userData.lower.rotation.x = (kneeL > 0) ? kneeL * 1.2 * dynamicAmp / amp : 0;
              const kneeR = Math.sin(t + Math.PI);
-             this.legR.userData.lower.rotation.x = (kneeR > 0) ? kneeR * 1.2 : 0;
+             this.legR.userData.lower.rotation.x = (kneeR > 0) ? kneeR * 1.2 * dynamicAmp / amp : 0;
         }
 
         // Elbows (slight bend)
         if (this.armL.userData.lower) {
-             this.armL.userData.lower.rotation.x = -Math.abs(Math.sin(t + Math.PI)) * 0.5;
-             this.armR.userData.lower.rotation.x = -Math.abs(Math.sin(t)) * 0.5;
+             this.armL.userData.lower.rotation.x = -Math.abs(Math.sin(t + Math.PI)) * 0.5 * dynamicAmp / amp;
+             this.armR.userData.lower.rotation.x = -Math.abs(Math.sin(t)) * 0.5 * dynamicAmp / amp;
         }
     }
 
     resetAnim() {
-        const lerp = 0.1;
+        const lerp = 0.2;
         if(this.legL) this.legL.rotation.x += (0 - this.legL.rotation.x) * lerp;
         if(this.legR) this.legR.rotation.x += (0 - this.legR.rotation.x) * lerp;
         if(this.armL) this.armL.rotation.x += (0 - this.armL.rotation.x) * lerp;
@@ -3610,6 +3623,12 @@ class Humanoid {
         if(this.legR && this.legR.userData.lower) this.legR.userData.lower.rotation.x += (0 - this.legR.userData.lower.rotation.x) * lerp;
         if(this.armL && this.armL.userData.lower) this.armL.userData.lower.rotation.x += (0 - this.armL.userData.lower.rotation.x) * lerp;
         if(this.armR && this.armR.userData.lower) this.armR.userData.lower.rotation.x += (0 - this.armR.userData.lower.rotation.x) * lerp;
+
+        // Ensure walk anim time syncs so next movement doesn't snap
+        if (this.walkAnimTime) {
+             const target = Math.round(this.walkAnimTime / (Math.PI * 2)) * Math.PI * 2;
+             this.walkAnimTime += (target - this.walkAnimTime) * lerp * 0.5;
+        }
     }
 
     loadUnit(u) {
