@@ -3594,24 +3594,26 @@ class Humanoid {
         // Accumulate walk animation time based on actual speed
         // If not grounded, keep animation going slightly so legs flail when stunned/falling
         const speedFactor = this.isGrounded ? normalizedSpeed : 1.0;
-        this.walkAnimTime = (this.walkAnimTime || 0) + dt * speed * speedFactor * 2.5;
+        // Adjusted speed multiplier to 3.5 to make it a bit faster
+        this.walkAnimTime = (this.walkAnimTime || 0) + dt * speed * speedFactor * 3.5;
 
         const t = this.walkAnimTime;
 
-        // Shoulders & Hips
+        // Shoulders & Hips (smoothed using simple sin waves)
         this.legL.rotation.x = Math.sin(t) * dynamicAmp;
         this.legR.rotation.x = Math.sin(t + Math.PI) * dynamicAmp;
         this.armL.rotation.x = Math.sin(t + Math.PI) * dynamicAmp * 0.6;
         this.armR.rotation.x = Math.sin(t) * dynamicAmp * 0.6;
 
-        // Knees (bend when leg swings backward/upward)
+        // Knees (bend when leg swings backward/upward) - using phase shifted wave for smoother transition
         if (this.legL.userData.lower) {
-             const kneeL = Math.sin(t);
-             // When thigh swings forward (sin > 0), knee needs to bend backward slightly so foot doesn't clip the ground
-             // When thigh swings backward (sin < 0), knee should bend backward a lot to lift foot
-             this.legL.userData.lower.rotation.x = (kneeL > 0) ? kneeL * 0.5 * dynamicAmp / amp : -kneeL * 1.2 * dynamicAmp / amp;
-             const kneeR = Math.sin(t + Math.PI);
-             this.legR.userData.lower.rotation.x = (kneeR > 0) ? kneeR * 0.5 * dynamicAmp / amp : -kneeR * 1.2 * dynamicAmp / amp;
+             // Use phase shifted wave to phase the knee bend smoothly relative to the thigh
+             // Knee should bend most when the leg is behind and swinging forward
+             const kneeL = Math.max(0, -Math.sin(t - Math.PI / 4));
+             this.legL.userData.lower.rotation.x = kneeL * 1.5 * dynamicAmp / amp;
+
+             const kneeR = Math.max(0, -Math.sin(t + Math.PI - Math.PI / 4));
+             this.legR.userData.lower.rotation.x = kneeR * 1.5 * dynamicAmp / amp;
         }
 
         // Elbows (slight bend)
