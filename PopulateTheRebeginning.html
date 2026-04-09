@@ -3600,9 +3600,11 @@ class Humanoid {
         // Knees (bend when leg swings backward/upward)
         if (this.legL.userData.lower) {
              const kneeL = Math.sin(t);
-             this.legL.userData.lower.rotation.x = (kneeL > 0) ? kneeL * 1.2 * dynamicAmp / amp : 0;
+             // When thigh swings forward (sin > 0), knee needs to bend backward slightly so foot doesn't clip the ground
+             // When thigh swings backward (sin < 0), knee should bend backward a lot to lift foot
+             this.legL.userData.lower.rotation.x = (kneeL > 0) ? kneeL * 0.5 * dynamicAmp / amp : -kneeL * 1.2 * dynamicAmp / amp;
              const kneeR = Math.sin(t + Math.PI);
-             this.legR.userData.lower.rotation.x = (kneeR > 0) ? kneeR * 1.2 * dynamicAmp / amp : 0;
+             this.legR.userData.lower.rotation.x = (kneeR > 0) ? kneeR * 0.5 * dynamicAmp / amp : -kneeR * 1.2 * dynamicAmp / amp;
         }
 
         // Elbows (slight bend)
