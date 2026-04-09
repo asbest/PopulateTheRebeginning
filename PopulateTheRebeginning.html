@@ -3586,13 +3586,15 @@ class Humanoid {
         const currentSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
 
         // Calculate dynamic amplitude and speed based on movement
-        const normalizedSpeed = Math.min(currentSpeed / this.moveSpeed, 1.5);
+        // Fallback to 6.0 if this.moveSpeed is somehow undefined to avoid NaN corruption
+        const maxSpeed = this.moveSpeed || 6.0;
+        const normalizedSpeed = Math.min(currentSpeed / maxSpeed, 1.5);
         const dynamicAmp = amp * (normalizedSpeed > 0.1 ? normalizedSpeed : 0.1);
 
         // Accumulate walk animation time based on actual speed
         // If not grounded, keep animation going slightly so legs flail when stunned/falling
         const speedFactor = this.isGrounded ? normalizedSpeed : 1.0;
-        this.walkAnimTime = (this.walkAnimTime || 0) + dt * speed * speedFactor * 1.5;
+        this.walkAnimTime = (this.walkAnimTime || 0) + dt * speed * speedFactor * 2.5;
 
         const t = this.walkAnimTime;
 
