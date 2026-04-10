@@ -4027,6 +4027,8 @@ class EnemyAI {
     }
 
     think() {
+        if (this.personality === 'swarmer') this.targetHutCount = 10;
+
         // Get Enemy Units
         const myUnits = state.units.filter(u => u.faction === this.faction && u.state !== 'dead');
         const myBuildings = state.buildings.filter(b => b.faction === this.faction && !b.dead);
@@ -4083,7 +4085,11 @@ class EnemyAI {
                     else if (lostType === 'airship') targetBuildingType = 'shipyard';
                 } else {
                     // Keep an even mix of units
-                    if (unitCounts.warrior >= unitCounts.firewarrior + 2 && myBuildings.some(b => b.type === 'fire')) {
+                    if (this.personality === 'swarmer') {
+                        targetBuildingType = 'warrior';
+                    } else if (this.personality === 'sorcerer' && myBuildings.some(b => b.type === 'fire')) {
+                        targetBuildingType = 'fire';
+                    } else if (unitCounts.warrior >= unitCounts.firewarrior + 2 && myBuildings.some(b => b.type === 'fire')) {
                         targetBuildingType = 'fire';
                     } else if (unitCounts.firewarrior >= unitCounts.spy + 1 && myBuildings.some(b => b.type === 'spy')) {
                         targetBuildingType = 'spy';
@@ -4187,7 +4193,16 @@ class EnemyAI {
         });
 
         // 3. Attack Player
-        if(myUnits.length > 5) {
+        let shouldAttack = myUnits.length > 5;
+        if (this.personality === 'swarmer') shouldAttack = myUnits.length > 2;
+        if (this.personality === 'opportunist') {
+            const playerShaman = state.shaman;
+            shouldAttack = myUnits.length > 5 && (
+                !playerShaman || playerShaman.state === 'dead' || state.mana < 20
+            );
+        }
+
+        if(shouldAttack) {
             // Send some to attack enemy shaman
             const attackers = myUnits.filter(u => u.type !== 'wild' && u.state === 'idle');
             // Find an enemy shaman
@@ -4209,7 +4224,8 @@ class EnemyAI {
 
             // Offensive Spells
             const spellRange = 10.0 + myShaman.mesh.position.y;
-            if (state.clock.getElapsedTime() - this.lastSpellTime > 5.0) {
+            const spellCooldown = this.personality === 'sorcerer' ? 2.5 : 5.0;
+            if (state.clock.getElapsedTime() - this.lastSpellTime > spellCooldown) {
                 if (dist < spellRange) {
                     const offensiveSpells = ['blast', 'lightning', 'tornado', 'swarm', 'firestorm'];
                     const spell = offensiveSpells[Math.floor(Math.random() * offensiveSpells.length)];
@@ -4824,6 +4840,17 @@ window.renderTribeMenu = function() {
         teamInput.onchange = (e) => { state.teams[ai.faction] = parseInt(e.target.value); renderTribeMenu(); };
         div.appendChild(teamInput);
 
+        const personalitySelect = document.createElement('select');
+        ['default', 'swarmer', 'sorcerer', 'opportunist'].forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.innerText = p.charAt(0).toUpperCase() + p.slice(1);
+            if(ai.personality === p) opt.selected = true;
+            personalitySelect.appendChild(opt);
+        });
+        personalitySelect.onchange = (e) => { ai.personality = e.target.value; };
+        div.appendChild(personalitySelect);
+
         const rmBtn = document.createElement('button');
         rmBtn.innerText = 'Remove';
         rmBtn.onclick = () => { removeTribe(ai.faction); };
@@ -4838,7 +4865,7 @@ window.addTribe = function() {
     while (window.enemyAIs.some(ai => ai.faction === nextFaction)) {
         nextFaction++;
     }
-    const ai = new EnemyAI(nextFaction);
+    const ai = new EnemyAI(nextFaction, 'default');
 
     // Find safe spot for new tribe
     let r = 50 + nextFaction * 20;
@@ -4920,6 +4947,7 @@ window.saveGame = function() {
 
         enemyAIs: window.enemyAIs.map(ai => ({
             faction: ai.faction,
+            personality: ai.personality,
             timer: ai.timer,
             state: ai.state,
             baseX: ai.baseX,
@@ -4998,7 +5026,7 @@ window.loadGame = function() {
         window.enemyAIs = [];
         if (data.enemyAIs) {
             data.enemyAIs.forEach(aiData => {
-                const ai = new EnemyAI(aiData.faction);
+                const ai = new EnemyAI(aiData.faction, aiData.personality || 'default');
                 ai.timer = aiData.timer;
                 ai.state = aiData.state;
                 ai.baseX = aiData.baseX;
@@ -5386,7 +5414,7 @@ function findSafeSpawnAndStart() {
     createShaman(r, r);
 
 
-    window.enemyAIs = [new EnemyAI(1)];
+    window.enemyAIs = [new EnemyAI(1, 'default')];
     window.enemyAIs.forEach((ai, i) => {
         const angle = (i+1) * Math.PI*2 / (window.enemyAIs.length+1);
         const startX = r + Math.cos(angle)*150;
