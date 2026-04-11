@@ -937,6 +937,7 @@ function checkCampaignVictory() {
 
         document.getElementById('campaign-menu').style.display = 'flex';
         window.openCampaignMenu(); // update buttons
+        if (!state.isPaused) window.togglePause();
     }
 }
 
