@@ -236,11 +236,12 @@
         <button class="menu-btn" onclick="saveGame()">Save Game</button>
         <button class="menu-btn" onclick="loadGame()">Load Game</button>
         <button class="menu-btn" onclick="openMultiplayer()">Multiplayer</button>
-        <button class="menu-btn" onclick="newGame()">New Game</button>
+        <button class="menu-btn" onclick="openCampaignMenu()">New Game</button>
         <button class="menu-btn" onclick="toggleFps()">Toggle FPS</button>
         <button class="menu-btn" onclick="toggleFullscreen()">Toggle Fullscreen</button>
 
         <button class="menu-btn" onclick="openTribeMenu()">Tribes</button>
+        <button class="menu-btn" onclick="toggleMatchSettings()">Match Settings</button>
         <button class="menu-btn" onclick="openLandGenMenu()">Land Generation</button>
         <button class="menu-btn" onclick="togglePause()">Resume</button>
 
@@ -284,6 +285,33 @@
         </div>
         <button class="menu-btn" onclick="applyLandGen()">Apply & Regenerate</button>
         <button class="menu-btn" onclick="closeLandGenMenu()">Back</button>
+    </div>
+
+
+    <div id="match-settings-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto; overflow-y:auto;">
+        <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">MATCH SETTINGS</h1>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; text-align:left; width: 250px;">
+            <label><input type="checkbox" id="mutator-noflyers" onchange="state.matchSettings.noFlyers = this.checked"> No Flyers (No Airships)</label>
+            <label><input type="checkbox" id="mutator-infinitemana" onchange="state.matchSettings.infiniteMana = this.checked"> Infinite Mana</label>
+            <label><input type="checkbox" id="mutator-doublespeed" onchange="state.matchSettings.doubleSpeed = this.checked"> Double Unit Speed</label>
+            <label><input type="checkbox" id="mutator-suddendeath" onchange="state.matchSettings.suddenDeath = this.checked"> Sudden Death (Shaman doesn't respawn)</label>
+            <hr style="width: 100%; border-color: #555;">
+            <label><input type="checkbox" id="mutator-winter" onchange="state.matchSettings.winter = this.checked"> Winter Biome</label>
+        </div>
+        <button class="menu-btn" onclick="toggleMatchSettings()">Back</button>
+    </div>
+
+    <div id="campaign-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto; overflow-y:auto;">
+        <h1 style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">NEW GAME</h1>
+        <div id="campaign-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; width:400px;">
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(1)">Level 1: The Awakening (Tutorial)</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(2)" id="btn-camp-2">Level 2: The Swarm</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(3)" id="btn-camp-3">Level 3: The Frozen Wastes</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(4)" id="btn-camp-4">Level 4: The Opportunist's Trap</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(5)" id="btn-camp-5">Level 5: The Grand Melee</button>
+            <button class="menu-btn" style="width:100%; margin-top:20px; background-color:#555;" onclick="newGame()">Sandbox Mode (Random Start)</button>
+        </div>
+        <button class="menu-btn" onclick="closeCampaignMenu()">Back</button>
     </div>
 
     <div id="multiplayer-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:201; color:white; pointer-events:auto;">
@@ -449,6 +477,7 @@ const state = {
     chunks: {},
     terrainMods: new Map(),
     units: [],
+    matchSettings: { noFlyers: false, infiniteMana: false, doubleSpeed: false, suddenDeath: false, winter: false },
 
     particles: [],
     projectiles: [],
@@ -785,6 +814,133 @@ window.openMultiplayer = () => {
     document.getElementById('multiplayer-menu').style.display = 'flex';
     document.getElementById('pause-menu').style.display = 'none';
 };
+
+window.toggleMatchSettings = function() {
+    const menu = document.getElementById('match-settings-menu');
+    const pauseMenu = document.getElementById('pause-menu');
+    if (menu.style.display === 'none') {
+        document.getElementById('mutator-noflyers').checked = state.matchSettings.noFlyers;
+        document.getElementById('mutator-infinitemana').checked = state.matchSettings.infiniteMana;
+        document.getElementById('mutator-doublespeed').checked = state.matchSettings.doubleSpeed;
+        document.getElementById('mutator-suddendeath').checked = state.matchSettings.suddenDeath;
+        document.getElementById('mutator-winter').checked = state.matchSettings.winter;
+
+        pauseMenu.style.display = 'none';
+        menu.style.display = 'flex';
+    } else {
+        menu.style.display = 'none';
+        pauseMenu.style.display = 'flex';
+    }
+}
+
+window.openCampaignMenu = function() {
+    document.getElementById('pause-menu').style.display = 'none';
+    document.getElementById('campaign-menu').style.display = 'flex';
+
+    // Update lock status based on localStorage
+    const maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
+    for(let i=2; i<=5; i++) {
+        const btn = document.getElementById('btn-camp-' + i);
+        if(btn) {
+            if(i > maxLevel) {
+                btn.style.opacity = '0.5';
+                btn.disabled = true;
+                if (!btn.innerText.includes("(Locked)")) {
+                    btn.innerText += " (Locked)";
+                }
+            } else {
+                btn.style.opacity = '1.0';
+                btn.disabled = false;
+                btn.innerText = btn.innerText.replace(" (Locked)", "");
+            }
+        }
+    }
+}
+
+window.closeCampaignMenu = function() {
+    document.getElementById('campaign-menu').style.display = 'none';
+    document.getElementById('pause-menu').style.display = 'flex';
+}
+
+window.startCampaignLevel = function(level) {
+    if(confirm("Start Level " + level + "? Unsaved progress will be lost.")) {
+        localStorage.setItem('rebeginning_start_campaign', level);
+        location.reload();
+    }
+}
+
+window.loadCampaignLevelIfRequested = function() {
+    const levelStr = localStorage.getItem('rebeginning_start_campaign');
+    if(!levelStr) return false;
+
+    const level = parseInt(levelStr);
+    localStorage.removeItem('rebeginning_start_campaign'); // Clear it so standard reloads are normal
+
+    state.isCampaign = true;
+    state.campaignLevel = level;
+
+    if(!state.matchSettings) state.matchSettings = {};
+    state.matchSettings.suddenDeath = false;
+    state.matchSettings.winter = false;
+    state.matchSettings.noFlyers = false;
+    state.matchSettings.infiniteMana = false;
+    state.matchSettings.doubleSpeed = false;
+
+    window.enemyAIs = [];
+    if(level === 1) {
+        state.mana = 500;
+        window.enemyAIs.push(new EnemyAI(1, 'default'));
+    } else if (level === 2) {
+        window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
+        window.enemyAIs.push(new EnemyAI(2, 'swarmer'));
+        state.teams[1] = 2; // AI 1 is team 2
+        state.teams[2] = 2; // AI 2 is team 2
+    } else if (level === 3) {
+        state.matchSettings.winter = true;
+        state.matchSettings.noFlyers = true;
+        window.enemyAIs.push(new EnemyAI(1, 'sorcerer'));
+    } else if (level === 4) {
+        state.matchSettings.suddenDeath = true;
+        window.enemyAIs.push(new EnemyAI(1, 'opportunist'));
+    } else if (level === 5) {
+        state.matchSettings.infiniteMana = true;
+        state.matchSettings.doubleSpeed = true;
+        window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
+        window.enemyAIs.push(new EnemyAI(2, 'sorcerer'));
+        window.enemyAIs.push(new EnemyAI(3, 'default'));
+    }
+    return true;
+}
+
+function checkCampaignVictory() {
+    if(!state.isCampaign || window.gameOverAlertShown) return;
+
+    const enemiesAlive = window.enemyAIs.filter(ai => {
+        const hasUnits = state.units.some(u => u.faction === ai.faction && u.state !== 'dead');
+        const hasBuildings = state.buildings.some(b => b.faction === ai.faction && !b.dead);
+        return hasUnits || hasBuildings;
+    }).length;
+
+    if (enemiesAlive === 0 && state.shaman && state.shaman.state !== 'dead') {
+        window.gameOverAlertShown = true;
+
+        let maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
+        if(state.campaignLevel >= maxLevel && state.campaignLevel < 5) {
+            maxLevel = state.campaignLevel + 1;
+            localStorage.setItem('rebeginning_max_campaign_level', maxLevel.toString());
+            alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete. Level " + maxLevel + " unlocked!");
+        } else if (state.campaignLevel === 5) {
+            alert("CAMPAIGN COMPLETE! You have united the tribes. Thank you for playing.");
+        } else {
+            alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete.");
+        }
+
+        document.getElementById('campaign-menu').style.display = 'flex';
+        window.openCampaignMenu(); // update buttons
+        if (!state.isPaused) window.togglePause();
+    }
+}
+
 window.closeMultiplayer = () => {
     document.getElementById('multiplayer-menu').style.display = 'none';
     document.getElementById('pause-menu').style.display = 'flex';
@@ -1918,7 +2074,7 @@ const Pathfinder = {
                 if(!isFlying && dh > 2.0) continue;
 
                 let cost = dist + dh * 0.5;
-                if (h < WATER_LEVEL) cost += 10.0; // Penalty for water
+                if (h < WATER_LEVEL && state.waterState !== 'frozen') cost += 10.0; // Penalty for water
                 const gScore = currentNode.g + cost;
 
                 if(!neighbor || gScore < neighbor.g) {
@@ -2698,6 +2854,11 @@ class Humanoid {
         if(type === 'spy') { this.damage = 0; }
         if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; this.height = 2.2; }
         if(type === 'airship') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; this.height = 2.0; }
+
+        if (state.matchSettings && state.matchSettings.doubleSpeed) {
+            this.moveSpeed *= 2.0;
+            this.attackSpeed *= 2.0;
+        }
 
         this.hp = this.maxHp; this.recoverTimer = 0;
         this.shielded = false;
@@ -3948,7 +4109,9 @@ function buildShipyard() {
 // --- js/ai.js ---
 
 class EnemyAI {
-    constructor(faction) { this.faction = faction;
+    constructor(faction, personality = "default") {
+        this.faction = faction;
+        this.personality = personality;
         this.timer = 0;
         this.state = 'build'; // 'build', 'attack'
         this.baseX = 0;
@@ -3960,7 +4123,7 @@ class EnemyAI {
         this.myShaman = null;
 
         // Track losses for rebuilding
-        this.targetHutCount = 5;
+        this.targetHutCount = this.personality === 'swarmer' ? 10 : 5;
         this.knownUnitCounts = { warrior: 0, firewarrior: 0, spy: 0, airship: 0 };
         this.lossQueue = [];
     }
@@ -4027,6 +4190,8 @@ class EnemyAI {
     }
 
     think() {
+
+
         // Get Enemy Units
         const myUnits = state.units.filter(u => u.faction === this.faction && u.state !== 'dead');
         const myBuildings = state.buildings.filter(b => b.faction === this.faction && !b.dead);
@@ -4068,7 +4233,7 @@ class EnemyAI {
         let bravesToTrain = idleBraves.slice(2);
 
         // Only start training once all training buildings are built
-        const hasAllTrainingBuildings = currentCounts.warrior > 0 && currentCounts.fire > 0 && currentCounts.spy > 0 && currentCounts.shipyard > 0;
+        const hasAllTrainingBuildings = currentCounts.warrior > 0 && currentCounts.fire > 0 && currentCounts.spy > 0 && (currentCounts.shipyard > 0 || (state.matchSettings && state.matchSettings.noFlyers));
 
         if (hasAllTrainingBuildings && bravesToTrain.length > 0 && trainingBuildings.length > 0) {
             bravesToTrain.forEach(brave => {
@@ -4083,7 +4248,11 @@ class EnemyAI {
                     else if (lostType === 'airship') targetBuildingType = 'shipyard';
                 } else {
                     // Keep an even mix of units
-                    if (unitCounts.warrior >= unitCounts.firewarrior + 2 && myBuildings.some(b => b.type === 'fire')) {
+                    if (this.personality === 'swarmer') {
+                        targetBuildingType = 'warrior';
+                    } else if (this.personality === 'sorcerer' && myBuildings.some(b => b.type === 'fire')) {
+                        targetBuildingType = 'fire';
+                    } else if (unitCounts.warrior >= unitCounts.firewarrior + 2 && myBuildings.some(b => b.type === 'fire')) {
                         targetBuildingType = 'fire';
                     } else if (unitCounts.firewarrior >= unitCounts.spy + 1 && myBuildings.some(b => b.type === 'spy')) {
                         targetBuildingType = 'spy';
@@ -4127,13 +4296,13 @@ class EnemyAI {
             else if (currentCounts.warrior < 1) typeToBuild = 'warrior';
             else if (currentCounts.fire < 1) typeToBuild = 'fire';
             else if (currentCounts.spy < 1) typeToBuild = 'spy';
-            else if (currentCounts.shipyard < 1) typeToBuild = 'shipyard';
+            else if (currentCounts.shipyard < 1 && !(state.matchSettings && state.matchSettings.noFlyers)) typeToBuild = 'shipyard';
             // Then continue expanding up to targets
             else if (currentCounts.hut < targetCounts.hut) typeToBuild = 'hut';
             else if (currentCounts.warrior < targetCounts.warrior) typeToBuild = 'warrior';
             else if (currentCounts.fire < targetCounts.fire) typeToBuild = 'fire';
             else if (currentCounts.spy < targetCounts.spy) typeToBuild = 'spy';
-            else if (currentCounts.shipyard < targetCounts.shipyard) typeToBuild = 'shipyard';
+            else if (currentCounts.shipyard < targetCounts.shipyard && !(state.matchSettings && state.matchSettings.noFlyers)) typeToBuild = 'shipyard';
             else if (currentCounts.tower < targetCounts.tower) typeToBuild = 'tower';
             // If we have met the target counts, start building more
             else {
@@ -4187,7 +4356,16 @@ class EnemyAI {
         });
 
         // 3. Attack Player
-        if(myUnits.length > 5) {
+        let shouldAttack = myUnits.length > 5;
+        if (this.personality === 'swarmer') shouldAttack = myUnits.length > 2;
+        if (this.personality === 'opportunist') {
+            const playerShaman = state.shaman;
+            shouldAttack = myUnits.length > 5 && (
+                !playerShaman || playerShaman.state === 'dead' || state.mana < 20
+            );
+        }
+
+        if(shouldAttack) {
             // Send some to attack enemy shaman
             const attackers = myUnits.filter(u => u.type !== 'wild' && u.state === 'idle');
             // Find an enemy shaman
@@ -4209,7 +4387,8 @@ class EnemyAI {
 
             // Offensive Spells
             const spellRange = 10.0 + myShaman.mesh.position.y;
-            if (state.clock.getElapsedTime() - this.lastSpellTime > 5.0) {
+            const spellCooldown = this.personality === 'sorcerer' ? 2.5 : 5.0;
+            if (state.clock.getElapsedTime() - this.lastSpellTime > spellCooldown) {
                 if (dist < spellRange) {
                     const offensiveSpells = ['blast', 'lightning', 'tornado', 'swarm', 'firestorm'];
                     const spell = offensiveSpells[Math.floor(Math.random() * offensiveSpells.length)];
@@ -4398,7 +4577,8 @@ function updateContextMenus() {
     if (hasShaman) {
         visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create'];
     } else if (hasBrave) {
-        visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy', 'build_shipyard', 'build_airship'];
+        visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy'];
+        if (!(state.matchSettings && state.matchSettings.noFlyers)) visibleActions.push('build_shipyard', 'build_airship');
     } else if (hasSpy) {
         visibleActions = ['hypnotise'];
     }
@@ -4658,9 +4838,8 @@ window.onload = () => setTimeout(init, 100);
 window.enemyAIs = [];
 
 function init() {
+    const checkCampaign = window.loadCampaignLevelIfRequested();
     try {
-        const loadingEl = document.getElementById('loading');
-        if(loadingEl) loadingEl.style.display = 'none';
 
         state.clock = new THREE.Clock();
         state.cameraLookAt = new THREE.Vector3(0, 0, 0);
@@ -4700,7 +4879,28 @@ function init() {
 
         state.raycaster = new THREE.Raycaster();
 
-        findSafeSpawnAndStart();
+        if (checkCampaign) {
+            findSafeSpawnAndStart();
+        } else {
+            const sandboxStart = localStorage.getItem('rebeginning_sandbox_start');
+            if (sandboxStart) {
+                localStorage.removeItem('rebeginning_sandbox_start');
+                findSafeSpawnAndStart();
+            } else {
+                const saveStr = localStorage.getItem('rebeginning_save');
+                if (saveStr) {
+                    try {
+                        window.loadGame();
+                        if(state.isPaused) togglePause();
+                    } catch(e) {
+                        console.error("Auto-load failed:", e);
+                        findSafeSpawnAndStart();
+                    }
+                } else {
+                    findSafeSpawnAndStart();
+                }
+            }
+        }
 
         const c = state.renderer.domElement;
         c.addEventListener('mousedown', onPointerDown);
@@ -4722,6 +4922,8 @@ function init() {
         window.addEventListener('contextmenu', e => e.preventDefault());
 
         animate();
+        const loadingEl = document.getElementById('loading');
+        if(loadingEl) loadingEl.style.display = 'none';
     } catch(e) {
         console.error("Init failed:", e);
         alert("Game failed to start: " + e.message);
@@ -4824,6 +5026,17 @@ window.renderTribeMenu = function() {
         teamInput.onchange = (e) => { state.teams[ai.faction] = parseInt(e.target.value); renderTribeMenu(); };
         div.appendChild(teamInput);
 
+        const personalitySelect = document.createElement('select');
+        ['default', 'swarmer', 'sorcerer', 'opportunist'].forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.innerText = p.charAt(0).toUpperCase() + p.slice(1);
+            if(ai.personality === p) opt.selected = true;
+            personalitySelect.appendChild(opt);
+        });
+        personalitySelect.onchange = (e) => { ai.personality = e.target.value; };
+        div.appendChild(personalitySelect);
+
         const rmBtn = document.createElement('button');
         rmBtn.innerText = 'Remove';
         rmBtn.onclick = () => { removeTribe(ai.faction); };
@@ -4838,7 +5051,7 @@ window.addTribe = function() {
     while (window.enemyAIs.some(ai => ai.faction === nextFaction)) {
         nextFaction++;
     }
-    const ai = new EnemyAI(nextFaction);
+    const ai = new EnemyAI(nextFaction, 'default');
 
     // Find safe spot for new tribe
     let r = 50 + nextFaction * 20;
@@ -4908,18 +5121,23 @@ window.toggleFps = function() {
 
 window.newGame = function() {
     if(confirm("Are you sure? Unsaved progress will be lost.")) {
+        localStorage.setItem('rebeginning_sandbox_start', 'true');
         location.reload();
     }
 }
 
 window.saveGame = function() {
     const data = {
+        isCampaign: state.isCampaign,
+        campaignLevel: state.campaignLevel,
+        matchSettings: state.matchSettings,
         mana: state.mana,
         terrainMods: Array.from(state.terrainMods.entries()),
         cameraLookAt: {x: state.cameraLookAt.x, y: state.cameraLookAt.y, z: state.cameraLookAt.z},
 
         enemyAIs: window.enemyAIs.map(ai => ({
             faction: ai.faction,
+            personality: ai.personality,
             timer: ai.timer,
             state: ai.state,
             baseX: ai.baseX,
@@ -4998,7 +5216,7 @@ window.loadGame = function() {
         window.enemyAIs = [];
         if (data.enemyAIs) {
             data.enemyAIs.forEach(aiData => {
-                const ai = new EnemyAI(aiData.faction);
+                const ai = new EnemyAI(aiData.faction, aiData.personality || 'default');
                 ai.timer = aiData.timer;
                 ai.state = aiData.state;
                 ai.baseX = aiData.baseX;
@@ -5386,7 +5604,7 @@ function findSafeSpawnAndStart() {
     createShaman(r, r);
 
 
-    window.enemyAIs = [new EnemyAI(1)];
+    if(!state.isCampaign) window.enemyAIs = [new EnemyAI(1, 'default')];
     window.enemyAIs.forEach((ai, i) => {
         const angle = (i+1) * Math.PI*2 / (window.enemyAIs.length+1);
         const startX = r + Math.cos(angle)*150;
@@ -5411,6 +5629,11 @@ let _lastFpsTime = performance.now();
 
 function animate() {
     requestAnimationFrame(animate); const dt = Math.min(state.clock.getDelta(), 0.1);
+
+    if (state.matchSettings && state.matchSettings.winter) {
+        state.waterState = Math.floor(state.clock.getElapsedTime() / 30) % 2 === 0 ? 'liquid' : 'frozen';
+    }
+
 
     if (state.showFps) {
         _framesThisSecond++;
@@ -5480,6 +5703,8 @@ function animate() {
     if (state.network.role === 'host') NetworkManager.sendFullState();
 
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
+    checkCampaignVictory();
+    if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = 10000;
     state.units.forEach(u => u.update(dt));
     state.buildings.forEach(b => b.update(dt));
 
@@ -5515,7 +5740,18 @@ function animate() {
             if (!u.respawnPending) {
                 u.respawnPending = true;
                 u.respawnTimer = 30.0;
+                if (u.faction === 0 && state.matchSettings && state.matchSettings.suddenDeath) {
+                    if(!window.gameOverAlertShown) {
+                        if(state.isCampaign) {
+                            alert("CAMPAIGN DEFEAT: Your Shaman was killed!");
+                        } else {
+                            alert("SUDDEN DEATH: Your Shaman was killed!");
+                        }
+                        window.gameOverAlertShown = true;
+                    }
+                }
             } else {
+                if(state.matchSettings && state.matchSettings.suddenDeath) return;
                 u.respawnTimer -= dt;
                 if (u.respawnTimer <= 0) {
                     const braves = state.units.filter(b => b.faction === u.faction && b.type === 'wild' && b.state !== 'dead');
@@ -5555,7 +5791,19 @@ function animate() {
                     } else {
                         if (u.faction === 0) {
                             if(!window.gameOverAlertShown) {
-                                alert("GAME OVER - Shaman dead and no followers left.");
+                                if (state.matchSettings && state.matchSettings.suddenDeath) {
+                                    if(state.isCampaign) {
+                                        alert("CAMPAIGN DEFEAT: Your Shaman was killed!");
+                                    } else {
+                                        alert("SUDDEN DEATH: Your Shaman was killed!");
+                                    }
+                                } else {
+                                    if(state.isCampaign) {
+                                        alert("CAMPAIGN DEFEAT - Shaman dead and no followers left.");
+                                    } else {
+                                        alert("GAME OVER - Shaman dead and no followers left.");
+                                    }
+                                }
                                 window.gameOverAlertShown = true;
                             }
                             u.respawnTimer = 100000;
