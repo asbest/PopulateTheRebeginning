@@ -309,7 +309,6 @@
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(3)" id="btn-camp-3">Level 3: The Frozen Wastes</button>
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(4)" id="btn-camp-4">Level 4: The Opportunist's Trap</button>
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(5)" id="btn-camp-5">Level 5: The Grand Melee</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(6)" id="btn-camp-6">Level 6: Survival Mode</button>
             <button class="menu-btn" style="width:100%; margin-top:20px; background-color:#555;" onclick="newGame()">Sandbox Mode (Random Start)</button>
         </div>
         <button class="menu-btn" onclick="closeCampaignMenu()">Back</button>
@@ -840,7 +839,7 @@ window.openCampaignMenu = function() {
 
     // Update lock status based on localStorage
     const maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
-    for(let i=2; i<=6; i++) {
+    for(let i=2; i<=5; i++) {
         const btn = document.getElementById('btn-camp-' + i);
         if(btn) {
             if(i > maxLevel) {
@@ -909,41 +908,10 @@ window.loadCampaignLevelIfRequested = function() {
         window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
         window.enemyAIs.push(new EnemyAI(2, 'sorcerer'));
         window.enemyAIs.push(new EnemyAI(3, 'default'));
-    } else if (level === 6) {
-        state.matchSettings.survival = true;
-        window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
     }
     return true;
 }
 
-function checkCampaignVictory() {
-    if(!state.isCampaign || window.gameOverAlertShown) return;
-
-    const enemiesAlive = window.enemyAIs.filter(ai => {
-        const hasUnits = state.units.some(u => u.faction === ai.faction && u.state !== 'dead');
-        const hasBuildings = state.buildings.some(b => b.faction === ai.faction && !b.dead);
-        return hasUnits || hasBuildings;
-    }).length;
-
-    if (enemiesAlive === 0 && state.shaman && state.shaman.state !== 'dead') {
-        window.gameOverAlertShown = true;
-
-        let maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
-        if(state.campaignLevel >= maxLevel && state.campaignLevel < 6) {
-            maxLevel = state.campaignLevel + 1;
-            localStorage.setItem('rebeginning_max_campaign_level', maxLevel.toString());
-            alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete. Level " + maxLevel + " unlocked!");
-        } else if (state.campaignLevel === 6) {
-            alert("CAMPAIGN COMPLETE! You have united the tribes. Thank you for playing.");
-        } else {
-            alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete.");
-        }
-
-        document.getElementById('campaign-menu').style.display = 'flex';
-        window.openCampaignMenu(); // update buttons
-        if (!state.isPaused) window.togglePause();
-    }
-}
 
 window.closeMultiplayer = () => {
     document.getElementById('multiplayer-menu').style.display = 'none';
@@ -5707,7 +5675,6 @@ function animate() {
     if (state.network.role === 'host') NetworkManager.sendFullState();
 
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
-    checkCampaignVictory();
     if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = 10000;
     state.units.forEach(u => u.update(dt));
     state.buildings.forEach(b => b.update(dt));
@@ -5832,7 +5799,23 @@ function animate() {
          if (!window.gameWonAlertShown && window.enemyAIs && window.enemyAIs.length > 0) { // Don't win immediately if there are no tribes to start with
              // Check if there ever were any non allied tribes
              if (window.enemyAIs.some(ai => !window.isAllied(ai.faction, 0))) {
-                alert("VICTORY! All enemy units defeated!");
+                if (state.isCampaign) {
+                    let maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
+                    if(state.campaignLevel >= maxLevel && state.campaignLevel < 5) {
+                        maxLevel = state.campaignLevel + 1;
+                        localStorage.setItem('rebeginning_max_campaign_level', maxLevel.toString());
+                        alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete. Level " + maxLevel + " unlocked!");
+                    } else if (state.campaignLevel === 5) {
+                        alert("CAMPAIGN COMPLETE! You have united the tribes. Thank you for playing.");
+                    } else {
+                        alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete.");
+                    }
+                    document.getElementById('campaign-menu').style.display = 'flex';
+                    window.openCampaignMenu(); // update buttons
+                    if (!state.isPaused) window.togglePause();
+                } else {
+                    alert("VICTORY! All enemy units defeated!");
+                }
                 window.gameWonAlertShown = true;
              }
          }
