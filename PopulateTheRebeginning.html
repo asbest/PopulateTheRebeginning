@@ -309,6 +309,7 @@
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(3)" id="btn-camp-3">Level 3: The Frozen Wastes</button>
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(4)" id="btn-camp-4">Level 4: The Opportunist's Trap</button>
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(5)" id="btn-camp-5">Level 5: The Grand Melee</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(6)" id="btn-camp-6">Level 6: Survival Mode</button>
             <button class="menu-btn" style="width:100%; margin-top:20px; background-color:#555;" onclick="newGame()">Sandbox Mode (Random Start)</button>
         </div>
         <button class="menu-btn" onclick="closeCampaignMenu()">Back</button>
@@ -839,7 +840,7 @@ window.openCampaignMenu = function() {
 
     // Update lock status based on localStorage
     const maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
-    for(let i=2; i<=5; i++) {
+    for(let i=2; i<=6; i++) {
         const btn = document.getElementById('btn-camp-' + i);
         if(btn) {
             if(i > maxLevel) {
@@ -908,6 +909,9 @@ window.loadCampaignLevelIfRequested = function() {
         window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
         window.enemyAIs.push(new EnemyAI(2, 'sorcerer'));
         window.enemyAIs.push(new EnemyAI(3, 'default'));
+    } else if (level === 6) {
+        state.matchSettings.survival = true;
+        window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
     }
     return true;
 }
@@ -925,11 +929,11 @@ function checkCampaignVictory() {
         window.gameOverAlertShown = true;
 
         let maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
-        if(state.campaignLevel >= maxLevel && state.campaignLevel < 5) {
+        if(state.campaignLevel >= maxLevel && state.campaignLevel < 6) {
             maxLevel = state.campaignLevel + 1;
             localStorage.setItem('rebeginning_max_campaign_level', maxLevel.toString());
             alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete. Level " + maxLevel + " unlocked!");
-        } else if (state.campaignLevel === 5) {
+        } else if (state.campaignLevel === 6) {
             alert("CAMPAIGN COMPLETE! You have united the tribes. Thank you for playing.");
         } else {
             alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete.");
