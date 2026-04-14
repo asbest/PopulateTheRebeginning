@@ -254,9 +254,9 @@
         </div>
     </div>
 
-    <div id="tribe-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto; overflow-y:auto;">
+    <div id="tribe-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto;">
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">TRIBES CONFIGURATION</h1>
-        <div id="tribe-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;"></div>
+        <div id="tribe-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; max-height:60vh; overflow-y:auto; padding:10px; width:90%; max-width:600px;"></div>
         <button class="menu-btn" onclick="addTribe()">Add Tribe</button>
         <button class="menu-btn" onclick="closeTribeMenu()">Back</button>
     </div>
@@ -4977,10 +4977,11 @@ window.renderTribeMenu = function() {
 
     // Player
     const pdiv = document.createElement('div');
-    pdiv.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; gap:10px;';
+    pdiv.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;';
     pdiv.innerHTML = `<span style="color:#${FACTION_COLORS[0].toString(16).padStart(6, '0')}">Player (Team: ${state.teams[0] !== undefined ? state.teams[0] : 0})</span>`;
     const pteamInput = document.createElement('input');
     pteamInput.type = 'number';
+    pteamInput.style.width = '50px';
     pteamInput.value = state.teams[0] !== undefined ? state.teams[0] : 0;
     pteamInput.onchange = (e) => { state.teams[0] = parseInt(e.target.value); renderTribeMenu(); };
     pdiv.appendChild(pteamInput);
@@ -4988,12 +4989,13 @@ window.renderTribeMenu = function() {
 
     window.enemyAIs.forEach((ai, idx) => {
         const div = document.createElement('div');
-        div.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; gap:10px;';
+        div.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;';
         const c = FACTION_COLORS[ai.faction % FACTION_COLORS.length].toString(16).padStart(6, '0');
         div.innerHTML = `<span style="color:#${c}">Enemy ${ai.faction} (Team: ${state.teams[ai.faction] !== undefined ? state.teams[ai.faction] : ai.faction})</span>`;
 
         const teamInput = document.createElement('input');
         teamInput.type = 'number';
+        teamInput.style.width = '50px';
         teamInput.value = state.teams[ai.faction] !== undefined ? state.teams[ai.faction] : ai.faction;
         teamInput.onchange = (e) => { state.teams[ai.faction] = parseInt(e.target.value); renderTribeMenu(); };
         div.appendChild(teamInput);
