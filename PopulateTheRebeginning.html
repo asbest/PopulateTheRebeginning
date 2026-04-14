@@ -254,9 +254,9 @@
         </div>
     </div>
 
-    <div id="tribe-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto; overflow-y:auto;">
+    <div id="tribe-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto;">
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">TRIBES CONFIGURATION</h1>
-        <div id="tribe-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;"></div>
+        <div id="tribe-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; max-height:60vh; overflow-y:auto; padding:10px; width:90%; max-width:600px;"></div>
         <button class="menu-btn" onclick="addTribe()">Add Tribe</button>
         <button class="menu-btn" onclick="closeTribeMenu()">Back</button>
     </div>
@@ -912,34 +912,6 @@ window.loadCampaignLevelIfRequested = function() {
     return true;
 }
 
-function checkCampaignVictory() {
-    if(!state.isCampaign || window.gameOverAlertShown) return;
-
-    const enemiesAlive = window.enemyAIs.filter(ai => {
-        const hasUnits = state.units.some(u => u.faction === ai.faction && u.state !== 'dead');
-        const hasBuildings = state.buildings.some(b => b.faction === ai.faction && !b.dead);
-        return hasUnits || hasBuildings;
-    }).length;
-
-    if (enemiesAlive === 0 && state.shaman && state.shaman.state !== 'dead') {
-        window.gameOverAlertShown = true;
-
-        let maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
-        if(state.campaignLevel >= maxLevel && state.campaignLevel < 5) {
-            maxLevel = state.campaignLevel + 1;
-            localStorage.setItem('rebeginning_max_campaign_level', maxLevel.toString());
-            alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete. Level " + maxLevel + " unlocked!");
-        } else if (state.campaignLevel === 5) {
-            alert("CAMPAIGN COMPLETE! You have united the tribes. Thank you for playing.");
-        } else {
-            alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete.");
-        }
-
-        document.getElementById('campaign-menu').style.display = 'flex';
-        window.openCampaignMenu(); // update buttons
-        if (!state.isPaused) window.togglePause();
-    }
-}
 
 window.closeMultiplayer = () => {
     document.getElementById('multiplayer-menu').style.display = 'none';
@@ -5005,10 +4977,11 @@ window.renderTribeMenu = function() {
 
     // Player
     const pdiv = document.createElement('div');
-    pdiv.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; gap:10px;';
+    pdiv.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;';
     pdiv.innerHTML = `<span style="color:#${FACTION_COLORS[0].toString(16).padStart(6, '0')}">Player (Team: ${state.teams[0] !== undefined ? state.teams[0] : 0})</span>`;
     const pteamInput = document.createElement('input');
     pteamInput.type = 'number';
+    pteamInput.style.width = '50px';
     pteamInput.value = state.teams[0] !== undefined ? state.teams[0] : 0;
     pteamInput.onchange = (e) => { state.teams[0] = parseInt(e.target.value); renderTribeMenu(); };
     pdiv.appendChild(pteamInput);
@@ -5016,12 +4989,13 @@ window.renderTribeMenu = function() {
 
     window.enemyAIs.forEach((ai, idx) => {
         const div = document.createElement('div');
-        div.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; gap:10px;';
+        div.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;';
         const c = FACTION_COLORS[ai.faction % FACTION_COLORS.length].toString(16).padStart(6, '0');
         div.innerHTML = `<span style="color:#${c}">Enemy ${ai.faction} (Team: ${state.teams[ai.faction] !== undefined ? state.teams[ai.faction] : ai.faction})</span>`;
 
         const teamInput = document.createElement('input');
         teamInput.type = 'number';
+        teamInput.style.width = '50px';
         teamInput.value = state.teams[ai.faction] !== undefined ? state.teams[ai.faction] : ai.faction;
         teamInput.onchange = (e) => { state.teams[ai.faction] = parseInt(e.target.value); renderTribeMenu(); };
         div.appendChild(teamInput);
@@ -5703,7 +5677,6 @@ function animate() {
     if (state.network.role === 'host') NetworkManager.sendFullState();
 
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
-    checkCampaignVictory();
     if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = 10000;
     state.units.forEach(u => u.update(dt));
     state.buildings.forEach(b => b.update(dt));
@@ -5828,7 +5801,23 @@ function animate() {
          if (!window.gameWonAlertShown && window.enemyAIs && window.enemyAIs.length > 0) { // Don't win immediately if there are no tribes to start with
              // Check if there ever were any non allied tribes
              if (window.enemyAIs.some(ai => !window.isAllied(ai.faction, 0))) {
-                alert("VICTORY! All enemy units defeated!");
+                if (state.isCampaign) {
+                    let maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
+                    if(state.campaignLevel >= maxLevel && state.campaignLevel < 5) {
+                        maxLevel = state.campaignLevel + 1;
+                        localStorage.setItem('rebeginning_max_campaign_level', maxLevel.toString());
+                        alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete. Level " + maxLevel + " unlocked!");
+                    } else if (state.campaignLevel === 5) {
+                        alert("CAMPAIGN COMPLETE! You have united the tribes. Thank you for playing.");
+                    } else {
+                        alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete.");
+                    }
+                    document.getElementById('campaign-menu').style.display = 'flex';
+                    window.openCampaignMenu(); // update buttons
+                    if (!state.isPaused) window.togglePause();
+                } else {
+                    alert("VICTORY! All enemy units defeated!");
+                }
                 window.gameWonAlertShown = true;
              }
          }
