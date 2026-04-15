@@ -3372,6 +3372,35 @@ class Humanoid {
                     target.conversionTimer = 3.0; // Refresh timer
                     SoundManager.playSound('magic');
                 }
+            } else if (this.type === 'shaman') {
+                // Shaman small flashes from hands to target
+                this.attackTarget.takeDamage(this.damage, true);
+                SoundManager.playSound('magic');
+
+                // Create flash effect
+                const startPosL = new THREE.Vector3();
+                const startPosR = new THREE.Vector3();
+                this.armL.getWorldPosition(startPosL);
+                this.armR.getWorldPosition(startPosR);
+                const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
+
+                const flashMat = new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.8});
+
+                const createFlash = (start) => {
+                    const diff = targetPos.clone().sub(start);
+                    const dist = diff.length();
+                    const geo = new THREE.CylinderGeometry(0.05, 0.05, dist, 4);
+                    const mesh = new THREE.Mesh(geo, flashMat);
+
+                    mesh.position.copy(start).add(diff.multiplyScalar(0.5));
+                    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), diff.clone().normalize());
+
+                    state.particles.push(new VisualEffect(mesh, 0.15, (eff, dt) => {
+                        eff.mesh.material.opacity = (eff.life / eff.maxLife) * 0.8;
+                    }));
+                };
+                createFlash(startPosL);
+                createFlash(startPosR);
             } else {
                 // Melee
                 this.attackTarget.takeDamage(this.damage, true);
