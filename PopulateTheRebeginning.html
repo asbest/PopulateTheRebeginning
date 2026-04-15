@@ -3049,6 +3049,8 @@ class Humanoid {
         this.conversionTimer = 0;
         this.originalFaction = null;
         this.burnTimer = 0;
+        this.attackPhase = 0;
+        this.attackFired = false;
     }
 
     setFaction(newFaction) {
@@ -3271,16 +3273,88 @@ class Humanoid {
 
         this.mesh.lookAt(this.attackTarget.mesh.position.x, this.mesh.position.y, this.attackTarget.mesh.position.z);
 
-        // Animation
-        const t = this.animTime * 10;
-        this.armR.rotation.x = -Math.PI/2 + Math.sin(t) * 0.5; // Swing
+        const timeSinceLast = state.clock.getElapsedTime() - this.lastAttackTime;
+        const interval = 1.0 / this.attackSpeed;
 
-        // Deal damage at right time
-        // Simplified: just check cooldown
-        if(state.clock.getElapsedTime() - this.lastAttackTime > (1.0/this.attackSpeed)) {
+        // Phase is between 0.0 and 1.0
+        this.attackPhase = timeSinceLast / interval;
+
+        if (this.attackPhase >= 1.0) {
+            this.attackPhase = 0;
+            this.attackFired = false;
             this.lastAttackTime = state.clock.getElapsedTime();
+        }
+
+        // Custom animation arcs based on type
+        if (this.type === 'warrior') {
+            // Sword slash and shield block
+            // Sword arm (R) swings down rapidly from 0.0 to 0.5, then slowly returns
+            if (this.attackPhase < 0.5) {
+                const p = this.attackPhase / 0.5;
+                this.armR.rotation.x = -Math.PI/2 - (Math.sin(p * Math.PI/2) * Math.PI/2); // Swing forward/down
+            } else {
+                const p = (this.attackPhase - 0.5) / 0.5;
+                this.armR.rotation.x = -Math.PI/2 - (Math.cos(p * Math.PI/2) * Math.PI/2); // Return
+            }
+            // Shield arm (L) raises to block
+            this.armL.rotation.x = -Math.PI/4 + (Math.sin(this.attackPhase * Math.PI) * Math.PI/4);
+        }
+        else if (this.type === 'wild') {
+            // Overhead tool swing
+            if (this.attackPhase < 0.4) {
+                const p = this.attackPhase / 0.4;
+                this.armR.rotation.x = -Math.PI/2 - (p * Math.PI/2); // Wind up overhead
+            } else if (this.attackPhase < 0.6) {
+                const p = (this.attackPhase - 0.4) / 0.2;
+                this.armR.rotation.x = -Math.PI + (p * Math.PI); // Strike down
+            } else {
+                const p = (this.attackPhase - 0.6) / 0.4;
+                this.armR.rotation.x = -Math.PI/2 + (Math.cos(p * Math.PI/2) * Math.PI/2); // Return
+            }
+        }
+        else if (this.type === 'shaman') {
+            // Magic thrust with both arms
+            const thrust = Math.sin(this.attackPhase * Math.PI);
+            this.armR.rotation.x = -Math.PI/2 - (thrust * Math.PI/4);
+            this.armL.rotation.x = -Math.PI/2 - (thrust * Math.PI/4);
+        }
+        else if (this.type === 'firewarrior') {
+            // Throwing motion
+            if (this.attackPhase < 0.3) {
+                const p = this.attackPhase / 0.3;
+                this.armR.rotation.x = -Math.PI/2 - (p * Math.PI/4); // Wind up
+            } else if (this.attackPhase < 0.5) {
+                const p = (this.attackPhase - 0.3) / 0.2;
+                this.armR.rotation.x = -Math.PI/2 - Math.PI/4 + (p * Math.PI/2); // Throw
+            } else {
+                const p = (this.attackPhase - 0.5) / 0.5;
+                this.armR.rotation.x = -Math.PI/2 + (Math.cos(p * Math.PI/2) * Math.PI/4); // Return
+            }
+        }
+        else if (this.type === 'spy') {
+            // Sneaky stab
+            if (this.attackPhase < 0.5) {
+                const p = this.attackPhase / 0.5;
+                this.armR.rotation.x = -Math.PI/2 + (p * Math.PI/4); // Draw back
+            } else if (this.attackPhase < 0.7) {
+                const p = (this.attackPhase - 0.5) / 0.2;
+                this.armR.rotation.x = -Math.PI/4 - (p * Math.PI/2); // Quick stab
+            } else {
+                const p = (this.attackPhase - 0.7) / 0.3;
+                this.armR.rotation.x = -Math.PI/2 - Math.PI/4 + (p * Math.PI/4); // Return
+            }
+        }
+        else {
+            // Default
+            this.armR.rotation.x = -Math.PI/2 + Math.sin(this.attackPhase * Math.PI * 2) * 0.5;
+        }
+
+        // Deal damage at the impact point (phase >= 0.5)
+        if (this.attackPhase >= 0.5 && !this.attackFired) {
+            this.attackFired = true;
+
             if(this.type === 'firewarrior') {
-                // Spawn Fireball
+                 // Spawn Fireball
                  const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
                  const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
                  state.projectiles.push(new Fireball(startPos, targetPos, this.faction));
@@ -3296,9 +3370,37 @@ class Humanoid {
                         target.state = 'idle';
                     }
                     target.conversionTimer = 3.0; // Refresh timer
-
                     SoundManager.playSound('magic');
                 }
+            } else if (this.type === 'shaman') {
+                // Shaman small flashes from hands to target
+                this.attackTarget.takeDamage(this.damage, true);
+                SoundManager.playSound('magic');
+
+                // Create flash effect
+                const startPosL = new THREE.Vector3();
+                const startPosR = new THREE.Vector3();
+                this.armL.getWorldPosition(startPosL);
+                this.armR.getWorldPosition(startPosR);
+                const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
+
+                const flashMat = new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.8});
+
+                const createFlash = (start) => {
+                    const diff = targetPos.clone().sub(start);
+                    const dist = diff.length();
+                    const geo = new THREE.CylinderGeometry(0.05, 0.05, dist, 4);
+                    const mesh = new THREE.Mesh(geo, flashMat);
+
+                    mesh.position.copy(start).add(diff.multiplyScalar(0.5));
+                    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), diff.clone().normalize());
+
+                    state.particles.push(new VisualEffect(mesh, 0.15, (eff, dt) => {
+                        eff.mesh.material.opacity = (eff.life / eff.maxLife) * 0.8;
+                    }));
+                };
+                createFlash(startPosL);
+                createFlash(startPosR);
             } else {
                 // Melee
                 this.attackTarget.takeDamage(this.damage, true);
