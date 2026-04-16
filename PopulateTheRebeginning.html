@@ -428,7 +428,7 @@ const ACTIONS = {
     'lower': { icon: '▼', label: 'Lowr', cost: 5 },
     'flatten': { icon: '➖', label: 'Flat', cost: 10 },
     'landbridge': { icon: '🌉', label: 'Bridg', cost: 20 },
-    'swamp': { icon: '🌫️', label: 'Swmp', cost: 15 },
+    'swamp': { icon: '🌫️', label: 'Swmp', cost: 80 },
     'invisibility': { icon: '👻', label: 'Invis', cost: 20 },
     'shield': { icon: '🛡️', label: 'Shld', cost: 20 },
     'hypnotise': { icon: '🌀', label: 'Conv', cost: 50 },
@@ -4724,7 +4724,7 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
 
     const costs = {
         blast: 10, lightning: 50, raise: 5, lower: 5, flatten: 10, landbridge: 20,
-        swamp: 15, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 90, heal: 10, teleport: 90, create: 50,
+        swamp: 80, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 90, heal: 10, teleport: 90, create: 50,
         build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
         build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
     };
