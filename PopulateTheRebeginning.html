@@ -223,11 +223,59 @@
         .menu-btn:hover { background: #666; }
         .menu-btn:active { background: #222; }
 
+        .donation-btn-small {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: #FF424D;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: bold;
+            pointer-events: auto;
+            z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .donation-btn-small:hover { background: #E0353F; }
+
+        .donation-container-large {
+            position: absolute;
+            bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .donation-btn-large {
+            background: #FF424D;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 18px;
+            font-weight: bold;
+            pointer-events: auto;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+        }
+        .donation-btn-large:hover { background: #E0353F; }
+        .copyright-text {
+            font-size: 12px;
+            color: #ccc;
+        }
+
     </style>
 </head>
 <body>
 
-<div id="loading">Generating World...</div>
+<div id="loading">
+    Generating World...
+    <div class="donation-container-large">
+        <a href="https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link" target="_blank" class="donation-btn-large">Support on Patreon</a>
+        <div class="copyright-text">Copyright 2026 AS Consulting</div>
+    </div>
+</div>
 
 <div id="ui-layer">
     <div id="fps-indicator" style="position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 10px; color: white; display: none; z-index: 1000; text-shadow: 1px 1px 0 #000;">FPS: 0</div>
@@ -353,6 +401,7 @@
     <div id="btn-multiselect" class="multi-select-btn" onclick="toggleMultiSelect()">⊕</div>
     <div id="btn-unload" class="unload-btn" onclick="unloadSelected()">⬇️</div>
     <div id="btn-pause" onclick="togglePause()">⏸️</div>
+    <a href="https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link" target="_blank" class="donation-btn-small">Support</a>
 </div>
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
