@@ -1492,7 +1492,7 @@ const _cLava = new THREE.Color(COLORS.lava);
 const _col = new THREE.Color();
 
 function initTerrainResources() {
-    chunkTerrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false });
+    chunkTerrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: false, roughness: 0.8, metalness: 0.1 });
     chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES/2, CHUNK_RES/2);
 
     const waterVertexShader = `
@@ -1520,7 +1520,7 @@ function initTerrainResources() {
         uniform vec3 color;
         varying vec2 vUv;
         void main() {
-            gl_FragColor = vec4(color, 0.6);
+            gl_FragColor = vec4(color, 0.75);
         }
     `;
     chunkWaterMat = new THREE.ShaderMaterial({
@@ -1816,10 +1816,10 @@ function createChunk(cx, cz) {
                 treeGroup.position.set(lx+offX, h, lz+offZ);
 
                 const t = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.25,1,5), new THREE.MeshStandardMaterial({color: 0x8B4513, roughness: 0.7, metalness: 0.1}));
-                t.position.y = 0.5; t.castShadow = true;
+                t.position.y = 0.5; t.castShadow = true; t.receiveShadow = true;
 
                 const l = new THREE.Mesh(new THREE.ConeGeometry(0.9,2.8,5), new THREE.MeshStandardMaterial({color: 0x006400, roughness: 0.7, metalness: 0.1}));
-                l.position.y = 1.9; l.castShadow = true;
+                l.position.y = 1.9; l.castShadow = true; l.receiveShadow = true;
 
                 treeGroup.add(t); treeGroup.add(l);
                 grp.add(treeGroup);
@@ -2935,11 +2935,11 @@ class Humanoid {
             this.torso = new THREE.Group(); this.torso.position.y = 0.9; this.mesh.add(this.torso);
             const tMesh = new THREE.Mesh(AssetCache.geos.torso, shirtMat); tMesh.userData.isFactionColored = true; tMesh.castShadow = true; tMesh.receiveShadow = true; this.torso.add(tMesh);
 
-            const neck = new THREE.Mesh(AssetCache.geos.neck, skinMat); neck.position.y = 0.25; neck.castShadow = true; this.torso.add(neck);
+            const neck = new THREE.Mesh(AssetCache.geos.neck, skinMat); neck.position.y = 0.25; neck.castShadow = true; neck.receiveShadow = true; this.torso.add(neck);
 
             this.head = new THREE.Group(); this.head.position.y = 0.4; this.torso.add(this.head);
             const headMesh = new THREE.Mesh(AssetCache.geos.head, skinMat);
-            headMesh.castShadow = true;
+            headMesh.castShadow = true; headMesh.receiveShadow = true;
             this.head.add(headMesh);
 
             // Add eyes
@@ -3026,7 +3026,7 @@ class Humanoid {
                 const topJoint = new THREE.Mesh(topJointGeo, mat);
                 upperGroup.add(topJoint);
 
-                const upperMesh = new THREE.Mesh(upperGeo, mat); upperMesh.position.y = -upperH / 2; upperMesh.castShadow = true;
+                const upperMesh = new THREE.Mesh(upperGeo, mat); upperMesh.position.y = -upperH / 2; upperMesh.castShadow = true; upperMesh.receiveShadow = true;
                 upperGroup.add(upperMesh);
 
                 const lowerGroup = new THREE.Group(); lowerGroup.position.y = -upperH;
@@ -3034,7 +3034,7 @@ class Humanoid {
                 const middleJoint = new THREE.Mesh(topJointGeo, mat);
                 lowerGroup.add(middleJoint);
 
-                const lowerMesh = new THREE.Mesh(lowerGeo, mat); lowerMesh.position.y = -lowerH / 2; lowerMesh.castShadow = true;
+                const lowerMesh = new THREE.Mesh(lowerGeo, mat); lowerMesh.position.y = -lowerH / 2; lowerMesh.castShadow = true; lowerMesh.receiveShadow = true;
                 lowerGroup.add(lowerMesh);
                 upperGroup.add(lowerGroup);
                 upperGroup.userData.lower = lowerGroup;
@@ -3042,13 +3042,13 @@ class Humanoid {
                 if (isArm) {
                     const hand = new THREE.Mesh(AssetCache.geos.hand, AssetCache.mats.skin);
                     hand.position.y = -lowerH;
-                    hand.castShadow = true;
+                    hand.castShadow = true; hand.receiveShadow = true;
                     lowerGroup.add(hand);
                 } else {
                     const foot = new THREE.Mesh(AssetCache.geos.foot, AssetCache.mats.shoe);
                     foot.position.y = -lowerH;
                     foot.position.z = 0.05;
-                    foot.castShadow = true;
+                    foot.castShadow = true; foot.receiveShadow = true;
                     lowerGroup.add(foot);
                 }
 
@@ -4973,8 +4973,8 @@ function init() {
         initTerrainResources();
 
         state.scene = new THREE.Scene();
-        state.scene.background = new THREE.Color(0x87CEEB);
-        state.scene.fog = new THREE.Fog(0x87CEEB, 20, 150);
+        state.scene.background = new THREE.Color(0x7EC8E3);
+        state.scene.fog = new THREE.Fog(0x7EC8E3, 30, 180);
 
         const aspect = window.innerWidth / window.innerHeight;
         state.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
@@ -4986,17 +4986,19 @@ function init() {
         state.renderer.setSize(window.innerWidth, window.innerHeight);
         state.renderer.shadowMap.enabled = true;
         state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        state.renderer.physicallyCorrectLights = true;
+        state.renderer.outputEncoding = THREE.sRGBEncoding;
         document.body.appendChild(state.renderer.domElement);
 
-        const amb = new THREE.AmbientLight(0xffffff, 0.6);
+        const amb = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
         state.scene.add(amb);
         state.scene.add(state.rangeRing);
-        const sun = new THREE.DirectionalLight(0xffffff, 0.7);
+        const sun = new THREE.DirectionalLight(0xffffff, 3.14);
         sun.position.set(50, 100, 40);
         sun.castShadow = true;
-        sun.shadow.mapSize.width = 1024; sun.shadow.mapSize.height = 1024;
-        sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
-        sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+        sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
+        sun.shadow.camera.left = -100; sun.shadow.camera.right = 100;
+        sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100;
         sun.shadow.bias = -0.0005;
         state.scene.add(sun);
 
