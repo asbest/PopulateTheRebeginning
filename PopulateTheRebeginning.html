@@ -1109,7 +1109,8 @@ const AssetCache = {
         tool: new THREE.BoxGeometry(0.05, 0.4, 0.05),
         flowerStem: new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4),
         flowerCenter: new THREE.SphereGeometry(0.04, 6, 6),
-        flowerPetal: new THREE.BoxGeometry(0.06, 0.02, 0.12)
+        flowerPetal: new THREE.BoxGeometry(0.06, 0.02, 0.12),
+        tulipPetal: new THREE.SphereGeometry(0.06, 4, 4)
     },
     mats: {
         skin: new THREE.MeshStandardMaterial({color: COLORS.skin, roughness: 0.7, metalness: 0.1}),
@@ -1124,7 +1125,8 @@ const AssetCache = {
         selectRing: new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}),
         marker: new THREE.MeshBasicMaterial({color: 0xFF0000}),
         flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1}),
-        flowerCenter: new THREE.MeshStandardMaterial({color: 0xFFFF00, roughness: 0.8, metalness: 0.1})
+        flowerCenter: new THREE.MeshStandardMaterial({color: 0xFFFF00, roughness: 0.8, metalness: 0.1}),
+        tulipPetalBase: new THREE.MeshStandardMaterial({color: 0xFFFFFF, roughness: 0.6, metalness: 0.1})
     }
 };
 
@@ -1139,6 +1141,7 @@ const FlowerMaterials = [
 AssetCache.mats.flowerPetalBase = FlowerMaterials[0].clone();
 AssetCache.mats.flowerPetalBase.color.setHex(0xffffff);
 AssetCache.geos.flowerPetal.translate(0, 0, 0.08);
+AssetCache.geos.tulipPetal.translate(0, 0.06, 0.04);
 
 function addWindShader(material) {
     material.onBeforeCompile = function(shader) {
@@ -1170,6 +1173,7 @@ function addWindShader(material) {
 addWindShader(AssetCache.mats.flowerStem);
 addWindShader(AssetCache.mats.flowerCenter);
 addWindShader(AssetCache.mats.flowerPetalBase);
+addWindShader(AssetCache.mats.tulipPetalBase);
 
 // --- js/utils.js ---
 
@@ -1721,31 +1725,39 @@ function updateChunkDecorations(chunk, cx, cz) {
 
     if (chunk.userData.flowers) {
         const flowers = chunk.userData.flowers;
-        // Check if it's using the optimized structure or old array
-        if (flowers.data && flowers.stems && flowers.centers && flowers.petals) {
+        if (flowers.data && flowers.stems) {
             const dataList = flowers.data;
             const stems = flowers.stems;
             const centers = flowers.centers;
             const petals = flowers.petals;
-            const petalsPerFlower = flowers.petalsPerFlower || 5;
+            const tulips = flowers.tulips;
+            const petalsPerDaisy = flowers.petalsPerDaisy || 5;
+            const petalsPerTulip = flowers.petalsPerTulip || 4;
 
             const dummy = new THREE.Object3D();
             const stemDummy = new THREE.Object3D();
             const centerDummy = new THREE.Object3D();
             const petalDummy = new THREE.Object3D();
+            const tulipDummy = new THREE.Object3D();
 
             const stemMatrix = new THREE.Matrix4();
             const centerMatrix = new THREE.Matrix4();
             const petalMatrix = new THREE.Matrix4();
 
             const basePosArray = stems.geometry.attributes.aBasePos.array;
-            const petalBasePosArray = petals.geometry.attributes.aBasePos.array;
+            const centerBasePosArray = (centers && centers.geometry && centers.geometry.attributes.aBasePos) ? centers.geometry.attributes.aBasePos.array : null;
+            const petalBasePosArray = (petals && petals.geometry && petals.geometry.attributes.aBasePos) ? petals.geometry.attributes.aBasePos.array : null;
+            const tulipBasePosArray = (tulips && tulips.geometry && tulips.geometry.attributes.aBasePos) ? tulips.geometry.attributes.aBasePos.array : null;
+
+            let daisyIndex = 0;
+            let tulipIndex = 0;
+            let daisyPetalIndex = 0;
+            let tulipPetalIndex = 0;
 
             for (let i = 0; i < dataList.length; i++) {
                 const data = dataList[i];
                 const h = getHeight(data.x, data.z);
 
-                // Hide if out of bounds by scaling to 0
                 const visible = (h > WATER_LEVEL + 0.5 && h < 7.0);
                 const globalScale = visible ? 1 : 0;
 
@@ -1758,7 +1770,6 @@ function updateChunkDecorations(chunk, cx, cz) {
                 dummy.scale.set(globalScale, globalScale, globalScale);
                 dummy.updateMatrix();
 
-                // Set stem matrix
                 stemDummy.position.set(0, 0.2 * data.scaleFactor, 0);
                 stemDummy.rotation.set(0, 0, 0);
                 stemDummy.scale.set(1.0, data.scaleFactor, 1.0);
@@ -1766,39 +1777,73 @@ function updateChunkDecorations(chunk, cx, cz) {
                 stemMatrix.multiplyMatrices(dummy.matrix, stemDummy.matrix);
                 stems.setMatrixAt(i, stemMatrix);
 
-                // Set center matrix
-                centerDummy.position.set(0, 0.4 * data.scaleFactor, 0);
-                centerDummy.rotation.set(0, 0, 0);
-                centerDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
-                centerDummy.updateMatrix();
-                centerMatrix.multiplyMatrices(dummy.matrix, centerDummy.matrix);
-                centers.setMatrixAt(i, centerMatrix);
+                if (!data.isTulip) {
+                    if (centerBasePosArray) {
+                        centerBasePosArray[daisyIndex*3] = data.x;
+                        centerBasePosArray[daisyIndex*3+1] = h;
+                        centerBasePosArray[daisyIndex*3+2] = data.z;
+                    }
 
-                // Set petal matrix
-                for (let j = 0; j < petalsPerFlower; j++) {
-                    const petalIndex = i * petalsPerFlower + j;
+                    centerDummy.position.set(0, 0.4 * data.scaleFactor, 0);
+                    centerDummy.rotation.set(0, 0, 0);
+                    centerDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
+                    centerDummy.updateMatrix();
+                    centerMatrix.multiplyMatrices(dummy.matrix, centerDummy.matrix);
+                    centers.setMatrixAt(daisyIndex, centerMatrix);
 
-                    petalBasePosArray[petalIndex*3] = data.x;
-                    petalBasePosArray[petalIndex*3+1] = h;
-                    petalBasePosArray[petalIndex*3+2] = data.z;
+                    for (let j = 0; j < petalsPerDaisy; j++) {
+                        if (petalBasePosArray) {
+                            petalBasePosArray[daisyPetalIndex*3] = data.x;
+                            petalBasePosArray[daisyPetalIndex*3+1] = h;
+                            petalBasePosArray[daisyPetalIndex*3+2] = data.z;
+                        }
 
-                    const angle = (j / petalsPerFlower) * Math.PI * 2;
+                        const angle = (j / petalsPerDaisy) * Math.PI * 2;
+                        petalDummy.position.set(0, 0.4 * data.scaleFactor, 0);
+                        petalDummy.rotation.set(0, angle, 0);
+                        petalDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
+                        petalDummy.updateMatrix();
 
-                    petalDummy.position.set(0, 0.4 * data.scaleFactor, 0);
-                    petalDummy.rotation.set(0, angle, 0);
-                    petalDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
-                    petalDummy.updateMatrix();
+                        petalMatrix.multiplyMatrices(dummy.matrix, petalDummy.matrix);
+                        petals.setMatrixAt(daisyPetalIndex, petalMatrix);
+                        daisyPetalIndex++;
+                    }
+                    daisyIndex++;
+                } else {
+                    for (let j = 0; j < petalsPerTulip; j++) {
+                        if (tulipBasePosArray) {
+                            tulipBasePosArray[tulipPetalIndex*3] = data.x;
+                            tulipBasePosArray[tulipPetalIndex*3+1] = h;
+                            tulipBasePosArray[tulipPetalIndex*3+2] = data.z;
+                        }
 
-                    petalMatrix.multiplyMatrices(dummy.matrix, petalDummy.matrix);
-                    petals.setMatrixAt(petalIndex, petalMatrix);
+                        const angle = (j / petalsPerTulip) * Math.PI * 2;
+                        tulipDummy.position.set(0, 0.3 * data.scaleFactor, 0);
+                        tulipDummy.rotation.set(0.2, angle, 0);
+                        tulipDummy.scale.set(data.scaleFactor, data.scaleFactor * 1.5, data.scaleFactor);
+                        tulipDummy.updateMatrix();
+
+                        petalMatrix.multiplyMatrices(dummy.matrix, tulipDummy.matrix);
+                        tulips.setMatrixAt(tulipPetalIndex, petalMatrix);
+                        tulipPetalIndex++;
+                    }
+                    tulipIndex++;
                 }
             }
             stems.instanceMatrix.needsUpdate = true;
-            centers.instanceMatrix.needsUpdate = true;
-            petals.instanceMatrix.needsUpdate = true;
-            stems.geometry.attributes.aBasePos.needsUpdate = true;
-            centers.geometry.attributes.aBasePos.needsUpdate = true;
-            petals.geometry.attributes.aBasePos.needsUpdate = true;
+            if (stems.geometry.attributes.aBasePos) stems.geometry.attributes.aBasePos.needsUpdate = true;
+            if (centers && centers.count > 0 && centers.instanceMatrix) {
+                centers.instanceMatrix.needsUpdate = true;
+                if (centers.geometry.attributes.aBasePos) centers.geometry.attributes.aBasePos.needsUpdate = true;
+            }
+            if (petals && petals.count > 0 && petals.instanceMatrix) {
+                petals.instanceMatrix.needsUpdate = true;
+                if (petals.geometry.attributes.aBasePos) petals.geometry.attributes.aBasePos.needsUpdate = true;
+            }
+            if (tulips && tulips.count > 0 && tulips.instanceMatrix) {
+                tulips.instanceMatrix.needsUpdate = true;
+                if (tulips.geometry.attributes.aBasePos) tulips.geometry.attributes.aBasePos.needsUpdate = true;
+            }
         } else if (Array.isArray(flowers)) {
             // Fallback for old save games / structure (if any remain)
             for (let i = flowers.length - 1; i >= 0; i--) {
@@ -1904,6 +1949,7 @@ function createChunk(cx, cz) {
                         scaleFactor: scaleFactor,
                         squashY: squashY,
                         cIndex: cIndex,
+                        isTulip: Math.random() > 0.5,
                         rotY: Math.random() * Math.PI * 2,
                         rotZ: (Math.random() - 0.5) * 0.4,
                         rotX: (Math.random() - 0.5) * 0.4
@@ -1920,31 +1966,54 @@ function createChunk(cx, cz) {
         const centerGeo = AssetCache.geos.flowerCenter.clone();
         const petalGeo = AssetCache.geos.flowerPetal.clone();
 
+        const tulipPetalGeo = AssetCache.geos.tulipPetal.clone();
+
         const numFlowers = flowerDataList.length;
-        const petalsPerFlower = 5;
-        const totalPetals = numFlowers * petalsPerFlower;
+        let numDaisies = 0;
+        let numTulips = 0;
+
+        for (let i = 0; i < numFlowers; i++) {
+            if (flowerDataList[i].isTulip) numTulips++;
+            else numDaisies++;
+        }
+
+        const petalsPerDaisy = 5;
+        const petalsPerTulip = 4;
+        const totalDaisyPetals = numDaisies * petalsPerDaisy;
+        const totalTulipPetals = numTulips * petalsPerTulip;
 
         const stemInstancedMesh = new THREE.InstancedMesh(stemGeo, AssetCache.mats.flowerStem, numFlowers);
-        stemInstancedMesh.castShadow = true;
+        stemInstancedMesh.castShadow = false;
 
-        const centerInstancedMesh = new THREE.InstancedMesh(centerGeo, AssetCache.mats.flowerCenter, numFlowers);
-        centerInstancedMesh.castShadow = true;
+        const centerInstancedMesh = new THREE.InstancedMesh(centerGeo, AssetCache.mats.flowerCenter, numDaisies > 0 ? numDaisies : 1);
+        centerInstancedMesh.castShadow = false;
 
-        const petalInstancedMesh = new THREE.InstancedMesh(petalGeo, AssetCache.mats.flowerPetalBase, totalPetals);
-        petalInstancedMesh.castShadow = true;
+        const daisyPetalInstancedMesh = new THREE.InstancedMesh(petalGeo, AssetCache.mats.flowerPetalBase, totalDaisyPetals > 0 ? totalDaisyPetals : 1);
+        daisyPetalInstancedMesh.castShadow = false;
+
+        const tulipPetalInstancedMesh = new THREE.InstancedMesh(tulipPetalGeo, AssetCache.mats.tulipPetalBase, totalTulipPetals > 0 ? totalTulipPetals : 1);
+        tulipPetalInstancedMesh.castShadow = false;
 
         const tempColor = new THREE.Color();
 
         const stemDummy = new THREE.Object3D();
         const centerDummy = new THREE.Object3D();
         const petalDummy = new THREE.Object3D();
+        const tulipDummy = new THREE.Object3D();
 
         const stemMatrix = new THREE.Matrix4();
         const centerMatrix = new THREE.Matrix4();
         const petalMatrix = new THREE.Matrix4();
 
         const basePosArray = new Float32Array(numFlowers * 3);
-        const petalBasePosArray = new Float32Array(totalPetals * 3);
+        const centerBasePosArray = new Float32Array((numDaisies > 0 ? numDaisies : 1) * 3);
+        const daisyBasePosArray = new Float32Array((totalDaisyPetals > 0 ? totalDaisyPetals : 1) * 3);
+        const tulipBasePosArray = new Float32Array((totalTulipPetals > 0 ? totalTulipPetals : 1) * 3);
+
+        let daisyIndex = 0;
+        let tulipIndex = 0;
+        let daisyPetalIndex = 0;
+        let tulipPetalIndex = 0;
 
         for (let i = 0; i < numFlowers; i++) {
             const data = flowerDataList[i];
@@ -1953,13 +2022,11 @@ function createChunk(cx, cz) {
             basePosArray[i*3+1] = data.h;
             basePosArray[i*3+2] = data.z;
 
-            // Replicate the flowerGroup transform
             dummy.position.set(data.x, data.h, data.z);
             dummy.rotation.set(data.rotX, data.rotY, data.rotZ);
             dummy.scale.set(1, 1, 1);
             dummy.updateMatrix();
 
-            // Set stem matrix
             stemDummy.position.set(0, 0.2 * data.scaleFactor, 0);
             stemDummy.rotation.set(0, 0, 0);
             stemDummy.scale.set(1.0, data.scaleFactor, 1.0);
@@ -1967,52 +2034,85 @@ function createChunk(cx, cz) {
             stemMatrix.multiplyMatrices(dummy.matrix, stemDummy.matrix);
             stemInstancedMesh.setMatrixAt(i, stemMatrix);
 
-            // Set center matrix
-            centerDummy.position.set(0, 0.4 * data.scaleFactor, 0);
-            centerDummy.rotation.set(0, 0, 0);
-            centerDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
-            centerDummy.updateMatrix();
-            centerMatrix.multiplyMatrices(dummy.matrix, centerDummy.matrix);
-            centerInstancedMesh.setMatrixAt(i, centerMatrix);
-
-            // Set petal color
             const petalColor = FlowerMaterials[data.cIndex].color;
             tempColor.copy(petalColor);
 
-            // Set petal matrices
-            for (let j = 0; j < petalsPerFlower; j++) {
-                const petalIndex = i * petalsPerFlower + j;
+            if (!data.isTulip) {
+                centerBasePosArray[daisyIndex*3] = data.x;
+                centerBasePosArray[daisyIndex*3+1] = data.h;
+                centerBasePosArray[daisyIndex*3+2] = data.z;
 
-                petalBasePosArray[petalIndex*3] = data.x;
-                petalBasePosArray[petalIndex*3+1] = data.h;
-                petalBasePosArray[petalIndex*3+2] = data.z;
+                centerDummy.position.set(0, 0.4 * data.scaleFactor, 0);
+                centerDummy.rotation.set(0, 0, 0);
+                centerDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
+                centerDummy.updateMatrix();
+                centerMatrix.multiplyMatrices(dummy.matrix, centerDummy.matrix);
+                centerInstancedMesh.setMatrixAt(daisyIndex, centerMatrix);
 
-                const angle = (j / petalsPerFlower) * Math.PI * 2;
+                for (let j = 0; j < petalsPerDaisy; j++) {
+                    daisyBasePosArray[daisyPetalIndex*3] = data.x;
+                    daisyBasePosArray[daisyPetalIndex*3+1] = data.h;
+                    daisyBasePosArray[daisyPetalIndex*3+2] = data.z;
 
-                petalDummy.position.set(0, 0.4 * data.scaleFactor, 0);
-                petalDummy.rotation.set(0, angle, 0); // Fan out around Y axis
-                petalDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
-                petalDummy.updateMatrix();
+                    const angle = (j / petalsPerDaisy) * Math.PI * 2;
+                    petalDummy.position.set(0, 0.4 * data.scaleFactor, 0);
+                    petalDummy.rotation.set(0, angle, 0);
+                    petalDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
+                    petalDummy.updateMatrix();
 
-                petalMatrix.multiplyMatrices(dummy.matrix, petalDummy.matrix);
-                petalInstancedMesh.setMatrixAt(petalIndex, petalMatrix);
-                petalInstancedMesh.setColorAt(petalIndex, tempColor);
+                    petalMatrix.multiplyMatrices(dummy.matrix, petalDummy.matrix);
+                    daisyPetalInstancedMesh.setMatrixAt(daisyPetalIndex, petalMatrix);
+                    daisyPetalInstancedMesh.setColorAt(daisyPetalIndex, tempColor);
+                    daisyPetalIndex++;
+                }
+                daisyIndex++;
+            } else {
+                for (let j = 0; j < petalsPerTulip; j++) {
+                    tulipBasePosArray[tulipPetalIndex*3] = data.x;
+                    tulipBasePosArray[tulipPetalIndex*3+1] = data.h;
+                    tulipBasePosArray[tulipPetalIndex*3+2] = data.z;
+
+                    const angle = (j / petalsPerTulip) * Math.PI * 2;
+                    tulipDummy.position.set(0, 0.3 * data.scaleFactor, 0);
+                    tulipDummy.rotation.set(0.2, angle, 0); // Point slightly upwards
+                    tulipDummy.scale.set(data.scaleFactor, data.scaleFactor * 1.5, data.scaleFactor);
+                    tulipDummy.updateMatrix();
+
+                    petalMatrix.multiplyMatrices(dummy.matrix, tulipDummy.matrix);
+                    tulipPetalInstancedMesh.setMatrixAt(tulipPetalIndex, petalMatrix);
+                    tulipPetalInstancedMesh.setColorAt(tulipPetalIndex, tempColor);
+                    tulipPetalIndex++;
+                }
+                tulipIndex++;
             }
         }
 
+        if (numDaisies === 0) {
+            centerInstancedMesh.count = 0;
+            daisyPetalInstancedMesh.count = 0;
+        }
+        if (numTulips === 0) {
+            tulipPetalInstancedMesh.count = 0;
+        }
+
         stemInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
-        centerInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
-        petalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(petalBasePosArray, 3));
+        centerInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(centerBasePosArray, 3));
+        daisyPetalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(daisyBasePosArray, 3));
+        tulipPetalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(tulipBasePosArray, 3));
 
         grp.add(stemInstancedMesh);
         grp.add(centerInstancedMesh);
-        grp.add(petalInstancedMesh);
+        grp.add(daisyPetalInstancedMesh);
+        grp.add(tulipPetalInstancedMesh);
+
         grp.userData.flowers = {
             data: flowerDataList,
             stems: stemInstancedMesh,
             centers: centerInstancedMesh,
-            petals: petalInstancedMesh,
-            petalsPerFlower: petalsPerFlower
+            petals: daisyPetalInstancedMesh,
+            tulips: tulipPetalInstancedMesh,
+            petalsPerDaisy: petalsPerDaisy,
+            petalsPerTulip: petalsPerTulip
         };
     }
 
