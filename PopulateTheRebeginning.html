@@ -1830,8 +1830,10 @@ function updateChunkDecorations(chunk, cx, cz) {
                     tulipIndex++;
                 }
             }
-            stems.instanceMatrix.needsUpdate = true;
-            if (stems.geometry.attributes.aBasePos) stems.geometry.attributes.aBasePos.needsUpdate = true;
+            if (stems && stems.count > 0 && stems.instanceMatrix) {
+                stems.instanceMatrix.needsUpdate = true;
+                if (stems.geometry.attributes.aBasePos) stems.geometry.attributes.aBasePos.needsUpdate = true;
+            }
             if (centers && centers.count > 0 && centers.instanceMatrix) {
                 centers.instanceMatrix.needsUpdate = true;
                 if (centers.geometry.attributes.aBasePos) centers.geometry.attributes.aBasePos.needsUpdate = true;
@@ -2087,23 +2089,30 @@ function createChunk(cx, cz) {
             }
         }
 
-        if (numDaisies === 0) {
-            centerInstancedMesh.count = 0;
-            daisyPetalInstancedMesh.count = 0;
-        }
-        if (numTulips === 0) {
-            tulipPetalInstancedMesh.count = 0;
-        }
-
         stemInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
         centerInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(centerBasePosArray, 3));
         daisyPetalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(daisyBasePosArray, 3));
         tulipPetalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(tulipBasePosArray, 3));
 
+        if (numDaisies === 0) {
+            centerInstancedMesh.count = 0;
+            daisyPetalInstancedMesh.count = 0;
+            centerInstancedMesh.visible = false;
+            daisyPetalInstancedMesh.visible = false;
+        }
+        if (numTulips === 0) {
+            tulipPetalInstancedMesh.count = 0;
+            tulipPetalInstancedMesh.visible = false;
+        }
+
         grp.add(stemInstancedMesh);
-        grp.add(centerInstancedMesh);
-        grp.add(daisyPetalInstancedMesh);
-        grp.add(tulipPetalInstancedMesh);
+        if (numDaisies > 0) {
+            grp.add(centerInstancedMesh);
+            grp.add(daisyPetalInstancedMesh);
+        }
+        if (numTulips > 0) {
+            grp.add(tulipPetalInstancedMesh);
+        }
 
         grp.userData.flowers = {
             data: flowerDataList,
