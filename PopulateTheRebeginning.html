@@ -1108,7 +1108,8 @@ const AssetCache = {
         shield: new THREE.CylinderGeometry(0.25, 0.25, 0.05, 8),
         tool: new THREE.BoxGeometry(0.05, 0.4, 0.05),
         flowerStem: new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4),
-        flowerPetal: new THREE.SphereGeometry(0.08, 4, 4)
+        flowerCenter: new THREE.SphereGeometry(0.04, 6, 6),
+        flowerPetal: new THREE.BoxGeometry(0.06, 0.02, 0.12)
     },
     mats: {
         skin: new THREE.MeshStandardMaterial({color: COLORS.skin, roughness: 0.7, metalness: 0.1}),
@@ -1122,7 +1123,8 @@ const AssetCache = {
         hpRed: new THREE.MeshBasicMaterial({color: 0xFF0000}),
         selectRing: new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}),
         marker: new THREE.MeshBasicMaterial({color: 0xFF0000}),
-        flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1})
+        flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1}),
+        flowerCenter: new THREE.MeshStandardMaterial({color: 0xFFFF00, roughness: 0.8, metalness: 0.1})
     }
 };
 
@@ -1136,6 +1138,7 @@ const FlowerMaterials = [
 
 AssetCache.mats.flowerPetalBase = FlowerMaterials[0].clone();
 AssetCache.mats.flowerPetalBase.color.setHex(0xffffff);
+AssetCache.geos.flowerPetal.translate(0, 0, 0.08);
 
 function addWindShader(material) {
     material.onBeforeCompile = function(shader) {
@@ -1165,6 +1168,7 @@ function addWindShader(material) {
 }
 
 addWindShader(AssetCache.mats.flowerStem);
+addWindShader(AssetCache.mats.flowerCenter);
 addWindShader(AssetCache.mats.flowerPetalBase);
 
 // --- js/utils.js ---
@@ -1718,18 +1722,24 @@ function updateChunkDecorations(chunk, cx, cz) {
     if (chunk.userData.flowers) {
         const flowers = chunk.userData.flowers;
         // Check if it's using the optimized structure or old array
-        if (flowers.data && flowers.stems && flowers.petals) {
+        if (flowers.data && flowers.stems && flowers.centers && flowers.petals) {
             const dataList = flowers.data;
             const stems = flowers.stems;
+            const centers = flowers.centers;
             const petals = flowers.petals;
+            const petalsPerFlower = flowers.petalsPerFlower || 5;
 
             const dummy = new THREE.Object3D();
             const stemDummy = new THREE.Object3D();
+            const centerDummy = new THREE.Object3D();
             const petalDummy = new THREE.Object3D();
+
             const stemMatrix = new THREE.Matrix4();
+            const centerMatrix = new THREE.Matrix4();
             const petalMatrix = new THREE.Matrix4();
 
             const basePosArray = stems.geometry.attributes.aBasePos.array;
+            const petalBasePosArray = petals.geometry.attributes.aBasePos.array;
 
             for (let i = 0; i < dataList.length; i++) {
                 const data = dataList[i];
@@ -1756,17 +1766,38 @@ function updateChunkDecorations(chunk, cx, cz) {
                 stemMatrix.multiplyMatrices(dummy.matrix, stemDummy.matrix);
                 stems.setMatrixAt(i, stemMatrix);
 
+                // Set center matrix
+                centerDummy.position.set(0, 0.4 * data.scaleFactor, 0);
+                centerDummy.rotation.set(0, 0, 0);
+                centerDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
+                centerDummy.updateMatrix();
+                centerMatrix.multiplyMatrices(dummy.matrix, centerDummy.matrix);
+                centers.setMatrixAt(i, centerMatrix);
+
                 // Set petal matrix
-                petalDummy.position.set(0, 0.4 * data.scaleFactor, 0);
-                petalDummy.rotation.set(0, 0, 0);
-                petalDummy.scale.set(data.scaleFactor, data.scaleFactor * data.squashY, data.scaleFactor);
-                petalDummy.updateMatrix();
-                petalMatrix.multiplyMatrices(dummy.matrix, petalDummy.matrix);
-                petals.setMatrixAt(i, petalMatrix);
+                for (let j = 0; j < petalsPerFlower; j++) {
+                    const petalIndex = i * petalsPerFlower + j;
+
+                    petalBasePosArray[petalIndex*3] = data.x;
+                    petalBasePosArray[petalIndex*3+1] = h;
+                    petalBasePosArray[petalIndex*3+2] = data.z;
+
+                    const angle = (j / petalsPerFlower) * Math.PI * 2;
+
+                    petalDummy.position.set(0, 0.4 * data.scaleFactor, 0);
+                    petalDummy.rotation.set(0, angle, 0);
+                    petalDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
+                    petalDummy.updateMatrix();
+
+                    petalMatrix.multiplyMatrices(dummy.matrix, petalDummy.matrix);
+                    petals.setMatrixAt(petalIndex, petalMatrix);
+                }
             }
             stems.instanceMatrix.needsUpdate = true;
+            centers.instanceMatrix.needsUpdate = true;
             petals.instanceMatrix.needsUpdate = true;
             stems.geometry.attributes.aBasePos.needsUpdate = true;
+            centers.geometry.attributes.aBasePos.needsUpdate = true;
             petals.geometry.attributes.aBasePos.needsUpdate = true;
         } else if (Array.isArray(flowers)) {
             // Fallback for old save games / structure (if any remain)
@@ -1886,24 +1917,36 @@ function createChunk(cx, cz) {
         const dummy = new THREE.Object3D();
 
         const stemGeo = AssetCache.geos.flowerStem.clone();
+        const centerGeo = AssetCache.geos.flowerCenter.clone();
         const petalGeo = AssetCache.geos.flowerPetal.clone();
 
-        const stemInstancedMesh = new THREE.InstancedMesh(stemGeo, AssetCache.mats.flowerStem, flowerDataList.length);
+        const numFlowers = flowerDataList.length;
+        const petalsPerFlower = 5;
+        const totalPetals = numFlowers * petalsPerFlower;
+
+        const stemInstancedMesh = new THREE.InstancedMesh(stemGeo, AssetCache.mats.flowerStem, numFlowers);
         stemInstancedMesh.castShadow = true;
 
-        const petalInstancedMesh = new THREE.InstancedMesh(petalGeo, AssetCache.mats.flowerPetalBase, flowerDataList.length);
+        const centerInstancedMesh = new THREE.InstancedMesh(centerGeo, AssetCache.mats.flowerCenter, numFlowers);
+        centerInstancedMesh.castShadow = true;
+
+        const petalInstancedMesh = new THREE.InstancedMesh(petalGeo, AssetCache.mats.flowerPetalBase, totalPetals);
         petalInstancedMesh.castShadow = true;
 
         const tempColor = new THREE.Color();
 
         const stemDummy = new THREE.Object3D();
+        const centerDummy = new THREE.Object3D();
         const petalDummy = new THREE.Object3D();
+
         const stemMatrix = new THREE.Matrix4();
+        const centerMatrix = new THREE.Matrix4();
         const petalMatrix = new THREE.Matrix4();
 
-        const basePosArray = new Float32Array(flowerDataList.length * 3);
+        const basePosArray = new Float32Array(numFlowers * 3);
+        const petalBasePosArray = new Float32Array(totalPetals * 3);
 
-        for (let i = 0; i < flowerDataList.length; i++) {
+        for (let i = 0; i < numFlowers; i++) {
             const data = flowerDataList[i];
 
             basePosArray[i*3] = data.x;
@@ -1921,33 +1964,55 @@ function createChunk(cx, cz) {
             stemDummy.rotation.set(0, 0, 0);
             stemDummy.scale.set(1.0, data.scaleFactor, 1.0);
             stemDummy.updateMatrix();
-            // stemWorldMatrix = flowerGroupMatrix * stemLocalMatrix
             stemMatrix.multiplyMatrices(dummy.matrix, stemDummy.matrix);
             stemInstancedMesh.setMatrixAt(i, stemMatrix);
 
-            // Set petal matrix
-            petalDummy.position.set(0, 0.4 * data.scaleFactor, 0);
-            petalDummy.rotation.set(0, 0, 0);
-            petalDummy.scale.set(data.scaleFactor, data.scaleFactor * data.squashY, data.scaleFactor);
-            petalDummy.updateMatrix();
-            petalMatrix.multiplyMatrices(dummy.matrix, petalDummy.matrix);
-            petalInstancedMesh.setMatrixAt(i, petalMatrix);
+            // Set center matrix
+            centerDummy.position.set(0, 0.4 * data.scaleFactor, 0);
+            centerDummy.rotation.set(0, 0, 0);
+            centerDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
+            centerDummy.updateMatrix();
+            centerMatrix.multiplyMatrices(dummy.matrix, centerDummy.matrix);
+            centerInstancedMesh.setMatrixAt(i, centerMatrix);
 
             // Set petal color
             const petalColor = FlowerMaterials[data.cIndex].color;
             tempColor.copy(petalColor);
-            petalInstancedMesh.setColorAt(i, tempColor);
+
+            // Set petal matrices
+            for (let j = 0; j < petalsPerFlower; j++) {
+                const petalIndex = i * petalsPerFlower + j;
+
+                petalBasePosArray[petalIndex*3] = data.x;
+                petalBasePosArray[petalIndex*3+1] = data.h;
+                petalBasePosArray[petalIndex*3+2] = data.z;
+
+                const angle = (j / petalsPerFlower) * Math.PI * 2;
+
+                petalDummy.position.set(0, 0.4 * data.scaleFactor, 0);
+                petalDummy.rotation.set(0, angle, 0); // Fan out around Y axis
+                petalDummy.scale.set(data.scaleFactor, data.scaleFactor, data.scaleFactor);
+                petalDummy.updateMatrix();
+
+                petalMatrix.multiplyMatrices(dummy.matrix, petalDummy.matrix);
+                petalInstancedMesh.setMatrixAt(petalIndex, petalMatrix);
+                petalInstancedMesh.setColorAt(petalIndex, tempColor);
+            }
         }
 
         stemInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
-        petalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
+        centerInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(basePosArray, 3));
+        petalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(petalBasePosArray, 3));
 
         grp.add(stemInstancedMesh);
+        grp.add(centerInstancedMesh);
         grp.add(petalInstancedMesh);
         grp.userData.flowers = {
             data: flowerDataList,
             stems: stemInstancedMesh,
-            petals: petalInstancedMesh
+            centers: centerInstancedMesh,
+            petals: petalInstancedMesh,
+            petalsPerFlower: petalsPerFlower
         };
     }
 
