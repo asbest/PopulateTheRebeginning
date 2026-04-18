@@ -278,13 +278,19 @@
 </div>
 
 <div id="ui-layer">
+    <div id="story-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); flex-direction:column; align-items:center; justify-content:center; z-index:300; color:white; pointer-events:auto; text-align:center; padding: 20px; box-sizing: border-box;">
+        <h1 id="story-title" style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000; max-width: 800px;"></h1>
+        <div id="story-text" style="margin-bottom:30px; font-size: 18px; line-height: 1.5; max-width: 800px; text-shadow: 1px 1px 0 #000;"></div>
+        <button class="menu-btn" style="font-size: 20px; padding: 10px 20px; width: auto;" onclick="closeStoryOverlay()">Begin</button>
+    </div>
+
     <div id="fps-indicator" style="position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 10px; color: white; display: none; z-index: 1000; text-shadow: 1px 1px 0 #000;">FPS: 0</div>
     <div id="pause-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); flex-direction:column; align-items:center; justify-content:center; z-index:200; pointer-events:auto;">
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">PAUSED</h1>
         <button class="menu-btn" onclick="saveGame()">Save Game</button>
         <button class="menu-btn" onclick="loadGame()">Load Game</button>
         <button class="menu-btn" onclick="openMultiplayer()">Multiplayer</button>
-        <button class="menu-btn" onclick="openCampaignMenu()">New Game</button>
+        <button class="menu-btn" onclick="openCampaignMenu()">Level selection</button>
         <button class="menu-btn" onclick="toggleFps()">Toggle FPS</button>
         <button class="menu-btn" onclick="toggleFullscreen()">Toggle Fullscreen</button>
 
@@ -298,6 +304,7 @@
             <button class="menu-btn" onclick="cheatMana()">Set Mana 10000</button>
             <button class="menu-btn" onclick="cheatRange()">Unlimited Range</button>
             <button class="menu-btn" onclick="cheatImmortal()">God Mode</button>
+                        <button class="menu-btn" onclick="cheatUnlockLevels()">Unlock All Levels</button>
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
         </div>
     </div>
@@ -350,7 +357,7 @@
     </div>
 
     <div id="campaign-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto; overflow-y:auto;">
-        <h1 style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">NEW GAME</h1>
+        <h1 style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">LEVEL SELECTION</h1>
         <div id="campaign-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; width:400px;">
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(1)">Level 1: The Awakening (Tutorial)</button>
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(2)" id="btn-camp-2">Level 2: The Swarm</button>
@@ -1687,6 +1694,18 @@ function updateChunkGeometry(mesh, cx, cz) {
          let h = getHeight(wx, wz);
          pos.setY(i, h);
 
+         if (state.matchSettings && state.matchSettings.winter) {
+             // Ice/Snow World colors
+             if (h < WATER_LEVEL) col.copy(cSand).lerp(cSnow, 0.8); // Frosty sand
+             else if (h < WATER_LEVEL + 1.0) col.copy(cSnow);
+             else if (h < 8.0) col.copy(cSnow);
+             else if (h < 9.0) col.copy(cSnow).lerp(cRock, h - 8.0);
+             else if (h < 13.0) col.copy(cRock);
+             else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
+             else if (h < 19.0) col.copy(cSnow);
+             else if (h < 21.0) col.copy(cSnow).lerp(cRock, (h - 19.0) / 2.0);
+             else col.copy(cRock); // No lava in winter
+         } else {
          if (h < WATER_LEVEL) col.copy(cSand);
          else if (h < WATER_LEVEL + 1.0) col.copy(cSand).lerp(cGrass, h - WATER_LEVEL);
          else if (h < 8.0) col.copy(cGrass);
@@ -1696,6 +1715,7 @@ function updateChunkGeometry(mesh, cx, cz) {
          else if (h < 19.0) col.copy(cSnow);
          else if (h < 21.0) col.copy(cSnow).lerp(cLava, (h - 19.0) / 2.0);
          else col.copy(cLava);
+         }
 
          if(h > 2.5) col.offsetHSL(0, 0, (Math.random()-0.5)*0.03);
 
@@ -5180,6 +5200,7 @@ function init() {
 
         if (checkCampaign) {
             findSafeSpawnAndStart();
+            showCampaignStory(state.campaignLevel);
         } else {
             const sandboxStart = localStorage.getItem('rebeginning_sandbox_start');
             if (sandboxStart) {
@@ -5193,10 +5214,38 @@ function init() {
                         if(state.isPaused) togglePause();
                     } catch(e) {
                         console.error("Auto-load failed:", e);
-                        findSafeSpawnAndStart();
+
+                    // Start Level 1 Campaign by default
+                    state.isCampaign = true;
+                    state.campaignLevel = 1;
+                    state.mana = 500;
+                    if (!state.matchSettings) state.matchSettings = {};
+                    state.matchSettings.suddenDeath = false;
+                    state.matchSettings.winter = false;
+                    state.matchSettings.noFlyers = false;
+                    state.matchSettings.infiniteMana = false;
+                    state.matchSettings.doubleSpeed = false;
+                    window.enemyAIs = [new EnemyAI(1, 'default')];
+                    findSafeSpawnAndStart();
+                    showCampaignStory(1);
+
                     }
                 } else {
+
+                    // Start Level 1 Campaign by default
+                    state.isCampaign = true;
+                    state.campaignLevel = 1;
+                    state.mana = 500;
+                    if (!state.matchSettings) state.matchSettings = {};
+                    state.matchSettings.suddenDeath = false;
+                    state.matchSettings.winter = false;
+                    state.matchSettings.noFlyers = false;
+                    state.matchSettings.infiniteMana = false;
+                    state.matchSettings.doubleSpeed = false;
+                    window.enemyAIs = [new EnemyAI(1, 'default')];
                     findSafeSpawnAndStart();
+                    showCampaignStory(1);
+
                 }
             }
         }
@@ -5419,6 +5468,53 @@ window.toggleFps = function() {
         if(fpsIndicator) fpsIndicator.innerText = `FPS: ...`;
     }
 }
+
+
+const CAMPAIGN_STORIES = {
+    1: {
+        title: "Level 1: The Awakening",
+        text: "The First Shaman wakes up on a pristine island, the sun rising over untouched shores. The world is young, fractured, and filled with untamed magic pulsing beneath the soil. You are the chosen one, destined to unite the scattered tribes under a single banner. But survival comes first. You must learn to gather your wandering followers, construct basic buildings to house them, and tap into the primal forces of nature to eliminate the feral tribe that threatens your very existence. This is the dawn of your legacy, a quiet beginning to an epic saga of conquest and creation."
+    },
+    2: {
+        title: "Level 2: The Swarm",
+        text: "The whispers of your growing power have spread across the seas, drawing the ire of two aggressive clans. Driven by fear and ambition, they have allied against you, pooling their resources to crush your fledgling empire before it can take root. They build rapidly, churning out warriors at a terrifying pace, and attack in relentless, overwhelming numbers. You must balance desperate defense—erecting towers and unleashing strategic, devastating spell usage—with the agonizingly slow task of building up a strong enough force to break their siege. Every moment is a struggle for survival as the swarm descends upon your borders."
+    },
+    3: {
+        title: "Level 3: The Frozen Wastes",
+        text: "Your journey leads you to the bitter, desolate north, a realm of perpetual winter where the land itself seems hostile to life. Here reigns the Sorcerer King, a tyrant obsessed with the destructive purity of fire magic. With your mighty airships grounded by the howling blizzards and unrelenting gales, you are forced to rely entirely on ground troops marching through deep snow. The treacherous, shifting ice mechanic means you must carefully time your desperate assaults when the freezing waters solidify into temporary bridges, or risk your entire army drowning when the sudden thaw comes. The enemy Sorcerer will ruthlessly rain down heavy fire spells and deploy elite Fire Warriors, turning the icy battlefield into a frozen hellscape."
+    },
+    4: {
+        title: "Level 4: The Opportunist's Trap",
+        text: "Deep within a labyrinthine canyon lies a highly defensive tribe, their fortress a masterpiece of paranoid engineering. A cunning, calculating enemy awaits, refusing to engage in open, honorable combat. They are patient, watching your every move, and won't attack you outright unless they sense a moment of fatal weakness—specifically, if your Shaman is struck down or your reserves of magical mana are completely depleted. It is a deadly game of cat and mouse. You must carefully, methodically dismantle their impenetrable defenses using stealthy spies, precise surgical strikes, and overwhelming patience, all while keeping your fragile Shaman safely protected behind unyielding lines at all times. One mistake means instant annihilation."
+    },
+    5: {
+        title: "Level 5: The Grand Melee",
+        text: "The final confrontation is at hand. The remaining tribes, desperate and driven mad by the prolonged conflict, have gathered in a massive, sprawling archipelago for a final, apocalyptic battle to determine the fate of the world. With limitless magical power surging through the ley lines and units moving at lightning-fast, supernatural speeds, the battlefield descends into absolute, unmitigated chaos. The sky burns with arcane fire, the earth shatters under the weight of endless armies, and alliances mean nothing. You must spam reality-bending spells, maneuver your forces with blinding rapidity, and master the art of manipulation, letting your enemies brutally weaken each other before swooping in for the final, decisive kill. Only one tribe will survive the Grand Melee."
+    }
+};
+
+window.showCampaignStory = function(level) {
+    const story = CAMPAIGN_STORIES[level];
+    if (story) {
+        document.getElementById('story-title').innerText = story.title;
+        document.getElementById('story-text').innerText = story.text;
+        document.getElementById('story-overlay').style.display = 'flex';
+        state.isPaused = true;
+    }
+};
+
+window.closeStoryOverlay = function() {
+    document.getElementById('story-overlay').style.display = 'none';
+    state.isPaused = false;
+};
+
+window.cheatUnlockLevels = function() {
+    localStorage.setItem('rebeginning_max_campaign_level', '5');
+    if (document.getElementById('campaign-menu').style.display !== 'none') {
+        window.openCampaignMenu();
+    }
+    alert("All campaign levels unlocked! Check the Level selection menu.");
+};
 
 window.newGame = function() {
     if(confirm("Are you sure? Unsaved progress will be lost.")) {
@@ -5933,6 +6029,13 @@ function animate() {
 
     if (state.matchSettings && state.matchSettings.winter) {
         state.waterState = Math.floor(state.clock.getElapsedTime() / 30) % 2 === 0 ? 'liquid' : 'frozen';
+        if (state.chunkWaterMat) {
+            // Smoothly transition water color based on state
+            const targetColor = state.waterState === 'frozen' ? 0x88CCFF : 0x1E90FF;
+            state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(targetColor), dt * 2.0);
+        }
+    } else {
+        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x1E90FF), dt * 2.0);
     }
 
 
