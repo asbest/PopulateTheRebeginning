@@ -1694,6 +1694,18 @@ function updateChunkGeometry(mesh, cx, cz) {
          let h = getHeight(wx, wz);
          pos.setY(i, h);
 
+         if (state.matchSettings && state.matchSettings.winter) {
+             // Ice/Snow World colors
+             if (h < WATER_LEVEL) col.copy(cSand).lerp(cSnow, 0.8); // Frosty sand
+             else if (h < WATER_LEVEL + 1.0) col.copy(cSnow);
+             else if (h < 8.0) col.copy(cSnow);
+             else if (h < 9.0) col.copy(cSnow).lerp(cRock, h - 8.0);
+             else if (h < 13.0) col.copy(cRock);
+             else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
+             else if (h < 19.0) col.copy(cSnow);
+             else if (h < 21.0) col.copy(cSnow).lerp(cRock, (h - 19.0) / 2.0);
+             else col.copy(cRock); // No lava in winter
+         } else {
          if (h < WATER_LEVEL) col.copy(cSand);
          else if (h < WATER_LEVEL + 1.0) col.copy(cSand).lerp(cGrass, h - WATER_LEVEL);
          else if (h < 8.0) col.copy(cGrass);
@@ -1703,6 +1715,7 @@ function updateChunkGeometry(mesh, cx, cz) {
          else if (h < 19.0) col.copy(cSnow);
          else if (h < 21.0) col.copy(cSnow).lerp(cLava, (h - 19.0) / 2.0);
          else col.copy(cLava);
+         }
 
          if(h > 2.5) col.offsetHSL(0, 0, (Math.random()-0.5)*0.03);
 
@@ -6016,6 +6029,13 @@ function animate() {
 
     if (state.matchSettings && state.matchSettings.winter) {
         state.waterState = Math.floor(state.clock.getElapsedTime() / 30) % 2 === 0 ? 'liquid' : 'frozen';
+        if (state.chunkWaterMat) {
+            // Smoothly transition water color based on state
+            const targetColor = state.waterState === 'frozen' ? 0x88CCFF : 0x1E90FF;
+            state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(targetColor), dt * 2.0);
+        }
+    } else {
+        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x1E90FF), dt * 2.0);
     }
 
 
