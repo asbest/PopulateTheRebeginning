@@ -278,6 +278,12 @@
 </div>
 
 <div id="ui-layer">
+    <div id="story-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); flex-direction:column; align-items:center; justify-content:center; z-index:300; color:white; pointer-events:auto; text-align:center; padding: 20px; box-sizing: border-box;">
+        <h1 id="story-title" style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000; max-width: 800px;"></h1>
+        <div id="story-text" style="margin-bottom:30px; font-size: 18px; line-height: 1.5; max-width: 800px; text-shadow: 1px 1px 0 #000;"></div>
+        <button class="menu-btn" style="font-size: 20px; padding: 10px 20px; width: auto;" onclick="closeStoryOverlay()">Begin</button>
+    </div>
+
     <div id="fps-indicator" style="position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 10px; color: white; display: none; z-index: 1000; text-shadow: 1px 1px 0 #000;">FPS: 0</div>
     <div id="pause-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); flex-direction:column; align-items:center; justify-content:center; z-index:200; pointer-events:auto;">
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">PAUSED</h1>
@@ -298,6 +304,7 @@
             <button class="menu-btn" onclick="cheatMana()">Set Mana 10000</button>
             <button class="menu-btn" onclick="cheatRange()">Unlimited Range</button>
             <button class="menu-btn" onclick="cheatImmortal()">God Mode</button>
+                        <button class="menu-btn" onclick="cheatUnlockLevels()">Unlock All Levels</button>
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
         </div>
     </div>
@@ -5180,6 +5187,7 @@ function init() {
 
         if (checkCampaign) {
             findSafeSpawnAndStart();
+            showCampaignStory(state.campaignLevel);
         } else {
             const sandboxStart = localStorage.getItem('rebeginning_sandbox_start');
             if (sandboxStart) {
@@ -5419,6 +5427,53 @@ window.toggleFps = function() {
         if(fpsIndicator) fpsIndicator.innerText = `FPS: ...`;
     }
 }
+
+
+const CAMPAIGN_STORIES = {
+    1: {
+        title: "Level 1: The Awakening",
+        text: "The First Shaman wakes up on a pristine island. You must learn to gather followers, construct basic buildings, and eliminate the feral tribe nearby."
+    },
+    2: {
+        title: "Level 2: The Swarm",
+        text: "Two aggressive clans have allied against you. They build rapidly and attack in high numbers. You must balance defense (towers, strategic spell usage) with building up a strong enough force to break their siege."
+    },
+    3: {
+        title: "Level 3: The Frozen Wastes",
+        text: "You travel north to confront a tribe obsessed with fire magic. With airships grounded due to the blizzard, you must rely on ground troops. The shifting ice mechanic means you must carefully time your assaults when the water freezes, or risk your army drowning when the thaw comes. The enemy Sorcerer will heavily utilize fire spells and Fire Warriors."
+    },
+    4: {
+        title: "Level 4: The Opportunist's Trap",
+        text: "A cunning enemy awaits in a heavily fortified base. They won't attack you outright unless they sense weakness—specifically, if your Shaman is killed or your mana is depleted. You must carefully dismantle their defenses using spies and strategic strikes, keeping your Shaman safely protected at all times."
+    },
+    5: {
+        title: "Level 5: The Grand Melee",
+        text: "The remaining tribes have gathered in a massive archipelago for a final, chaotic battle. With limitless magical power and lightning-fast units, the battlefield is sheer chaos. You must spam spells, maneuver rapidly, and let your enemies weaken each other before moving in for the kill."
+    }
+};
+
+window.showCampaignStory = function(level) {
+    const story = CAMPAIGN_STORIES[level];
+    if (story) {
+        document.getElementById('story-title').innerText = story.title;
+        document.getElementById('story-text').innerText = story.text;
+        document.getElementById('story-overlay').style.display = 'flex';
+        state.isPaused = true;
+    }
+};
+
+window.closeStoryOverlay = function() {
+    document.getElementById('story-overlay').style.display = 'none';
+    state.isPaused = false;
+};
+
+window.cheatUnlockLevels = function() {
+    localStorage.setItem('rebeginning_max_campaign_level', '5');
+    if (document.getElementById('campaign-menu').style.display !== 'none') {
+        window.openCampaignMenu();
+    }
+    alert("All campaign levels unlocked! Check the New Game menu.");
+};
 
 window.newGame = function() {
     if(confirm("Are you sure? Unsaved progress will be lost.")) {
