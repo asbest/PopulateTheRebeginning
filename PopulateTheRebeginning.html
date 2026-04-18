@@ -290,7 +290,7 @@
         <button class="menu-btn" onclick="saveGame()">Save Game</button>
         <button class="menu-btn" onclick="loadGame()">Load Game</button>
         <button class="menu-btn" onclick="openMultiplayer()">Multiplayer</button>
-        <button class="menu-btn" onclick="openCampaignMenu()">New Game</button>
+        <button class="menu-btn" onclick="openCampaignMenu()">Level selection</button>
         <button class="menu-btn" onclick="toggleFps()">Toggle FPS</button>
         <button class="menu-btn" onclick="toggleFullscreen()">Toggle Fullscreen</button>
 
@@ -357,7 +357,7 @@
     </div>
 
     <div id="campaign-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto; overflow-y:auto;">
-        <h1 style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">NEW GAME</h1>
+        <h1 style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">LEVEL SELECTION</h1>
         <div id="campaign-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; width:400px;">
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(1)">Level 1: The Awakening (Tutorial)</button>
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(2)" id="btn-camp-2">Level 2: The Swarm</button>
@@ -5201,10 +5201,38 @@ function init() {
                         if(state.isPaused) togglePause();
                     } catch(e) {
                         console.error("Auto-load failed:", e);
-                        findSafeSpawnAndStart();
+
+                    // Start Level 1 Campaign by default
+                    state.isCampaign = true;
+                    state.campaignLevel = 1;
+                    state.mana = 500;
+                    if (!state.matchSettings) state.matchSettings = {};
+                    state.matchSettings.suddenDeath = false;
+                    state.matchSettings.winter = false;
+                    state.matchSettings.noFlyers = false;
+                    state.matchSettings.infiniteMana = false;
+                    state.matchSettings.doubleSpeed = false;
+                    window.enemyAIs = [new EnemyAI(1, 'default')];
+                    findSafeSpawnAndStart();
+                    showCampaignStory(1);
+
                     }
                 } else {
+
+                    // Start Level 1 Campaign by default
+                    state.isCampaign = true;
+                    state.campaignLevel = 1;
+                    state.mana = 500;
+                    if (!state.matchSettings) state.matchSettings = {};
+                    state.matchSettings.suddenDeath = false;
+                    state.matchSettings.winter = false;
+                    state.matchSettings.noFlyers = false;
+                    state.matchSettings.infiniteMana = false;
+                    state.matchSettings.doubleSpeed = false;
+                    window.enemyAIs = [new EnemyAI(1, 'default')];
                     findSafeSpawnAndStart();
+                    showCampaignStory(1);
+
                 }
             }
         }
@@ -5472,7 +5500,7 @@ window.cheatUnlockLevels = function() {
     if (document.getElementById('campaign-menu').style.display !== 'none') {
         window.openCampaignMenu();
     }
-    alert("All campaign levels unlocked! Check the New Game menu.");
+    alert("All campaign levels unlocked! Check the Level selection menu.");
 };
 
 window.newGame = function() {
