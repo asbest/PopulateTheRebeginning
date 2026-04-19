@@ -1077,6 +1077,62 @@ function getBasicMaterial(color) {
     return MaterialCache.get(color);
 }
 
+
+
+let unitTextureImg = null;
+let unitTextureTex = null;
+let unitTextureFailed = false;
+let unitTextureCallbacks = [];
+
+function loadUnitTexture() {
+    if (unitTextureFailed) return;
+    if (unitTextureImg) {
+        // already loaded
+        return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+        unitTextureImg = img;
+        unitTextureTex = new THREE.Texture(img);
+        unitTextureTex.needsUpdate = true;
+        unitTextureCallbacks.forEach(cb => cb(unitTextureTex));
+        unitTextureCallbacks = [];
+    };
+    img.onerror = () => {
+        unitTextureFailed = true;
+        unitTextureCallbacks = [];
+    };
+    img.src = 'Unittextures.png';
+}
+loadUnitTexture();
+
+function applyUnitTexture(unit) {
+    if (unitTextureFailed) return;
+
+    const apply = (tex) => {
+        const spriteMat = new THREE.SpriteMaterial({ map: tex, color: 0xffffff });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.scale.set(1.5, 1.5, 1.5);
+        sprite.position.y = 0.5;
+        unit.mesh.add(sprite);
+
+        if (unit.torso) unit.torso.visible = false;
+        if (unit.head) unit.head.visible = false;
+        if (unit.armL) unit.armL.visible = false;
+        if (unit.armR) unit.armR.visible = false;
+        if (unit.legL) unit.legL.visible = false;
+        if (unit.legR) unit.legR.visible = false;
+    };
+
+    if (unitTextureTex) {
+        apply(unitTextureTex);
+    } else {
+        unitTextureCallbacks.push(apply);
+    }
+}
+
 const AssetCache = {
     geos: {
         particle: new THREE.BoxGeometry(1, 1, 1),
@@ -3294,6 +3350,9 @@ class Humanoid {
         this.burnTimer = 0;
         this.attackPhase = 0;
         this.attackFired = false;
+
+
+        applyUnitTexture(this);
     }
 
     setFaction(newFaction) {
