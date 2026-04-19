@@ -1110,9 +1110,27 @@ loadUnitTexture();
 
 function applyUnitTexture(unit) {
     if (unitTextureFailed) return;
+    if (unit.type === 'airship') return;
 
     const apply = (tex) => {
-        const spriteMat = new THREE.SpriteMaterial({ map: tex, color: 0xffffff });
+        let row = 1; // default 'wild'
+        switch(unit.type) {
+            case 'shaman': row = 0; break;
+            case 'wild': row = 1; break;
+            case 'warrior': row = 2; break;
+            case 'preacher': row = 3; break;
+            case 'firewarrior': row = 4; break;
+            case 'spy': row = 5; break;
+        }
+
+        let col = unit.faction || 0;
+        if (col > 7) col = 7; // Clamp to max 8 factions (0-7)
+
+        const clonedTex = tex.clone();
+        clonedTex.repeat.set(1/11, 1/6);
+        clonedTex.offset.set(col / 11, (5 - row) / 6);
+
+        const spriteMat = new THREE.SpriteMaterial({ map: clonedTex, color: 0xffffff });
         const sprite = new THREE.Sprite(spriteMat);
         sprite.scale.set(1.5, 1.5, 1.5);
         sprite.position.y = 0.5;
