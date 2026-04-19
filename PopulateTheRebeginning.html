@@ -1127,6 +1127,7 @@ function applyUnitTexture(unit) {
         if (col > 7) col = 7; // Clamp to max 8 factions (0-7)
 
         const clonedTex = tex.clone();
+        clonedTex.needsUpdate = true; // Important for cloned textures in older Three.js versions
         clonedTex.repeat.set(1/11, 1/6);
         clonedTex.offset.set(col / 11, (5 - row) / 6);
 
