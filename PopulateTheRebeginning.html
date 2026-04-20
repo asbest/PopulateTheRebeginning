@@ -1149,33 +1149,33 @@ function applyUnitTexture(unit) {
             }
         };
 
-        // Head (approx top center)
+        // Head (top portion, narrower width)
         const headTex = clonedTex.clone();
         headTex.needsUpdate = true;
-        headTex.repeat.set(1/11 * 0.4, 1/6 * 0.4);
-        headTex.offset.set(col / 11 + (1/11)*0.3, (5 - row) / 6 + (1/6)*0.6);
+        headTex.repeat.set((1/11) * 0.4, (1/6) * 0.35);
+        headTex.offset.set(col / 11 + (1/11) * 0.3, (5 - row) / 6 + (1/6) * 0.6);
         applyTexToMesh(unit.head, headTex);
 
-        // Torso (center)
+        // Torso (middle portion, wider)
         const torsoTex = clonedTex.clone();
         torsoTex.needsUpdate = true;
-        torsoTex.repeat.set(1/11 * 0.6, 1/6 * 0.5);
-        torsoTex.offset.set(col / 11 + (1/11)*0.2, (5 - row) / 6 + (1/6)*0.2);
+        torsoTex.repeat.set((1/11) * 0.5, (1/6) * 0.4);
+        torsoTex.offset.set(col / 11 + (1/11) * 0.25, (5 - row) / 6 + (1/6) * 0.2);
         applyTexToMesh(unit.torso, torsoTex);
 
         // Arms (sides)
         const armTex = clonedTex.clone();
         armTex.needsUpdate = true;
-        armTex.repeat.set(1/11 * 0.2, 1/6 * 0.4);
-        armTex.offset.set(col / 11 + (1/11)*0.7, (5 - row) / 6 + (1/6)*0.3);
+        armTex.repeat.set((1/11) * 0.15, (1/6) * 0.3);
+        armTex.offset.set(col / 11 + (1/11) * 0.75, (5 - row) / 6 + (1/6) * 0.25);
         applyTexToMesh(unit.armL, armTex);
         applyTexToMesh(unit.armR, armTex);
 
         // Legs (bottom)
         const legTex = clonedTex.clone();
         legTex.needsUpdate = true;
-        legTex.repeat.set(1/11 * 0.3, 1/6 * 0.4);
-        legTex.offset.set(col / 11 + (1/11)*0.3, (5 - row) / 6 + (1/6)*0.0);
+        legTex.repeat.set((1/11) * 0.2, (1/6) * 0.25);
+        legTex.offset.set(col / 11 + (1/11) * 0.4, (5 - row) / 6 + (1/6) * 0.0);
         applyTexToMesh(unit.legL, legTex);
         applyTexToMesh(unit.legR, legTex);
     };
