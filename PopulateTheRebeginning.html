@@ -1462,6 +1462,26 @@ const CritterManager = {
         rightEar.rotation.x = -0.2;
         group.add(rightEar);
 
+        // Add legs
+        const legGeo = new THREE.SphereGeometry(bodySize * 0.15, 12, 12);
+
+        const frontLeftLeg = new THREE.Mesh(legGeo, mat);
+        frontLeftLeg.position.set(-bodySize * 0.3, bodySize * 0.1, bodySize * 0.4);
+        group.add(frontLeftLeg);
+
+        const frontRightLeg = new THREE.Mesh(legGeo, mat);
+        frontRightLeg.position.set(bodySize * 0.3, bodySize * 0.1, bodySize * 0.4);
+        group.add(frontRightLeg);
+
+        const backLeftLeg = new THREE.Mesh(legGeo, mat);
+        backLeftLeg.position.set(-bodySize * 0.3, bodySize * 0.1, -bodySize * 0.4);
+        group.add(backLeftLeg);
+
+        const backRightLeg = new THREE.Mesh(legGeo, mat);
+        backRightLeg.position.set(bodySize * 0.3, bodySize * 0.1, -bodySize * 0.4);
+        group.add(backRightLeg);
+
+
         let x, z;
         if(randomPos) {
             x = (Math.random() - 0.5) * 400;
@@ -1586,7 +1606,7 @@ const CritterManager = {
 
                     // Pick a random nearby target
                     const angle = Math.random() * Math.PI * 2;
-                    const dist = 2 + Math.random() * 5;
+                    const dist = 0.5 + Math.random() * 1.5;
                     b.targetX = b.mesh.position.x + Math.sin(angle) * dist;
                     b.targetZ = b.mesh.position.z + Math.cos(angle) * dist;
 
@@ -1616,7 +1636,7 @@ const CritterManager = {
                 const h = getHeight(b.mesh.position.x, b.mesh.position.z);
 
                 // Add arc
-                const arcHeight = Math.sin(t * Math.PI) * 1.5;
+                const arcHeight = Math.sin(t * Math.PI) * 0.5;
 
                 // Interpolate Y between startY and current target ground height + arc
                 b.mesh.position.y = b.startY + (h - b.startY) * t + arcHeight;
