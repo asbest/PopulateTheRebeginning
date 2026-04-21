@@ -501,7 +501,8 @@ const ACTIONS = {
     'build_fire': { icon: '🔥', label: 'Fire', cost: 40 },
     'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
     'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
-    'build_airship': { icon: '🎈', label: 'Ship', cost: 25 }
+    'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
+    'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 10 }
 };
 
 const UNIT_ICONS = {
@@ -3458,6 +3459,8 @@ class Humanoid {
         this.type = type; // 'wild', 'warrior', 'firewarrior', 'spy', 'shaman'
         this.isShaman = (type === 'shaman');
 
+        this.upgradeLevel = 0;
+
         // Stats
         this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6; this.height = 1.5;
         if(type === 'warrior') { this.maxHp = 200; this.damage = 52.5; }
@@ -3802,6 +3805,18 @@ class Humanoid {
                 this.originalMats.clear();
             }
         }
+    }
+
+    upgrade() {
+        this.upgradeLevel = (this.upgradeLevel || 0) + 1;
+        this.moveSpeed *= 1.1;
+        this.damage *= 1.1;
+        this.maxHp *= 1.1;
+        this.hp *= 1.1;
+        this.attackSpeed *= 1.1;
+
+        spawnPulse(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFFFF00);
+        this.mesh.scale.multiplyScalar(1.1);
     }
 
     die() {
@@ -5299,6 +5314,10 @@ function updateContextMenus() {
         visibleActions = ['hypnotise'];
     }
 
+    if (hasSelection) {
+        visibleActions.push('upgrade_unit');
+    }
+
     visibleActions.forEach(act => {
          const data = ACTIONS[act];
          if(!data) return;
@@ -5324,6 +5343,19 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
         const unitIds = actingUnits.map(u => u.id);
         NetworkManager.sendInput({x, z, action, unitIds});
         spawnPulse(x, getHeight(x, z), z, 0x888888);
+        return;
+    }
+
+    if(action === 'upgrade_unit') {
+        if(actingUnits.length > 0) {
+            actingUnits.forEach(u => {
+                if (state.mana >= 10) {
+                    state.mana -= 10;
+                    u.upgrade();
+                }
+            });
+            updateUI();
+        }
         return;
     }
 
