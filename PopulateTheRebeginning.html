@@ -502,7 +502,7 @@ const ACTIONS = {
     'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
     'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
     'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
-    'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 10 }
+    'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 50 }
 };
 
 const UNIT_ICONS = {
@@ -1190,6 +1190,7 @@ function applyUnitTexture(unit) {
 
 const AssetCache = {
     geos: {
+        hair: new THREE.SphereGeometry(0.2, 16, 16).scale(1.1, 1.1, 1.1).translate(0, 0.05, -0.05),
         particle: new THREE.BoxGeometry(1, 1, 1),
         cloud: new THREE.DodecahedronGeometry(1, 1),
         ring: new THREE.RingGeometry(0.5, 0.6, 16),
@@ -3535,6 +3536,10 @@ class Humanoid {
             headMesh.castShadow = true; headMesh.receiveShadow = true;
             this.head.add(headMesh);
 
+            this.hairMat = new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.8});
+            this.hairMesh = new THREE.Mesh(AssetCache.geos.hair, this.hairMat);
+            this.head.add(this.hairMesh);
+
             // Add eyes
             const eyeL = new THREE.Mesh(AssetCache.geos.eye, AssetCache.mats.eyeWhite);
             eyeL.position.set(0.08, 0.05, 0.18);
@@ -3814,6 +3819,11 @@ class Humanoid {
         this.maxHp *= 1.1;
         this.hp *= 1.1;
         this.attackSpeed *= 1.1;
+
+        if (this.hairMat) {
+            let colorVal = Math.min(255, this.upgradeLevel * 51);
+            this.hairMat.color.setRGB(colorVal / 255, colorVal / 255, colorVal / 255);
+        }
 
         spawnPulse(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFFFF00);
     }
@@ -5348,8 +5358,8 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     if(action === 'upgrade_unit') {
         if(actingUnits.length > 0) {
             actingUnits.forEach(u => {
-                if (state.mana >= 10) {
-                    state.mana -= 10;
+                if (state.mana >= 50) {
+                    state.mana -= 50;
                     u.upgrade();
                 }
             });
