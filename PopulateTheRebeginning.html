@@ -3861,6 +3861,13 @@ class Humanoid {
     applyForce(vec) {
         if(this.state === 'dead') return;
         this.velocity.add(vec); this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 5.0; this.target = null;
+
+        // Setup initial rotational physics based on the force vector
+        if(!this.angularVelocity) this.angularVelocity = new THREE.Vector3();
+        // Force on Z pitches around X, Force on X rolls around Z
+        this.angularVelocity.x = vec.z * 0.2 + (Math.random() - 0.5);
+        this.angularVelocity.y = (Math.random() - 0.5) * 2;
+        this.angularVelocity.z = -vec.x * 0.2 + (Math.random() - 0.5);
     }
 
     manualMove(vec, dt = 0.016) {
@@ -4259,15 +4266,61 @@ class Humanoid {
 
         if(this.state === 'stunned') {
             if(this.velocity.length() > 2 || !this.isGrounded) {
-                 this.mesh.rotation.x += dt * 5; this.mesh.rotation.z += dt * 3;
+                 if(this.angularVelocity) {
+                     this.mesh.rotation.x += this.angularVelocity.x * dt;
+                     this.mesh.rotation.y += this.angularVelocity.y * dt;
+                     this.mesh.rotation.z += this.angularVelocity.z * dt;
+
+                     // Apply angular damping
+                     const damping = this.isGrounded ? 0.90 : 0.99;
+                     this.angularVelocity.multiplyScalar(damping);
+                 } else {
+                     this.mesh.rotation.x += dt * 5; this.mesh.rotation.z += dt * 3;
+                 }
+
                  if(this.legL) {
                     this.updateWalkAnim(15, 1.0, dt);
                  }
             } else {
                 this.recoverTimer -= dt;
+
+                // Normalize rotations to [-PI, PI] for smooth shortest-path interpolation
+                let rotX = this.mesh.rotation.x % (2 * Math.PI);
+                if (rotX < -Math.PI) rotX += 2 * Math.PI;
+                if (rotX > Math.PI) rotX -= 2 * Math.PI;
+                this.mesh.rotation.x = rotX;
+
+                let rotY = this.mesh.rotation.y % (2 * Math.PI);
+                if (rotY < -Math.PI) rotY += 2 * Math.PI;
+                if (rotY > Math.PI) rotY -= 2 * Math.PI;
+                this.mesh.rotation.y = rotY;
+
+                let rotZ = this.mesh.rotation.z % (2 * Math.PI);
+                if (rotZ < -Math.PI) rotZ += 2 * Math.PI;
+                if (rotZ > Math.PI) rotZ -= 2 * Math.PI;
+                this.mesh.rotation.z = rotZ;
+
                 const targetRotX = -Math.PI/2;
-                this.mesh.rotation.x += (targetRotX - this.mesh.rotation.x) * 5 * dt;
-                this.mesh.rotation.z *= 0.9;
+
+                // Calculate shortest angular distance for X
+                let diffX = targetRotX - this.mesh.rotation.x;
+                if (diffX > Math.PI) diffX -= 2 * Math.PI;
+                if (diffX < -Math.PI) diffX += 2 * Math.PI;
+
+                this.mesh.rotation.x += diffX * 5 * dt;
+
+                // Calculate shortest angular distance for Y
+                let diffY = 0 - this.mesh.rotation.y;
+                if (diffY > Math.PI) diffY -= 2 * Math.PI;
+                if (diffY < -Math.PI) diffY += 2 * Math.PI;
+                this.mesh.rotation.y += diffY * 5 * dt; // Gradually stop spinning
+
+                // Calculate shortest angular distance for Z
+                let diffZ = 0 - this.mesh.rotation.z;
+                if (diffZ > Math.PI) diffZ -= 2 * Math.PI;
+                if (diffZ < -Math.PI) diffZ += 2 * Math.PI;
+                this.mesh.rotation.z += diffZ * 5 * dt;
+
                 this.resetAnim();
                 if(this.recoverTimer <= 0) {
                     this.state = 'getting_up';
