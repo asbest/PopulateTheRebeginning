@@ -687,7 +687,10 @@ const NetworkManager = {
     startHost: function() {
         if(state.network.peer) return;
         state.network.role = 'host';
-        state.network.peer = new Peer({
+
+        // Generate a 5-character alphanumeric ID to use with PeerJS
+        const hostId = generateUUID().substr(0, 5);
+        state.network.peer = new Peer(hostId, {
              debug: 2
         });
 
