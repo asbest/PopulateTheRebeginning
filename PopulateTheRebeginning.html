@@ -501,7 +501,8 @@ const ACTIONS = {
     'build_fire': { icon: '🔥', label: 'Fire', cost: 40 },
     'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
     'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
-    'build_airship': { icon: '🎈', label: 'Ship', cost: 25 }
+    'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
+    'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 50 }
 };
 
 const UNIT_ICONS = {
@@ -1189,6 +1190,7 @@ function applyUnitTexture(unit) {
 
 const AssetCache = {
     geos: {
+        hair: new THREE.SphereGeometry(0.18, 8, 8).scale(1.0, 0.6, 1.0).translate(0, 0.15, -0.05),
         particle: new THREE.BoxGeometry(1, 1, 1),
         cloud: new THREE.DodecahedronGeometry(1, 1),
         ring: new THREE.RingGeometry(0.5, 0.6, 16),
@@ -1538,6 +1540,27 @@ const CritterManager = {
         bodyGeo.rotateX(Math.PI / 2);
         const body = new THREE.Mesh(bodyGeo, mat);
         group.add(body);
+
+        // Head
+        const headGeo = new THREE.SphereGeometry(size * 0.4, 8, 8);
+        const head = new THREE.Mesh(headGeo, mat);
+        head.position.set(0, size * 0.2, size * 0.8);
+        group.add(head);
+
+        // Beak
+        const beakGeo = new THREE.ConeGeometry(size * 0.15, size * 0.4, 4);
+        beakGeo.rotateX(Math.PI / 2);
+        const beakMat = new THREE.MeshStandardMaterial({color: 0xFFA500, roughness: 0.4});
+        const beak = new THREE.Mesh(beakGeo, beakMat);
+        beak.position.set(0, size * 0.2, size * 1.1);
+        group.add(beak);
+
+        // Tail
+        const tailGeo = new THREE.PlaneGeometry(size * 0.8, size * 1.2);
+        tailGeo.rotateX(-Math.PI / 2);
+        const tail = new THREE.Mesh(tailGeo, mat);
+        tail.position.set(0, 0, -size * 0.8);
+        group.add(tail);
 
         // Wings
         const wingGeo = new THREE.PlaneGeometry(size * 2, size * 0.8);
@@ -3458,6 +3481,8 @@ class Humanoid {
         this.type = type; // 'wild', 'warrior', 'firewarrior', 'spy', 'shaman'
         this.isShaman = (type === 'shaman');
 
+        this.upgradeLevel = 0;
+
         // Stats
         this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6; this.height = 1.5;
         if(type === 'warrior') { this.maxHp = 200; this.damage = 52.5; }
@@ -3531,6 +3556,10 @@ class Humanoid {
             const headMesh = new THREE.Mesh(AssetCache.geos.head, skinMat);
             headMesh.castShadow = true; headMesh.receiveShadow = true;
             this.head.add(headMesh);
+
+            this.hairMat = new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.8});
+            this.hairMesh = new THREE.Mesh(AssetCache.geos.hair, this.hairMat);
+            this.head.add(this.hairMesh);
 
             // Add eyes
             const eyeL = new THREE.Mesh(AssetCache.geos.eye, AssetCache.mats.eyeWhite);
@@ -3802,6 +3831,22 @@ class Humanoid {
                 this.originalMats.clear();
             }
         }
+    }
+
+    upgrade() {
+        this.upgradeLevel = (this.upgradeLevel || 0) + 1;
+        this.moveSpeed *= 1.1;
+        this.damage *= 1.1;
+        this.maxHp *= 1.1;
+        this.hp *= 1.1;
+        this.attackSpeed *= 1.1;
+
+        if (this.hairMat) {
+            let colorVal = Math.min(255, this.upgradeLevel * 51);
+            this.hairMat.color.setRGB(colorVal / 255, colorVal / 255, colorVal / 255);
+        }
+
+        spawnPulse(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFFFF00);
     }
 
     die() {
@@ -5299,6 +5344,10 @@ function updateContextMenus() {
         visibleActions = ['hypnotise'];
     }
 
+    if (hasSelection) {
+        visibleActions.push('upgrade_unit');
+    }
+
     visibleActions.forEach(act => {
          const data = ACTIONS[act];
          if(!data) return;
@@ -5324,6 +5373,19 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
         const unitIds = actingUnits.map(u => u.id);
         NetworkManager.sendInput({x, z, action, unitIds});
         spawnPulse(x, getHeight(x, z), z, 0x888888);
+        return;
+    }
+
+    if(action === 'upgrade_unit') {
+        if(actingUnits.length > 0) {
+            actingUnits.forEach(u => {
+                if (state.mana >= 50) {
+                    state.mana -= 50;
+                    u.upgrade();
+                }
+            });
+            updateUI();
+        }
         return;
     }
 
