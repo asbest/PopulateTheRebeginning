@@ -4351,7 +4351,10 @@ class Humanoid {
 
                 if(canMove) {
                     const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
-                    const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
+                    let speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
+                    if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
+                        speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
+                    }
                     const targetVelX = dir.x * speed;
                     const targetVelZ = dir.z * speed;
                     this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
@@ -4454,7 +4457,10 @@ class Humanoid {
 
                 if(canMove) {
                     const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
-                    const speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
+                    let speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
+                    if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
+                        speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
+                    }
                     const targetVelX = dir.x * speed;
                     const targetVelZ = dir.z * speed;
                     this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
