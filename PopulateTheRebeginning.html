@@ -502,7 +502,8 @@ const ACTIONS = {
     'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
     'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
     'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
-    'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 50 }
+    'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 50 },
+    'airship_rocket': { icon: '🚀', label: 'Rckt', cost: 10 }
 };
 
 const UNIT_ICONS = {
@@ -686,7 +687,7 @@ const NetworkManager = {
     startHost: function() {
         if(state.network.peer) return;
         state.network.role = 'host';
-        state.network.peer = new Peer(generateUUID().substr(0, 5), {
+        state.network.peer = new Peer({
              debug: 2
         });
 
@@ -720,7 +721,7 @@ const NetworkManager = {
     joinGame: function(hostId) {
         if(state.network.peer) return;
         state.network.role = 'client';
-        state.network.peer = new Peer(generateUUID().substr(0, 5));
+        state.network.peer = new Peer();
 
         state.network.peer.on('open', (id) => {
              state.network.id = id;
@@ -1536,9 +1537,10 @@ const CritterManager = {
         const size = (0.3 + Math.random() * 0.2) * 1.7;
 
         // Body
-        const bodyGeo = new THREE.ConeGeometry(size * 0.4, size * 1.5, 4);
-        bodyGeo.rotateX(Math.PI / 2);
+        const bodyGeo = new THREE.SphereGeometry(size * 0.5, 12, 12);
         const body = new THREE.Mesh(bodyGeo, mat);
+        body.scale.set(1.0, 0.8, 1.8);
+        body.position.set(0, size * 0.1, 0);
         group.add(body);
 
         // Head
@@ -4141,7 +4143,20 @@ class Humanoid {
         const feetOffset = 0; // Removed arbitrary downward offset to stop feet clipping into terrain
 
         if (this.type === 'airship') {
-            const targetAlt = Math.max(groundH, WATER_LEVEL) + 8.0; // Fly above water or ground
+            let targetAlt = Math.max(groundH, WATER_LEVEL) + 8.0; // Fly above water or ground
+
+            if (this.rocketCooldown) {
+                this.rocketCooldown -= dt;
+            }
+            if (this.rocketActiveTimer && this.rocketActiveTimer > 0) {
+                this.rocketActiveTimer -= dt;
+                this.velocity.y += 20.0 * dt; // Apply strong thrust
+                targetAlt += 20.0; // Temporarily increase target altitude
+                if (Math.random() < 0.5) {
+                     state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), -1, (Math.random()-0.5))), 0xFF4500, 0.3, 0.8));
+                }
+            }
+
             const diff = targetAlt - this.mesh.position.y;
             this.velocity.y += diff * dt * 5.0;
             this.velocity.y *= 0.9;
@@ -5344,6 +5359,10 @@ function updateContextMenus() {
         visibleActions = ['hypnotise'];
     }
 
+    if (hasAirship) {
+        visibleActions.push('airship_rocket');
+    }
+
     if (hasSelection) {
         visibleActions.push('upgrade_unit');
     }
@@ -5357,6 +5376,27 @@ function updateContextMenus() {
          btn.id = `btn-${act}`;
          btn.innerHTML = `${data.icon}<span class="label">${data.label} (${data.cost})</span>`;
          if(state.currentAction === act) btn.classList.add('active');
+
+         if (act === 'airship_rocket' && hasAirship) {
+             const ship = state.selectedUnits[0];
+             if (ship.rocketCooldown && ship.rocketCooldown > 0) {
+                 btn.classList.add('disabled');
+                 const overlay = document.createElement('div');
+                 overlay.style.position = 'absolute';
+                 overlay.style.top = '0'; overlay.style.left = '0'; overlay.style.right = '0'; overlay.style.bottom = '0';
+                 overlay.style.backgroundColor = 'rgba(0,0,0,0.6)';
+                 overlay.style.display = 'flex';
+                 overlay.style.alignItems = 'center';
+                 overlay.style.justifyContent = 'center';
+                 overlay.style.fontSize = '12px';
+                 overlay.innerText = Math.ceil(ship.rocketCooldown) + 's';
+                 btn.style.position = 'relative';
+                 btn.appendChild(overlay);
+                 btn.onclick = (e) => e.stopPropagation();
+                 menu.appendChild(btn);
+                 return;
+             }
+         }
 
          btn.onclick = (e) => {
              e.stopPropagation();
@@ -5382,6 +5422,23 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
                 if (state.mana >= 50) {
                     state.mana -= 50;
                     u.upgrade();
+                }
+            });
+            updateUI();
+        }
+        return;
+    }
+
+    if(action === 'airship_rocket') {
+        if(actingUnits.length > 0) {
+            actingUnits.forEach(u => {
+                if (u.type === 'airship' && u.faction === 0 && (!u.rocketCooldown || u.rocketCooldown <= 0)) {
+                    if (state.mana >= 10) {
+                        state.mana -= 10;
+                        u.rocketCooldown = 30.0;
+                        u.rocketActiveTimer = 5.0;
+                        spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xffaa00);
+                    }
                 }
             });
             updateUI();
