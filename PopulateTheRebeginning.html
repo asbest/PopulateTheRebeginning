@@ -1190,7 +1190,7 @@ function applyUnitTexture(unit) {
 
 const AssetCache = {
     geos: {
-        hair: new THREE.SphereGeometry(0.2, 16, 16).scale(1.1, 1.1, 1.1).translate(0, 0.05, -0.05),
+        hair: new THREE.SphereGeometry(0.18, 8, 8).scale(1.0, 0.6, 1.0).translate(0, 0.15, -0.05),
         particle: new THREE.BoxGeometry(1, 1, 1),
         cloud: new THREE.DodecahedronGeometry(1, 1),
         ring: new THREE.RingGeometry(0.5, 0.6, 16),
@@ -1540,6 +1540,27 @@ const CritterManager = {
         bodyGeo.rotateX(Math.PI / 2);
         const body = new THREE.Mesh(bodyGeo, mat);
         group.add(body);
+
+        // Head
+        const headGeo = new THREE.SphereGeometry(size * 0.4, 8, 8);
+        const head = new THREE.Mesh(headGeo, mat);
+        head.position.set(0, size * 0.2, size * 0.8);
+        group.add(head);
+
+        // Beak
+        const beakGeo = new THREE.ConeGeometry(size * 0.15, size * 0.4, 4);
+        beakGeo.rotateX(Math.PI / 2);
+        const beakMat = new THREE.MeshStandardMaterial({color: 0xFFA500, roughness: 0.4});
+        const beak = new THREE.Mesh(beakGeo, beakMat);
+        beak.position.set(0, size * 0.2, size * 1.1);
+        group.add(beak);
+
+        // Tail
+        const tailGeo = new THREE.PlaneGeometry(size * 0.8, size * 1.2);
+        tailGeo.rotateX(-Math.PI / 2);
+        const tail = new THREE.Mesh(tailGeo, mat);
+        tail.position.set(0, 0, -size * 0.8);
+        group.add(tail);
 
         // Wings
         const wingGeo = new THREE.PlaneGeometry(size * 2, size * 0.8);
