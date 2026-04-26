@@ -43,6 +43,55 @@ Each level is accessed from a new "Campaign Mode" button on the main menu, loadi
 *   **Modifiers:** **Double Unit Speed**, **Infinite Mana**.
 *   **Narrative:** The remaining tribes have gathered in a massive archipelago for a final, chaotic battle. With limitless magical power and lightning-fast units, the battlefield is sheer chaos. You must spam spells, maneuver rapidly, and let your enemies weaken each other before moving in for the kill.
 
+### Level 6: The Tithe of Shadows
+*   **Objective:** Infiltrate and corrupt an enemy tribe from within.
+*   **Opponent:** 1 AI Tribe (Personality: **Trickster**).
+*   **Settings:** Night Biome (reduced visibility).
+*   **Modifiers:** **Illusionist Pact** - Player gains access to the new "Phantom" spell (conjures illusionary copies of units that deal no damage but distract enemies).
+*   **Narrative:** A master of deception has risen. Their tribe seems everywhere at once, yet never commits to a real fight. You must use your newly awakened gift of illusion to see through their tricks, turn their own deception against them, and corrupt their followers to your cause.
+
+### Level 7: The Crumbling Peak
+*   **Objective:** Conquer a tribe perched on mountain strongholds.
+*   **Opponent:** 1 AI Tribe (Personality: **Fortress**).
+*   **Settings:** **Mountain Biome** (vertical terrain, chokepoints).
+*   **Modifiers:** **Earthshaper's Will** - Player gains ability to raise small rock barriers and trigger localized avalanches.
+*   **Narrative:** Your enemy has built their fortress into the peaks, unreachable by conventional means. As your connection to the earth deepens, you learn to reshape the mountains themselves—triggering rockslides to expose hidden supply lines or creating ramps to assault the seemingly impregnable.
+
+### Level 8: The Web of Minds
+*   **Objective:** Defeat three tribes simultaneously while they coordinate against you.
+*   **Opponents:** 3 AI Tribes (Personality: **Hive** x3 - All allied, sharing vision and resources).
+*   **Settings:** Jungle Biome (dense foliage, line-of-sight blocked).
+*   **Modifiers:** **Telepathic Bond** - Player can issue commands to all units simultaneously across the map; units execute basic attacks without micro-management.
+*   **Narrative:** The three sister tribes have merged their consciousness into a single hive mind. They anticipate your every move with terrifying coordination. But as your mind expands, you too learn to think beyond one body—you command legions with a single thought, everywhere at once.
+
+### Level 9: The Stormgods' Crucible
+*   **Objective:** Survive and defeat an army that controls the weather itself.
+*   **Opponent:** 1 AI Tribe (Personality: **Stormkeeper**).
+*   **Settings:** **Storm Biome** (random lightning strikes, hurricane-force winds, rain that extinguishes fire).
+*   **Modifiers:** **Thunder's Voice** - Player gains chain lightning spell; air units move 50% faster in storms.
+*   **Narrative:** This enemy has bound the elemental forces of storm and sky. Lightning strikes their enemies before they can march. Rain drowns fire. But as the storm reaches its apex, you ascend further—becoming the storm itself, turning their own weather against them in a cataclysmic final confrontation.
+
+### Level 10: The Void Between
+*   **Objective:** Breach the enemy dimension and destroy the gate-keepers.
+*   **Opponent:** 1 AI Tribe (Personality: **Gatekeeper**).
+*   **Settings:** **Void Biome** (reality distortions, gravity fluctuations).
+*   **Modifiers:** **Reality Fracture** - Player can blink (instantly teleport) short distances; time briefly slows during combat.
+*   **Narrative:** Your enemy guards the gateway between worlds. Their realm bends physics itself—gravity reverses, distances twist, and the very concept of "here" becomes meaningless. But your awakening continues: you learn to step through the void, to blink across impossible distances, and finally to break the gate that holds this world hostage.
+
+### Level 11: The Pantheon Rising
+*   **Objective:** Defeat the Five Eternal Tribes—each a god in their own right.
+*   **Opponents:** 5 AI Tribes (Each with unique Personality: **Sorcerer**, **Stormkeeper**, **Fortress**, **Hive**, **Trickster** - All allied against you).
+*   **Settings:** **Celestial Biome** (floating islands, divine light, permanent day).
+*   **Modifiers:** **Ascension** - Player gains brief invulnerability after using a spell; killing units generates a protective shield. Player's Shaman aura now affects ALL friendly units globally.
+*   **Narrative:** The gods have united against the ascending mortal. Each commands an aspect of reality—fire, storm, earth, mind, and shadow. Only by mastering all elements can you hope to stand among them. The final battle is a cataclysm that echoes across all worlds.
+
+### Level 12: The First Shaman Ascends
+*   **Objective:** Defeat the Primordial One—the original creator now turned hostile.
+*   **Opponent:** 1 AI Tribe (Personality: **Primordial**).
+*   **Settings:** **Cosmic Biome** (space, nebulas, zero-gravity zones).
+*   **Modifiers:** **Divine Form** - Player's Shaman becomes a permanent glowing avatar; all spells are free; unit cap removed; all towers can fly.
+*   **Narrative:** The Primordial One—the being that birthed this world—has returned, and it does not recognize your ascension. You are no longer the student; you are the peer. In the cosmic void where time and space are meaningless, your final form emerges: a god among gods.
+
 ### Post-Campaign: Endless Survival
 After beating the campaign, players unlock "Survival Mode", where they face endless, increasingly difficult waves of Swarmer AIs while trying to survive as long as possible.
 

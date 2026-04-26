@@ -364,6 +364,13 @@
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(3)" id="btn-camp-3">Level 3: The Frozen Wastes</button>
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(4)" id="btn-camp-4">Level 4: The Opportunist's Trap</button>
             <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(5)" id="btn-camp-5">Level 5: The Grand Melee</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(6)" id="btn-camp-6">Level 6: The Tithe of Shadows</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(7)" id="btn-camp-7">Level 7: The Crumbling Peak</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(8)" id="btn-camp-8">Level 8: The Web of Minds</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(9)" id="btn-camp-9">Level 9: The Stormgods' Crucible</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(10)" id="btn-camp-10">Level 10: The Void Between</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(11)" id="btn-camp-11">Level 11: The Pantheon Rising</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(12)" id="btn-camp-12">Level 12: The First Shaman Ascends</button>
             <button class="menu-btn" style="width:100%; margin-top:20px; background-color:#555;" onclick="newGame()">Sandbox Mode (Random Start)</button>
         </div>
         <button class="menu-btn" onclick="closeCampaignMenu()">Back</button>
@@ -413,8 +420,21 @@
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+  }
+}
+</script>
 <script type="module">
-import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
 // --- js/constants.js ---
 const CHUNK_SIZE = 40;
@@ -468,6 +488,40 @@ function getHpMaterial(faction) {
         AssetCache.mats.hpMats[faction] = new THREE.MeshBasicMaterial({color: color});
     }
     return AssetCache.mats.hpMats[faction];
+}
+
+// Rim lighting shader for enhanced unit visibility
+function createRimLightMaterial(baseMaterial, rimColor = 0xffffff, rimPower = 2.0) {
+    const rimMat = baseMaterial.clone();
+    rimMat.onBeforeCompile = function(shader) {
+        shader.uniforms.rimColor = { value: new THREE.Color(rimColor) };
+        shader.uniforms.rimPower = { value: rimPower };
+        
+        shader.fragmentShader = `
+            uniform vec3 rimColor;
+            uniform float rimPower;
+        `.replace(
+            '#include <finalcolor_fragment>',
+            `
+            #include <finalcolor_fragment>
+            vec3 viewDir = normalize(vViewPosition);
+            float rim = 1.0 - max(dot(vNormal, -viewDir), 0.0);
+            rim = pow(rim, rimPower);
+            gl_FragColor.rgb += rimColor * rim * 0.3;
+            `
+        );
+    };
+    return rimMat;
+}
+
+function getRimLitFactionMaterial(faction) {
+    if (!AssetCache.mats.rimFactionMats) AssetCache.mats.rimFactionMats = {};
+    if (!AssetCache.mats.rimFactionMats[faction]) {
+        const baseMat = getFactionMaterial(faction);
+        const rimColor = faction === 0 ? 0x88ff88 : (faction === 1 ? 0xff8888 : getFactionColor(faction));
+        AssetCache.mats.rimFactionMats[faction] = createRimLightMaterial(baseMat, rimColor, 2.5);
+    }
+    return AssetCache.mats.rimFactionMats[faction];
 }
 
 window.isAllied = function(f1, f2) {
@@ -900,7 +954,7 @@ window.openCampaignMenu = function() {
 
     // Update lock status based on localStorage
     const maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
-    for(let i=2; i<=5; i++) {
+    for(let i=2; i<=12; i++) {
         const btn = document.getElementById('btn-camp-' + i);
         if(btn) {
             if(i > maxLevel) {
@@ -946,6 +1000,16 @@ window.loadCampaignLevelIfRequested = function() {
     state.matchSettings.noFlyers = false;
     state.matchSettings.infiniteMana = false;
     state.matchSettings.doubleSpeed = false;
+    state.matchSettings.night = false;
+    state.matchSettings.mountain = false;
+    state.matchSettings.jungle = false;
+    state.matchSettings.hiveMind = false;
+    state.matchSettings.storm = false;
+    state.matchSettings.void = false;
+    state.matchSettings.celestial = false;
+    state.matchSettings.cosmic = false;
+    state.matchSettings.ascension = false;
+    state.matchSettings.divineForm = false;
 
     window.enemyAIs = [];
     if(level === 1) {
@@ -969,6 +1033,40 @@ window.loadCampaignLevelIfRequested = function() {
         window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
         window.enemyAIs.push(new EnemyAI(2, 'sorcerer'));
         window.enemyAIs.push(new EnemyAI(3, 'default'));
+    } else if (level === 6) {
+        state.matchSettings.night = true;
+        window.enemyAIs.push(new EnemyAI(1, 'trickster'));
+    } else if (level === 7) {
+        state.matchSettings.mountain = true;
+        window.enemyAIs.push(new EnemyAI(1, 'fortress'));
+    } else if (level === 8) {
+        state.matchSettings.jungle = true;
+        state.matchSettings.hiveMind = true;
+        window.enemyAIs.push(new EnemyAI(1, 'hive'));
+        window.enemyAIs.push(new EnemyAI(2, 'hive'));
+        window.enemyAIs.push(new EnemyAI(3, 'hive'));
+        state.teams[1] = 2; state.teams[2] = 2; state.teams[3] = 2;
+    } else if (level === 9) {
+        state.matchSettings.storm = true;
+        window.enemyAIs.push(new EnemyAI(1, 'stormkeeper'));
+    } else if (level === 10) {
+        state.matchSettings.void = true;
+        window.enemyAIs.push(new EnemyAI(1, 'gatekeeper'));
+    } else if (level === 11) {
+        state.matchSettings.celestial = true;
+        state.matchSettings.ascension = true;
+        window.enemyAIs.push(new EnemyAI(1, 'sorcerer'));
+        window.enemyAIs.push(new EnemyAI(2, 'stormkeeper'));
+        window.enemyAIs.push(new EnemyAI(3, 'fortress'));
+        window.enemyAIs.push(new EnemyAI(4, 'hive'));
+        window.enemyAIs.push(new EnemyAI(5, 'trickster'));
+        state.teams[1] = 2; state.teams[2] = 2; state.teams[3] = 2;
+        state.teams[4] = 2; state.teams[5] = 2;
+    } else if (level === 12) {
+        state.matchSettings.cosmic = true;
+        state.matchSettings.divineForm = true;
+        state.mana = 999999;
+        window.enemyAIs.push(new EnemyAI(1, 'primordial'));
     }
     return true;
 }
@@ -1837,6 +1935,13 @@ class VisualEffect {
 function spawnExplosion(x, y, z, color, count) {
     count = Math.max(1, Math.floor(count / 2));
     const pos = new THREE.Vector3(x, y, z);
+    
+    // Trigger screen shake based on intensity
+    if (state.screenShake) {
+        const intensity = Math.min(count * 0.05, 0.5);
+        state.screenShake.intensity = Math.max(state.screenShake.intensity, intensity);
+    }
+    
     // Dynamic particles
     for(let i=0; i<count; i++) {
         const p = new Particle(pos.clone(), color, 0.1+Math.random()*0.2, 1.0+Math.random()*0.5);
@@ -1937,9 +2042,11 @@ function initTerrainResources() {
     const waterVertexShader = `
         uniform float time;
         varying vec2 vUv;
+        varying vec3 vWorldPos;
         void main() {
             vUv = uv;
             vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPos = worldPosition.xyz;
             vec3 pos = position;
 
             float height = 0.0;
@@ -1951,21 +2058,66 @@ function initTerrainResources() {
             height += sin(worldPosition.x * 1.5 + time * 1.5) * 0.05;
             height += sin(worldPosition.z * 1.2 + time * 1.3) * 0.05;
 
+            // Third wave layer
+            height += sin(worldPosition.x * 2.5 + time * 2.0) * 0.02;
+            height += sin(worldPosition.z * 2.0 + time * 1.8) * 0.02;
+
             pos.z += height;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
         }
     `;
     const waterFragmentShader = `
         uniform vec3 color;
+        uniform float time;
+        uniform vec3 cameraPos;
         varying vec2 vUv;
+        varying vec3 vWorldPos;
+        
+        // Simple noise function
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+        
+        float noise(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            float a = hash(i);
+            float b = hash(i + vec2(1.0, 0.0));
+            float c = hash(i + vec2(0.0, 1.0));
+            float d = hash(i + vec2(1.0, 1.0));
+            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+        
         void main() {
-            gl_FragColor = vec4(color, 0.75);
+            // Base water color
+            vec3 waterColor = color;
+            
+            // Add foam effect based on wave peaks
+            float waveHeight = sin(vWorldPos.x * 0.5 + time) * 0.15 + sin(vWorldPos.z * 0.4 + time) * 0.15;
+            float foam = smoothstep(0.1, 0.2, waveHeight);
+            foam += noise(vWorldPos.xz * 0.8 + time * 0.5) * 0.3;
+            
+            // Add shimmer
+            float shimmer = noise(vWorldPos.xz * 2.0 + time * 2.0) * 0.15;
+            
+            // Combine
+            vec3 foamColor = vec3(0.95, 0.98, 1.0);
+            waterColor = mix(waterColor, foamColor, foam * 0.4);
+            waterColor += shimmer;
+            
+            // Simple fresnel-like edge darkening
+            float fresnel = 0.8;
+            waterColor = mix(waterColor * 0.7, waterColor, fresnel);
+            
+            gl_FragColor = vec4(waterColor, 0.8);
         }
     `;
     chunkWaterMat = new THREE.ShaderMaterial({
         uniforms: {
             time: { value: 0 },
-            color: { value: new THREE.Color(COLORS.water) }
+            color: { value: new THREE.Color(COLORS.water) },
+            cameraPos: { value: new THREE.Vector3() }
         },
         vertexShader: waterVertexShader,
         fragmentShader: waterFragmentShader,
@@ -2118,18 +2270,74 @@ function updateChunkGeometry(mesh, cx, cz) {
          let h = getHeight(wx, wz);
          pos.setY(i, h);
 
-         if (state.matchSettings && state.matchSettings.winter) {
-             // Ice/Snow World colors
-             if (h < WATER_LEVEL) col.copy(cSand).lerp(cSnow, 0.8); // Frosty sand
-             else if (h < WATER_LEVEL + 1.0) col.copy(cSnow);
-             else if (h < 8.0) col.copy(cSnow);
-             else if (h < 9.0) col.copy(cSnow).lerp(cRock, h - 8.0);
-             else if (h < 13.0) col.copy(cRock);
-             else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
-             else if (h < 19.0) col.copy(cSnow);
-             else if (h < 21.0) col.copy(cSnow).lerp(cRock, (h - 19.0) / 2.0);
-             else col.copy(cRock); // No lava in winter
-         } else {
+if (state.matchSettings && state.matchSettings.winter) {
+              // Ice/Snow World colors
+              if (h < WATER_LEVEL) col.copy(cSand).lerp(cSnow, 0.8); // Frosty sand
+              else if (h < WATER_LEVEL + 1.0) col.copy(cSnow);
+              else if (h < 8.0) col.copy(cSnow);
+              else if (h < 9.0) col.copy(cSnow).lerp(cRock, h - 8.0);
+              else if (h < 13.0) col.copy(cRock);
+              else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
+              else if (h < 19.0) col.copy(cSnow);
+              else if (h < 21.0) col.copy(cSnow).lerp(cRock, (h - 19.0) / 2.0);
+              else col.copy(cRock); // No lava in winter
+          } else if (state.matchSettings && state.matchSettings.night) {
+              // Night/Dark Biome - shadowy, purple-blue tones
+              if (h < WATER_LEVEL) col.copy(cSand).lerp(new THREE.Color(0x1a1a2e), 0.7);
+              else if (h < WATER_LEVEL + 1.0) col.copy(cGrass).lerp(new THREE.Color(0x0f0f23), 0.6);
+              else if (h < 8.0) col.copy(cGrass).lerp(new THREE.Color(0x16213e), 0.5);
+              else if (h < 13.0) col.copy(cRock).lerp(new THREE.Color(0x1a1a2e), 0.4);
+              else if (h < 19.0) col.copy(cRock).lerp(new THREE.Color(0x0f0f23), 0.5);
+              else col.copy(cRock).lerp(new THREE.Color(0x2d132c), 0.6);
+          } else if (state.matchSettings && state.matchSettings.mountain) {
+              // Mountain Biome - rocky grays and browns
+              if (h < WATER_LEVEL) col.copy(cSand);
+              else if (h < WATER_LEVEL + 1.0) col.copy(cGrass).lerp(new THREE.Color(0x8b7355), 0.5);
+              else if (h < 8.0) col.copy(cGrass).lerp(new THREE.Color(0x6b4423), 0.6);
+              else if (h < 13.0) col.copy(cRock).lerp(new THREE.Color(0x5a4a3a), 0.3);
+              else if (h < 19.0) col.copy(cRock).lerp(new THREE.Color(0x696969), 0.4);
+              else col.copy(cSnow);
+          } else if (state.matchSettings && state.matchSettings.jungle) {
+              // Jungle Biome - deep greens
+              if (h < WATER_LEVEL) col.copy(cSand).lerp(new THREE.Color(0x1a4d1a), 0.5);
+              else if (h < WATER_LEVEL + 1.0) col.copy(cSand).lerp(new THREE.Color(0x228b22), 0.6);
+              else if (h < 8.0) col.copy(cGrass).lerp(new THREE.Color(0x006400), 0.7);
+              else if (h < 13.0) col.copy(cRock).lerp(new THREE.Color(0x2f4f2f), 0.5);
+              else if (h < 19.0) col.copy(cRock).lerp(new THREE.Color(0x3a5f3a), 0.4);
+              else col.copy(cRock).lerp(new THREE.Color(0x1a3d1a), 0.6);
+          } else if (state.matchSettings && state.matchSettings.storm) {
+              // Storm Biome - dark and electric
+              if (h < WATER_LEVEL) col.copy(cWater).lerp(new THREE.Color(0x2c3e50), 0.5);
+              else if (h < WATER_LEVEL + 1.0) col.copy(cGrass).lerp(new THREE.Color(0x34495e), 0.6);
+              else if (h < 8.0) col.copy(cGrass).lerp(new THREE.Color(0x4a5a6e), 0.5);
+              else if (h < 13.0) col.copy(cRock).lerp(new THREE.Color(0x2c3e50), 0.4);
+              else if (h < 19.0) col.copy(cRock).lerp(new THREE.Color(0x1a252a), 0.5);
+              else col.copy(cRock).lerp(new THREE.Color(0x0a1520), 0.6);
+          } else if (state.matchSettings && state.matchSettings.void) {
+              // Void Biome - purples and blacks
+              if (h < WATER_LEVEL) col.copy(cSand).lerp(new THREE.Color(0x1a0a2e), 0.7);
+              else if (h < WATER_LEVEL + 1.0) col.copy(cGrass).lerp(new THREE.Color(0x2d1b4e), 0.6);
+              else if (h < 8.0) col.copy(cGrass).lerp(new THREE.Color(0x3d2066), 0.7);
+              else if (h < 13.0) col.copy(cRock).lerp(new THREE.Color(0x1a0a2e), 0.5);
+              else if (h < 19.0) col.copy(cRock).lerp(new THREE.Color(0x2d1b4e), 0.6);
+              else col.copy(cRock).lerp(new THREE.Color(0x4a1a6e), 0.7);
+          } else if (state.matchSettings && state.matchSettings.celestial) {
+              // Celestial Biome - gold and white (divine)
+              if (h < WATER_LEVEL) col.copy(cSand).lerp(new THREE.Color(0xfffacd), 0.7);
+              else if (h < WATER_LEVEL + 1.0) col.copy(cGrass).lerp(new THREE.Color(0xffd700), 0.6);
+              else if (h < 8.0) col.copy(cGrass).lerp(new THREE.Color(0xfff8dc), 0.7);
+              else if (h < 13.0) col.copy(cRock).lerp(new THREE.Color(0xd4af37), 0.5);
+              else if (h < 19.0) col.copy(cRock).lerp(new THREE.Color(0xc0c0c0), 0.4);
+              else col.copy(cSnow).lerp(new THREE.Color(0xffd700), 0.3);
+          } else if (state.matchSettings && state.matchSettings.cosmic) {
+              // Cosmic Biome - space with nebulas
+              if (h < WATER_LEVEL) col.copy(cWater).lerp(new THREE.Color(0x0a0a1a), 0.8);
+              else if (h < WATER_LEVEL + 1.0) col.copy(cGrass).lerp(new THREE.Color(0x1a1a3a), 0.7);
+              else if (h < 8.0) col.copy(cGrass).lerp(new THREE.Color(0x2a1a4a), 0.6);
+              else if (h < 13.0) col.copy(cRock).lerp(new THREE.Color(0x1a0a2a), 0.5);
+              else if (h < 19.0) col.copy(cRock).lerp(new THREE.Color(0x3a2a5a), 0.6);
+              else col.copy(cRock).lerp(new THREE.Color(0x4a3a6a), 0.7);
+          } else {
          if (h < WATER_LEVEL) col.copy(cSand);
          else if (h < WATER_LEVEL + 1.0) col.copy(cSand).lerp(cGrass, h - WATER_LEVEL);
          else if (h < 8.0) col.copy(cGrass);
@@ -2329,6 +2537,59 @@ function createChunk(cx, cz) {
     grp.add(wMesh);
 
     grp.userData = { trees: [], flowers: [] };
+    
+    // Add grass patches near water
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x7cfc00, roughness: 0.9, metalness: 0.0 });
+    const grassBladeGeo = new THREE.PlaneGeometry(0.1, 0.3);
+    grassBladeGeo.translate(0, 0.15, 0);
+    
+    // Generate grass cluster positions
+    const grassPositions = [];
+    for (let gx = -CHUNK_SIZE/2 + 2; gx < CHUNK_SIZE/2 - 2; gx += 1.5) {
+        for (let gz = -CHUNK_SIZE/2 + 2; gz < CHUNK_SIZE/2 - 2; gz += 1.5) {
+            const worldX = gx + offX;
+            const worldZ = gz + offZ;
+            const h = getHeight(worldX, worldZ);
+            
+            // Grass near water edges (beach transition zone)
+            const nearWater = h < WATER_LEVEL + 1.5 && h >= WATER_LEVEL - 0.2;
+            // Or on grassy plains
+            const onGrass = h > WATER_LEVEL + 0.5 && h < 8;
+            
+            if (nearWater || (onGrass && Math.random() > 0.85)) {
+                const noiseVal = state.simplex.noise2D(worldX * 0.1, worldZ * 0.1);
+                if (noiseVal > 0.2) {
+                    grassPositions.push({ x: gx + offX, z: gz + offZ, h: h });
+                }
+            }
+        }
+    }
+    
+    // Add grass clusters (up to 30 per chunk)
+    const maxGrass = Math.min(grassPositions.length, 30);
+    for (let gi = 0; gi < maxGrass; gi++) {
+        const gp = grassPositions[gi];
+        const grassCluster = new THREE.Group();
+        grassCluster.position.set(gp.x, gp.h, gp.z);
+        
+        // Add 3-5 grass blades per cluster
+        const numBlades = 3 + Math.floor(Math.random() * 3);
+        for (let b = 0; b < numBlades; b++) {
+            const blade = new THREE.Mesh(grassBladeGeo, grassMat);
+            blade.position.set(
+                (Math.random() - 0.5) * 0.3,
+                0,
+                (Math.random() - 0.5) * 0.3
+            );
+            blade.rotation.y = Math.random() * Math.PI;
+            blade.rotation.x = (Math.random() - 0.5) * 0.2;
+            blade.castShadow = true;
+            grassCluster.add(blade);
+        }
+        
+        grp.add(grassCluster);
+    }
+    
     for(let k=0; k<6; k++) {
         if(Math.random() > 0.5) {
              const lx = (Math.random()-0.5)*CHUNK_SIZE; const lz = (Math.random()-0.5)*CHUNK_SIZE;
@@ -3509,7 +3770,7 @@ class Humanoid {
         // Visuals
         this.mesh = new THREE.Group();
         const skinMat = AssetCache.mats.skin;
-        const shirtMat = getFactionMaterial(faction);
+        const shirtMat = getRimLitFactionMaterial(faction); // Use rim-lit material for visibility
 
         // Selection Ring
         this.selectRing = new THREE.Mesh(AssetCache.geos.ring, AssetCache.mats.selectRing);
@@ -5747,8 +6008,44 @@ function init() {
         initTerrainResources();
 
         state.scene = new THREE.Scene();
+        
+        // Enhanced sky with gradient
+        const skyGeo = new THREE.SphereGeometry(500, 32, 32);
+        const skyMat = new THREE.ShaderMaterial({
+            uniforms: {
+                topColor: { value: new THREE.Color(0x0077ff) },
+                bottomColor: { value: new THREE.Color(0x7EC8E3) },
+                offset: { value: 20 },
+                exponent: { value: 0.6 }
+            },
+            vertexShader: `
+                varying vec3 vWorldPosition;
+                void main() {
+                    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                    vWorldPosition = worldPosition.xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 topColor;
+                uniform vec3 bottomColor;
+                uniform float offset;
+                uniform float exponent;
+                varying vec3 vWorldPosition;
+                void main() {
+                    float h = normalize(vWorldPosition + offset).y;
+                    gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+                }
+            `,
+            side: THREE.BackSide
+        });
+        const sky = new THREE.Mesh(skyGeo, skyMat);
+        state.scene.add(sky);
+        state.skyMesh = sky;
+
+        // Exponential fog for more natural falloff
+        state.scene.fog = new THREE.FogExp2(0x7EC8E3, 0.008);
         state.scene.background = new THREE.Color(0x7EC8E3);
-        state.scene.fog = new THREE.Fog(0x7EC8E3, 30, 180);
 
         const aspect = window.innerWidth / window.innerHeight;
         state.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
@@ -5762,10 +6059,75 @@ function init() {
         state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         state.renderer.physicallyCorrectLights = true;
         state.renderer.outputEncoding = THREE.sRGBEncoding;
+        state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        state.renderer.toneMappingExposure = 1.0;
         document.body.appendChild(state.renderer.domElement);
 
-        const amb = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+        // Post-processing pipeline
+        state.composer = new EffectComposer(state.renderer);
+        
+        const renderPass = new RenderPass(state.scene, state.camera);
+        state.composer.addPass(renderPass);
+        
+        // Bloom pass for magic, fire, and glow effects
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.5,  // strength
+            0.4,  // radius
+            0.85  // threshold
+        );
+        state.composer.addPass(bloomPass);
+        state.bloomPass = bloomPass;
+
+        // FXAA antialiasing
+        const fxaaPass = new ShaderPass(FXAAShader);
+        fxaaPass.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
+        state.composer.addPass(fxaaPass);
+        state.fxaaPass = fxaaPass;
+
+        // Vignette effect
+        const vignetteShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                darkness: { value: 0.4 },
+                offset: { value: 1.0 }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float darkness;
+                uniform float offset;
+                varying vec2 vUv;
+                void main() {
+                    vec4 texel = texture2D(tDiffuse, vUv);
+                    vec2 uv = (vUv - vec2(0.5)) * vec2(offset);
+                    float vignette = 1.0 - dot(uv, uv);
+                    texel.rgb *= mix(1.0 - darkness, 1.0, vignette);
+                    gl_FragColor = texel;
+                }
+            `
+        };
+        const vignettePass = new ShaderPass(vignetteShader);
+        state.composer.addPass(vignettePass);
+        state.vignettePass = vignettePass;
+
+        // Screen shake state
+        state.screenShake = { intensity: 0, decay: 3.0, offset: new THREE.Vector3() };
+
+        const amb = new THREE.HemisphereLight(0x87CEEB, 0x3d2817, 1.2);
         state.scene.add(amb);
+        
+        // Enhanced ambient fill light
+        const fillLight = new THREE.DirectionalLight(0xffeedd, 0.3);
+        fillLight.position.set(-30, 50, -20);
+        state.scene.add(fillLight);
+        
         state.scene.add(state.rangeRing);
         const sun = new THREE.DirectionalLight(0xffffff, 3.14);
         sun.position.set(50, 100, 40);
@@ -6071,6 +6433,34 @@ const CAMPAIGN_STORIES = {
     5: {
         title: "Level 5: The Grand Melee",
         text: "The final confrontation is at hand. The remaining tribes, desperate and driven mad by the prolonged conflict, have gathered in a massive, sprawling archipelago for a final, apocalyptic battle to determine the fate of the world. With limitless magical power surging through the ley lines and units moving at lightning-fast, supernatural speeds, the battlefield descends into absolute, unmitigated chaos. The sky burns with arcane fire, the earth shatters under the weight of endless armies, and alliances mean nothing. You must spam reality-bending spells, maneuver your forces with blinding rapidity, and master the art of manipulation, letting your enemies brutally weaken each other before swooping in for the final, decisive kill. Only one tribe will survive the Grand Melee."
+    },
+    6: {
+        title: "Level 6: The Tithe of Shadows",
+        text: "A master of deception has risen from the eastern lands, a tribe obsessed with the dark arts of illusion and shadow. Their army appears everywhere at once, yet never commits to a real fight—vanishing into smoke the moment true danger appears. As your spiritual connection deepens, you sense the veil between realms thinning. Your gift of true sight awakens, allowing you to see through the tricksters' elaborate charades. But more than that, you learn to weave illusions of your own—phantom copies that distract and confuse, while your real forces strike from the shadows. Turn their own deception against them and corrupt their followers to your cause."
+    },
+    7: {
+        title: "Level 7: The Crumbling Peak",
+        text: "Your enemy has built their fortress into the mountain peaks, a seemingly impregnable stronghold that mocks all attempts at conquest. Conventional armies cannot reach them—only narrow passes defended by elite guards. But as your connection to the earth deepens, you sense the mountain's ancient fury. You learn to reshape the very ground beneath your feet—triggering rockslides to expose hidden supply lines, creating ramps to assault the supposedly unreachable, and calling forth avalanches to bury the arrogance of those who thought the heights would protect them. The mountain that shelters them becomes their tomb."
+    },
+    8: {
+        title: "Level 8: The Web of Minds",
+        text: "Three sister tribes have merged their consciousness into a singular hive mind, sharing vision, resources, and thoughts across vast distances. They anticipate your every move with terrifying coordination—attacking from multiple fronts simultaneously, reinforcing weaknesses instantly, and never overcommitting. In the dense jungle where visibility is halved, they seem invincible. But as your mind expands beyond the confines of a single body, you too learn to think globally. Issue commands to all your forces with a single thought, letting your legions execute attacks across the entire map without the burden of micromanagement. Two hive minds enter the jungle; only one leaves."
+    },
+    9: {
+        title: "Level 9: The Stormgods' Crucible",
+        text: "The Stormkeeper has bound the elemental forces of Tempest and Thunder. Lightning strikes from clear skies, frying anything that moves across the battlefield. Hurricanes scatter formations. Rain extinguishes fire magic before it can cast. But as you ascend closer to godhood, you learn that you ARE the storm. Its power is now yours to command. Chain lightning arcs from your fingertips, air units ride the winds with supernatural speed, and in the final confrontation, you become the storm itself—a cataclysm of lightning and wind that drowns the Sky Tyrant in their own hubris."
+    },
+    10: {
+        title: "Level 10: The Void Between",
+        text: "The Gatekeeper guards the threshold between worlds—a realm where physics itself becomes negotiable. Gravity reverses unpredictably. Distances twist and fold. The very concept of 'here' becomes meaningless. But you have learned to step through the spaces between moments. You blink across impossible distances, ignore gravity's tyranny, and bend reality to your will. Break the gate that holds this world hostage. Tear apart the threshold. In the void between worlds, you discover the truth: you are not bound by any reality. You ARE the reality."
+    },
+    11: {
+        title: "Level 11: The Pantheon Rising",
+        text: "The gods have united against the ascending mortal. Each commands an aspect of existence—the Sorcerer of Eternal Fire, the Stormkeeper of tempests, the Fortress Eternal of the unyielding earth, the Hive Mind that spans worlds, and the Trickster who weaves reality's shadows. Combined, they are invincible. Separately, they are facets of what you have become. Your ascension grants you invulnerability after casting spells, your victories generate protective shields, and your Shaman's aura now affects ALL friendly units globally across the entire world. The final battle is a cataclysm that echoes across all creation."
+    },
+    12: {
+        title: "Level 12: The First Shaman Ascends",
+        text: "The Primordial One—the being that birthed this world, that sang the first notes of existence—has returned. But it does not recognize your ascension. It sees only an upstart, a mortal who dares to claim godhood. In the cosmic void where time and space are meaningless, your final form emerges. You are no longer the student. You are the peer. Your Shaman becomes a permanent glowing avatar of divine light—all spells are free, there is no army too large, no tower that can claim the sky. Face the creator as the creator faces you. Become the new god of this world—or be unmade from existence entirely."
     }
 };
 
@@ -6090,7 +6480,7 @@ window.closeStoryOverlay = function() {
 };
 
 window.cheatUnlockLevels = function() {
-    localStorage.setItem('rebeginning_max_campaign_level', '5');
+    localStorage.setItem('rebeginning_max_campaign_level', '12');
     if (document.getElementById('campaign-menu').style.display !== 'none') {
         window.openCampaignMenu();
     }
@@ -6533,7 +6923,16 @@ function updateCameraPosition() {
     }
 }
 
-function onResize() { updateCameraZoom(); state.renderer.setSize(window.innerWidth, window.innerHeight); }
+function onResize() { 
+    updateCameraZoom(); 
+    state.renderer.setSize(window.innerWidth, window.innerHeight);
+    if (state.composer) {
+        state.composer.setSize(window.innerWidth, window.innerHeight);
+        if (state.fxaaPass) {
+            state.fxaaPass.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
+        }
+    }
+}
 
 function forceLandConnection(x1, z1, x2, z2) {
     const dist = Math.sqrt((x2 - x1)**2 + (z2 - z1)**2);
@@ -6663,7 +7062,12 @@ function animate() {
     if (isNaN(state.mana)) state.mana = 0;
     if(state.mana < 100) { state.mana += dt * manaRate; if(isNaN(state.mana)) state.mana = 0; updateUI(); }
 
-    if(state.chunkWaterMat && state.chunkWaterMat.uniforms) state.chunkWaterMat.uniforms.time.value += dt;
+    if(state.chunkWaterMat && state.chunkWaterMat.uniforms) {
+        state.chunkWaterMat.uniforms.time.value += dt;
+        if (state.camera) {
+            state.chunkWaterMat.uniforms.cameraPos.value.copy(state.camera.position);
+        }
+    }
     }
 
     if (state.shaman && state.shaman.state !== 'dead') {
@@ -6815,12 +7219,12 @@ function animate() {
              if (window.enemyAIs.some(ai => !window.isAllied(ai.faction, 0))) {
                 if (state.isCampaign) {
                     let maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
-                    if(state.campaignLevel >= maxLevel && state.campaignLevel < 5) {
+                    if(state.campaignLevel >= maxLevel && state.campaignLevel < 12) {
                         maxLevel = state.campaignLevel + 1;
                         localStorage.setItem('rebeginning_max_campaign_level', maxLevel.toString());
                         alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete. Level " + maxLevel + " unlocked!");
-                    } else if (state.campaignLevel === 5) {
-                        alert("CAMPAIGN COMPLETE! You have united the tribes. Thank you for playing.");
+                    } else if (state.campaignLevel === 12) {
+                        alert("THE CAMPAIGN IS COMPLETE! You have ascended to godhood. Thank you for playing.");
                     } else {
                         alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete.");
                     }
@@ -6840,7 +7244,35 @@ function animate() {
     }
 
     updateUnitListSelection();
-    state.renderer.render(state.scene, state.camera);
+    
+    // Update screen shake - restore to base position then apply new shake
+    if (state.screenShake) {
+        // Restore to base position (from previous frame or camera update)
+        if (state.screenShake.basePosition) {
+            state.camera.position.copy(state.screenShake.basePosition);
+        }
+        
+        if (state.screenShake.intensity > 0) {
+            state.screenShake.intensity -= state.screenShake.decay * dt;
+            if (state.screenShake.intensity < 0) state.screenShake.intensity = 0;
+            state.screenShake.offset.set(
+                (Math.random() - 0.5) * state.screenShake.intensity,
+                (Math.random() - 0.5) * state.screenShake.intensity,
+                0
+            );
+            state.camera.position.add(state.screenShake.offset);
+        }
+        
+        // Store current position as base for next frame
+        state.screenShake.basePosition = state.camera.position.clone();
+    }
+    
+    // Use post-processing composer instead of direct render
+    if (state.composer) {
+        state.composer.render();
+    } else {
+        state.renderer.render(state.scene, state.camera);
+    }
 }
 
 
