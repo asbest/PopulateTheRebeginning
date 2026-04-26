@@ -510,7 +510,9 @@ const ACTIONS = {
     'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
     'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
     'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 50 },
-    'airship_rocket': { icon: '🚀', label: 'Rckt', cost: 10 }
+    'airship_rocket': { icon: '🚀', label: 'Rckt', cost: 10 },
+    'phantom': { icon: '👥', label: 'Phnt', cost: 30 },
+    'blink': { icon: '✨', label: 'Blnk', cost: 20 }
 };
 
 const UNIT_ICONS = {
@@ -542,7 +544,7 @@ const state = {
     chunks: {},
     terrainMods: new Map(),
     units: [],
-    matchSettings: { noFlyers: false, infiniteMana: false, doubleSpeed: false, suddenDeath: false, winter: false },
+    matchSettings: { noFlyers: false, infiniteMana: false, doubleSpeed: false, suddenDeath: false, winter: false, biome: 'normal' },
 
     particles: [],
     projectiles: [],
@@ -977,34 +979,41 @@ window.loadCampaignLevelIfRequested = function() {
         window.enemyAIs.push(new EnemyAI(2, 'sorcerer'));
         window.enemyAIs.push(new EnemyAI(3, 'default'));
     } else if (level === 6) {
+        state.matchSettings.biome = 'night';
         window.enemyAIs.push(new EnemyAI(1, 'trickster'));
     } else if (level === 7) {
-        window.enemyAIs.push(new EnemyAI(1, 'default'));
+        state.matchSettings.biome = 'mountain';
+        window.enemyAIs.push(new EnemyAI(1, 'fortress'));
     } else if (level === 8) {
-        window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
-        window.enemyAIs.push(new EnemyAI(2, 'swarmer'));
-        window.enemyAIs.push(new EnemyAI(3, 'swarmer'));
+        state.matchSettings.biome = 'jungle';
+        window.enemyAIs.push(new EnemyAI(1, 'hive'));
+        window.enemyAIs.push(new EnemyAI(2, 'hive'));
+        window.enemyAIs.push(new EnemyAI(3, 'hive'));
         state.teams[1] = 2;
         state.teams[2] = 2;
         state.teams[3] = 2;
     } else if (level === 9) {
-        window.enemyAIs.push(new EnemyAI(1, 'sorcerer'));
+        state.matchSettings.biome = 'storm';
+        window.enemyAIs.push(new EnemyAI(1, 'stormkeeper'));
     } else if (level === 10) {
-        window.enemyAIs.push(new EnemyAI(1, 'sorcerer'));
+        state.matchSettings.biome = 'void';
+        window.enemyAIs.push(new EnemyAI(1, 'gatekeeper'));
     } else if (level === 11) {
-        window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
-        window.enemyAIs.push(new EnemyAI(2, 'sorcerer'));
-        window.enemyAIs.push(new EnemyAI(3, 'default'));
-        window.enemyAIs.push(new EnemyAI(4, 'opportunist'));
-        window.enemyAIs.push(new EnemyAI(5, 'default'));
+        state.matchSettings.biome = 'celestial';
+        window.enemyAIs.push(new EnemyAI(1, 'sorcerer'));
+        window.enemyAIs.push(new EnemyAI(2, 'stormkeeper'));
+        window.enemyAIs.push(new EnemyAI(3, 'fortress'));
+        window.enemyAIs.push(new EnemyAI(4, 'hive'));
+        window.enemyAIs.push(new EnemyAI(5, 'trickster'));
         state.teams[1] = 2;
         state.teams[2] = 2;
         state.teams[3] = 2;
         state.teams[4] = 2;
         state.teams[5] = 2;
     } else if (level === 12) {
+        state.matchSettings.biome = 'cosmic';
         state.mana = 9999;
-        window.enemyAIs.push(new EnemyAI(1, 'sorcerer'));
+        window.enemyAIs.push(new EnemyAI(1, 'primordial'));
     }
     return true;
 }
@@ -1355,13 +1364,26 @@ function mulberry32(a) {
 function getBaseHeight(x, z) {
     if (!state.simplex) return 0;
     let y = 0;
-    y += state.simplex.noise2D(x * NOISE_SCALE, z * NOISE_SCALE) * 12;
-    y += state.simplex.noise2D(x * NOISE_SCALE * 2, z * NOISE_SCALE * 2) * 4;
-    y += state.simplex.noise2D(x * NOISE_SCALE * 4, z * NOISE_SCALE * 4) * 1.5;
-    y += state.simplex.noise2D(x * NOISE_SCALE * 8, z * NOISE_SCALE * 8) * 0.75;
-    y += state.simplex.noise2D(x * NOISE_SCALE * 16, z * NOISE_SCALE * 16) * 0.375;
+    let ns = NOISE_SCALE;
+    let hm = HEIGHT_MULTIPLIER;
 
-    y *= HEIGHT_MULTIPLIER;
+    const biome = (state.matchSettings && state.matchSettings.biome) ? state.matchSettings.biome : 'normal';
+    if (biome === 'mountain') hm *= 2.5;
+    if (biome === 'void') hm *= 1.5;
+    if (biome === 'jungle') ns *= 1.2;
+
+    y += state.simplex.noise2D(x * ns, z * ns) * 12;
+    y += state.simplex.noise2D(x * ns * 2, z * ns * 2) * 4;
+    y += state.simplex.noise2D(x * ns * 4, z * ns * 4) * 1.5;
+    y += state.simplex.noise2D(x * ns * 8, z * ns * 8) * 0.75;
+    y += state.simplex.noise2D(x * ns * 16, z * ns * 16) * 0.375;
+
+    y *= hm;
+
+    if (biome === 'celestial') {
+        // Floating islands: only high peaks remain, others drop to "void" (deep water)
+        if (y < 4.0) y -= 20.0;
+    }
 
     // Land bridges using ridge noise
     // A value close to 0 in noise creates a ridge when inverted.
@@ -1964,6 +1986,11 @@ const _cGrass = new THREE.Color(COLORS.grass);
 const _cRock = new THREE.Color(COLORS.rock);
 const _cSnow = new THREE.Color(COLORS.snow);
 const _cLava = new THREE.Color(COLORS.lava);
+const _cPurple = new THREE.Color(0x800080);
+const _cBlack = new THREE.Color(0x050505);
+const _cGold = new THREE.Color(0xFFD700);
+const _cCyan = new THREE.Color(0x00FFFF);
+const _cDeepGreen = new THREE.Color(0x004400);
 const _col = new THREE.Color();
 
 function initTerrainResources() {
@@ -2146,7 +2173,14 @@ function updateChunkGeometry(mesh, cx, cz) {
     const cRock = _cRock;
     const cSnow = _cSnow;
     const cLava = _cLava;
+    const cPurple = _cPurple;
+    const cBlack = _cBlack;
+    const cGold = _cGold;
+    const cCyan = _cCyan;
+    const cDeepGreen = _cDeepGreen;
     const col = _col;
+
+    const biome = state.matchSettings.biome || 'normal';
 
     for(let i=0; i<pos.count; i++) {
          const wx = pos.getX(i) + offX;
@@ -2154,7 +2188,7 @@ function updateChunkGeometry(mesh, cx, cz) {
          let h = getHeight(wx, wz);
          pos.setY(i, h);
 
-         if (state.matchSettings && state.matchSettings.winter) {
+         if (biome === 'winter' || (state.matchSettings && state.matchSettings.winter)) {
              // Ice/Snow World colors
              if (h < WATER_LEVEL) col.copy(cSand).lerp(cSnow, 0.8); // Frosty sand
              else if (h < WATER_LEVEL + 1.0) col.copy(cSnow);
@@ -2165,16 +2199,44 @@ function updateChunkGeometry(mesh, cx, cz) {
              else if (h < 19.0) col.copy(cSnow);
              else if (h < 21.0) col.copy(cSnow).lerp(cRock, (h - 19.0) / 2.0);
              else col.copy(cRock); // No lava in winter
+         } else if (biome === 'night') {
+             if (h < WATER_LEVEL) col.copy(cSand).multiplyScalar(0.4);
+             else if (h < WATER_LEVEL + 1.0) col.copy(cSand).lerp(cGrass, h - WATER_LEVEL).multiplyScalar(0.4);
+             else if (h < 8.0) col.copy(cGrass).multiplyScalar(0.4);
+             else if (h < 9.0) col.copy(cGrass).lerp(cRock, h - 8.0).multiplyScalar(0.5);
+             else col.copy(cRock).multiplyScalar(0.5);
+         } else if (biome === 'mountain') {
+             if (h < WATER_LEVEL) col.copy(cSand);
+             else if (h < WATER_LEVEL + 1.0) col.copy(cSand).lerp(cRock, h - WATER_LEVEL);
+             else if (h < 8.0) col.copy(cRock);
+             else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 8.0) / 7.0);
+             else col.copy(cSnow);
+         } else if (biome === 'jungle') {
+             if (h < WATER_LEVEL) col.copy(cSand).lerp(cDeepGreen, 0.5);
+             else if (h < WATER_LEVEL + 2.0) col.copy(cDeepGreen).offsetHSL(0, 0, (Math.random()-0.5)*0.05);
+             else col.copy(cDeepGreen).lerp(cRock, Math.min(1, (h-WATER_LEVEL-2)/10));
+         } else if (biome === 'storm') {
+             if (h < WATER_LEVEL) col.copy(cSand).lerp(cRock, 0.4);
+             else col.copy(cGrass).lerp(cRock, 0.6);
+         } else if (biome === 'void') {
+             if (h < WATER_LEVEL) col.copy(cBlack);
+             else col.copy(cPurple).lerp(cBlack, Math.min(1, (h - WATER_LEVEL) / 12));
+         } else if (biome === 'celestial') {
+             if (h < WATER_LEVEL) col.copy(cGold).multiplyScalar(0.7);
+             else col.copy(cSnow).lerp(cGold, Math.min(1, h / 15));
+         } else if (biome === 'cosmic') {
+             if (h < WATER_LEVEL) col.copy(cBlack);
+             else col.copy(cBlack).lerp(cCyan, Math.min(1, (h - WATER_LEVEL) / 20));
          } else {
-         if (h < WATER_LEVEL) col.copy(cSand);
-         else if (h < WATER_LEVEL + 1.0) col.copy(cSand).lerp(cGrass, h - WATER_LEVEL);
-         else if (h < 8.0) col.copy(cGrass);
-         else if (h < 9.0) col.copy(cGrass).lerp(cRock, h - 8.0);
-         else if (h < 13.0) col.copy(cRock);
-         else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
-         else if (h < 19.0) col.copy(cSnow);
-         else if (h < 21.0) col.copy(cSnow).lerp(cLava, (h - 19.0) / 2.0);
-         else col.copy(cLava);
+             if (h < WATER_LEVEL) col.copy(cSand);
+             else if (h < WATER_LEVEL + 1.0) col.copy(cSand).lerp(cGrass, h - WATER_LEVEL);
+             else if (h < 8.0) col.copy(cGrass);
+             else if (h < 9.0) col.copy(cGrass).lerp(cRock, h - 8.0);
+             else if (h < 13.0) col.copy(cRock);
+             else if (h < 15.0) col.copy(cRock).lerp(cSnow, (h - 13.0) / 2.0);
+             else if (h < 19.0) col.copy(cSnow);
+             else if (h < 21.0) col.copy(cSnow).lerp(cLava, (h - 19.0) / 2.0);
+             else col.copy(cLava);
          }
 
          if(h > 2.5) col.offsetHSL(0, 0, (Math.random()-0.5)*0.03);
@@ -3347,6 +3409,28 @@ function executeSpell(type, x, z, caster) {
     else if (type === 'firestorm') {
         state.activeEffects.push(new Firestorm(x, z, caster.faction));
     }
+    else if (type === 'phantom') {
+        SoundManager.playSound('magic');
+        for(let i=0; i<3; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 2 + Math.random() * 3;
+            const px = x + Math.cos(angle) * dist;
+            const pz = z + Math.sin(angle) * dist;
+            const safe = findNearestLand(px, pz);
+            const u = new Humanoid(caster.faction, 'wild', safe.x, safe.z);
+            u.damage = 0; u.isPhantom = true; u.maxHp = 1; u.hp = 1;
+            u.mesh.traverse(c => { if(c.material) { c.material = c.material.clone(); c.material.transparent = true; c.material.opacity = 0.5; } });
+            state.units.push(u);
+            setTimeout(() => { u.takeDamage(1000, true); }, 15000); // Dissipate
+        }
+    }
+    else if (type === 'blink') {
+        SoundManager.playSound('magic');
+        const h = getHeight(x, z);
+        spawnPulse(caster.mesh.position.x, caster.mesh.position.y, caster.mesh.position.z, 0x00FFFF);
+        caster.mesh.position.set(x, h, z);
+        spawnPulse(x, h, z, 0x00FFFF);
+    }
     else if (type === 'shield') {
         SoundManager.playSound('magic');
 
@@ -3492,13 +3576,28 @@ function executeSpell(type, x, z, caster) {
         // Damage
         let hit = false;
         burnTreesAt(x, z, 5); // Burn trees
+        let hitUnits = [];
         SpatialHash.query(x, z, 4).forEach(u => {
              const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
              if(dist < 4 && u.faction !== caster.faction) {
                  u.takeDamage(400);
                  hit = true;
+                 hitUnits.push(u);
              }
         });
+
+        // Chain Lightning Mod
+        if (state.campaignLevel >= 9) {
+            hitUnits.forEach(u => {
+                SpatialHash.query(u.mesh.position.x, u.mesh.position.z, 10).forEach(extra => {
+                    if (extra.faction !== caster.faction && !hitUnits.includes(extra)) {
+                        extra.takeDamage(200);
+                        spawnPulse(extra.mesh.position.x, extra.mesh.position.y, extra.mesh.position.z, 0xFFFFFF);
+                    }
+                });
+            });
+        }
+
         state.buildings.forEach(b => {
              const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
              if(dist < 4 && b.faction !== caster.faction) {
@@ -4997,7 +5096,9 @@ class EnemyAI {
         this.myShaman = null;
 
         // Track losses for rebuilding
-        this.targetHutCount = this.personality === 'swarmer' ? 10 : 5;
+        this.targetHutCount = 5;
+        if (this.personality === 'swarmer' || this.personality === 'hive') this.targetHutCount = 10;
+        if (this.personality === 'primordial') this.targetHutCount = 20;
         this.knownUnitCounts = { warrior: 0, firewarrior: 0, spy: 0, airship: 0 };
         this.lossQueue = [];
     }
@@ -5160,7 +5261,7 @@ class EnemyAI {
         const buildingLimit = 15 + this.targetHutCount;
         if (myBuildings.length < buildingLimit && myBraves.length > 0) {
             // Determine which building to build next
-            const targetCounts = { hut: this.targetHutCount, tower: 5, warrior: 2, fire: 2, spy: 2, shipyard: 1 };
+            const targetCounts = { hut: this.targetHutCount, tower: (this.personality === 'fortress' ? 12 : 5), warrior: 2, fire: 2, spy: 2, shipyard: 1 };
 
             let typeToBuild = null;
 
@@ -5172,6 +5273,7 @@ class EnemyAI {
             else if (currentCounts.spy < 1) typeToBuild = 'spy';
             else if (currentCounts.shipyard < 1 && !(state.matchSettings && state.matchSettings.noFlyers)) typeToBuild = 'shipyard';
             // Then continue expanding up to targets
+            else if (this.personality === 'fortress' && currentCounts.tower < targetCounts.tower) typeToBuild = 'tower';
             else if (currentCounts.hut < targetCounts.hut) typeToBuild = 'hut';
             else if (currentCounts.warrior < targetCounts.warrior) typeToBuild = 'warrior';
             else if (currentCounts.fire < targetCounts.fire) typeToBuild = 'fire';
@@ -5180,7 +5282,7 @@ class EnemyAI {
             else if (currentCounts.tower < targetCounts.tower) typeToBuild = 'tower';
             // If we have met the target counts, start building more
             else {
-                const extraTypes = ['hut', 'tower', 'warrior', 'fire'];
+                const extraTypes = this.personality === 'fortress' ? ['tower', 'hut'] : ['hut', 'tower', 'warrior', 'fire'];
                 typeToBuild = extraTypes[Math.floor(Math.random() * extraTypes.length)];
             }
 
@@ -5231,7 +5333,7 @@ class EnemyAI {
 
         // 3. Attack Player
         let shouldAttack = myUnits.length > 5;
-        if (this.personality === 'swarmer') shouldAttack = myUnits.length > 2;
+        if (this.personality === 'swarmer' || this.personality === 'hive' || this.personality === 'primordial') shouldAttack = myUnits.length > 2;
         if (this.personality === 'opportunist') {
             const playerShaman = state.shaman;
             shouldAttack = myUnits.length > 5 && (
@@ -5261,12 +5363,21 @@ class EnemyAI {
 
             // Offensive Spells
             const spellRange = 10.0 + myShaman.mesh.position.y;
-            const spellCooldown = this.personality === 'sorcerer' ? 2.5 : 5.0;
+            let spellCooldown = this.personality === 'sorcerer' ? 2.5 : 5.0;
+            if (this.personality === 'primordial') spellCooldown = 1.0;
+
             if (state.clock.getElapsedTime() - this.lastSpellTime > spellCooldown) {
-                if (dist < spellRange) {
-                    const offensiveSpells = ['blast', 'lightning', 'tornado', 'swarm', 'firestorm'];
+                if (dist < spellRange || this.personality === 'primordial') {
+                    let offensiveSpells = ['blast', 'lightning', 'tornado', 'swarm', 'firestorm'];
+                    if (this.personality === 'trickster') offensiveSpells = ['hypnotise', 'invisibility', 'phantom'];
+                    if (this.personality === 'stormkeeper') offensiveSpells = ['lightning', 'tornado', 'firestorm'];
+                    if (this.personality === 'gatekeeper') offensiveSpells = ['teleport', 'blast'];
+
                     const spell = offensiveSpells[Math.floor(Math.random() * offensiveSpells.length)];
-                    executeSpell(spell, target.mesh.position.x, target.mesh.position.z, myShaman);
+                    const tx = (dist < spellRange) ? target.mesh.position.x : (myShaman.mesh.position.x + (Math.random()-0.5)*20);
+                    const tz = (dist < spellRange) ? target.mesh.position.z : (myShaman.mesh.position.z + (Math.random()-0.5)*20);
+
+                    executeSpell(spell, tx, tz, myShaman);
                     this.lastSpellTime = state.clock.getElapsedTime();
                 }
             }
@@ -5584,10 +5695,20 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     const costs = {
         blast: 10, lightning: 50, raise: 5, lower: 5, flatten: 10, landbridge: 20,
         swamp: 80, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 90, heal: 10, teleport: 90, create: 50,
+        phantom: 30, blink: 20,
         build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
         build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
     };
-    const cost = costs[action];
+
+    if (state.campaignLevel === 12) {
+        // Divine Form: free spells
+        if (!action.startsWith('build_')) {
+            // only spells are free
+            // costs[action] = 0; // but it needs to be reflected in check
+        }
+    }
+    let cost = costs[action];
+    if (state.campaignLevel === 12 && !action.startsWith('build_')) cost = 0;
     if (cost === undefined || isNaN(cost)) return;
     if (state.mana < cost) return;
     state.mana -= cost;
@@ -5801,9 +5922,11 @@ function init() {
         document.body.appendChild(state.renderer.domElement);
 
         const amb = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+        state.ambLight = amb;
         state.scene.add(amb);
         state.scene.add(state.rangeRing);
         const sun = new THREE.DirectionalLight(0xffffff, 3.14);
+        state.sunLight = sun;
         sun.position.set(50, 100, 40);
         sun.castShadow = true;
         sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
@@ -6110,31 +6233,31 @@ const CAMPAIGN_STORIES = {
     },
     6: {
         title: "Level 6: The Tithe of Shadows",
-        text: "A master of deception has risen. Their army appears everywhere at once, yet never commits to a real fight. You must learn to see through their illusions and turn their own tricks against them."
+        text: "A master of deception has risen. Their tribe seems everywhere at once, yet never commits to a real fight. You must use your newly awakened gift of illusion to see through their tricks, turn their own deception against them, and corrupt their followers to your cause."
     },
     7: {
         title: "Level 7: The Crumbling Peak",
-        text: "Your enemy has built their fortress into the mountain peaks. But as your connection to the earth deepens, you learn to reshape the mountains themselves."
+        text: "Your enemy has built their fortress into the peaks, unreachable by conventional means. As your connection to the earth deepens, you learn to reshape the mountains themselves—triggering rockslides to expose hidden supply lines or creating ramps to assault the seemingly impregnable."
     },
     8: {
         title: "Level 8: The Web of Minds",
-        text: "Three tribes have merged their consciousness into a hive mind, sharing vision across vast distances. Learn to think globally and command all your forces with a single thought."
+        text: "The three sister tribes have merged their consciousness into a single hive mind. They anticipate your every move with terrifying coordination. But as your mind expands, you too learn to think beyond one body—you command legions with a single thought, everywhere at once."
     },
     9: {
         title: "Level 9: The Stormgods' Crucible",
-        text: "The Stormkeeper commands the weather itself—lightning, hurricanes, and rain. But as you ascend, you become the storm itself."
+        text: "This enemy has bound the elemental forces of storm and sky. Lightning strikes their enemies before they can march. Rain drowns fire. But as the storm reaches its apex, you ascend further—becoming the storm itself, turning their own weather against them in a cataclysmic final confrontation."
     },
     10: {
         title: "Level 10: The Void Between",
-        text: "The Gatekeeper guards a realm where physics is negotiable—gravity reverses, distances twist. Learn to step through the void itself."
+        text: "Your enemy guards the gateway between worlds. Their realm bends physics itself—gravity reverses, distances twist, and the very concept of \"here\" becomes meaningless. But your awakening continues: you learn to step through the void, to blink across impossible distances, and finally to break the gate that holds this world hostage."
     },
     11: {
         title: "Level 11: The Pantheon Rising",
-        text: "The five gods have united against you: fire, storm, earth, mind, and shadow. Master all elements to stand among them."
+        text: "The gods have united against the ascending mortal. Each commands an aspect of reality—fire, storm, earth, mind, and shadow. Only by mastering all elements can you hope to stand among them. The final battle is a cataclysm that echoes across all worlds."
     },
     12: {
         title: "Level 12: The First Shaman Ascends",
-        text: "Face the Primordial One—the being that birthed this world. Ascend to godhood or be unmade from existence entirely."
+        text: "The Primordial One—the being that birthed this world—has returned, and it does not recognize your ascension. You are no longer the student; you are the peer. In the cosmic void where time and space are meaningless, your final form emerges: a god among gods."
     }
 };
 
@@ -6672,15 +6795,51 @@ let _lastFpsTime = performance.now();
 function animate() {
     requestAnimationFrame(animate); const dt = Math.min(state.clock.getDelta(), 0.1);
 
-    if (state.matchSettings && state.matchSettings.winter) {
+    const biome = state.matchSettings.biome || 'normal';
+    if (biome === 'winter' || (state.matchSettings && state.matchSettings.winter)) {
         state.waterState = Math.floor(state.clock.getElapsedTime() / 30) % 2 === 0 ? 'liquid' : 'frozen';
         if (state.chunkWaterMat) {
-            // Smoothly transition water color based on state
             const targetColor = state.waterState === 'frozen' ? 0x88CCFF : 0x1E90FF;
             state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(targetColor), dt * 2.0);
         }
+    } else if (biome === 'jungle') {
+        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x004422), dt * 2.0);
+    } else if (biome === 'void') {
+        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x220022), dt * 2.0);
+    } else if (biome === 'celestial') {
+        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0xFFFFFF), dt * 2.0);
+    } else if (biome === 'cosmic') {
+        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x000000), dt * 2.0);
     } else {
         if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x1E90FF), dt * 2.0);
+    }
+
+    // Biome Scene Adjustments
+    if (state.scene && state.sunLight) {
+        let targetBg = 0x7EC8E3, targetFog = 0x7EC8E3, fogNear = 30, fogFar = 180, sunInt = 3.14, sunCol = 0xffffff;
+        if (biome === 'night') {
+            targetBg = 0x000011; targetFog = 0x000011; fogNear = 10; fogFar = 80; sunInt = 0.5; sunCol = 0x8888ff;
+        } else if (biome === 'jungle') {
+            targetBg = 0x113311; targetFog = 0x113311; fogNear = 5; fogFar = 100; sunInt = 2.0; sunCol = 0xccffcc;
+        } else if (biome === 'mountain') {
+            targetBg = 0x8899aa; targetFog = 0x8899aa; fogNear = 50; fogFar = 300; sunInt = 3.5;
+        } else if (biome === 'storm') {
+            targetBg = 0x444444; targetFog = 0x444444; fogNear = 10; fogFar = 120; sunInt = 1.5; sunCol = 0xaaaaaa;
+            if (Math.random() < 0.005) { sunInt = 10.0; sunCol = 0xffffff; } // Lightning flash
+        } else if (biome === 'void') {
+            targetBg = 0x110022; targetFog = 0x110022; fogNear = 5; fogFar = 150; sunInt = 1.2; sunCol = 0xcc88ff;
+        } else if (biome === 'celestial') {
+            targetBg = 0xfff4cc; targetFog = 0xfff4cc; fogNear = 100; fogFar = 500; sunInt = 4.0; sunCol = 0xffffaa;
+        } else if (biome === 'cosmic') {
+            targetBg = 0x000005; targetFog = 0x000005; fogNear = 20; fogFar = 400; sunInt = 2.0; sunCol = 0xffaaff;
+        }
+
+        state.scene.background.lerp(new THREE.Color(targetBg), dt);
+        state.scene.fog.color.lerp(new THREE.Color(targetFog), dt);
+        state.scene.fog.near += (fogNear - state.scene.fog.near) * dt;
+        state.scene.fog.far += (fogFar - state.scene.fog.far) * dt;
+        state.sunLight.intensity += (sunInt - state.sunLight.intensity) * dt;
+        state.sunLight.color.lerp(new THREE.Color(sunCol), dt);
     }
 
 
@@ -6722,7 +6881,11 @@ function animate() {
 
     const playerBraves = state.units.filter(u => u.faction === 0 && u.type === 'wild').length;
     const playerHouses = state.buildings.filter(b => b.faction === 0 && b.type === 'hut' && !b.underConstruction).length;
-    const manaRate = 1.0 + (playerBraves * 0.2) + (playerHouses * 0.2);
+    let manaRate = 1.0 + (playerBraves * 0.2) + (playerHouses * 0.2);
+    if (state.campaignLevel === 11) {
+        // Global Shaman Aura
+        manaRate *= 1.5;
+    }
 
     if (isNaN(state.mana)) state.mana = 0;
     if(state.mana < 100) { state.mana += dt * manaRate; if(isNaN(state.mana)) state.mana = 0; updateUI(); }
@@ -6873,6 +7036,12 @@ function animate() {
 
         // Win Condition
     const hasEnemy = state.units.some(u => !window.isAllied(u.faction, 0) && u.state !== 'dead');
+    if (state.matchSettings && state.matchSettings.suddenDeath && state.shaman && state.shaman.state === 'dead' && !window.gameOverAlertShown) {
+        alert("CAMPAIGN DEFEAT: Your Shaman was killed!");
+        window.gameOverAlertShown = true;
+        if (!state.isPaused) window.togglePause();
+    }
+
     if (!hasEnemy && state.units.some(u => window.isAllied(u.faction, 0))) {
          if (!window.gameWonAlertShown && window.enemyAIs && window.enemyAIs.length > 0) { // Don't win immediately if there are no tribes to start with
              // Check if there ever were any non allied tribes
