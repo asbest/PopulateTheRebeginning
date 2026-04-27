@@ -2038,7 +2038,8 @@ const _col = new THREE.Color();
 
 function initTerrainResources() {
     chunkTerrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: false, roughness: 0.8, metalness: 0.1 });
-    chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES/2, CHUNK_RES/2);
+    // Increase water resolution for better foam
+    chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES, CHUNK_RES);
 
     const waterVertexShader = `
         uniform float time;
@@ -2071,9 +2072,17 @@ function initTerrainResources() {
         varying float vFoam;
         void main() {
             vec3 baseColor = color;
-            float foamEdge = vFoam * (0.5 + 0.5 * sin(time * 3.0 + vUv.x * 10.0 + vUv.y * 10.0));
-            vec3 finalColor = mix(baseColor, vec3(1.0, 1.0, 1.0), foamEdge * 0.8);
-            gl_FragColor = vec4(finalColor, 0.75 + foamEdge * 0.2);
+            float f = vFoam;
+            // Visible high-contrast foam ripples
+            float ripples = sin(vUv.x * 100.0 + time * 2.0) * cos(vUv.y * 100.0 - time * 1.5) * 0.5 + 0.5;
+            float pulse = sin(f * 20.0 - time * 4.0) * 0.5 + 0.5;
+
+            // Combined foam intensity
+            float foamAmount = smoothstep(0.2, 0.7, f * 0.8 + ripples * 0.2 * f + pulse * 0.1 * f);
+
+            vec3 finalColor = mix(baseColor, vec3(1.0, 1.0, 1.0), foamAmount);
+            float finalAlpha = mix(0.7, 1.0, foamAmount);
+            gl_FragColor = vec4(finalColor, finalAlpha);
         }
     `;
     chunkWaterMat = new THREE.ShaderMaterial({
@@ -2215,19 +2224,28 @@ function updateChunks(force = false, specificChunks = null) {
 function updateChunkWater(wMesh, cx, cz) {
     const geo = wMesh.geometry;
     const pos = geo.attributes.position;
-    const foam = geo.attributes.foam;
+    const foamAttr = geo.attributes.foam;
     const offX = cx * CHUNK_SIZE;
     const offZ = cz * CHUNK_SIZE;
+
     for (let i = 0; i < pos.count; i++) {
-        const lx = pos.getX(i);
-        const ly = pos.getY(i);
-        const wx = lx + offX;
-        const wz = -ly + offZ;
+        const wx = pos.getX(i) + offX;
+        const wz = pos.getZ(i) + offZ;
         const h = getHeight(wx, wz);
-        const depth = WATER_LEVEL - h;
-        foam.setX(i, (depth > 0 && depth < 0.3) ? 1.0 : 0.0);
+
+        // We want foam at both logical (WATER_LEVEL) and visual (VISUAL_WATER_LEVEL) shorelines
+        const d1 = Math.abs(h - VISUAL_WATER_LEVEL);
+        const d2 = Math.abs(h - WATER_LEVEL);
+        const dist = Math.min(d1, d2);
+
+        let val = 0;
+        if (dist < 2.0) {
+            val = 1.0 - dist / 2.0;
+            val = Math.pow(val, 0.5); // Boost intensity
+        }
+        foamAttr.setX(i, val);
     }
-    foam.needsUpdate = true;
+    foamAttr.needsUpdate = true;
 }
 
 function updateChunkGeometry(mesh, cx, cz) {
@@ -2495,10 +2513,11 @@ function createChunk(cx, cz) {
     updateChunkGeometry(mesh, cx, cz);
 
     const wGeo = chunkWaterGeo.clone();
+    wGeo.rotateX(-Math.PI/2); // Rotate geometry once
     const foam = new Float32Array(wGeo.attributes.position.count);
     wGeo.setAttribute('foam', new THREE.BufferAttribute(foam, 1));
     const wMesh = new THREE.Mesh(wGeo, chunkWaterMat);
-    wMesh.rotation.x = -Math.PI/2; wMesh.position.set(offX, VISUAL_WATER_LEVEL, offZ);
+    wMesh.position.set(offX, VISUAL_WATER_LEVEL, offZ);
     updateChunkWater(wMesh, cx, cz);
     grp.add(wMesh);
 
@@ -3690,7 +3709,7 @@ window.castLandbridge = castLandbridge;
 
 // --- js/humanoid.js ---
 
-class Humanoid {
+window.Humanoid = class Humanoid {
     constructor(faction, type, x, z, id = null) {
         this.id = id || generateUUID();
         this.faction = faction; // 0 = Player, 1 = Enemy
