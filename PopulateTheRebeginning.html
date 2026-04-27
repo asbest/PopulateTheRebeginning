@@ -509,7 +509,7 @@ const ACTIONS = {
     'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
     'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
     'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
-    'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 50 },
+    'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 80 },
     'airship_rocket': { icon: '🚀', label: 'Rckt', cost: 10 },
     'phantom': { icon: '👥', label: 'Phnt', cost: 30 },
     'blink': { icon: '✨', label: 'Blnk', cost: 20 }
@@ -5726,8 +5726,8 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     if(action === 'upgrade_unit') {
         if(actingUnits.length > 0) {
             actingUnits.forEach(u => {
-                if (state.mana >= 50) {
-                    state.mana -= 50;
+                if (state.mana >= 80) {
+                    state.mana -= 80;
                     u.upgrade();
                 }
             });
