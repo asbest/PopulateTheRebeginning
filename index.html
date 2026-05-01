@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Immediate meta redirect -->
+    <meta http-equiv="refresh" content="0; url=https://asbest.github.io/PopulateTheRebeginning/PopulateTheRebeginning.html">
+    <title>Redirecting...</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-slow {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-6 font-sans">
+
+    <div class="max-w-md w-full text-center space-y-8">
+        <!-- Visual Loading Indicator -->
+        <div class="relative flex justify-center">
+            <div class="w-20 h-20 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <div class="absolute inset-0 flex items-center justify-center">
+                <div class="w-4 h-4 bg-blue-400 rounded-full animate-pulse-slow"></div>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <h1 class="text-2xl font-bold tracking-tight">Redirecting to Game</h1>
+            <p class="text-slate-400">Please wait while we launch <strong>Populate The Rebeginning</strong>.</p>
+        </div>
+
+        <!-- Manual Link (Backup) -->
+        <div class="pt-4">
+            <a id="manual-link" 
+               href="https://asbest.github.io/PopulateTheRebeginning/PopulateTheRebeginning.html"
+               class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg shadow-blue-500/20">
+                Click here if not redirected
+            </a>
+        </div>
+
+        <p class="text-xs text-slate-500 italic">
+            Note: If this file is in your Startup folder, it will open your default browser automatically.
+        </p>
+    </div>
+
+    <script>
+        // JavaScript redirection fallback
+        const targetUrl = "https://asbest.github.io/PopulateTheRebeginning/PopulateTheRebeginning.html";
+        
+        window.onload = function() {
+            // Attempt immediate redirect
+            window.location.href = targetUrl;
+            
+            // Secondary attempt after 1 second if the first fails
+            setTimeout(() => {
+                window.location.replace(targetUrl);
+            }, 1000);
+        };
+    </script>
+</body>
+</html>
