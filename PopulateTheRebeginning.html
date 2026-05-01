@@ -1030,6 +1030,8 @@ window.closeMultiplayer = () => {
 // --- js/audio.js ---
 const SoundManager = {
     ctx: null,
+    music: null,
+    currentMusicUrl: null,
     init: function() {
         if (this.ctx) return;
         try {
@@ -1114,6 +1116,29 @@ const SoundManager = {
                 this.playTone(80, 'sawtooth', 0.5, 0.2);
                 break;
         }
+    },
+    playMusic: function(url) {
+        if (this.currentMusicUrl === url) return;
+        this.stopMusic();
+        this.currentMusicUrl = url;
+        const audio = new Audio(url);
+        audio.loop = true;
+        audio.volume = 0.5;
+        this.music = audio;
+        audio.play().catch(e => {
+            if (this.currentMusicUrl === url) {
+                this.currentMusicUrl = null;
+                this.music = null;
+            }
+            console.warn("Music playback failed:", e);
+        });
+    },
+    stopMusic: function() {
+        if (this.music) {
+            this.music.pause();
+            this.music = null;
+        }
+        this.currentMusicUrl = null;
     }
 };
 
@@ -7018,6 +7043,25 @@ function animate() {
     if (state.network.role === 'host') NetworkManager.sendFullState();
 
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
+
+    // Fight Music Logic
+    if (Math.floor(state.clock.elapsedTime * 60) % 30 === 0) {
+        let enemyInRange = false;
+        const playerUnits = state.units.filter(u => u.faction === 0 && u.state !== 'dead');
+        for (const u of playerUnits) {
+            const candidates = SpatialHash.query(u.mesh.position.x, u.mesh.position.z, 30);
+            if (candidates.some(c => c.faction !== 0 && c.state !== 'dead' && !c.invisible && u.mesh.position.distanceTo(c.mesh.position) < 30)) {
+                enemyInRange = true;
+                break;
+            }
+        }
+        if (enemyInRange) {
+            SoundManager.playMusic('FightMusic.mp3');
+        } else {
+            SoundManager.stopMusic();
+        }
+    }
+
     if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = 10000;
     state.units.forEach(u => u.update(dt));
     state.buildings.forEach(b => b.update(dt));
