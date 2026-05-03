@@ -1189,107 +1189,73 @@ loadUnitTexture();
 
 function applyUnitTexture(unit) {
     if (unitTextureFailed) return;
-    if (unit.type === 'airship') return;
+    if (unit.type !== 'shaman') return; // Only apply textures to shaman units
 
     const apply = (tex) => {
-        let row = 1; // default 'wild'
-        switch(unit.type) {
-            case 'shaman': row = 0; break;
-            case 'wild': row = 1; break;
-            case 'warrior': row = 2; break;
-            case 'preacher': row = 3; break;
-            case 'firewarrior': row = 4; break;
-            case 'spy': row = 5; break;
-        }
-
         let col = unit.faction || 0;
-        if (col > 7) col = 7; // Clamp to max 8 factions (0-7)
+        if (col > 7) col = 7;
 
-        const cacheKey = `${unit.type}_${col}`;
+        const cacheKey = `shaman_${col}`;
         if (UnitMaterialCache.has(cacheKey)) {
             const cached = UnitMaterialCache.get(cacheKey);
-            const applyCached = (group, mat) => {
-                if (!group || !mat) return;
+            const applyCached = (group, matKey) => {
+                if (!group) return;
                 group.traverse(child => {
                     if (child.isMesh && child.userData.isFactionColored) {
-                        child.material = mat;
+                        const pt = child.userData.partType;
+                        if (pt === 'shaman_mask') child.material = cached.mask;
+                        else if (pt === 'shaman_horn') child.material = cached.horn;
+                        else if (pt === 'shaman_cape') child.material = cached.cape;
+                        else child.material = cached[matKey];
                     }
                 });
             };
-            applyCached(unit.head, cached.head);
-            applyCached(unit.torso, cached.torso);
-            applyCached(unit.armL, cached.arms);
-            applyCached(unit.armR, cached.arms);
-            applyCached(unit.legL, cached.legs);
-            applyCached(unit.legR, cached.legs);
+            applyCached(unit.head, 'head');
+            applyCached(unit.torso, 'torso');
+            applyCached(unit.armL, 'limbs');
+            applyCached(unit.armR, 'limbs');
+            applyCached(unit.legL, 'limbs');
+            applyCached(unit.legR, 'limbs');
             return;
         }
 
-        const clonedTex = tex.clone();
-        clonedTex.needsUpdate = true;
-        clonedTex.repeat.set(1/11, 1/6);
-        clonedTex.offset.set(col / 11, (5 - row) / 6);
-
-        const cacheEntry = { head: null, torso: null, arms: null, legs: null };
-
-        const createMatForGroup = (group, texClone) => {
-            if (!group) return null;
-            let mat = null;
-            group.traverse(child => {
-                if (!mat && child.isMesh && child.userData.isFactionColored) {
-                    mat = child.material.clone();
-                    mat.map = texClone;
-                    mat.needsUpdate = true;
-                }
-            });
-            if (mat) {
-                group.traverse(child => {
-                    if (child.isMesh && child.userData.isFactionColored) {
-                        child.material = mat;
-                    }
-                });
-            }
-            return mat;
+        const createMat = (r, c, repX, repY, offX, offY) => {
+            const t = tex.clone();
+            t.needsUpdate = true;
+            t.repeat.set(repX, repY);
+            t.offset.set(c / 11 + offX, (5 - r) / 6 + offY);
+            return new THREE.MeshStandardMaterial({ map: t, roughness: 0.7, metalness: 0.1, transparent: true, alphaTest: 0.5 });
         };
 
-        const headTex = clonedTex.clone();
-        headTex.needsUpdate = true;
-        headTex.repeat.set((1/11) * 0.4, (1/6) * 0.35);
-        headTex.offset.set(col / 11 + (1/11) * 0.3, (5 - row) / 6 + (1/6) * 0.6);
-        cacheEntry.head = createMatForGroup(unit.head, headTex);
+        const cacheEntry = {
+            mask: createMat(0, 6, 1/11, 1/6, 0, 0), // Column 6 Shaman Mask
+            horn: createMat(0, 10, 1/11, 1/6, 0, 0), // Column 10 Wood/Horns
+            cape: createMat(0, 7, 1/11, 1/6, 0, 0), // Column 7 Pattern
+            head: createMat(0, 9, (1/11)*0.4, (1/6)*0.35, (1/11)*0.3, (1/6)*0.6), // Column 9 Skin
+            torso: createMat(0, 9, 1/11, 1/6, 0, 0), // Column 9 Skin
+            limbs: createMat(0, 9, (1/11)*0.4, (1/6)*0.4, (1/11)*0.3, (1/6)*0.1) // Column 9 Skin
+        };
 
-        const torsoTex = clonedTex.clone();
-        torsoTex.needsUpdate = true;
-        torsoTex.repeat.set((1/11) * 0.5, (1/6) * 0.4);
-        torsoTex.offset.set(col / 11 + (1/11) * 0.25, (5 - row) / 6 + (1/6) * 0.2);
-        cacheEntry.torso = createMatForGroup(unit.torso, torsoTex);
-
-        const armTex = clonedTex.clone();
-        armTex.needsUpdate = true;
-        armTex.repeat.set((1/11) * 0.15, (1/6) * 0.3);
-        armTex.offset.set(col / 11 + (1/11) * 0.75, (5 - row) / 6 + (1/6) * 0.25);
-        cacheEntry.arms = createMatForGroup(unit.armL, armTex);
-        if (unit.armR) {
-            unit.armR.traverse(child => {
-                if (child.isMesh && child.userData.isFactionColored) {
-                    child.material = cacheEntry.arms;
-                }
-            });
-        }
-
-        const legTex = clonedTex.clone();
-        legTex.needsUpdate = true;
-        legTex.repeat.set((1/11) * 0.2, (1/6) * 0.25);
-        legTex.offset.set(col / 11 + (1/11) * 0.4, (5 - row) / 6 + (1/6) * 0.0);
-        cacheEntry.legs = createMatForGroup(unit.legL, legTex);
-        if (unit.legR) {
-            unit.legR.traverse(child => {
-                if (child.isMesh && child.userData.isFactionColored) {
-                    child.material = cacheEntry.legs;
-                }
-            });
-        }
         UnitMaterialCache.set(cacheKey, cacheEntry);
+
+        const applyToUnit = (group, matKey) => {
+            if (!group) return;
+            group.traverse(child => {
+                if (child.isMesh && child.userData.isFactionColored) {
+                    const pt = child.userData.partType;
+                    if (pt === 'shaman_mask') child.material = cacheEntry.mask;
+                    else if (pt === 'shaman_horn') child.material = cacheEntry.horn;
+                    else if (pt === 'shaman_cape') child.material = cacheEntry.cape;
+                    else child.material = cacheEntry[matKey];
+                }
+            });
+        };
+        applyToUnit(unit.head, 'head');
+        applyToUnit(unit.torso, 'torso');
+        applyToUnit(unit.armL, 'limbs');
+        applyToUnit(unit.armR, 'limbs');
+        applyToUnit(unit.legL, 'limbs');
+        applyToUnit(unit.legR, 'limbs');
     };
 
     if (unitTextureTex) {
@@ -3850,14 +3816,16 @@ window.Humanoid = class Humanoid {
         if(this.isShaman) {
             this.mesh.scale.set(1.5, 1.5, 1.5);
             const mask = new THREE.Mesh(AssetCache.geos.shamanMask, new THREE.MeshStandardMaterial({color: 0xFFD700, emissive: 0x443300, roughness: 0.7, metalness: 0.1}));
+            mask.userData.isFactionColored = true; mask.userData.partType = 'shaman_mask';
             mask.position.z = 0.16; this.head.add(mask);
 
             const hornMat = new THREE.MeshStandardMaterial({color: 0xFFFFFF, emissive: 0x333333, roughness: 0.7, metalness: 0.1});
-            const h1 = new THREE.Mesh(AssetCache.geos.shamanHorn, hornMat); h1.position.set(0.15, 0.2, 0); h1.rotation.z = -0.3;
-            const h2 = new THREE.Mesh(AssetCache.geos.shamanHorn, hornMat); h2.position.set(-0.15, 0.2, 0); h2.rotation.z = 0.3; this.head.add(h1); this.head.add(h2);
+            const h1 = new THREE.Mesh(AssetCache.geos.shamanHorn, hornMat); h1.userData.isFactionColored = true; h1.userData.partType = 'shaman_horn'; h1.position.set(0.15, 0.2, 0); h1.rotation.z = -0.3;
+            const h2 = new THREE.Mesh(AssetCache.geos.shamanHorn, hornMat); h2.userData.isFactionColored = true; h2.userData.partType = 'shaman_horn'; h2.position.set(-0.15, 0.2, 0); h2.rotation.z = 0.3; this.head.add(h1); this.head.add(h2);
 
             // Cape for Shaman
             const cape = new THREE.Mesh(AssetCache.geos.cape, new THREE.MeshStandardMaterial({color: 0x330000, roughness: 0.7, metalness: 0.1}));
+            cape.userData.isFactionColored = true; cape.userData.partType = 'shaman_cape';
             cape.position.set(0, -0.1, -0.22); cape.rotation.x = 0.2;
             this.torso.add(cape);
 
