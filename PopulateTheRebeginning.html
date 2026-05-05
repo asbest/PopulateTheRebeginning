@@ -1219,16 +1219,16 @@ function applyUnitTexture(unit) {
             return;
         }
 
-        const createMat = (r, c, repX, repY, offX, offY) => {
+        const createMat = (r, c, repX, repY, offX, offY, opacity = 1.0) => {
             const t = tex.clone();
             t.needsUpdate = true;
             t.repeat.set(repX, repY);
             t.offset.set(c / 11 + offX, (5 - r) / 6 + offY);
-            return new THREE.MeshStandardMaterial({ map: t, roughness: 0.7, metalness: 0.1, transparent: true, alphaTest: 0.5 });
+            return new THREE.MeshStandardMaterial({ map: t, roughness: 0.7, metalness: 0.1, transparent: true, opacity: opacity, alphaTest: opacity < 1.0 ? 0.05 : 0.5 });
         };
 
         const cacheEntry = {
-            mask: createMat(0, 6, 1/11, 1/6, 0, 0), // Column 6 Shaman Mask
+            mask: createMat(0, 6, 1/11, 1/6, 0, 0, 0.5), // Column 6 Shaman Mask
             horn: createMat(0, 10, 1/11, 1/6, 0, 0), // Column 10 Wood/Horns
             cape: createMat(0, 7, 1/11, 1/6, 0, 0), // Column 7 Pattern
             head: createMat(0, 9, (1/11)*0.4, (1/6)*0.35, (1/11)*0.3, (1/6)*0.6), // Column 9 Skin
@@ -3815,7 +3815,7 @@ window.Humanoid = class Humanoid {
         // Props
         if(this.isShaman) {
             this.mesh.scale.set(1.5, 1.5, 1.5);
-            const mask = new THREE.Mesh(AssetCache.geos.shamanMask, new THREE.MeshStandardMaterial({color: 0xFFD700, emissive: 0x443300, roughness: 0.7, metalness: 0.1}));
+            const mask = new THREE.Mesh(AssetCache.geos.shamanMask, new THREE.MeshStandardMaterial({color: 0xFFD700, emissive: 0x443300, roughness: 0.7, metalness: 0.1, transparent: true, opacity: 0.5}));
             mask.userData.isFactionColored = true; mask.userData.partType = 'shaman_mask';
             mask.position.z = 0.16; this.head.add(mask);
 
