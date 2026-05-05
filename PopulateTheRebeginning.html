@@ -1224,7 +1224,7 @@ function applyUnitTexture(unit) {
             t.needsUpdate = true;
             t.repeat.set(repX, repY);
             t.offset.set(c / 11 + offX, (5 - r) / 6 + offY);
-            return new THREE.MeshStandardMaterial({ map: t, roughness: 0.7, metalness: 0.1, transparent: true, opacity: opacity, alphaTest: opacity < 1.0 ? 0.05 : 0.5 });
+            return new THREE.MeshStandardMaterial({ map: t, roughness: 0.7, metalness: 0.1, transparent: true, opacity: opacity, alphaTest: opacity < 1.0 ? 0.05 : 0.25 });
         };
 
         const cacheEntry = {
