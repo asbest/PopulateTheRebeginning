@@ -4543,32 +4543,33 @@ window.Humanoid = class Humanoid {
                 if (diffX > Math.PI) diffX -= 2 * Math.PI;
                 if (diffX < -Math.PI) diffX += 2 * Math.PI;
 
-                this.mesh.rotation.x += diffX * 5 * dt;
+                this.mesh.rotation.x += diffX * 2.5 * dt;
 
                 // Calculate shortest angular distance for Y
                 let diffY = 0 - this.mesh.rotation.y;
                 if (diffY > Math.PI) diffY -= 2 * Math.PI;
                 if (diffY < -Math.PI) diffY += 2 * Math.PI;
-                this.mesh.rotation.y += diffY * 5 * dt; // Gradually stop spinning
+                this.mesh.rotation.y += diffY * 2.5 * dt; // Gradually stop spinning
 
                 // Calculate shortest angular distance for Z
                 let diffZ = 0 - this.mesh.rotation.z;
                 if (diffZ > Math.PI) diffZ -= 2 * Math.PI;
                 if (diffZ < -Math.PI) diffZ += 2 * Math.PI;
-                this.mesh.rotation.z += diffZ * 5 * dt;
+                this.mesh.rotation.z += diffZ * 2.5 * dt;
 
                 this.resetAnim();
                 if(this.recoverTimer <= 0) {
                     this.state = 'getting_up';
-                    this.getUpTimer = 0.5;
+                    this.getUpDuration = 1.2;
+                    this.getUpTimer = this.getUpDuration;
                 }
             }
         }
         else if(this.state === 'getting_up') {
             this.getUpTimer -= dt;
-            const progress = Math.max(0, Math.min(1.0, 1.0 - (this.getUpTimer / 0.5)));
-            // Cubic Ease Out: 1 - pow(1 - x, 3)
-            const ease = 1 - Math.pow(1 - progress, 3);
+            const progress = Math.max(0, Math.min(1.0, 1.0 - (this.getUpTimer / this.getUpDuration)));
+            // Smooth Step: 3x^2 - 2x^3 or Cubic Ease In-Out
+            const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
             this.mesh.rotation.x = -Math.PI/2 * (1 - ease);
             this.mesh.rotation.z *= 0.8; // Also correct Z tilt
             if (this.getUpTimer <= 0) {
