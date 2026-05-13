@@ -420,7 +420,7 @@
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
-<script src="https://unpkg.com/@dimforge/rapier3d-compat/rapier.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.11.2/rapier.js"></script>
 <script type="module">
 import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
 
@@ -2271,7 +2271,7 @@ function updateChunkWater(wMesh, cx, cz) {
 }
 
 function updateChunkPhysics(cx, cz) {
-    if (!state.physicsWorld) return;
+    if (!state.physicsWorld || typeof RAPIER === 'undefined') return;
     const key = `${cx},${cz}`;
 
     // Remove existing collider if any
@@ -2290,8 +2290,8 @@ function updateChunkPhysics(cx, cz) {
 
     for (let i = 0; i <= nrows; i++) {
         for (let j = 0; j <= ncols; j++) {
-            const x = offX - CHUNK_SIZE / 2 + (j / ncols) * CHUNK_SIZE;
-            const z = offZ - CHUNK_SIZE / 2 + (i / nrows) * CHUNK_SIZE;
+            const x = offX + (j - ncols / 2) * (CHUNK_SIZE / ncols);
+            const z = offZ + (i - nrows / 2) * (CHUNK_SIZE / nrows);
             heights[i * (ncols + 1) + j] = getHeight(x, z);
         }
     }
@@ -3038,7 +3038,7 @@ class Fireball {
         this.initPhysics(start);
     }
     initPhysics(start) {
-        if (!state.physicsWorld) return;
+        if (!state.physicsWorld || typeof RAPIER === 'undefined') return;
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(start.x, start.y, start.z)
             .setLinvel(this.dir.x * this.speed, this.dir.y * this.speed, this.dir.z * this.speed)
@@ -3054,7 +3054,7 @@ class Fireball {
     update(dt) {
         if(!this.active) return false;
 
-        if (this.rigidBody) {
+        if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
             const pos = this.rigidBody.translation();
             this.mesh.position.set(pos.x, pos.y, pos.z);
 
@@ -4057,7 +4057,7 @@ window.Humanoid = class Humanoid {
     }
 
     initPhysics(x, z) {
-        if (!state.physicsWorld) return;
+        if (!state.physicsWorld || typeof RAPIER === 'undefined') return;
         const groundH = getHeight(x, z);
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
             .setTranslation(x, groundH + this.height, z)
@@ -4207,7 +4207,7 @@ window.Humanoid = class Humanoid {
 
     applyForce(vec) {
         if(this.state === 'dead') return;
-        if (this.rigidBody) {
+        if (this.rigidBody && typeof this.rigidBody.applyImpulse === 'function') {
             this.rigidBody.applyImpulse({ x: vec.x, y: vec.y, z: vec.z }, true);
             this.rigidBody.applyTorqueImpulse({
                 x: vec.z * 0.2 + (Math.random() - 0.5),
@@ -4512,7 +4512,7 @@ window.Humanoid = class Humanoid {
         if (this.updateTicker % 2 === 0) this.hpGroup.lookAt(state.camera.position);
         this.animTime += dt;
 
-        if (this.rigidBody) {
+        if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
             const rbPos = this.rigidBody.translation();
             this.mesh.position.set(rbPos.x, rbPos.y - this.height/2, rbPos.z);
             const rbRot = this.rigidBody.rotation();
@@ -6181,9 +6181,24 @@ window.onload = () => setTimeout(init, 100);
 window.enemyAIs = [];
 
 async function init() {
-    await RAPIER.init();
-    const gravity = { x: 0.0, y: -30.0, z: 0.0 };
-    state.physicsWorld = new RAPIER.World(gravity);
+    console.log("Initializing Game...");
+    try {
+        if (typeof RAPIER === 'undefined') {
+            console.error("RAPIER is not defined. Checking window.RAPIER...");
+            if (window.RAPIER) {
+                globalThis.RAPIER = window.RAPIER;
+            } else {
+                throw new Error("Rapier physics library failed to load.");
+            }
+        }
+        await RAPIER.init();
+        console.log("RAPIER initialized successfully.");
+        const gravity = { x: 0.0, y: -30.0, z: 0.0 };
+        state.physicsWorld = new RAPIER.World(gravity);
+    } catch (e) {
+        console.error("Physics initialization failed:", e);
+        alert("Physics engine failed to initialize. The game may not work correctly.");
+    }
 
     const checkCampaign = window.loadCampaignLevelIfRequested();
     try {
@@ -7208,7 +7223,7 @@ function animate() {
 
     if(state.chunkWaterMat && state.chunkWaterMat.uniforms) state.chunkWaterMat.uniforms.time.value += dt;
 
-    if (state.physicsWorld) {
+    if (state.physicsWorld && typeof state.physicsWorld.step === 'function') {
         state.physicsWorld.step();
     }
     }
