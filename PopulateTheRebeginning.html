@@ -4406,7 +4406,18 @@ window.Humanoid = class Humanoid {
                 this.velocity.y = Math.max(0, this.velocity.y);
             }
         } else {
-            const targetY = groundH;
+            let targetY = groundH;
+            if (this.state === 'stunned' || this.state === 'getting_up') {
+                // Lift origin when tilted to prevent body clipping through land
+                // Using (1-cos) ensures maximum lift when upside down (180 deg)
+                const tilt = Math.max(
+                    Math.abs(Math.sin(this.mesh.rotation.x)),
+                    Math.abs(Math.sin(this.mesh.rotation.z)),
+                    1.0 - Math.cos(this.mesh.rotation.x),
+                    1.0 - Math.cos(this.mesh.rotation.z)
+                );
+                targetY += tilt * (this.isShaman ? 1.2 : 0.8);
+            }
             if (this.mesh.position.y < targetY) {
                 if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(20, true);
                 this.mesh.position.y = targetY;
