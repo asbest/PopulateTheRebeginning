@@ -420,9 +420,11 @@
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.11.2/rapier.js"></script>
 <script type="module">
 import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
-import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
+
+let RAPIER = null;
 
 // --- js/constants.js ---
 const CHUNK_SIZE = 40;
@@ -4063,7 +4065,7 @@ window.Humanoid = class Humanoid {
         const halfHeight = Math.max(0.1, (this.height / 2) - radius);
 
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
-            .setTranslation(x, groundH + halfHeight + radius, z)
+            .setTranslation(x, groundH + halfHeight + radius + 0.1, z)
             .setLinearDamping(0.5)
             .setAngularDamping(0.5);
         this.rigidBody = state.physicsWorld.createRigidBody(rigidBodyDesc);
@@ -4259,10 +4261,17 @@ window.Humanoid = class Humanoid {
             const lerpFactor = 5.0;
 
             if (this.rigidBody) {
+                this.rigidBody.wakeUp();
                 const v = this.rigidBody.linvel();
                 const vx = v.x + (targetVelX - v.x) * lerpFactor * dt;
                 const vz = v.z + (targetVelZ - v.z) * lerpFactor * dt;
-                this.rigidBody.setLinvel({ x: vx, y: v.y, z: vz }, true);
+
+                if (this.isGrounded) {
+                    this.rigidBody.setLinvel({ x: vx, y: v.y, z: vz }, true);
+                } else {
+                    // Less control in air
+                    this.rigidBody.applyImpulse({ x: vec.x * speed * dt * 2, y: 0, z: vec.z * speed * dt * 2 }, true);
+                }
             } else {
                 this.velocity.x += (targetVelX - this.velocity.x) * lerpFactor * dt;
                 this.velocity.z += (targetVelZ - this.velocity.z) * lerpFactor * dt;
@@ -4525,7 +4534,11 @@ window.Humanoid = class Humanoid {
             this.velocity.set(linvel.x, linvel.y, linvel.z);
         } else {
             if(!this.isGrounded) this.velocity.y -= 30 * dt;
-            else { this.velocity.x *= 0.9; this.velocity.z *= 0.9; }
+            else {
+                // High friction when manual logic is active
+                this.velocity.x *= 0.8;
+                this.velocity.z *= 0.8;
+            }
             this.mesh.position.addScaledVector(this.velocity, dt);
         }
 
@@ -4831,10 +4844,16 @@ window.Humanoid = class Humanoid {
                     const targetVelZ = dir.z * speed;
 
                     if (this.rigidBody) {
+                        this.rigidBody.wakeUp();
                         const v = this.rigidBody.linvel();
                         const vx = v.x + (targetVelX - v.x) * 5.0 * dt;
                         const vz = v.z + (targetVelZ - v.z) * 5.0 * dt;
-                        this.rigidBody.setLinvel({ x: vx, y: v.y, z: vz }, true);
+
+                        if (this.isGrounded || this.type === 'airship') {
+                            this.rigidBody.setLinvel({ x: vx, y: v.y, z: vz }, true);
+                        } else {
+                            this.rigidBody.applyImpulse({ x: dir.x * speed * dt * 2, y: 0, z: dir.z * speed * dt * 2 }, true);
+                        }
                     } else {
                         this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
                         this.velocity.z += (targetVelZ - this.velocity.z) * 5.0 * dt;
@@ -4943,8 +4962,22 @@ window.Humanoid = class Humanoid {
                     }
                     const targetVelX = dir.x * speed;
                     const targetVelZ = dir.z * speed;
-                    this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
-                    this.velocity.z += (targetVelZ - this.velocity.z) * 5.0 * dt;
+
+                    if (this.rigidBody) {
+                        this.rigidBody.wakeUp();
+                        const v = this.rigidBody.linvel();
+                        const vx = v.x + (targetVelX - v.x) * 5.0 * dt;
+                        const vz = v.z + (targetVelZ - v.z) * 5.0 * dt;
+
+                        if (this.isGrounded || this.type === 'airship') {
+                            this.rigidBody.setLinvel({ x: vx, y: v.y, z: vz }, true);
+                        } else {
+                            this.rigidBody.applyImpulse({ x: dir.x * speed * dt * 2, y: 0, z: dir.z * speed * dt * 2 }, true);
+                        }
+                    } else {
+                        this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
+                        this.velocity.z += (targetVelZ - this.velocity.z) * 5.0 * dt;
+                    }
 
                     if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
                         const targetRot = Math.atan2(dx, dz);
@@ -6186,8 +6219,14 @@ window.enemyAIs = [];
 async function init() {
     console.log("Initializing Game...");
     try {
-        if (!RAPIER) throw new Error("RAPIER module not found");
-        console.log("RAPIER module loaded. Initializing WASM...");
+        if (window.RAPIER) {
+            RAPIER = window.RAPIER;
+            console.log("RAPIER found on window object.");
+        } else {
+            throw new Error("RAPIER library not found on window.");
+        }
+
+        console.log("Initializing WASM...");
         await RAPIER.init();
         console.log("RAPIER WASM initialized successfully.");
         const gravity = { x: 0.0, y: -30.0, z: 0.0 };
@@ -6197,6 +6236,7 @@ async function init() {
         console.error("Physics initialization failed:", e);
         console.warn("Stack trace:", e.stack);
         console.warn("Physics engine initialization failed. Falling back to non-physics mode.");
+        RAPIER = null;
     }
 
     const checkCampaign = window.loadCampaignLevelIfRequested();
@@ -7223,7 +7263,11 @@ function animate() {
     if(state.chunkWaterMat && state.chunkWaterMat.uniforms) state.chunkWaterMat.uniforms.time.value += dt;
 
     if (state.physicsWorld && typeof state.physicsWorld.step === 'function') {
-        state.physicsWorld.step();
+        try {
+            state.physicsWorld.step();
+        } catch (e) {
+            console.error("Physics step failed:", e);
+        }
     }
     }
 
