@@ -420,8 +420,11 @@
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.11.2/rapier.js"></script>
 <script type="module">
 import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
+
+let RAPIER = null;
 
 // --- js/constants.js ---
 const CHUNK_SIZE = 40;
@@ -551,6 +554,9 @@ const state = {
     projectiles: [],
     buildings: [],
     activeEffects: [],
+    physicsWorld: null,
+    rigidBodies: new Map(), // Stores rigid bodies for units/projectiles
+    terrainColliders: new Map(), // Stores colliders for terrain chunks
 
     shaman: null,
     rangeRing: null,
@@ -841,8 +847,13 @@ const NetworkManager = {
         });
 
         for(let i = state.units.length-1; i>=0; i--) {
-            if(!unitIds.has(state.units[i].id)) {
-                 state.scene.remove(state.units[i].mesh);
+            const u = state.units[i];
+            if(!unitIds.has(u.id)) {
+                 if (state.physicsWorld && u.rigidBody) {
+                     state.physicsWorld.removeRigidBody(u.rigidBody);
+                     state.rigidBodies.delete(u.id);
+                 }
+                 state.scene.remove(u.mesh);
                  state.units.splice(i, 1);
             }
         }
@@ -2138,6 +2149,23 @@ function modifyTerrain(centerX, centerZ, radius, amount) {
         }
     }
 
+    modifiedChunks.forEach(key => {
+        const [cx, cz] = key.split(',').map(Number);
+        updateChunkPhysics(cx, cz);
+    });
+
+    // Wake up rigid bodies near terrain modification
+    if (state.physicsWorld) {
+        state.units.forEach(u => {
+            if (u.rigidBody) {
+                const distSq = (u.mesh.position.x - centerX)**2 + (u.mesh.position.z - centerZ)**2;
+                if (distSq < (radius + 2)**2) {
+                    u.rigidBody.wakeUp();
+                }
+            }
+        });
+    }
+
     // Check if buildings collapse
     state.buildings.forEach(b => {
         const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
@@ -2182,6 +2210,7 @@ function updateChunks(force = false, specificChunks = null) {
                         updateChunkWater(state.chunks[key].children[1], cx+x, cz+z);
                     }
                     updateChunkDecorations(state.chunks[key], cx+x, cz+z);
+                    updateChunkPhysics(cx+x, cz+z);
                 } else {
                     if (!state.chunks[key] && createdCount >= MAX_CHUNKS_PER_FRAME) {
                         chunksLoadingPending = true;
@@ -2206,6 +2235,10 @@ function updateChunks(force = false, specificChunks = null) {
                 state.scene.remove(state.chunks[key]);
                 if(state.chunks[key].children[0] && state.chunks[key].children[0].geometry) state.chunks[key].children[0].geometry.dispose();
                 if(state.chunks[key].children[1] && state.chunks[key].children[1].geometry) state.chunks[key].children[1].geometry.dispose();
+                if (state.physicsWorld && state.terrainColliders.has(key)) {
+                    state.physicsWorld.removeCollider(state.terrainColliders.get(key));
+                    state.terrainColliders.delete(key);
+                }
                 delete state.chunks[key];
             }
         }
@@ -2237,6 +2270,39 @@ function updateChunkWater(wMesh, cx, cz) {
         foamAttr.setX(i, val);
     }
     foamAttr.needsUpdate = true;
+}
+
+function updateChunkPhysics(cx, cz) {
+    if (!state.physicsWorld || typeof RAPIER === 'undefined') return;
+    const key = `${cx},${cz}`;
+
+    // Remove existing collider if any
+    if (state.terrainColliders.has(key)) {
+        state.physicsWorld.removeCollider(state.terrainColliders.get(key));
+        state.terrainColliders.delete(key);
+    }
+
+    const offX = cx * CHUNK_SIZE;
+    const offZ = cz * CHUNK_SIZE;
+
+    // We need CHUNK_RES + 1 heights in each dimension
+    const nrows = CHUNK_RES;
+    const ncols = CHUNK_RES;
+    const heights = new Float32Array((nrows + 1) * (ncols + 1));
+
+    for (let i = 0; i <= nrows; i++) {
+        for (let j = 0; j <= ncols; j++) {
+            const x = offX + (j - ncols / 2) * (CHUNK_SIZE / ncols);
+            const z = offZ + (i - nrows / 2) * (CHUNK_SIZE / nrows);
+            heights[i * (ncols + 1) + j] = getHeight(x, z);
+        }
+    }
+
+    const scale = { x: CHUNK_SIZE / ncols, y: 1.0, z: CHUNK_SIZE / nrows };
+    const colliderDesc = RAPIER.ColliderDesc.heightfield(nrows, ncols, heights, scale)
+        .setTranslation(offX, 0, offZ);
+    const collider = state.physicsWorld.createCollider(colliderDesc);
+    state.terrainColliders.set(key, collider);
 }
 
 function updateChunkGeometry(mesh, cx, cz) {
@@ -2511,6 +2577,8 @@ function createChunk(cx, cz) {
     wMesh.position.set(offX, VISUAL_WATER_LEVEL, offZ);
     updateChunkWater(wMesh, cx, cz);
     grp.add(wMesh);
+
+    updateChunkPhysics(cx, cz);
 
     grp.userData = { trees: [], flowers: [] };
     for(let k=0; k<6; k++) {
@@ -2958,6 +3026,7 @@ function smoothPath(path, isFlying, unitHeight) {
 
 class Fireball {
     constructor(start, end, faction) {
+        this.id = generateUUID();
         this.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({color: 0xFF4500}));
         this.mesh.position.copy(start); this.target = end; this.dir = end.clone().sub(start).normalize();
         this.faction = faction;
@@ -2968,24 +3037,51 @@ class Fireball {
         this.mesh.add(this.light);
 
         state.scene.add(this.mesh);
+        this.initPhysics(start);
+    }
+    initPhysics(start) {
+        if (!state.physicsWorld || typeof RAPIER === 'undefined') return;
+        const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(start.x, start.y, start.z)
+            .setLinvel(this.dir.x * this.speed, this.dir.y * this.speed, this.dir.z * this.speed)
+            .setGravityScale(0);
+        this.rigidBody = state.physicsWorld.createRigidBody(rigidBodyDesc);
+
+        const colliderDesc = RAPIER.ColliderDesc.ball(0.5)
+            .setSensor(true)
+            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+        this.collider = state.physicsWorld.createCollider(colliderDesc, this.rigidBody);
+        state.rigidBodies.set(this.id, this.rigidBody);
     }
     update(dt) {
         if(!this.active) return false;
-        const moveDist = this.speed * dt;
-        const distToTarget = this.mesh.position.distanceTo(this.target);
 
-        if (distToTarget <= moveDist) {
-             this.mesh.position.copy(this.target); // Snap to target for visual
-             this.explode();
-             return false;
+        if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
+            const pos = this.rigidBody.translation();
+            this.mesh.position.set(pos.x, pos.y, pos.z);
+
+            // Manual terrain check as sensors might not hit heightfields reliably if speed is too high
+            const h = getHeight(pos.x, pos.z);
+            if (h > pos.y) {
+                this.explode();
+                return false;
+            }
+
+            // Check for collision with units using Rapier contact pairs is complex,
+            // keeping it simple with a proximity check or Raycast if needed.
+            // For now, let's keep the target snap or check proximity to units.
+        } else {
+            const moveDist = this.speed * dt;
+            this.mesh.position.addScaledVector(this.dir, moveDist);
+            const h = getHeight(this.mesh.position.x, this.mesh.position.z);
+            if (h > this.mesh.position.y) {
+                 this.explode();
+                 return false;
+            }
         }
 
-        this.mesh.position.addScaledVector(this.dir, moveDist);
-
-        // Terrain Collision Check
-        const h = getHeight(this.mesh.position.x, this.mesh.position.z);
-        if (h > this.mesh.position.y) {
-             this.mesh.position.y = h; // Snap to surface
+        const distToTarget = this.mesh.position.distanceTo(this.target);
+        if (distToTarget <= 1.0) {
              this.explode();
              return false;
         }
@@ -3008,6 +3104,11 @@ class Fireball {
         return true;
     }
     explode() {
+        if (state.physicsWorld && this.rigidBody) {
+            state.physicsWorld.removeRigidBody(this.rigidBody);
+            this.rigidBody = null;
+            state.rigidBodies.delete(this.id);
+        }
         state.scene.remove(this.mesh);
         this.mesh.geometry.dispose();
         this.mesh.material.dispose();
@@ -3954,6 +4055,25 @@ window.Humanoid = class Humanoid {
 
 
         applyUnitTexture(this);
+        this.initPhysics(x, z);
+    }
+
+    initPhysics(x, z) {
+        if (!state.physicsWorld || typeof RAPIER === 'undefined') return;
+        const groundH = getHeight(x, z);
+        const radius = 0.3;
+        const halfHeight = Math.max(0.1, (this.height / 2) - radius);
+
+        const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(x, groundH + halfHeight + radius + 0.1, z)
+            .setLinearDamping(0.5)
+            .setAngularDamping(0.5);
+        this.rigidBody = state.physicsWorld.createRigidBody(rigidBodyDesc);
+
+        const colliderDesc = RAPIER.ColliderDesc.capsule(halfHeight, radius);
+        state.physicsWorld.createCollider(colliderDesc, this.rigidBody);
+
+        state.rigidBodies.set(this.id, this.rigidBody);
     }
 
     setFaction(newFaction) {
@@ -4083,11 +4203,26 @@ window.Humanoid = class Humanoid {
 
     die() {
         this.state = 'dead'; this.hpGroup.visible = false; if(this.marker) this.marker.visible = false; this.velocity.set(0, 0, 0);
+        if (state.physicsWorld && this.rigidBody) {
+            state.physicsWorld.removeRigidBody(this.rigidBody);
+            this.rigidBody = null;
+            state.rigidBodies.delete(this.id);
+        }
     }
 
     applyForce(vec) {
         if(this.state === 'dead') return;
-        this.velocity.add(vec); this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 5.0; this.target = null;
+        if (this.rigidBody && typeof this.rigidBody.applyImpulse === 'function') {
+            this.rigidBody.applyImpulse({ x: vec.x, y: vec.y, z: vec.z }, true);
+            this.rigidBody.applyTorqueImpulse({
+                x: vec.z * 0.2 + (Math.random() - 0.5),
+                y: (Math.random() - 0.5) * 2,
+                z: -vec.x * 0.2 + (Math.random() - 0.5)
+            }, true);
+        } else {
+            this.velocity.add(vec);
+        }
+        this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 5.0; this.target = null;
 
         // Setup initial rotational physics based on the force vector
         if(!this.angularVelocity) this.angularVelocity = new THREE.Vector3();
@@ -4125,8 +4260,22 @@ window.Humanoid = class Humanoid {
             const targetVelZ = vec.z * speed;
             const lerpFactor = 5.0;
 
-            this.velocity.x += (targetVelX - this.velocity.x) * lerpFactor * dt;
-            this.velocity.z += (targetVelZ - this.velocity.z) * lerpFactor * dt;
+            if (this.rigidBody) {
+                this.rigidBody.wakeUp();
+                const v = this.rigidBody.linvel();
+                const vx = v.x + (targetVelX - v.x) * lerpFactor * dt;
+                const vz = v.z + (targetVelZ - v.z) * lerpFactor * dt;
+
+                if (this.isGrounded) {
+                    this.rigidBody.setLinvel({ x: vx, y: v.y, z: vz }, true);
+                } else {
+                    // Less control in air
+                    this.rigidBody.applyImpulse({ x: vec.x * speed * dt * 2, y: 0, z: vec.z * speed * dt * 2 }, true);
+                }
+            } else {
+                this.velocity.x += (targetVelX - this.velocity.x) * lerpFactor * dt;
+                this.velocity.z += (targetVelZ - this.velocity.z) * lerpFactor * dt;
+            }
 
             if(vec.lengthSq() > 0.001) {
                 const targetRot = Math.atan2(vec.x, vec.z);
@@ -4374,9 +4523,24 @@ window.Humanoid = class Humanoid {
 
         if (this.updateTicker % 2 === 0) this.hpGroup.lookAt(state.camera.position);
         this.animTime += dt;
-        if(!this.isGrounded) this.velocity.y -= 30 * dt;
-        else { this.velocity.x *= 0.9; this.velocity.z *= 0.9; }
-        this.mesh.position.addScaledVector(this.velocity, dt);
+
+        if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
+            const rbPos = this.rigidBody.translation();
+            this.mesh.position.set(rbPos.x, rbPos.y - this.height/2, rbPos.z);
+            const rbRot = this.rigidBody.rotation();
+            this.mesh.quaternion.set(rbRot.x, rbRot.y, rbRot.z, rbRot.w);
+
+            const linvel = this.rigidBody.linvel();
+            this.velocity.set(linvel.x, linvel.y, linvel.z);
+        } else {
+            if(!this.isGrounded) this.velocity.y -= 30 * dt;
+            else {
+                // High friction when manual logic is active
+                this.velocity.x *= 0.8;
+                this.velocity.z *= 0.8;
+            }
+            this.mesh.position.addScaledVector(this.velocity, dt);
+        }
 
         const groundH = getHeight(this.mesh.position.x, this.mesh.position.z);
 
@@ -4386,9 +4550,10 @@ window.Humanoid = class Humanoid {
             if (this.rocketCooldown) {
                 this.rocketCooldown -= dt;
             }
+            let thrust = 0;
             if (this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                 this.rocketActiveTimer -= dt;
-                this.velocity.y += 20.0 * dt; // Apply strong thrust
+                thrust = 20.0;
                 targetAlt += 20.0; // Temporarily increase target altitude
                 if (Math.random() < 0.5) {
                      state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), -1, (Math.random()-0.5))), 0xFF4500, 0.3, 0.8));
@@ -4396,20 +4561,34 @@ window.Humanoid = class Humanoid {
             }
 
             const diff = targetAlt - this.mesh.position.y;
-            this.velocity.y += diff * dt * 5.0;
-            this.velocity.y *= 0.9;
+            const liftForce = diff * 5.0 + thrust;
+
+            if (this.rigidBody) {
+                this.rigidBody.applyImpulse({ x: 0, y: liftForce * dt, z: 0 }, true);
+                // Damping for airship
+                const v = this.rigidBody.linvel();
+                this.rigidBody.setLinvel({ x: v.x * 0.9, y: v.y * 0.9, z: v.z * 0.9 }, true);
+            } else {
+                this.velocity.y += liftForce * dt;
+                this.velocity.y *= 0.9;
+            }
             this.isGrounded = false;
             // Always fly above terrain
             const minAlt = Math.max(groundH, WATER_LEVEL) + 2.0;
             if(this.mesh.position.y < minAlt) {
                 this.mesh.position.y = minAlt;
-                this.velocity.y = Math.max(0, this.velocity.y);
+                if (this.rigidBody) {
+                    const p = this.rigidBody.translation();
+                    this.rigidBody.setTranslation({ x: p.x, y: minAlt + this.height/2, z: p.z }, true);
+                    const v = this.rigidBody.linvel();
+                    this.rigidBody.setLinvel({ x: v.x, y: Math.max(0, v.y), z: v.z }, true);
+                } else {
+                    this.velocity.y = Math.max(0, this.velocity.y);
+                }
             }
         } else {
             let targetY = groundH;
             if (this.state === 'stunned' || this.state === 'getting_up') {
-                // Lift origin when tilted to prevent body clipping through land
-                // Using (1-cos) ensures maximum lift when upside down (180 deg)
                 const tilt = Math.max(
                     Math.abs(Math.sin(this.mesh.rotation.x)),
                     Math.abs(Math.sin(this.mesh.rotation.z)),
@@ -4420,9 +4599,24 @@ window.Humanoid = class Humanoid {
             }
             if (this.mesh.position.y < targetY) {
                 if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(20, true);
-                this.mesh.position.y = targetY;
-                this.isGrounded = true; this.velocity.y = 0;
-                if(this.state === 'stunned' && this.velocity.length() < 1) { this.state = 'idle'; this.mesh.rotation.z = 0; this.mesh.rotation.x = 0; }
+
+                if (this.rigidBody) {
+                    const p = this.rigidBody.translation();
+                    this.rigidBody.setTranslation({ x: p.x, y: targetY + this.height/2, z: p.z }, true);
+                    const v = this.rigidBody.linvel();
+                    this.rigidBody.setLinvel({ x: v.x, y: 0, z: v.z }, true);
+                } else {
+                    this.mesh.position.y = targetY;
+                    this.velocity.y = 0;
+                }
+                this.isGrounded = true;
+                if(this.state === 'stunned' && this.velocity.length() < 1) {
+                    this.state = 'idle';
+                    this.mesh.rotation.z = 0; this.mesh.rotation.x = 0;
+                    if (this.rigidBody) {
+                        this.rigidBody.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+                    }
+                }
             } else if (this.mesh.position.y > targetY + 0.1) { this.isGrounded = false; }
         }
 
@@ -4648,8 +4842,22 @@ window.Humanoid = class Humanoid {
                     }
                     const targetVelX = dir.x * speed;
                     const targetVelZ = dir.z * speed;
-                    this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
-                    this.velocity.z += (targetVelZ - this.velocity.z) * 5.0 * dt;
+
+                    if (this.rigidBody) {
+                        this.rigidBody.wakeUp();
+                        const v = this.rigidBody.linvel();
+                        const vx = v.x + (targetVelX - v.x) * 5.0 * dt;
+                        const vz = v.z + (targetVelZ - v.z) * 5.0 * dt;
+
+                        if (this.isGrounded || this.type === 'airship') {
+                            this.rigidBody.setLinvel({ x: vx, y: v.y, z: vz }, true);
+                        } else {
+                            this.rigidBody.applyImpulse({ x: dir.x * speed * dt * 2, y: 0, z: dir.z * speed * dt * 2 }, true);
+                        }
+                    } else {
+                        this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
+                        this.velocity.z += (targetVelZ - this.velocity.z) * 5.0 * dt;
+                    }
 
                     if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
                         const targetRot = Math.atan2(dx, dz);
@@ -4754,8 +4962,22 @@ window.Humanoid = class Humanoid {
                     }
                     const targetVelX = dir.x * speed;
                     const targetVelZ = dir.z * speed;
-                    this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
-                    this.velocity.z += (targetVelZ - this.velocity.z) * 5.0 * dt;
+
+                    if (this.rigidBody) {
+                        this.rigidBody.wakeUp();
+                        const v = this.rigidBody.linvel();
+                        const vx = v.x + (targetVelX - v.x) * 5.0 * dt;
+                        const vz = v.z + (targetVelZ - v.z) * 5.0 * dt;
+
+                        if (this.isGrounded || this.type === 'airship') {
+                            this.rigidBody.setLinvel({ x: vx, y: v.y, z: vz }, true);
+                        } else {
+                            this.rigidBody.applyImpulse({ x: dir.x * speed * dt * 2, y: 0, z: dir.z * speed * dt * 2 }, true);
+                        }
+                    } else {
+                        this.velocity.x += (targetVelX - this.velocity.x) * 5.0 * dt;
+                        this.velocity.z += (targetVelZ - this.velocity.z) * 5.0 * dt;
+                    }
 
                     if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
                         const targetRot = Math.atan2(dx, dz);
@@ -5994,7 +6216,29 @@ window.onload = () => setTimeout(init, 100);
 
 window.enemyAIs = [];
 
-function init() {
+async function init() {
+    console.log("Initializing Game...");
+    try {
+        if (window.RAPIER) {
+            RAPIER = window.RAPIER;
+            console.log("RAPIER found on window object.");
+        } else {
+            throw new Error("RAPIER library not found on window.");
+        }
+
+        console.log("Initializing WASM...");
+        await RAPIER.init();
+        console.log("RAPIER WASM initialized successfully.");
+        const gravity = { x: 0.0, y: -30.0, z: 0.0 };
+        state.physicsWorld = new RAPIER.World(gravity);
+        console.log("Physics world created.");
+    } catch (e) {
+        console.error("Physics initialization failed:", e);
+        console.warn("Stack trace:", e.stack);
+        console.warn("Physics engine initialization failed. Falling back to non-physics mode.");
+        RAPIER = null;
+    }
+
     const checkCampaign = window.loadCampaignLevelIfRequested();
     try {
 
@@ -6179,7 +6423,11 @@ window.applyLandGen = function() {
 
         // Remove existing chunk meshes
         for(let key in state.chunks) {
-            if(state.chunks[key].mesh) state.scene.remove(state.chunks[key].mesh);
+            state.scene.remove(state.chunks[key]);
+            if (state.physicsWorld && state.terrainColliders.has(key)) {
+                state.physicsWorld.removeCollider(state.terrainColliders.get(key));
+                state.terrainColliders.delete(key);
+            }
         }
         state.chunks = {};
 
@@ -6263,6 +6511,10 @@ window.removeTribe = function(faction) {
     // Remove units and buildings of this faction
     state.units = state.units.filter(u => {
         if (u.faction === faction) {
+            if (state.physicsWorld && u.rigidBody) {
+                state.physicsWorld.removeRigidBody(u.rigidBody);
+                state.rigidBodies.delete(u.id);
+            }
             state.scene.remove(u.mesh);
             return false;
         }
@@ -6456,6 +6708,17 @@ window.loadGame = function() {
         state.units.length = 0;
         state.buildings.forEach(b => state.scene.remove(b.mesh));
         state.buildings.length = 0;
+
+        if (state.physicsWorld) {
+            for (let [key, collider] of state.terrainColliders.entries()) {
+                state.physicsWorld.removeCollider(collider);
+            }
+            state.terrainColliders.clear();
+            for (let [id, rb] of state.rigidBodies.entries()) {
+                state.physicsWorld.removeRigidBody(rb);
+            }
+            state.rigidBodies.clear();
+        }
         state.activeEffects.forEach(e => { if(e.mesh) state.scene.remove(e.mesh); });
         state.activeEffects.length = 0;
         state.projectiles.forEach(p => state.scene.remove(p.mesh));
@@ -6998,6 +7261,14 @@ function animate() {
     if(state.mana < 100) { state.mana += dt * manaRate; if(isNaN(state.mana)) state.mana = 0; updateUI(); }
 
     if(state.chunkWaterMat && state.chunkWaterMat.uniforms) state.chunkWaterMat.uniforms.time.value += dt;
+
+    if (state.physicsWorld && typeof state.physicsWorld.step === 'function') {
+        try {
+            state.physicsWorld.step();
+        } catch (e) {
+            console.error("Physics step failed:", e);
+        }
+    }
     }
 
     if (state.shaman && state.shaman.state !== 'dead') {
