@@ -420,9 +420,9 @@
 
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.11.2/rapier.js"></script>
 <script type="module">
 import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
+import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
 
 // --- js/constants.js ---
 const CHUNK_SIZE = 40;
@@ -4059,13 +4059,16 @@ window.Humanoid = class Humanoid {
     initPhysics(x, z) {
         if (!state.physicsWorld || typeof RAPIER === 'undefined') return;
         const groundH = getHeight(x, z);
+        const radius = 0.3;
+        const halfHeight = Math.max(0.1, (this.height / 2) - radius);
+
         const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
-            .setTranslation(x, groundH + this.height, z)
+            .setTranslation(x, groundH + halfHeight + radius, z)
             .setLinearDamping(0.5)
             .setAngularDamping(0.5);
         this.rigidBody = state.physicsWorld.createRigidBody(rigidBodyDesc);
 
-        const colliderDesc = RAPIER.ColliderDesc.capsule(this.height / 2, 0.3);
+        const colliderDesc = RAPIER.ColliderDesc.capsule(halfHeight, radius);
         state.physicsWorld.createCollider(colliderDesc, this.rigidBody);
 
         state.rigidBodies.set(this.id, this.rigidBody);
@@ -6183,21 +6186,17 @@ window.enemyAIs = [];
 async function init() {
     console.log("Initializing Game...");
     try {
-        if (typeof RAPIER === 'undefined') {
-            console.error("RAPIER is not defined. Checking window.RAPIER...");
-            if (window.RAPIER) {
-                globalThis.RAPIER = window.RAPIER;
-            } else {
-                throw new Error("Rapier physics library failed to load.");
-            }
-        }
+        if (!RAPIER) throw new Error("RAPIER module not found");
+        console.log("RAPIER module loaded. Initializing WASM...");
         await RAPIER.init();
-        console.log("RAPIER initialized successfully.");
+        console.log("RAPIER WASM initialized successfully.");
         const gravity = { x: 0.0, y: -30.0, z: 0.0 };
         state.physicsWorld = new RAPIER.World(gravity);
+        console.log("Physics world created.");
     } catch (e) {
         console.error("Physics initialization failed:", e);
-        alert("Physics engine failed to initialize. The game may not work correctly.");
+        console.warn("Stack trace:", e.stack);
+        console.warn("Physics engine initialization failed. Falling back to non-physics mode.");
     }
 
     const checkCampaign = window.loadCampaignLevelIfRequested();
