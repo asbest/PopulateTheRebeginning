@@ -292,6 +292,7 @@
         <button class="menu-btn" onclick="openMultiplayer()">Multiplayer</button>
         <button class="menu-btn" onclick="openCampaignMenu()">Level selection</button>
         <button class="menu-btn" onclick="toggleFps()">Toggle FPS</button>
+        <button class="menu-btn" id="btn-toggle-music" onclick="toggleMusic()">Music: On</button>
         <button class="menu-btn" onclick="toggleFullscreen()">Toggle Fullscreen</button>
 
         <button class="menu-btn" onclick="openTribeMenu()">Tribes</button>
@@ -1041,19 +1042,29 @@ window.closeMultiplayer = () => {
 // --- js/audio.js ---
 const SoundManager = {
     ctx: null,
-    music: null,
-    currentMusicUrl: null,
+    explorationMusic: null,
+    combatMusic: null,
+    musicEnabled: localStorage.getItem('musicEnabled') !== 'false',
     init: function() {
-        if (this.ctx) return;
+        if (this.ctx && this.explorationMusic) return;
         try {
             window.AudioContext = window.AudioContext || window.webkitAudioContext;
-            if(window.AudioContext) {
+            if(window.AudioContext && !this.ctx) {
                 this.ctx = new AudioContext();
-            } else {
-                console.warn("WebAudio not supported");
             }
         } catch(e) {
             console.warn("AudioContext creation failed:", e);
+        }
+
+        if (!this.explorationMusic) {
+            this.explorationMusic = new Audio('IngameMusic.mp3');
+            this.explorationMusic.loop = true;
+            this.explorationMusic.volume = 0.5;
+        }
+        if (!this.combatMusic) {
+            this.combatMusic = new Audio('FightMusic.mp3');
+            this.combatMusic.loop = true;
+            this.combatMusic.volume = 0.6;
         }
     },
     playTone: function(freq, type, duration, vol=0.1) {
@@ -1128,28 +1139,34 @@ const SoundManager = {
                 break;
         }
     },
-    playMusic: function(url) {
-        if (this.currentMusicUrl === url) return;
-        this.stopMusic();
-        this.currentMusicUrl = url;
-        const audio = new Audio(url);
-        audio.loop = true;
-        audio.volume = 0.5;
-        this.music = audio;
-        audio.play().catch(e => {
-            if (this.currentMusicUrl === url) {
-                this.currentMusicUrl = null;
-                this.music = null;
-            }
-            console.warn("Music playback failed:", e);
-        });
-    },
-    stopMusic: function() {
-        if (this.music) {
-            this.music.pause();
-            this.music = null;
+    updateMusic: function(enemyInRange) {
+        if (!this.musicEnabled) {
+            if (this.explorationMusic) this.explorationMusic.pause();
+            if (this.combatMusic) this.combatMusic.pause();
+            return;
         }
-        this.currentMusicUrl = null;
+
+        this.init();
+
+        if (enemyInRange) {
+            if (this.combatMusic.paused) {
+                if (this.explorationMusic) this.explorationMusic.pause();
+                this.combatMusic.play().catch(e => {});
+            }
+        } else {
+            if (this.explorationMusic && this.explorationMusic.paused) {
+                if (this.combatMusic) this.combatMusic.pause();
+                this.explorationMusic.play().catch(e => {});
+            }
+        }
+    },
+    setMusicEnabled: function(enabled) {
+        this.musicEnabled = enabled;
+        localStorage.setItem('musicEnabled', enabled);
+        if (!enabled) {
+            if (this.explorationMusic) this.explorationMusic.pause();
+            if (this.combatMusic) this.combatMusic.pause();
+        }
     }
 };
 
@@ -6537,7 +6554,20 @@ window.togglePause = function() {
     const btn = document.getElementById('btn-pause');
     if(btn) btn.innerText = state.isPaused ? '▶️' : '⏸️';
     const menu = document.getElementById('pause-menu');
-    if(menu) menu.style.display = state.isPaused ? 'flex' : 'none';
+    if(menu) {
+        menu.style.display = state.isPaused ? 'flex' : 'none';
+        if (state.isPaused) {
+            const musicBtn = document.getElementById('btn-toggle-music');
+            if (musicBtn) musicBtn.innerText = SoundManager.musicEnabled ? "Music: On" : "Music: Off";
+        }
+    }
+}
+
+window.toggleMusic = function() {
+    const enabled = !SoundManager.musicEnabled;
+    SoundManager.setMusicEnabled(enabled);
+    const musicBtn = document.getElementById('btn-toggle-music');
+    if (musicBtn) musicBtn.innerText = enabled ? "Music: On" : "Music: Off";
 }
 
 window.toggleFullscreen = function() {
@@ -7295,7 +7325,7 @@ function animate() {
 
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
 
-    // Fight Music Logic
+    // Music Logic
     if (Math.floor(state.clock.elapsedTime * 60) % 30 === 0) {
         let enemyInRange = false;
         const playerUnits = state.units.filter(u => u.faction === 0 && u.state !== 'dead');
@@ -7306,11 +7336,7 @@ function animate() {
                 break;
             }
         }
-        if (enemyInRange) {
-            SoundManager.playMusic('FightMusic.mp3');
-        } else {
-            SoundManager.stopMusic();
-        }
+        SoundManager.updateMusic(enemyInRange);
     }
 
     if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = 10000;
