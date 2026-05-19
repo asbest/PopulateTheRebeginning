@@ -3084,9 +3084,19 @@ class Fireball {
                 return false;
             }
 
-            // Check for collision with units using Rapier contact pairs is complex,
-            // keeping it simple with a proximity check or Raycast if needed.
-            // For now, let's keep the target snap or check proximity to units.
+            // Rapier intersection check
+            if (state.physicsWorld) {
+                let hitSomething = false;
+                state.physicsWorld.intersectionsWithCollider(this.collider, (handle) => {
+                    if (handle !== this.collider.handle) {
+                        hitSomething = true;
+                    }
+                });
+                if (hitSomething) {
+                    this.explode();
+                    return false;
+                }
+            }
         } else {
             const moveDist = this.speed * dt;
             this.mesh.position.addScaledVector(this.dir, moveDist);
@@ -3785,6 +3795,9 @@ function executeSpell(type, x, z, caster) {
              const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
              if(dist < 4 && u.faction !== caster.faction) {
                  u.takeDamage(400);
+                 const forceDir = u.mesh.position.clone().sub(new THREE.Vector3(x, h, z)).normalize();
+                 forceDir.y += 1.0;
+                 u.applyForce(forceDir.multiplyScalar(20));
                  hit = true;
                  hitUnits.push(u);
              }
@@ -4547,6 +4560,9 @@ window.Humanoid = class Humanoid {
             const rbRot = this.rigidBody.rotation();
             this.mesh.quaternion.set(rbRot.x, rbRot.y, rbRot.z, rbRot.w);
 
+            // Sync Euler for logic that still uses it
+            this.mesh.rotation.setFromQuaternion(this.mesh.quaternion);
+
             const linvel = this.rigidBody.linvel();
             this.velocity.set(linvel.x, linvel.y, linvel.z);
         } else {
@@ -4713,16 +4729,18 @@ window.Humanoid = class Humanoid {
 
         if(this.state === 'stunned') {
             if(this.velocity.length() > 2 || !this.isGrounded) {
-                 if(this.angularVelocity) {
-                     this.mesh.rotation.x += this.angularVelocity.x * dt;
-                     this.mesh.rotation.y += this.angularVelocity.y * dt;
-                     this.mesh.rotation.z += this.angularVelocity.z * dt;
+                 if (!this.rigidBody) {
+                     if(this.angularVelocity) {
+                         this.mesh.rotation.x += this.angularVelocity.x * dt;
+                         this.mesh.rotation.y += this.angularVelocity.y * dt;
+                         this.mesh.rotation.z += this.angularVelocity.z * dt;
 
-                     // Apply angular damping
-                     const damping = this.isGrounded ? 0.90 : 0.99;
-                     this.angularVelocity.multiplyScalar(damping);
-                 } else {
-                     this.mesh.rotation.x += dt * 5; this.mesh.rotation.z += dt * 3;
+                         // Apply angular damping
+                         const damping = this.isGrounded ? 0.90 : 0.99;
+                         this.angularVelocity.multiplyScalar(damping);
+                     } else {
+                         this.mesh.rotation.x += dt * 5; this.mesh.rotation.z += dt * 3;
+                     }
                  }
 
                  if(this.legL) {
@@ -4731,62 +4749,78 @@ window.Humanoid = class Humanoid {
             } else {
                 this.recoverTimer -= dt;
 
-                // Normalize rotations to [-PI, PI] for smooth shortest-path interpolation
-                let rotX = this.mesh.rotation.x % (2 * Math.PI);
-                if (rotX < -Math.PI) rotX += 2 * Math.PI;
-                if (rotX > Math.PI) rotX -= 2 * Math.PI;
-                this.mesh.rotation.x = rotX;
+                if (!this.rigidBody) {
+                    // Normalize rotations to [-PI, PI] for smooth shortest-path interpolation
+                    let rotX = this.mesh.rotation.x % (2 * Math.PI);
+                    if (rotX < -Math.PI) rotX += 2 * Math.PI;
+                    if (rotX > Math.PI) rotX -= 2 * Math.PI;
+                    this.mesh.rotation.x = rotX;
 
-                let rotY = this.mesh.rotation.y % (2 * Math.PI);
-                if (rotY < -Math.PI) rotY += 2 * Math.PI;
-                if (rotY > Math.PI) rotY -= 2 * Math.PI;
-                this.mesh.rotation.y = rotY;
+                    let rotY = this.mesh.rotation.y % (2 * Math.PI);
+                    if (rotY < -Math.PI) rotY += 2 * Math.PI;
+                    if (rotY > Math.PI) rotY -= 2 * Math.PI;
+                    this.mesh.rotation.y = rotY;
 
-                let rotZ = this.mesh.rotation.z % (2 * Math.PI);
-                if (rotZ < -Math.PI) rotZ += 2 * Math.PI;
-                if (rotZ > Math.PI) rotZ -= 2 * Math.PI;
-                this.mesh.rotation.z = rotZ;
+                    let rotZ = this.mesh.rotation.z % (2 * Math.PI);
+                    if (rotZ < -Math.PI) rotZ += 2 * Math.PI;
+                    if (rotZ > Math.PI) rotZ -= 2 * Math.PI;
+                    this.mesh.rotation.z = rotZ;
 
-                const targetRotX = -Math.PI/2;
+                    const targetRotX = -Math.PI/2;
 
-                // Calculate shortest angular distance for X
-                let diffX = targetRotX - this.mesh.rotation.x;
-                if (diffX > Math.PI) diffX -= 2 * Math.PI;
-                if (diffX < -Math.PI) diffX += 2 * Math.PI;
+                    // Calculate shortest angular distance for X
+                    let diffX = targetRotX - this.mesh.rotation.x;
+                    if (diffX > Math.PI) diffX -= 2 * Math.PI;
+                    if (diffX < -Math.PI) diffX += 2 * Math.PI;
 
-                this.mesh.rotation.x += diffX * 2.5 * dt;
+                    this.mesh.rotation.x += diffX * 2.5 * dt;
 
-                // Calculate shortest angular distance for Y
-                let diffY = 0 - this.mesh.rotation.y;
-                if (diffY > Math.PI) diffY -= 2 * Math.PI;
-                if (diffY < -Math.PI) diffY += 2 * Math.PI;
-                this.mesh.rotation.y += diffY * 2.5 * dt; // Gradually stop spinning
+                    // Calculate shortest angular distance for Y
+                    let diffY = 0 - this.mesh.rotation.y;
+                    if (diffY > Math.PI) diffY -= 2 * Math.PI;
+                    if (diffY < -Math.PI) diffY += 2 * Math.PI;
+                    this.mesh.rotation.y += diffY * 2.5 * dt; // Gradually stop spinning
 
-                // Calculate shortest angular distance for Z
-                let diffZ = 0 - this.mesh.rotation.z;
-                if (diffZ > Math.PI) diffZ -= 2 * Math.PI;
-                if (diffZ < -Math.PI) diffZ += 2 * Math.PI;
-                this.mesh.rotation.z += diffZ * 2.5 * dt;
+                    // Calculate shortest angular distance for Z
+                    let diffZ = 0 - this.mesh.rotation.z;
+                    if (diffZ > Math.PI) diffZ -= 2 * Math.PI;
+                    if (diffZ < -Math.PI) diffZ += 2 * Math.PI;
+                    this.mesh.rotation.z += diffZ * 2.5 * dt;
+                }
 
                 this.resetAnim();
                 if(this.recoverTimer <= 0) {
                     this.state = 'getting_up';
                     this.getUpDuration = 1.2;
                     this.getUpTimer = this.getUpDuration;
+                    this.getUpStartQuat = this.mesh.quaternion.clone();
                 }
             }
         }
         else if(this.state === 'getting_up') {
             this.getUpTimer -= dt;
             const progress = Math.max(0, Math.min(1.0, 1.0 - (this.getUpTimer / this.getUpDuration)));
-            // Smooth Step: 3x^2 - 2x^3 or Cubic Ease In-Out
             const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-            this.mesh.rotation.x = -Math.PI/2 * (1 - ease);
-            this.mesh.rotation.z *= 0.8; // Also correct Z tilt
+
+            const targetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.mesh.rotation.y);
+            this.mesh.quaternion.copy(this.getUpStartQuat).slerp(targetQuat, ease);
+            this.mesh.rotation.setFromQuaternion(this.mesh.quaternion);
+
+            if (this.rigidBody) {
+                const q = this.mesh.quaternion;
+                this.rigidBody.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
+                this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+            }
+
             if (this.getUpTimer <= 0) {
                  this.state = 'idle';
                  this.mesh.rotation.x = 0;
                  this.mesh.rotation.z = 0;
+                 if (this.rigidBody) {
+                     this.rigidBody.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+                     this.rigidBody.setEnabledRotations(false, true, false);
+                 }
             }
         }
         else if(this.state === 'manual') {
@@ -6236,6 +6270,7 @@ window.enemyAIs = [];
 async function init() {
     console.log("Initializing Game...");
     try {
+
         if (window.RAPIER) {
             RAPIER = window.RAPIER;
             console.log("RAPIER found on window object.");
@@ -6248,7 +6283,6 @@ async function init() {
         console.log("RAPIER WASM initialized successfully.");
         const gravity = { x: 0.0, y: -30.0, z: 0.0 };
         state.physicsWorld = new RAPIER.World(gravity);
-        console.log("Physics world created.");
     } catch (e) {
         console.error("Physics initialization failed:", e);
         console.warn("Stack trace:", e.stack);
