@@ -702,8 +702,19 @@ window.flowerUniforms = { uTime: { value: 0 } };
 
 // --- js/network.js ---
 const NetworkManager = {
+    resetNetwork: function() {
+        if(state.network.conn) state.network.conn.close();
+        if(state.network.peer) state.network.peer.destroy();
+        state.network.peer = null;
+        state.network.conn = null;
+        state.network.role = 'none';
+        state.network.id = null;
+        document.getElementById('mp-status').innerText = "Disconnected.";
+        document.getElementById('mp-id-display').style.display = 'none';
+    },
+
     startHost: function() {
-        if(state.network.peer) return;
+        if(state.network.peer) this.resetNetwork();
         state.network.role = 'host';
 
         // Generate a 5-character alphanumeric ID to use with PeerJS
@@ -728,6 +739,9 @@ const NetworkManager = {
              state.network.conn = conn;
              document.getElementById('mp-status').innerText = "Player Connected!";
 
+             // Initial Sync
+             this.sendFullState(true);
+
              conn.on('data', (data) => {
                  this.handleData(data);
              });
@@ -740,7 +754,7 @@ const NetworkManager = {
     },
 
     joinGame: function(hostId) {
-        if(state.network.peer) return;
+        if(state.network.peer) this.resetNetwork();
         state.network.role = 'client';
         state.network.peer = new Peer();
 
@@ -763,8 +777,11 @@ const NetworkManager = {
              });
 
              conn.on('close', () => {
-                  alert("Disconnected from Host");
-                  location.reload();
+                  state.network.conn = null;
+                  document.getElementById('mp-status').innerText = "Disconnected from Host";
+                  document.getElementById('multiplayer-menu').style.display = 'flex';
+                  document.getElementById('mp-lobby').style.display = 'flex';
+                  state.isPaused = true;
              });
         });
 
@@ -773,7 +790,7 @@ const NetworkManager = {
         });
     },
 
-    sendFullState: function() {
+    sendFullState: function(includeTerrain = false) {
         if(!state.network.conn) return;
         const data = {
             type: 'sync',
@@ -798,8 +815,14 @@ const NetworkManager = {
                 hp: b.hp,
                 underConstruction: b.underConstruction,
                 constructionTimer: b.constructionTimer
-            }))
+            })),
+            mana: state.mana,
+            matchSettings: state.matchSettings,
+            isPaused: state.isPaused
         };
+        if (includeTerrain) {
+            data.terrainMods = Array.from(state.terrainMods.entries());
+        }
         state.network.conn.send(data);
     },
 
@@ -821,10 +844,22 @@ const NetworkManager = {
                      units = state.units.filter(u => d.unitIds.includes(u.id));
                  }
                  performAction(d.x, d.z, d.action, units);
+             } else if (data.type === 'terrain_update') {
+                 data.mods.forEach(([key, val]) => {
+                     state.terrainMods.set(key, val);
+                 });
+                 state.heightCache.clear();
+                 updateChunks(true);
              }
         } else {
              if(data.type === 'sync') {
                  this.applySync(data);
+             } else if (data.type === 'terrain_update') {
+                 data.mods.forEach(([key, val]) => {
+                     state.terrainMods.set(key, val);
+                 });
+                 state.heightCache.clear();
+                 updateChunks(true);
              }
         }
     },
@@ -885,6 +920,24 @@ const NetworkManager = {
                  state.buildings.splice(i, 1);
             }
         }
+
+        if (data.mana !== undefined) state.mana = data.mana;
+        if (data.matchSettings !== undefined) state.matchSettings = data.matchSettings;
+        if (data.isPaused !== undefined) state.isPaused = data.isPaused;
+        if (data.terrainMods !== undefined) {
+            let changed = false;
+            data.terrainMods.forEach(([key, val]) => {
+                if (state.terrainMods.get(key) !== val) {
+                    state.terrainMods.set(key, val);
+                    changed = true;
+                }
+            });
+            if (changed) {
+                state.heightCache.clear();
+                updateChunks(true);
+            }
+        }
+        updateUI();
     }
 };
 
@@ -2180,6 +2233,16 @@ function modifyTerrain(centerX, centerZ, radius, amount) {
                     u.rigidBody.wakeUp();
                 }
             }
+        });
+    }
+
+    if (state.network.conn) {
+        state.network.conn.send({
+            type: 'terrain_update',
+            mods: Array.from(state.terrainMods.entries()).filter(([key]) => {
+                const [x, z] = key.split(',').map(Number);
+                return Math.abs(x - centerX) <= radius && Math.abs(z - centerZ) <= radius;
+            })
         });
     }
 
@@ -7354,9 +7417,12 @@ function animate() {
     }
 
     updateChunks();
-    if(!state.isPaused) {
-    if (state.network.role === 'host') NetworkManager.sendFullState();
 
+    if (state.network.role === 'host' && Math.floor(state.clock.elapsedTime * 60) % 120 === 0) {
+        NetworkManager.sendFullState();
+    }
+
+    if(!state.isPaused) {
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
 
     // Music Logic
