@@ -8,3 +8,6 @@ https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_s
 
 Game on itch.io:
 https://asbest1.itch.io/populate-the-rebeginning
+
+Game on Gamejolt:
+https://gamejolt.com/games/PopulateTheRebeginning/1072190
