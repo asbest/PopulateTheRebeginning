@@ -318,19 +318,21 @@
     <div id="fps-indicator" style="position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 10px; color: white; display: none; z-index: 1000; text-shadow: 1px 1px 0 #000;">FPS: 0</div>
     <div id="pause-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); flex-direction:column; align-items:center; justify-content:center; z-index:200; pointer-events:auto;">
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">PAUSED</h1>
-        <button class="menu-btn" onclick="saveGame()">Save Game</button>
-        <button class="menu-btn" onclick="loadGame()">Load Game</button>
-        <button class="menu-btn" onclick="openMultiplayer()">Multiplayer</button>
-        <button class="menu-btn" onclick="openCampaignMenu()">Level selection</button>
-        <button class="menu-btn" onclick="toggleFps()">Toggle FPS</button>
-        <button class="menu-btn" id="btn-toggle-music" onclick="toggleMusic()">Music: On</button>
-        <button class="menu-btn" onclick="toggleFullscreen()">Toggle Fullscreen</button>
+        <div style="display: grid; grid-template-columns: repeat(2, 160px); gap: 5px; justify-content: center;">
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="saveGame()">Save Game</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="loadGame()">Load Game</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openMultiplayer()">Multiplayer</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openCampaignMenu()">Level selection</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFps()">Toggle FPS</button>
+            <button class="menu-btn" style="margin:0; width:100%;" id="btn-toggle-music" onclick="toggleMusic()">Music: On</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFullscreen()">Toggle Fullscreen</button>
 
-        <button class="menu-btn" onclick="openTribeMenu()">Tribes</button>
-        <button class="menu-btn" onclick="toggleMatchSettings()">Match Settings</button>
-        <button class="menu-btn" onclick="openLandGenMenu()">Land Generation</button>
-        <button class="menu-btn" onclick="showHelp()">Controls / Help</button>
-        <button class="menu-btn" onclick="togglePause()">Resume</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openTribeMenu()">Tribes</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleMatchSettings()">Match Settings</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openLandGenMenu()">Land Generation</button>
+            <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2;" onclick="showHelp()">Controls / Help</button>
+            <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2; background-color: #555;" onclick="togglePause()">Resume</button>
+        </div>
 
         <div id="cheat-menu" style="display:none; flex-direction:column; align-items:center; margin-top:20px; border-top: 1px solid white; padding-top:10px;">
             <h2 style="color:gold; font-size:16px;">CHEATS</h2>
