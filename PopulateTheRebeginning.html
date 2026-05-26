@@ -248,6 +248,24 @@
             align-items: center;
             gap: 10px;
         }
+
+        #help-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 400;
+            color: white;
+            pointer-events: auto;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+
         .donation-btn-large {
             background: #FF424D;
             color: white;
@@ -278,6 +296,19 @@
 </div>
 
 <div id="ui-layer">
+    <div id="help-overlay" style="display:none;">
+        <h1 style="color:gold; margin-bottom:15px; text-shadow: 2px 2px 0 #000;">CONTROLS</h1>
+        <div style="max-width: 800px; text-align: left; font-size: 16px; line-height: 1.4; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">
+            <p><strong>🖱️ Camera:</strong> Move with <strong>Left Click Drag</strong> or <strong>WASD</strong>. Rotate with <strong>Right Click Drag</strong> or <strong>Two-finger Twist</strong>. Zoom with <strong>Scroll Wheel</strong> or <strong>Pinch</strong>.</p>
+            <p><strong>🎯 Selection:</strong> Click a unit in the world or the list on the left. Toggle <strong>⊕</strong> for multi-selection.</p>
+            <p><strong>✨ Actions & Spells:</strong> Select an action from the right menu, then <strong>Click on the terrain</strong> to execute. Most spells require the Shaman to be selected and in range.</p>
+            <p><strong>🎮 Direct Control:</strong> Use the <strong>Joystick</strong> (bottom-left) or <strong>WASD</strong> to move selected units directly. Zoom in fully for <strong>First Person View</strong>.</p>
+            <p><strong>🧙 Shaman:</strong> Your Shaman is your most powerful unit. If they die, they will respawn near your followers after a delay, unless <em>Sudden Death</em> is active.</p>
+            <p><strong>⏸️ Pause:</strong> Access Save/Load and game settings via the <strong>Pause button</strong> (top-right).</p>
+        </div>
+        <button class="menu-btn" style="margin-top: 20px; font-size: 18px; width: auto; padding: 10px 30px;" onclick="closeHelp()">Close</button>
+    </div>
+
     <div id="story-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); flex-direction:column; align-items:center; justify-content:center; z-index:300; color:white; pointer-events:auto; text-align:center; padding: 20px; box-sizing: border-box;">
         <h1 id="story-title" style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000; max-width: 800px;"></h1>
         <div id="story-text" style="margin-bottom:30px; font-size: 18px; line-height: 1.5; max-width: 800px; text-shadow: 1px 1px 0 #000;"></div>
@@ -287,18 +318,21 @@
     <div id="fps-indicator" style="position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 10px; color: white; display: none; z-index: 1000; text-shadow: 1px 1px 0 #000;">FPS: 0</div>
     <div id="pause-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); flex-direction:column; align-items:center; justify-content:center; z-index:200; pointer-events:auto;">
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">PAUSED</h1>
-        <button class="menu-btn" onclick="saveGame()">Save Game</button>
-        <button class="menu-btn" onclick="loadGame()">Load Game</button>
-        <button class="menu-btn" onclick="openMultiplayer()">Multiplayer</button>
-        <button class="menu-btn" onclick="openCampaignMenu()">Level selection</button>
-        <button class="menu-btn" onclick="toggleFps()">Toggle FPS</button>
-        <button class="menu-btn" id="btn-toggle-music" onclick="toggleMusic()">Music: On</button>
-        <button class="menu-btn" onclick="toggleFullscreen()">Toggle Fullscreen</button>
+        <div style="display: grid; grid-template-columns: repeat(2, 160px); gap: 5px; justify-content: center;">
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="saveGame()">Save Game</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="loadGame()">Load Game</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openMultiplayer()">Multiplayer</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openCampaignMenu()">Level selection</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFps()">Toggle FPS</button>
+            <button class="menu-btn" style="margin:0; width:100%;" id="btn-toggle-music" onclick="toggleMusic()">Music: On</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFullscreen()">Toggle Fullscreen</button>
 
-        <button class="menu-btn" onclick="openTribeMenu()">Tribes</button>
-        <button class="menu-btn" onclick="toggleMatchSettings()">Match Settings</button>
-        <button class="menu-btn" onclick="openLandGenMenu()">Land Generation</button>
-        <button class="menu-btn" onclick="togglePause()">Resume</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openTribeMenu()">Tribes</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleMatchSettings()">Match Settings</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openLandGenMenu()">Land Generation</button>
+            <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2;" onclick="showHelp()">Controls / Help</button>
+            <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2; background-color: #555;" onclick="togglePause()">Resume</button>
+        </div>
 
         <div id="cheat-menu" style="display:none; flex-direction:column; align-items:center; margin-top:20px; border-top: 1px solid white; padding-top:10px;">
             <h2 style="color:gold; font-size:16px;">CHEATS</h2>
@@ -6473,6 +6507,11 @@ async function init() {
         animate();
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
+
+        if (!localStorage.getItem('rebeginning_help_shown')) {
+            window.showHelp();
+            localStorage.setItem('rebeginning_help_shown', 'true');
+        }
     } catch(e) {
         console.error("Init failed:", e);
         alert("Game failed to start: " + e.message);
@@ -6756,8 +6795,34 @@ window.showCampaignStory = function(level) {
 
 window.closeStoryOverlay = function() {
     document.getElementById('story-overlay').style.display = 'none';
-    state.isPaused = false;
+    const pauseMenu = document.getElementById('pause-menu');
+    const helpOverlay = document.getElementById('help-overlay');
+    if ((!pauseMenu || pauseMenu.style.display === 'none') &&
+        (!helpOverlay || helpOverlay.style.display === 'none')) {
+        state.isPaused = false;
+        const btn = document.getElementById('btn-pause');
+        if(btn) btn.innerText = '⏸️';
+    }
 };
+
+window.showHelp = function() {
+    document.getElementById('help-overlay').style.display = 'flex';
+    state.isPaused = true;
+    const btn = document.getElementById('btn-pause');
+    if(btn) btn.innerText = '▶️';
+}
+
+window.closeHelp = function() {
+    document.getElementById('help-overlay').style.display = 'none';
+    const pauseMenu = document.getElementById('pause-menu');
+    const storyOverlay = document.getElementById('story-overlay');
+    if ((!pauseMenu || pauseMenu.style.display === 'none') &&
+        (!storyOverlay || storyOverlay.style.display === 'none')) {
+        state.isPaused = false;
+        const btn = document.getElementById('btn-pause');
+        if(btn) btn.innerText = '⏸️';
+    }
+}
 
 window.cheatUnlockLevels = function() {
     localStorage.setItem('rebeginning_max_campaign_level', '12');
