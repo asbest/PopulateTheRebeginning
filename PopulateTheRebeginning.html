@@ -342,10 +342,10 @@
             <button class="menu-btn" onclick="cheatUnlockLevels()">Unlock All Levels</button>
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
 
-            <div id="stats-dashboard" style="margin-top:15px; border: 1px solid #444; padding:10px; border-radius:5px; background:rgba(0,0,0,0.5); width:90%; text-align:center; color: white;">
-                <h3 style="color:#00d4ff; font-size:14px; margin:0 0 5px 0;">STATISTICS</h3>
-                <div style="font-size:12px; margin-bottom:5px; color: white;">Total Site Visits: <span id="visit-count-display">...</span></div>
-                <button class="menu-btn" style="font-size:10px; padding:5px 10px; height:auto; margin:0;" onclick="refreshStats()">Refresh Stats</button>
+            <div id="stats-dashboard" style="margin-top:15px; border: 1px solid #666; padding:12px; border-radius:8px; background:rgba(0,0,0,0.7); width:90%; text-align:center; color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+                <h3 style="color:#00d4ff; font-size:16px; margin:0 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">Statistics</h3>
+                <div style="font-size:14px; margin-bottom:10px; color: white; font-weight: bold;">Total Site Visits: <span id="visit-count-display" style="color: #00ff00;">...</span></div>
+                <button class="menu-btn" style="font-size:11px; padding:6px 12px; height:auto; margin:0; font-weight: bold; text-transform: uppercase;" onclick="refreshStats()">Refresh Stats</button>
             </div>
         </div>
     </div>
@@ -620,7 +620,7 @@ const state = {
     joystickVector: new THREE.Vector2(0, 0),
     keyboardVector: new THREE.Vector2(0, 0),
     isPaused: false,
-    visitCount: 0,
+    visitCount: null,
 
     // Cheats
     cheatUnlimitedRange: false,
@@ -5906,10 +5906,13 @@ function updateUI() {
 
     const visitDisplay = document.getElementById('visit-count-display');
     if (visitDisplay) {
-        if (state.visitCount === undefined || state.visitCount === null) {
-            visitDisplay.innerText = 'Loading...';
-        } else {
+        if (state.visitCount !== undefined && state.visitCount !== null) {
             visitDisplay.innerText = state.visitCount;
+        } else {
+            // Keep existing status (Error/Refreshing/Loading) if already set
+            if (!visitDisplay.innerText || visitDisplay.innerText === '...') {
+                visitDisplay.innerText = 'Loading...';
+            }
         }
     }
 }
@@ -6372,18 +6375,34 @@ window.refreshStats = async function() {
 
     try {
         // GET requires trailing slash for this API to avoid 301
-        const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/');
-        if (!response.ok) throw new Error("Status: " + response.status);
+        const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/', {
+            cache: 'no-store',
+            mode: 'cors'
+        });
+        if (!response.ok) {
+            const errText = "HTTP " + response.status;
+            console.warn("Stats fetch failed:", errText);
+            if (visitDisplay) visitDisplay.innerText = errText;
+            return;
+        }
         const data = await response.json();
         if (data && typeof data.count === 'number') {
             state.visitCount = data.count;
             updateUI();
         } else {
-            throw new Error("Invalid response format");
+            console.error("Invalid stats data format:", data);
+            if (visitDisplay) visitDisplay.innerText = "Data Error";
         }
     } catch (e) {
-        console.error("Failed to refresh stats:", e);
-        if (visitDisplay) visitDisplay.innerText = "Error: " + e.message;
+        console.error("Network error refreshing stats:", e);
+        if (visitDisplay) {
+            const msg = e.message ? e.message.toLowerCase() : "";
+            if (msg.includes('fetch') || msg.includes('network') || msg.includes('cors')) {
+                visitDisplay.innerText = "Connection Error";
+            } else {
+                visitDisplay.innerText = "Error: " + e.message;
+            }
+        }
     }
 }
 
@@ -6406,23 +6425,31 @@ window.enemyAIs = [];
 async function init() {
     console.log("Initializing Game...");
 
-    // Increment and fetch visit count
-    try {
-        const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/up');
-        if (response.ok) {
-            const data = await response.json();
-            state.visitCount = data.count;
-            console.log("Visit count updated:", state.visitCount);
-            updateUI();
-        } else {
-            console.warn("Failed to increment visit count: HTTP", response.status);
-            // Fallback: try to just get the count if increment fails
+    // Increment and fetch visit count (Non-blocking)
+    (async () => {
+        try {
+            const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/up', {
+                cache: 'no-store',
+                mode: 'cors'
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data && typeof data.count === 'number') {
+                    state.visitCount = data.count;
+                    console.log("Visit count updated:", state.visitCount);
+                    updateUI();
+                }
+            } else {
+                console.warn("Failed to increment visit count: HTTP", response.status);
+                window.refreshStats();
+            }
+        } catch (e) {
+            console.error("Failed to update visit count in init:", e);
+            // If it's a fetch error, the refresh will likely fail too, but we try anyway
             window.refreshStats();
         }
-    } catch (e) {
-        console.error("Failed to update visit count:", e);
-        window.refreshStats();
-    }
+    })();
+
     try {
 
         if (window.RAPIER) {
