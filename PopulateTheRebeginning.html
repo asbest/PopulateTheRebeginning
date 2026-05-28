@@ -339,8 +339,14 @@
             <button class="menu-btn" onclick="cheatMana()">Set Mana 10000</button>
             <button class="menu-btn" onclick="cheatRange()">Unlimited Range</button>
             <button class="menu-btn" onclick="cheatImmortal()">God Mode</button>
-                        <button class="menu-btn" onclick="cheatUnlockLevels()">Unlock All Levels</button>
+            <button class="menu-btn" onclick="cheatUnlockLevels()">Unlock All Levels</button>
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
+
+            <div id="stats-dashboard" style="margin-top:15px; border: 1px solid #666; padding:12px; border-radius:8px; background:rgba(0,0,0,0.7); width:90%; text-align:center; color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
+                <h3 style="color:#00d4ff; font-size:16px; margin:0 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">Statistics</h3>
+                <div style="font-size:14px; margin-bottom:10px; color: white; font-weight: bold;">Total Site Visits: <span id="visit-count-display" style="color: #00ff00;">...</span></div>
+                <button class="menu-btn" style="font-size:11px; padding:6px 12px; height:auto; margin:0; font-weight: bold; text-transform: uppercase;" onclick="refreshStats()">Refresh Stats</button>
+            </div>
         </div>
     </div>
 
@@ -614,6 +620,7 @@ const state = {
     joystickVector: new THREE.Vector2(0, 0),
     keyboardVector: new THREE.Vector2(0, 0),
     isPaused: false,
+    visitCount: null,
 
     // Cheats
     cheatUnlimitedRange: false,
@@ -5896,6 +5903,18 @@ function updateUI() {
     const manaFill = document.getElementById('mana-fill');
     if(manaText) manaText.innerText = Math.floor(state.mana);
     if(manaFill) manaFill.style.width = state.mana + '%';
+
+    const visitDisplay = document.getElementById('visit-count-display');
+    if (visitDisplay) {
+        if (state.visitCount !== undefined && state.visitCount !== null) {
+            visitDisplay.innerText = state.visitCount;
+        } else {
+            // Keep existing status (Error/Refreshing/Loading) if already set
+            if (!visitDisplay.innerText || visitDisplay.innerText === '...') {
+                visitDisplay.innerText = 'Loading...';
+            }
+        }
+    }
 }
 
 function showEnemySpellIcon(spellType) {
@@ -6350,6 +6369,37 @@ window.cheatDisable = function() {
     alert("Cheats Disabled");
 }
 
+window.refreshStats = async function() {
+    const visitDisplay = document.getElementById('visit-count-display');
+    if (visitDisplay) visitDisplay.innerText = "Refreshing...";
+
+    const ns = 'rb_eval_prod';
+    const baseUrl = `https://api.counterapi.dev/v1/${ns}/visits/`;
+    const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${baseUrl}`;
+
+    const tryFetch = async (url) => {
+        const response = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        const data = await response.json();
+        if (data && typeof data.count === 'number') return data.count;
+        throw new Error("Invalid Data");
+    };
+
+    try {
+        state.visitCount = await tryFetch(baseUrl);
+        updateUI();
+    } catch (e) {
+        console.warn("Direct stats fetch failed, trying proxy:", e);
+        try {
+            state.visitCount = await tryFetch(proxyUrl);
+            updateUI();
+        } catch (proxyError) {
+            console.error("Proxy fetch failed:", proxyError);
+            if (visitDisplay) visitDisplay.innerText = "Offline";
+        }
+    }
+}
+
 
 // --- js/main.js ---
 
@@ -6368,6 +6418,38 @@ window.enemyAIs = [];
 
 async function init() {
     console.log("Initializing Game...");
+
+    // Increment and fetch visit count (Non-blocking with proxy fallback)
+    (async () => {
+        const ns = 'rb_eval_prod';
+        const upUrl = `https://api.counterapi.dev/v1/${ns}/visits/up`;
+        const proxyUpUrl = `https://api.codetabs.com/v1/proxy/?quest=${upUrl}`;
+
+        const tryIncr = async (url) => {
+            const response = await fetch(url, { cache: 'no-store' });
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            const data = await response.json();
+            if (data && typeof data.count === 'number') {
+                state.visitCount = data.count;
+                updateUI();
+                return true;
+            }
+            return false;
+        };
+
+        try {
+            await tryIncr(upUrl);
+        } catch (e) {
+            console.warn("Direct increment failed, trying proxy:", e);
+            try {
+                await tryIncr(proxyUpUrl);
+            } catch (proxyErr) {
+                console.error("Init visit increment failed completely:", proxyErr);
+                window.refreshStats();
+            }
+        }
+    })();
+
     try {
 
         if (window.RAPIER) {
