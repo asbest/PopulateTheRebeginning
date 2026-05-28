@@ -342,9 +342,9 @@
             <button class="menu-btn" onclick="cheatUnlockLevels()">Unlock All Levels</button>
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
 
-            <div id="stats-dashboard" style="margin-top:15px; border: 1px solid #444; padding:10px; border-radius:5px; background:rgba(0,0,0,0.5); width:90%; text-align:center;">
+            <div id="stats-dashboard" style="margin-top:15px; border: 1px solid #444; padding:10px; border-radius:5px; background:rgba(0,0,0,0.5); width:90%; text-align:center; color: white;">
                 <h3 style="color:#00d4ff; font-size:14px; margin:0 0 5px 0;">STATISTICS</h3>
-                <div style="font-size:12px; margin-bottom:5px;">Total Site Visits: <span id="visit-count-display">...</span></div>
+                <div style="font-size:12px; margin-bottom:5px; color: white;">Total Site Visits: <span id="visit-count-display">...</span></div>
                 <button class="menu-btn" style="font-size:10px; padding:5px 10px; height:auto; margin:0;" onclick="refreshStats()">Refresh Stats</button>
             </div>
         </div>
@@ -6367,7 +6367,9 @@ window.refreshStats = async function() {
     if (visitDisplay) visitDisplay.innerText = "Refreshing...";
 
     try {
-        const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits');
+        // Added trailing slash to avoid 301 redirect issues
+        const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/');
+        if (!response.ok) throw new Error("HTTP " + response.status);
         const data = await response.json();
         state.visitCount = data.count;
         updateUI();
@@ -6399,12 +6401,19 @@ async function init() {
     // Increment and fetch visit count
     try {
         const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/up');
-        const data = await response.json();
-        state.visitCount = data.count;
-        console.log("Visit count updated:", state.visitCount);
-        updateUI();
+        if (response.ok) {
+            const data = await response.json();
+            state.visitCount = data.count;
+            console.log("Visit count updated:", state.visitCount);
+            updateUI();
+        } else {
+            console.warn("Failed to increment visit count: HTTP", response.status);
+            // Fallback: try to just get the count if increment fails
+            window.refreshStats();
+        }
     } catch (e) {
         console.error("Failed to update visit count:", e);
+        window.refreshStats();
     }
     try {
 
