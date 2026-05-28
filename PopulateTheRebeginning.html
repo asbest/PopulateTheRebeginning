@@ -6375,12 +6375,15 @@ window.refreshStats = async function() {
 
     try {
         // GET requires trailing slash for this API to avoid 301
-        const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/', {
-            cache: 'no-store',
-            mode: 'cors'
+        // We use query param to bypass aggressive caching
+        const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/?t=' + Date.now(), {
+            method: 'GET',
+            mode: 'cors',
+            credentials: 'omit',
+            cache: 'no-store'
         });
         if (!response.ok) {
-            const errText = "HTTP " + response.status;
+            const errText = (response.status === 429) ? "Rate Limited" : ("Offline (" + response.status + ")");
             console.warn("Stats fetch failed:", errText);
             if (visitDisplay) visitDisplay.innerText = errText;
             return;
@@ -6396,12 +6399,7 @@ window.refreshStats = async function() {
     } catch (e) {
         console.error("Network error refreshing stats:", e);
         if (visitDisplay) {
-            const msg = e.message ? e.message.toLowerCase() : "";
-            if (msg.includes('fetch') || msg.includes('network') || msg.includes('cors')) {
-                visitDisplay.innerText = "Connection Error";
-            } else {
-                visitDisplay.innerText = "Error: " + e.message;
-            }
+            visitDisplay.innerText = "Connection Error";
         }
     }
 }
@@ -6429,8 +6427,10 @@ async function init() {
     (async () => {
         try {
             const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/up', {
-                cache: 'no-store',
-                mode: 'cors'
+                method: 'GET',
+                mode: 'cors',
+                credentials: 'omit',
+                cache: 'no-store'
             });
             if (response.ok) {
                 const data = await response.json();
