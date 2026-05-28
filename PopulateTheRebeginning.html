@@ -3139,11 +3139,13 @@ function smoothPath(path, isFlying, unitHeight) {
 // --- js/projectiles.js ---
 
 class Fireball {
-    constructor(start, end, faction) {
+    constructor(start, end, faction, unitDamage = 27, buildingDamage = 75) {
         this.id = generateUUID();
         this.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({color: 0xFF4500}));
         this.mesh.position.copy(start); this.target = end; this.dir = end.clone().sub(start).normalize();
         this.faction = faction;
+        this.unitDamage = unitDamage;
+        this.buildingDamage = buildingDamage;
         this.speed = 25; this.active = true; this.trailTimer = 0;
 
         // Add light
@@ -3249,7 +3251,7 @@ class Fireball {
                 if (u.faction !== this.faction) {
                     const forceDir = u.mesh.position.clone().sub(impactPos).normalize(); const force = (8 - d) * 3;
                     forceDir.multiplyScalar(force); forceDir.y += force * 0.5;
-                    u.applyForce(forceDir); u.takeDamage(27);
+                    u.applyForce(forceDir); u.takeDamage(this.unitDamage);
                     u.burnTimer = 3.0;
                 }
             }
@@ -3258,7 +3260,7 @@ class Fireball {
         state.buildings.forEach(b => {
             const d = b.mesh.position.distanceTo(impactPos);
             if(d < 8 && b.faction !== this.faction) {
-                b.takeDamage(75); // Fireball deals 75 damage to buildings
+                b.takeDamage(this.buildingDamage); // Fireball deals damage to buildings
                 b.burnTimer = 3.0;
             }
         });
@@ -3940,7 +3942,7 @@ window.Humanoid = class Humanoid {
         // Stats
         this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6; this.height = 1.5;
         if(type === 'warrior') { this.maxHp = 200; this.damage = 52.5; }
-        if(type === 'firewarrior') { this.maxHp = 120; this.damage = 25; this.range = 12; this.attackSpeed = 2.0; }
+        if(type === 'firewarrior') { this.maxHp = 120; this.damage = 5; this.range = 12; this.attackSpeed = 2.0; }
         if(type === 'spy') { this.damage = 0; }
         if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; this.height = 2.2; }
         if(type === 'airship') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; this.height = 2.0; }
@@ -4559,7 +4561,7 @@ window.Humanoid = class Humanoid {
                  // Spawn Fireball
                  const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
                  const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
-                 state.projectiles.push(new Fireball(startPos, targetPos, this.faction));
+                 state.projectiles.push(new Fireball(startPos, targetPos, this.faction, 5.4, 15)); // 20% of 27/75
                  SoundManager.playSound('fireball');
             } else if (this.type === 'spy') {
                 // Spy Conversion
