@@ -339,8 +339,14 @@
             <button class="menu-btn" onclick="cheatMana()">Set Mana 10000</button>
             <button class="menu-btn" onclick="cheatRange()">Unlimited Range</button>
             <button class="menu-btn" onclick="cheatImmortal()">God Mode</button>
-                        <button class="menu-btn" onclick="cheatUnlockLevels()">Unlock All Levels</button>
+            <button class="menu-btn" onclick="cheatUnlockLevels()">Unlock All Levels</button>
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
+
+            <div id="stats-dashboard" style="margin-top:15px; border: 1px solid #444; padding:10px; border-radius:5px; background:rgba(0,0,0,0.5); width:90%; text-align:center; color: white;">
+                <h3 style="color:#00d4ff; font-size:14px; margin:0 0 5px 0;">STATISTICS</h3>
+                <div style="font-size:12px; margin-bottom:5px; color: white;">Total Site Visits: <span id="visit-count-display">...</span></div>
+                <button class="menu-btn" style="font-size:10px; padding:5px 10px; height:auto; margin:0;" onclick="refreshStats()">Refresh Stats</button>
+            </div>
         </div>
     </div>
 
@@ -614,6 +620,7 @@ const state = {
     joystickVector: new THREE.Vector2(0, 0),
     keyboardVector: new THREE.Vector2(0, 0),
     isPaused: false,
+    visitCount: 0,
 
     // Cheats
     cheatUnlimitedRange: false,
@@ -5896,6 +5903,15 @@ function updateUI() {
     const manaFill = document.getElementById('mana-fill');
     if(manaText) manaText.innerText = Math.floor(state.mana);
     if(manaFill) manaFill.style.width = state.mana + '%';
+
+    const visitDisplay = document.getElementById('visit-count-display');
+    if (visitDisplay) {
+        if (state.visitCount === undefined || state.visitCount === null) {
+            visitDisplay.innerText = 'Loading...';
+        } else {
+            visitDisplay.innerText = state.visitCount;
+        }
+    }
 }
 
 function showEnemySpellIcon(spellType) {
@@ -6350,6 +6366,27 @@ window.cheatDisable = function() {
     alert("Cheats Disabled");
 }
 
+window.refreshStats = async function() {
+    const visitDisplay = document.getElementById('visit-count-display');
+    if (visitDisplay) visitDisplay.innerText = "Refreshing...";
+
+    try {
+        // GET requires trailing slash for this API to avoid 301
+        const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/');
+        if (!response.ok) throw new Error("Status: " + response.status);
+        const data = await response.json();
+        if (data && typeof data.count === 'number') {
+            state.visitCount = data.count;
+            updateUI();
+        } else {
+            throw new Error("Invalid response format");
+        }
+    } catch (e) {
+        console.error("Failed to refresh stats:", e);
+        if (visitDisplay) visitDisplay.innerText = "Error: " + e.message;
+    }
+}
+
 
 // --- js/main.js ---
 
@@ -6368,6 +6405,24 @@ window.enemyAIs = [];
 
 async function init() {
     console.log("Initializing Game...");
+
+    // Increment and fetch visit count
+    try {
+        const response = await fetch('https://api.counterapi.dev/v1/rebeginning_stats/visits/up');
+        if (response.ok) {
+            const data = await response.json();
+            state.visitCount = data.count;
+            console.log("Visit count updated:", state.visitCount);
+            updateUI();
+        } else {
+            console.warn("Failed to increment visit count: HTTP", response.status);
+            // Fallback: try to just get the count if increment fails
+            window.refreshStats();
+        }
+    } catch (e) {
+        console.error("Failed to update visit count:", e);
+        window.refreshStats();
+    }
     try {
 
         if (window.RAPIER) {
