@@ -334,7 +334,7 @@
             <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2; background-color: #555;" onclick="togglePause()">Resume</button>
         </div>
 
-        <div id="cheat-menu" style="display:none; flex-direction:column; align-items:center; margin-top:20px; border-top: 1px solid white; padding-top:10px;">
+        <div id="cheat-menu" style="display:none; flex-direction:column; align-items:center; margin-top:20px; border-top: 1px solid white; padding-top:10px; width: 100%;">
             <h2 style="color:gold; font-size:16px;">CHEATS</h2>
             <button class="menu-btn" onclick="cheatMana()">Set Mana 10000</button>
             <button class="menu-btn" onclick="cheatRange()">Unlimited Range</button>
@@ -344,7 +344,24 @@
 
             <div id="stats-dashboard" style="margin-top:15px; border: 1px solid #666; padding:12px; border-radius:8px; background:rgba(0,0,0,0.7); width:90%; text-align:center; color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
                 <h3 style="color:#00d4ff; font-size:16px; margin:0 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">Statistics</h3>
-                <div style="font-size:14px; margin-bottom:10px; color: white; font-weight: bold;">Total Site Visits: <span id="visit-count-display" style="color: #00ff00;">...</span></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size:12px; margin-bottom:10px; color: white;">
+                    <div style="background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px;">
+                        <div style="opacity: 0.8; font-size: 10px; text-transform: uppercase;">Total</div>
+                        <div id="visit-count-display" style="color: #00ff00; font-weight: bold; font-size: 14px;">...</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px;">
+                        <div style="opacity: 0.8; font-size: 10px; text-transform: uppercase;">This Year</div>
+                        <div id="visit-year-display" style="color: #00ff00; font-weight: bold; font-size: 14px;">...</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px;">
+                        <div style="opacity: 0.8; font-size: 10px; text-transform: uppercase;">This Month</div>
+                        <div id="visit-month-display" style="color: #00ff00; font-weight: bold; font-size: 14px;">...</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px;">
+                        <div style="opacity: 0.8; font-size: 10px; text-transform: uppercase;">This Week</div>
+                        <div id="visit-week-display" style="color: #00ff00; font-weight: bold; font-size: 14px;">...</div>
+                    </div>
+                </div>
                 <button class="menu-btn" style="font-size:11px; padding:6px 12px; height:auto; margin:0; font-weight: bold; text-transform: uppercase;" onclick="refreshStats()">Refresh Stats</button>
             </div>
         </div>
@@ -621,6 +638,7 @@ const state = {
     keyboardVector: new THREE.Vector2(0, 0),
     isPaused: false,
     visitCount: null,
+    visitStats: { year: null, month: null, week: null },
 
     // Cheats
     cheatUnlimitedRange: false,
@@ -5908,13 +5926,16 @@ function updateUI() {
     if (visitDisplay) {
         if (state.visitCount !== undefined && state.visitCount !== null) {
             visitDisplay.innerText = state.visitCount;
-        } else {
-            // Keep existing status (Error/Refreshing/Loading) if already set
-            if (!visitDisplay.innerText || visitDisplay.innerText === '...') {
-                visitDisplay.innerText = 'Loading...';
-            }
+        } else if (!visitDisplay.innerText || visitDisplay.innerText === '...') {
+            visitDisplay.innerText = 'Loading...';
         }
     }
+    const yearDisplay = document.getElementById('visit-year-display');
+    if (yearDisplay) yearDisplay.innerText = (state.visitStats.year !== null) ? state.visitStats.year : '...';
+    const monthDisplay = document.getElementById('visit-month-display');
+    if (monthDisplay) monthDisplay.innerText = (state.visitStats.month !== null) ? state.visitStats.month : '...';
+    const weekDisplay = document.getElementById('visit-week-display');
+    if (weekDisplay) weekDisplay.innerText = (state.visitStats.week !== null) ? state.visitStats.week : '...';
 }
 
 function showEnemySpellIcon(spellType) {
@@ -6369,35 +6390,72 @@ window.cheatDisable = function() {
     alert("Cheats Disabled");
 }
 
+function getVisitKeys() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    // ISO Week Calculation
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+
+    return {
+        total: 'visits',
+        year: `visits_${year}`,
+        month: `visits_${year}_m${month}`,
+        week: `visits_${year}_w${weekNum}`
+    };
+}
+
 window.refreshStats = async function() {
-    const visitDisplay = document.getElementById('visit-count-display');
-    if (visitDisplay) visitDisplay.innerText = "Refreshing...";
+    const displays = ['visit-count-display', 'visit-year-display', 'visit-month-display', 'visit-week-display'];
+    displays.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = "...";
+    });
 
     const ns = 'rb_eval_prod';
-    const baseUrl = `https://api.counterapi.dev/v1/${ns}/visits/`;
-    const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${baseUrl}`;
+    const keys = getVisitKeys();
 
-    const tryFetch = async (url) => {
-        const response = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
-        if (!response.ok) throw new Error("HTTP " + response.status);
-        const data = await response.json();
-        if (data && typeof data.count === 'number') return data.count;
-        throw new Error("Invalid Data");
+    const tryFetch = async (key) => {
+        const baseUrl = `https://api.counterapi.dev/v1/${ns}/${key}/`;
+        const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${baseUrl}`;
+
+        const fetchOnce = async (url) => {
+            const response = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            const data = await response.json();
+            if (data && typeof data.count === 'number') return data.count;
+            throw new Error("Invalid Data");
+        };
+
+        try {
+            return await fetchOnce(baseUrl);
+        } catch (e) {
+            return await fetchOnce(proxyUrl);
+        }
     };
 
-    try {
-        state.visitCount = await tryFetch(baseUrl);
-        updateUI();
-    } catch (e) {
-        console.warn("Direct stats fetch failed, trying proxy:", e);
-        try {
-            state.visitCount = await tryFetch(proxyUrl);
-            updateUI();
-        } catch (proxyError) {
-            console.error("Proxy fetch failed:", proxyError);
-            if (visitDisplay) visitDisplay.innerText = "Offline";
-        }
-    }
+    const results = await Promise.allSettled([
+        tryFetch(keys.total),
+        tryFetch(keys.year),
+        tryFetch(keys.month),
+        tryFetch(keys.week)
+    ]);
+
+    if (results[0].status === 'fulfilled') state.visitCount = results[0].value;
+    if (results[1].status === 'fulfilled') state.visitStats.year = results[1].value;
+    if (results[2].status === 'fulfilled') state.visitStats.month = results[2].value;
+    if (results[3].status === 'fulfilled') state.visitStats.week = results[3].value;
+
+    updateUI();
+
+    // Fallback labels for failures
+    if (results[0].status === 'rejected' && document.getElementById('visit-count-display'))
+        document.getElementById('visit-count-display').innerText = 'Offline';
 }
 
 
@@ -6422,31 +6480,44 @@ async function init() {
     // Increment and fetch visit count (Non-blocking with proxy fallback)
     (async () => {
         const ns = 'rb_eval_prod';
-        const upUrl = `https://api.counterapi.dev/v1/${ns}/visits/up`;
-        const proxyUpUrl = `https://api.codetabs.com/v1/proxy/?quest=${upUrl}`;
+        const keys = getVisitKeys();
 
-        const tryIncr = async (url) => {
-            const response = await fetch(url, { cache: 'no-store' });
-            if (!response.ok) throw new Error("HTTP " + response.status);
-            const data = await response.json();
-            if (data && typeof data.count === 'number') {
-                state.visitCount = data.count;
-                updateUI();
-                return true;
+        const tryIncr = async (key) => {
+            const upUrl = `https://api.counterapi.dev/v1/${ns}/${key}/up`;
+            const proxyUpUrl = `https://api.codetabs.com/v1/proxy/?quest=${upUrl}`;
+
+            const upOnce = async (url) => {
+                const response = await fetch(url, { cache: 'no-store' });
+                if (!response.ok) throw new Error("HTTP " + response.status);
+                const data = await response.json();
+                if (data && typeof data.count === 'number') return data.count;
+                throw new Error("Invalid Data");
+            };
+
+            try {
+                return await upOnce(upUrl);
+            } catch (e) {
+                return await upOnce(proxyUpUrl);
             }
-            return false;
         };
 
         try {
-            await tryIncr(upUrl);
-        } catch (e) {
-            console.warn("Direct increment failed, trying proxy:", e);
-            try {
-                await tryIncr(proxyUpUrl);
-            } catch (proxyErr) {
-                console.error("Init visit increment failed completely:", proxyErr);
-                window.refreshStats();
-            }
+            const results = await Promise.allSettled([
+                tryIncr(keys.total),
+                tryIncr(keys.year),
+                tryIncr(keys.month),
+                tryIncr(keys.week)
+            ]);
+
+            if (results[0].status === 'fulfilled') state.visitCount = results[0].value;
+            if (results[1].status === 'fulfilled') state.visitStats.year = results[1].value;
+            if (results[2].status === 'fulfilled') state.visitStats.month = results[2].value;
+            if (results[3].status === 'fulfilled') state.visitStats.week = results[3].value;
+
+            updateUI();
+        } catch (err) {
+            console.error("Init visit increment failed:", err);
+            window.refreshStats();
         }
     })();
 
