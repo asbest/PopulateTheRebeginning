@@ -300,9 +300,10 @@
         <h1 style="color:gold; margin-bottom:15px; text-shadow: 2px 2px 0 #000;">CONTROLS</h1>
         <div style="max-width: 800px; text-align: left; font-size: 16px; line-height: 1.4; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">
             <p><strong>🖱️ Camera:</strong> Move with <strong>Left Click Drag</strong> or <strong>WASD</strong>. Rotate with <strong>Right Click Drag</strong> or <strong>Two-finger Twist</strong>. Zoom with <strong>Scroll Wheel</strong> or <strong>Pinch</strong>.</p>
-            <p><strong>🎯 Selection:</strong> Click a unit in the world or the list on the left. Toggle <strong>⊕</strong> for multi-selection.</p>
-            <p><strong>✨ Actions & Spells:</strong> Select an action from the right menu, then <strong>Click on the terrain</strong> to execute. Most spells require the Shaman to be selected and in range.</p>
-            <p><strong>🎮 Direct Control:</strong> Use the <strong>Joystick</strong> (bottom-left) or <strong>WASD</strong> to move selected units directly. Zoom in fully for <strong>First Person View</strong>.</p>
+            <p><strong>🎯 Selection:</strong> Click a unit in the world or the list. Toggle <strong>⊕</strong> or hold <strong>Shift</strong> for multi-selection. <strong>Ctrl+A</strong> selects all units.</p>
+            <p><strong>✨ Actions & Spells:</strong> Select with <strong>1-9/0 keys</strong> or the menu. <strong>Click</strong> terrain to execute, or <strong>Right-Click</strong> to move regardless of selection.</p>
+            <p><strong>🖱️ Advanced:</strong> <strong>Right-Click</strong> or <strong>Middle-Click</strong> drag to rotate camera. <strong>Space</strong> centers camera on Shaman. <strong>Esc</strong> clears selection.</p>
+            <p><strong>🎮 Direct Control:</strong> Use <strong>Joystick</strong> or <strong>WASD</strong> to move units. Zoom in fully for <strong>First Person View</strong>.</p>
             <p><strong>🧙 Shaman:</strong> Your Shaman is your most powerful unit. If they die, they will respawn near your followers after a delay, unless <em>Sudden Death</em> is active.</p>
             <p><strong>⏸️ Pause:</strong> Access Save/Load and game settings via the <strong>Pause button</strong> (top-right).</p>
         </div>
@@ -5967,6 +5968,8 @@ function selectAction(action) {
     if(btn) btn.classList.add('active');
 }
 window.selectAction = selectAction;
+window.updateContextMenus = updateContextMenus;
+window.updateUnitListSelection = updateUnitListSelection;
 
 function unloadSelected() {
     if(state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'airship') {
@@ -6090,15 +6093,18 @@ function updateContextMenus() {
     if (hasSelection) {
         visibleActions.push('upgrade_unit');
     }
+    state.visibleActions = visibleActions;
 
-    visibleActions.forEach(act => {
+    visibleActions.forEach((act, index) => {
          const data = ACTIONS[act];
          if(!data) return;
 
          const btn = document.createElement('div');
          btn.className = 'action-btn';
          btn.id = `btn-${act}`;
-         btn.innerHTML = `${data.icon}<span class="label">${data.label} (${data.cost})</span>`;
+         const hotkey = index < 9 ? (index + 1) : (index === 9 ? 0 : '');
+         const hotkeyLabel = hotkey !== '' ? `[${hotkey}] ` : '';
+         btn.innerHTML = `${data.icon}<span class="label">${hotkeyLabel}${data.label} (${data.cost})</span>`;
          if(state.currentAction === act) btn.classList.add('active');
 
          if (act === 'airship_rocket' && hasAirship) {
@@ -6305,6 +6311,52 @@ function setupKeyboard() {
     window.addEventListener('keydown', (e) => {
         const k = e.key.toLowerCase();
         if(keys.hasOwnProperty(k)) { keys[k] = true; update(); }
+
+        // Hotkeys 1-9, 0
+        if (state.visibleActions && !isNaN(k) && k !== ' ') {
+            let idx = parseInt(k) - 1;
+            if (k === '0') idx = 9;
+            if (idx >= 0 && idx < state.visibleActions.length) {
+                selectAction(state.visibleActions[idx]);
+            }
+        }
+
+        // Ctrl+A Select All
+        if (e.ctrlKey && k === 'a') {
+            e.preventDefault();
+            state.selectedUnits.forEach(u => u.selectRing.visible = false);
+            state.selectedUnits = state.units.filter(u => u.faction === 0 && u.state !== 'dead');
+            state.selectedUnits.forEach(u => u.selectRing.visible = true);
+            updateContextMenus();
+            updateUnitListSelection();
+        }
+
+        // Escape to clear selection
+        if (k === 'escape') {
+            state.selectedUnits.forEach(u => u.selectRing.visible = false);
+            state.selectedUnits = [];
+            selectAction('move');
+            updateContextMenus();
+            updateUnitListSelection();
+        }
+
+        // Space to center camera
+        if (k === ' ') {
+            e.preventDefault();
+            let targetPos = null;
+            if (state.shaman && state.shaman.state !== 'dead') {
+                targetPos = state.shaman.mesh.position;
+            } else if (state.selectedUnits.length > 0) {
+                targetPos = new THREE.Vector3();
+                state.selectedUnits.forEach(u => targetPos.add(u.mesh.position));
+                targetPos.divideScalar(state.selectedUnits.length);
+            }
+
+            if (targetPos) {
+                state.cameraLookAt.copy(targetPos);
+                updateCameraPosition();
+            }
+        }
     });
     window.addEventListener('keyup', (e) => {
         const k = e.key.toLowerCase();
@@ -7184,7 +7236,7 @@ function onPointerMove(e) {
     const dx = e.clientX - state.dragStart.x;
     const dy = e.clientY - state.dragStart.y;
 
-    if (state.dragButton === 2) {
+    if (state.dragButton === 1 || state.dragButton === 2) {
          if(state.isFPV) {
              const speed = 0.005;
              state.fpvYaw -= dx * speed;
@@ -7260,10 +7312,10 @@ function onPointerUp(e) {
     state.isDragging = false;
     let x = e.clientX || (e.changedTouches ? e.changedTouches[0].clientX : 0);
     let y = e.clientY || (e.changedTouches ? e.changedTouches[0].clientY : 0);
-    if(Math.sqrt((x-state.tapStart.x)**2 + (y-state.tapStart.y)**2) < 10) handleTap(x, y, e.button === 2);
+    if(Math.sqrt((x-state.tapStart.x)**2 + (y-state.tapStart.y)**2) < 10) handleTap(x, y, e.button === 2, e.shiftKey);
 }
 
-function handleTap(x, y, isRightClick) {
+function handleTap(x, y, isRightClick, isShift) {
     const mouse = new THREE.Vector2((x/window.innerWidth)*2-1, -(y/window.innerHeight)*2+1);
     state.raycaster.setFromCamera(mouse, state.camera);
 
@@ -7297,7 +7349,7 @@ function handleTap(x, y, isRightClick) {
             const hitUnit = meshToUnit.get(unitHits[0].object);
             if(hitUnit) {
                 if(window.isAllied(hitUnit.faction, 0)) {
-                    if(state.multiSelectMode) {
+                    if(state.multiSelectMode || isShift) {
                         if(state.selectedUnits.includes(hitUnit)) {
                              state.selectedUnits = state.selectedUnits.filter(x => x !== hitUnit);
                              hitUnit.selectRing.visible = false;
@@ -7316,7 +7368,7 @@ function handleTap(x, y, isRightClick) {
             }
         }
 
-        if(terrainHits.length > 0 && !state.multiSelectMode) {
+        if(terrainHits.length > 0 && !state.multiSelectMode && !isShift) {
             state.selectedUnits.forEach(u => u.selectRing.visible = false);
             state.selectedUnits = [];
             updateContextMenus();
@@ -7361,7 +7413,7 @@ function handleTap(x, y, isRightClick) {
         }
 
         if(terrainHits.length > 0) {
-             performAction(terrainHits[0].point.x, terrainHits[0].point.z, action);
+             performAction(terrainHits[0].point.x, terrainHits[0].point.z, isRightClick ? 'move' : action);
         }
     }
 }
