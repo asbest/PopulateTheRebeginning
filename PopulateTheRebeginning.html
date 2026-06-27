@@ -188,6 +188,14 @@
             cursor: pointer;
         }
         .multi-select-btn.active { border-color: #00FF00; color: #00FF00; box-shadow: 0 0 5px #00FF00; }
+        #selection-box {
+            position: absolute;
+            border: 1px solid #00FF00;
+            background: rgba(0, 255, 0, 0.1);
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+        }
 
         .unload-btn {
             position: absolute; bottom: 20px; right: 90px;
@@ -472,6 +480,7 @@
     </div>
 
     <div id="btn-multiselect" class="multi-select-btn" onclick="toggleMultiSelect()">⊕</div>
+    <div id="selection-box"></div>
     <div id="btn-unload" class="unload-btn" onclick="unloadSelected()">⬇️</div>
     <div id="btn-pause" onclick="togglePause()">⏸️</div>
     <a href="https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link" target="_blank" class="donation-btn-small">Support</a>
@@ -482,6 +491,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.11.2/rapier.js"></script>
 <script type="module">
 import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
+window.THREE = THREE;
 
 let RAPIER = null;
 
@@ -619,6 +629,7 @@ const state = {
 
     shaman: null,
     rangeRing: null,
+    impactRing: null,
     selectedUnits: [],
     cameraLookAt: null,
     viewScale: 35,
@@ -628,6 +639,8 @@ const state = {
     isDragging: false,
     dragStart: { x: 0, y: 0 },
     tapStart: { x: 0, y: 0 },
+    lastMousePos: { x: 0, y: 0 },
+    selectionStart: null,
     dragButton: 0,
     pinchStartDist: 0,
     pinchStartScale: 35,
@@ -3957,6 +3970,22 @@ window.castLandbridge = castLandbridge;
 // --- js/humanoid.js ---
 
 window.Humanoid = class Humanoid {
+    getSeparationVector() {
+        const push = new THREE.Vector3(0, 0, 0);
+        const range = 1.5;
+        const neighbors = SpatialHash.query(this.mesh.position.x, this.mesh.position.z, range);
+        for (const other of neighbors) {
+            if (other === this || other.state === "dead" || other.state === "transported") continue;
+            const distSq = (this.mesh.position.x - other.mesh.position.x)**2 + (this.mesh.position.z - other.mesh.position.z)**2;
+            if (distSq < range * range && distSq > 0.001) {
+                const dist = Math.sqrt(distSq);
+                const force = (range - dist) / range;
+                push.x += (this.mesh.position.x - other.mesh.position.x) / dist * force;
+                push.z += (this.mesh.position.z - other.mesh.position.z) / dist * force;
+            }
+        }
+        return push;
+    }
     constructor(faction, type, x, z, id = null) {
         this.id = id || generateUUID();
         this.faction = faction; // 0 = Player, 1 = Enemy
@@ -3998,6 +4027,7 @@ window.Humanoid = class Humanoid {
         const hpMat = getHpMaterial(faction);
         this.hpBar = new THREE.Mesh(AssetCache.geos.hpFront, hpMat);
         this.hpBar.position.x = -0.5; this.hpGroup.add(this.hpBar);
+        this.hpGroup.visible = false;
         this.mesh.add(this.hpGroup);
 
         // Enemy Marker
@@ -4411,8 +4441,8 @@ window.Humanoid = class Humanoid {
         }
 
         if(allowed) {
-            const targetVelX = vec.x * speed;
-            const targetVelZ = vec.z * speed;
+            const push = this.getSeparationVector(); const targetVelX = (vec.x + push.x) * speed;
+            const targetVelZ = (vec.z + push.z) * speed;
             const lerpFactor = 5.0;
 
             if (this.rigidBody) {
@@ -4676,7 +4706,10 @@ window.Humanoid = class Humanoid {
              this.shieldMesh.children[1].rotation.y += dt * 2.0;
         }
 
-        if (this.updateTicker % 2 === 0) this.hpGroup.lookAt(state.camera.position);
+        const isSelected = state.selectedUnits.includes(this);
+        const isDamaged = this.hp < this.maxHp;
+        this.hpGroup.visible = isSelected || isDamaged;
+        if (this.hpGroup.visible && this.updateTicker % 2 === 0) this.hpGroup.lookAt(state.camera.position);
         this.animTime += dt;
 
         if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
@@ -5016,8 +5049,8 @@ window.Humanoid = class Humanoid {
                     if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                         speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
                     }
-                    const targetVelX = dir.x * speed;
-                    const targetVelZ = dir.z * speed;
+                    const push = this.getSeparationVector(); const targetVelX = (dir.x + push.x) * speed;
+                    const targetVelZ = (dir.z + push.z) * speed;
 
                     if (this.rigidBody) {
                         this.rigidBody.wakeUp();
@@ -5136,8 +5169,8 @@ window.Humanoid = class Humanoid {
                     if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                         speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
                     }
-                    const targetVelX = dir.x * speed;
-                    const targetVelZ = dir.z * speed;
+                    const push = this.getSeparationVector(); const targetVelX = (dir.x + push.x) * speed;
+                    const targetVelZ = (dir.z + push.z) * speed;
 
                     if (this.rigidBody) {
                         this.rigidBody.wakeUp();
@@ -5376,6 +5409,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
         const hpBar = new THREE.Mesh(fgGeo, new THREE.MeshBasicMaterial({color: 0x00FF00}));
         hpBar.position.x = -1.0;
         hpGroup.add(hpBar);
+        hpGroup.visible = false;
         group.add(hpGroup);
 
         state.scene.add(group);
@@ -5399,6 +5433,24 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             underConstruction: true,
             burnTimer: 0,
             trainingQueue: [],
+            rallyPoint: null,
+            rallyLine: null,
+            setRallyPoint: function(rx, rz) {
+                this.rallyPoint = {x: rx, z: rz};
+                if (!this.rallyLine) {
+                    const material = new THREE.LineBasicMaterial({ color: 0xffff00 });
+                    const geometry = new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(0, 0, 0),
+                        new THREE.Vector3(0, 0, 0)
+                    ]);
+                    this.rallyLine = new THREE.Line(geometry, material);
+                    state.scene.add(this.rallyLine);
+                }
+                const start = this.mesh.position.clone();
+                const end = new THREE.Vector3(rx, getHeight(rx, rz) + 0.5, rz);
+                this.rallyLine.geometry.setFromPoints([start, end]);
+                this.rallyLine.visible = (state.selectedBuilding === this);
+            },
             takeDamage: function(amount, silent = false) {
                 this.hp -= amount;
                 this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
@@ -5415,7 +5467,10 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                 BuildingSpatialHash.markDirty();
             },
             update: function(dt) {
-                this.hpGroup.lookAt(state.camera.position);
+                const isSelected = (state.selectedBuilding === this);
+                const isDamaged = this.hp < this.maxHp;
+                this.hpGroup.visible = isSelected || isDamaged;
+                if (this.hpGroup.visible) this.hpGroup.lookAt(state.camera.position);
                 if (state.network.role === 'client') return;
 
                 if(this.burnTimer > 0) {
@@ -5442,7 +5497,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                             const safe = findNearestLand(this.mesh.position.x + 2, this.mesh.position.z + 2, 10);
                             const u = new Humanoid(this.faction, 'wild', safe.x, safe.z);
                             state.units.push(u);
-
+                            if (this.rallyPoint) u.goto(this.rallyPoint.x, this.rallyPoint.z);
                         }
                     }
                     return; // Skip other updates while building
@@ -5457,6 +5512,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                             const safe = findNearestLand(this.mesh.position.x + 2, this.mesh.position.z + 2, 10);
                             const u = new Humanoid(task.faction, task.type, safe.x, safe.z);
                             state.units.push(u);
+                            if (this.rallyPoint) u.goto(this.rallyPoint.x, this.rallyPoint.z);
                             spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFD700);
                             this.trainingQueue.splice(i, 1);
                         }
@@ -6050,6 +6106,39 @@ function updateUnitList() {
     });
 }
 
+function performBoxSelection(x1, y1, x2, y2, isShift) {
+    const left = Math.min(x1, x2);
+    const right = Math.max(x1, x2);
+    const top = Math.min(y1, y2);
+    const bottom = Math.max(y1, y2);
+
+    if (!isShift) {
+        state.selectedUnits.forEach(u => u.selectRing.visible = false);
+        state.selectedUnits = [];
+    }
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    state.units.forEach(u => {
+        if (u.faction === 0 && u.state !== 'dead') {
+            const screenPos = u.mesh.position.clone().project(state.camera);
+            const sx = (screenPos.x + 1) * width / 2;
+            const sy = (-screenPos.y + 1) * height / 2;
+
+            if (sx >= left && sx <= right && sy >= top && sy <= bottom) {
+                if (!state.selectedUnits.includes(u)) {
+                    u.selectRing.visible = true;
+                    state.selectedUnits.push(u);
+                }
+            }
+        }
+    });
+
+    updateContextMenus();
+    updateUnitListSelection();
+}
+
 function updateUnitListSelection() {
     state.units.forEach(u => {
         if(u.listItem) {
@@ -6627,6 +6716,9 @@ async function init() {
         state.ambLight = amb;
         state.scene.add(amb);
         state.scene.add(state.rangeRing);
+        state.impactRing = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.1, 32), new THREE.MeshBasicMaterial({color: 0xFF0000, transparent: true, opacity: 0.3}));
+        state.impactRing.visible = false;
+        state.scene.add(state.impactRing);
         const sun = new THREE.DirectionalLight(0xffffff, 3.14);
         state.sunLight = sun;
         sun.position.set(50, 100, 40);
@@ -7212,6 +7304,7 @@ function onPointerDown(e) {
     state.dragStart = {x: e.clientX, y: e.clientY};
     state.tapStart = {x: e.clientX, y: e.clientY};
     state.dragButton = e.button || 0;
+    if (state.dragButton === 0 && state.currentAction === "select") state.selectionStart = {x: e.clientX, y: e.clientY};
 }
 
 function onTouchStart(e) {
@@ -7232,7 +7325,26 @@ function onTouchStart(e) {
 }
 
 function onPointerMove(e) {
+    state.lastMousePos.x = e.clientX;
+    state.lastMousePos.y = e.clientY;
     if(!state.isDragging) return;
+// Selection Box logic
+    if (state.dragButton === 0 && state.selectionStart && state.currentAction === 'select') {
+        const dist = Math.sqrt((e.clientX - state.selectionStart.x)**2 + (e.clientY - state.selectionStart.y)**2);
+        if (dist > 10) {
+            const box = document.getElementById('selection-box');
+            box.style.display = 'block';
+            const left = Math.min(e.clientX, state.selectionStart.x);
+            const top = Math.min(e.clientY, state.selectionStart.y);
+            const width = Math.abs(e.clientX - state.selectionStart.x);
+            const height = Math.abs(e.clientY - state.selectionStart.y);
+            box.style.left = left + 'px';
+            box.style.top = top + 'px';
+            box.style.width = width + 'px';
+            box.style.height = height + 'px';
+        }
+    }
+
     const dx = e.clientX - state.dragStart.x;
     const dy = e.clientY - state.dragStart.y;
 
@@ -7312,7 +7424,15 @@ function onPointerUp(e) {
     state.isDragging = false;
     let x = e.clientX || (e.changedTouches ? e.changedTouches[0].clientX : 0);
     let y = e.clientY || (e.changedTouches ? e.changedTouches[0].clientY : 0);
-    if(Math.sqrt((x-state.tapStart.x)**2 + (y-state.tapStart.y)**2) < 10) handleTap(x, y, e.button === 2, e.shiftKey);
+const box = document.getElementById('selection-box');
+    if (box && box.style.display === 'block') {
+        box.style.display = 'none';
+        performBoxSelection(state.selectionStart.x, state.selectionStart.y, x, y, e.shiftKey);
+    } else {
+        if(Math.sqrt((x-state.tapStart.x)**2 + (y-state.tapStart.y)**2) < 10) handleTap(x, y, e.button === 2, e.shiftKey);
+    }
+    state.selectionStart = null;
+
 }
 
 function handleTap(x, y, isRightClick, isShift) {
@@ -7341,36 +7461,65 @@ function handleTap(x, y, isRightClick, isShift) {
     });
     const unitHits = state.raycaster.intersectObjects(unitMeshes);
 
+    const buildingMeshes = [];
+    const meshToBuilding = new Map();
+    state.buildings.forEach(b => {
+        b.mesh.traverse(c => {
+            if(c.isMesh) {
+                buildingMeshes.push(c);
+                meshToBuilding.set(c, b);
+            }
+        });
+    });
+    const buildingHits = state.raycaster.intersectObjects(buildingMeshes);
+
     let action = state.currentAction;
     if(isRightClick) action = 'move';
 
     if (action === 'select') {
         if (unitHits.length > 0) {
             const hitUnit = meshToUnit.get(unitHits[0].object);
-            if(hitUnit) {
-                if(window.isAllied(hitUnit.faction, 0)) {
-                    if(state.multiSelectMode || isShift) {
-                        if(state.selectedUnits.includes(hitUnit)) {
-                             state.selectedUnits = state.selectedUnits.filter(x => x !== hitUnit);
-                             hitUnit.selectRing.visible = false;
-                        } else {
-                             state.selectedUnits.push(hitUnit);
-                             hitUnit.selectRing.visible = true;
-                        }
-                    } else {
-                        state.selectedUnits.forEach(u => u.selectRing.visible = false);
-                        state.selectedUnits = [hitUnit];
-                        hitUnit.selectRing.visible = true;
-                    }
-                    updateContextMenus();
-                    return;
+            if(hitUnit && window.isAllied(hitUnit.faction, 0)) {
+                if (state.selectedBuilding) {
+                    if (state.selectedBuilding.rallyLine) state.selectedBuilding.rallyLine.visible = false;
+                    state.selectedBuilding = null;
                 }
+                if(state.multiSelectMode || isShift) {
+                    if(state.selectedUnits.includes(hitUnit)) {
+                         state.selectedUnits = state.selectedUnits.filter(x => x !== hitUnit);
+                         hitUnit.selectRing.visible = false;
+                    } else {
+                         state.selectedUnits.push(hitUnit);
+                         hitUnit.selectRing.visible = true;
+                    }
+                } else {
+                    state.selectedUnits.forEach(u => u.selectRing.visible = false);
+                    state.selectedUnits = [hitUnit];
+                    hitUnit.selectRing.visible = true;
+                }
+                updateContextMenus();
+                return;
+            }
+        }
+
+        if (buildingHits.length > 0) {
+            const hitBuilding = meshToBuilding.get(buildingHits[0].object);
+            if (hitBuilding && window.isAllied(hitBuilding.faction, 0)) {
+                state.selectedUnits.forEach(u => u.selectRing.visible = false);
+                state.selectedUnits = [];
+                if (state.selectedBuilding && state.selectedBuilding.rallyLine) state.selectedBuilding.rallyLine.visible = false;
+                state.selectedBuilding = hitBuilding;
+                if (state.selectedBuilding.rallyLine) state.selectedBuilding.rallyLine.visible = true;
+                updateContextMenus();
+                return;
             }
         }
 
         if(terrainHits.length > 0 && !state.multiSelectMode && !isShift) {
             state.selectedUnits.forEach(u => u.selectRing.visible = false);
             state.selectedUnits = [];
+            if (state.selectedBuilding && state.selectedBuilding.rallyLine) state.selectedBuilding.rallyLine.visible = false;
+            state.selectedBuilding = null;
             updateContextMenus();
         }
     } else {
@@ -7412,9 +7561,15 @@ function handleTap(x, y, isRightClick, isShift) {
              }
         }
 
-        if(terrainHits.length > 0) {
-             performAction(terrainHits[0].point.x, terrainHits[0].point.z, isRightClick ? 'move' : action);
+if(terrainHits.length > 0) {
+            if (state.selectedBuilding && (isRightClick || action === 'move')) {
+                state.selectedBuilding.setRallyPoint(terrainHits[0].point.x, terrainHits[0].point.z);
+                spawnPulse(terrainHits[0].point.x, terrainHits[0].point.y, terrainHits[0].point.z, 0xffff00);
+            } else {
+                performAction(terrainHits[0].point.x, terrainHits[0].point.z, isRightClick ? 'move' : action);
+            }
         }
+
     }
 }
 
@@ -7670,22 +7825,63 @@ function animate() {
     }
     }
 
-    if (state.shaman && state.shaman.state !== 'dead') {
-        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create'];
+    let rangeCaster = (state.shaman && state.shaman.state !== 'dead') ? state.shaman : null;
+    const isSpyHypnotise = (state.currentAction === 'hypnotise' && state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'spy');
+    if (isSpyHypnotise) rangeCaster = state.selectedUnits[0];
+
+    if (rangeCaster) {
+        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create', 'phantom', 'blink', 'teleport'];
         if (spells.includes(state.currentAction)) {
             state.rangeRing.visible = true;
             if (state.cheatUnlimitedRange) {
                 state.rangeRing.scale.set(1000, 1, 1000);
             } else {
-                const r = 10.0 + state.shaman.mesh.position.y;
+                let r = 10.0 + rangeCaster.mesh.position.y;
+                if (rangeCaster.type === 'spy') r = 5.0;
                 state.rangeRing.scale.set(r, 60, r);
             }
-            state.rangeRing.position.set(state.shaman.mesh.position.x, state.shaman.mesh.position.y - 30, state.shaman.mesh.position.z);
+            state.rangeRing.position.set(rangeCaster.mesh.position.x, rangeCaster.mesh.position.y - 30, rangeCaster.mesh.position.z);
         } else {
             state.rangeRing.visible = false;
         }
     } else {
         state.rangeRing.visible = false;
+// Impact Visualization
+    if (state.impactRing) {
+        let impactRadius = 0;
+        let color = 0xFF0000;
+        if (state.currentAction === 'blast') impactRadius = 8;
+        else if (state.currentAction === 'lightning') impactRadius = 4;
+        else if (state.currentAction === 'hypnotise') { impactRadius = 8; color = 0xFF00FF; }
+        else if (state.currentAction === 'heal') { impactRadius = 8; color = 0x00FF00; }
+        else if (state.currentAction === 'flatten') { impactRadius = 5; color = 0x888888; }
+        else if (state.currentAction === 'raise') { impactRadius = 4; color = 0xFFFF00; }
+        else if (state.currentAction === 'lower') { impactRadius = 4; color = 0x444444; }
+        else if (state.currentAction === 'swamp') { impactRadius = 8; color = 0x004400; }
+        else if (state.currentAction === 'firestorm') impactRadius = 15;
+        else if (state.currentAction === 'tornado') impactRadius = 10;
+        else if (state.currentAction === 'swarm') { impactRadius = 10; color = 0xFFFF00; }
+        else if (state.currentAction === 'volcano') impactRadius = 15;
+
+        if (impactRadius > 0 && !state.isPaused) {
+            state.impactRing.material.color.setHex(color);
+            const mouse = new THREE.Vector2((state.lastMousePos.x/window.innerWidth)*2-1, -(state.lastMousePos.y/window.innerHeight)*2+1);
+            state.raycaster.setFromCamera(mouse, state.camera);
+            const meshes = [];
+            for(let k in state.chunks) { if (state.chunks[k] && state.chunks[k].children[0]) meshes.push(state.chunks[k].children[0]); }
+            const hits = state.raycaster.intersectObjects(meshes);
+            if (hits.length > 0) {
+                state.impactRing.visible = true;
+                state.impactRing.position.set(hits[0].point.x, hits[0].point.y + 0.1, hits[0].point.z);
+                state.impactRing.scale.set(impactRadius, 1, impactRadius);
+            } else {
+                state.impactRing.visible = false;
+            }
+        } else {
+            state.impactRing.visible = false;
+        }
+    }
+
     }
 
     updateChunks();
@@ -7870,6 +8066,7 @@ function animate() {
     updateUnitListSelection();
     state.renderer.render(state.scene, state.camera);
 }
+
 
 
 
