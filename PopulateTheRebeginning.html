@@ -495,42 +495,570 @@ window.THREE = THREE;
 
 let RAPIER = null;
 
-// --- js/constants.js ---
-const CHUNK_SIZE = 40;
-const CHUNK_RES = 80;
-const RENDER_DISTANCE = 5;
-let NOISE_SCALE = 0.02;
-let HEIGHT_MULTIPLIER = 1.0;
-let BRIDGE_HEIGHT = 3.0;
-let BRIDGE_WIDTH = 2.5;
-const MIN_ZOOM = 3;
-const MAX_ZOOM = 70;
-
-let WATER_LEVEL = 1.805;
-let VISUAL_WATER_LEVEL = 0.45125;
-
-const COLORS = {
-    water: 0x1E90FF, sand: 0xEEDC82, grass: 0x228B22, rock: 0x696969, snow: 0xFFFFFF,
-    lava: 0xCF1020, skin: 0xD2B48C, shirt_wild: 0x8B4513, shirt_shaman: 0xFF4500,
-    wood: 0x8B4513, straw: 0xDAA520, stone: 0x808080, red: 0x8B0000, yellow: 0xFFD700, blue: 0x4169E1
+const CONFIG = {
+    TERRAIN: {
+        CHUNK_SIZE: 40,
+        CHUNK_RES: 80,
+        RENDER_DISTANCE: 5,
+        NOISE_SCALE: 0.02,
+        HEIGHT_MULTIPLIER: 1.0,
+        BRIDGE_HEIGHT: 3.0,
+        BRIDGE_WIDTH: 2.5,
+        WATER_LEVEL: 1.805,
+        VISUAL_WATER_LEVEL: 0.45125,
+        MAX_CHUNKS_PER_FRAME: 10,
+        NOISE_OCTAVES: [
+            { amp: 12, factor: 1 },
+            { amp: 4, factor: 2 },
+            { amp: 1.5, factor: 4 },
+            { amp: 0.75, factor: 8 },
+            { amp: 0.375, factor: 16 }
+        ],
+        BRIDGE_NOISE_OFFSET: 100,
+        BRIDGE_NOISE_SCALE_MULT: 1.5,
+        LAND_HEIGHT_CAP: 8.0,
+        LAND_ABOVE_CAP_SLOPE: 0.5,
+        WATER_SMOOTH_FACTOR: 0.2,
+        BRIDGE_NOISE_MULT: 1.5,
+        CELESTIAL_PEAK_THRESHOLD: 4.0,
+        CELESTIAL_VOID_DROP: 20.0,
+        BIOME_MOUNTAIN_HEIGHT_MULT: 2.5,
+        BIOME_VOID_HEIGHT_MULT: 1.5,
+        BIOME_JUNGLE_NOISE_MULT: 1.2,
+        WATER_SAFE_DEPTH: 2.2,
+        BUILDING_RADIUS: 3,
+        BUILDING_COLLIDE_DIST: 4.0,
+        BUILDING_BRAVE_CHECK_RADIUS: 16.0,
+        BUILDING_TRAINING_CHECK_RADIUS: 16.0,
+        BUILDING_HEAL_RADIUS: 64.0,
+        BUILDING_EXPAND_SPACING: 6.0,
+        RAISE_LOWER_RADIUS: 5,
+        RAISE_AMOUNT: 2.0,
+    },
+    CAMERA: {
+        MIN_ZOOM: 3,
+        MAX_ZOOM: 70,
+        ORTHO_DIST: 42.4,
+        ORTHO_Y_BASE: 25,
+        ORTHO_Y_SCALE: 35,
+        ORTHO_MIN_GROUND_OFFSET: 5,
+        DRAG_SPEED: 0.002,
+        ROTATE_SPEED: 0.005,
+        FPV_SPEED: 0.005,
+        FPV_SENSITIVITY: 0.005,
+        HEAD_OFFSET_SHAMAN: 2.1,
+        HEAD_OFFSET_DEFAULT: 1.4,
+        FPV_OFFSET_DIST: 0.5,
+        INITIAL_ROTATION: Math.PI / 4,
+        INITIAL_VIEW_SCALE: 35,
+    },
+    COLORS: {
+        water: 0x1E90FF, sand: 0xEEDC82, grass: 0x228B22, rock: 0x696969, snow: 0xFFFFFF,
+        lava: 0xCF1020, skin: 0xD2B48C, shirt_wild: 0x8B4513, shirt_shaman: 0xFF4500,
+        wood: 0x8B4513, straw: 0xDAA520, stone: 0x808080, red: 0x8B0000, yellow: 0xFFD700, blue: 0x4169E1,
+        hpGreen: 0x00FF00, hpRed: 0xFF0000,
+        eyeWhite: 0xffffff, eyeBlack: 0x111111,
+        shoe: 0x332211,
+        hpBack: 0x880000,
+        selectRing: 0x00FF00,
+        marker: 0xFF0000,
+        flowerStem: 0x228B22,
+        flowerCenter: 0xFFFF00,
+        tulipPetalBase: 0xFFFFFF,
+        warriorHelm: 0x888888,
+        warriorCrest: 0xCC0000,
+        cloakDark: 0x330000,
+        bagBrown: 0x8B4513,
+        hoodBlack: 0x111111,
+        hoodCape: 0x111111,
+        hairBlack: 0x111111,
+        sword: 0xDDDDDD,
+        shield: 0x8B4513,
+        tool: 0x666666,
+        airshipBalloon: 0xEEEEEE,
+        airshipRope: 0x888888,
+        wood: 0x8B4513,
+        straw: 0xDAA520,
+        stone: 0x808080,
+        red: 0x8B0000,
+        yellow: 0xFFD700,
+        blue: 0x4169E1,
+        fireBody: 0xFF4500,
+        fireEmissive: 0xFF2200,
+        fireEye: 0xFFFF00,
+        spyBody: 0x222222,
+        flameCore: 0xFF4500,
+        flameEmissive: 0xFF2200,
+        templeBase: 0x444444,
+        templeBowl: 0x222222,
+        door: 0x220000,
+        window: 0x88CCFF,
+        barracksDoor: 0x331100,
+        beak: 0xFFA500,
+        charred: 0x222222,
+        treeLeaves: 0x006400,
+        craneRope: 0xDDDDDD,
+        smoke: 0x222222,
+    },
+    FACTION_COLORS: [
+        0x4169E1, // 0: Player (Blue)
+        0xFF4500, // 1: Enemy 1 (Red)
+        0x228B22, // 2: Enemy 2 (Green)
+        0xFFD700, // 3: Enemy 3 (Yellow)
+        0x800080, // 4: Enemy 4 (Purple)
+        0xFF69B4, // 5: Enemy 5 (Pink)
+        0x00CED1, // 6: Enemy 6 (Cyan)
+        0xFF8C00, // 7: Enemy 7 (Orange)
+    ],
+    COSTS: {
+        BUILDING: { hut: 15, tower: 20, warrior: 30, fire: 40, spy: 40, shipyard: 50 },
+        AIRSHIP: 25,
+        UPGRADE_UNIT: 80,
+        AIRSHIP_ROCKET: 10,
+        SPELLS: {
+            blast: 10, lightning: 50, raise: 5, lower: 5, flatten: 10, landbridge: 20,
+            swamp: 80, invisibility: 20, shield: 20, hypnotise: 50, swarm: 40, tornado: 60,
+            firestorm: 80, volcano: 90, heal: 10, teleport: 90, create: 50,
+            phantom: 30, blink: 20,
+        },
+    },
+    ACTIONS: {
+        'move': { icon: '👣', label: 'Walk', cost: 0 },
+        'blast': { icon: '🔥', label: 'Blast', cost: 10 },
+        'lightning': { icon: '⚡', label: 'Lght', cost: 50 },
+        'raise': { icon: '▲', label: 'Rais', cost: 5 },
+        'lower': { icon: '▼', label: 'Lowr', cost: 5 },
+        'flatten': { icon: '➖', label: 'Flat', cost: 10 },
+        'landbridge': { icon: '🌉', label: 'Bridg', cost: 20 },
+        'swamp': { icon: '🌫️', label: 'Swmp', cost: 80 },
+        'invisibility': { icon: '👻', label: 'Invis', cost: 20 },
+        'shield': { icon: '🛡️', label: 'Shld', cost: 20 },
+        'hypnotise': { icon: '🌀', label: 'Conv', cost: 50 },
+        'swarm': { icon: '🐝', label: 'Swrm', cost: 40 },
+        'tornado': { icon: '🌪️', label: 'Torn', cost: 60 },
+        'firestorm': { icon: '☄️', label: 'Fire', cost: 80 },
+        'volcano': { icon: '🌋', label: 'Volc', cost: 90 },
+        'heal': { icon: '💖', label: 'Heal', cost: 10 },
+        'teleport': { icon: '🌌', label: 'Tele', cost: 90 },
+        'create': { icon: '👶', label: 'Spwn', cost: 50 },
+        'build_hut': { icon: '🏠', label: 'Hut', cost: 15 },
+        'build_tower': { icon: '🗼', label: 'Towr', cost: 20 },
+        'build_warrior': { icon: '⚔️', label: 'War', cost: 30 },
+        'build_fire': { icon: '🔥', label: 'Fire', cost: 40 },
+        'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
+        'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
+        'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
+        'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 80 },
+        'airship_rocket': { icon: '🚀', label: 'Rckt', cost: 10 },
+        'phantom': { icon: '👥', label: 'Phnt', cost: 30 },
+        'blink': { icon: '✨', label: 'Blnk', cost: 20 },
+    },
+    UNIT_ICONS: {
+        'wild': '👷',
+        'warrior': '⚔️',
+        'firewarrior': '🔥',
+        'shaman': '🧙',
+        'spy': '🕵️',
+        'airship': '💨',
+    },
+    UNIT_STATS: {
+        DEFAULT: { maxHp: 100, damage: 5, range: 1, attackSpeed: 1.0, moveSpeed: 6, height: 1.5 },
+        warrior: { maxHp: 200, damage: 52.5 },
+        firewarrior: { maxHp: 120, damage: 5, range: 12, attackSpeed: 2.0 },
+        spy: { damage: 0 },
+        shaman: { maxHp: 500, damage: 30, range: 15, height: 2.2 },
+        airship: { maxHp: 500, damage: 0, moveSpeed: 15, capacity: 5, height: 2.0 },
+    },
+    COMBAT: {
+        FIREBALL_UNIT_DAMAGE: 27,
+        FIREBALL_BUILDING_DAMAGE: 75,
+        FIREWARRIOR_BALL_UNIT_DMG: 5.4,
+        FIREWARRIOR_BULLDING_DMG: 15,
+        LIGHTNING_DAMAGE: 400,
+        LIGHTNING_CHAIN_DAMAGE: 200,
+        LIGHTNING_RADIUS: 4,
+        LIGHTNING_CHAIN_RADIUS: 10,
+        FALL_DAMAGE_THRESHOLD: -15,
+        FALL_DAMAGE: 20,
+        DEEP_WATER_DMG_FACTOR: 0.10,
+        BURN_DURATION: 3.0,
+        BURN_TREE_RADIUS: 8,
+        SWAMP_KILL_DAMAGE: 10000,
+        SWARM_DPS: 25,
+        SHAMAN_DPS: 25,
+        TORNADO_DPS: 300,
+        TORNADO_RADIUS: 5,
+        VOLCANO_TICK_DAMAGE: 5,
+        VOLCANO_BUILDING_DAMAGE: 10,
+        COLLAPSE_DAMAGE: 100,
+        VOLCANO_TICK_INTERVAL: 0.2,
+        VOLCANO_TICK_RADIUS: 10,
+        AIRSHIP_ROCKET_COOLDOWN: 30.0,
+        AIRSHIP_ROCKET_DURATION: 5.0,
+    },
+    EFFECTS: {
+        FIREBALL_SPEED: 25,
+        FIREBALL_RADIUS: 0.5,
+        FIREBALL_TRAIL_INTERVAL: 0.02,
+        FIREBALL_LIGHT_INTENSITY: 1.5,
+        FIREBALL_LIGHT_RANGE: 15,
+        EXPLOSION_COUNT_DIVISOR: 2,
+        EXPLOSION_CORE_LIFE: 0.5,
+        EXPLOSION_CORE_MAX_SCALE: 4.0,
+        EXPLOSION_LIGHT_INTENSITY: 2,
+        EXPLOSION_LIGHT_RANGE: 10,
+        HEALING_LIFE: 1.5,
+        HEALING_RISE_SPEED: 2.0,
+        HEALING_ROTATION_SPEED: 3.0,
+        HEALING_LIGHT_INTENSITY: 1,
+        HEALING_LIGHT_RANGE: 5,
+        PULSE_LIFE: 0.6,
+        PULSE_MAX_SCALE: 10.0,
+        SHIELD_INNER_RADIUS: 0.8,
+        SHIELD_OUTER_RADIUS: 0.9,
+        SHIELD_Y_OFFSET: 1.0,
+        SHIELD_DURATION: 20000,
+        INVISIBILITY_DURATION: 30000,
+        HYPNOTISE_DURATION: 10.0,
+        PHANTOM_DURATION: 15000,
+        SWARM_PARTICLE_COUNT: 15,
+        TORNADO_CLOUD_COUNT: 7,
+        VOLCANO_SMOKE_CHANCE: 0.1,
+        VOLCANO_LAVA_CHANCE: 0.25,
+        DUST_PER_RADIUS: 2.5,
+        FIRE_TRAIL_RADIUS: 0.3,
+        FIRE_TRAIL_LIFE: 0.4,
+        LIGHTNING_BOLT_SEGMENTS: 10,
+        LIGHTNING_SEGMENT_HEIGHT: 3,
+        LIGHTNING_JITTER: 4,
+        LIGHTNING_RADIUS: 0.2,
+        VOLCANO_DURATION: 15.0,
+        VOLCANO_LAVA_RAISE: 0.2,
+        VOLCANO_TICK_RAISE: 0.2,
+        TORNADO_DURATION: 20.0,
+        SWAMP_DURATION: 30.0,
+        SWAMP_RADIUS: 4.0,
+        SWARM_DURATION: 7.0,
+        FIRESTORM_DURATION: 10.0,
+    },
+    PATHFINDER: {
+        GRID_SIZE: 2.0,
+        MAX_ITERATIONS: 10000,
+        WATER_SAFE_DEPTH: 2.2,
+        WATER_COST_PENALTY: 10.0,
+        DIAGONAL_CHECK: true,
+        TARGET_PROXIMITY: 1.5,
+        HEIGHT_DIFF_LIMIT: 2.0,
+        SLOPE_COST_FACTOR: 0.5,
+    },
+    AI: {
+        AGGRESSION_RANGE: 30,
+        THINK_INTERVAL: 5.0,
+        SHAMAN_SPELL_RANGE_BASE: 10.0,
+        AI_SPELL_COOLDOWN_DEFAULT: 5.0,
+        AI_SPELL_COOLDOWN_SORCERER: 2.5,
+        AI_SPELL_COOLDOWN_PRIMORDIAL: 1.0,
+        TARGET_HUT_COUNT_DEFAULT: 5,
+        TARGET_HUT_COUNT_SWARMER: 10,
+        TARGET_HUT_COUNT_HIVE: 10,
+        TARGET_HUT_COUNT_PRIMORDIAL: 20,
+        BUILDING_LIMIT_BASE: 15,
+        TOWER_TARGET_FORTRESS: 12,
+        TOWER_TARGET_DEFAULT: 5,
+        TRAINING_BUILDING_TARGETS: { warrior: 2, fire: 2, spy: 2, shipyard: 1 },
+        ATTACK_THRESHOLD_DEFAULT: 5,
+        ATTACK_THRESHOLD_AGGRESSIVE: 2,
+        EXPAND_DIST_MIN: 10,
+        EXPAND_DIST_MAX: 20,
+        BUILD_ATTEMPTS: 10,
+        BUILD_DIST_MIN: 2,
+        BUILD_DIST_MAX: 8,
+        BRIDGE_COOLDOWN: 1.0,
+        PATH_CHECK_COOLDOWN: 1.0,
+        SHAMAN_MOVE_COOLDOWN: 2.0,
+        SHAMAN_MOVE_DIST: 20,
+        SHAMAN_CHECK_AHEAD: 40,
+        SHAMAN_CHECK_STEPS: 10,
+    },
+    CAMPAGIN: {
+        DEFAULT_MANA: 500,
+        LEVEL_THREE_MANA: 9999,
+        CHAIN_LIGHTNING_LEVEL: 9,
+        DIVINE_FORM_LEVEL: 12,
+        MANA_RATE_DEFAULT: 1.0,
+        MANA_RATE_PER_BRAVE: 0.2,
+        MANA_RATE_PER_HOUSE: 0.2,
+        MANA_RATE_LEVEL_11_MULT: 1.5,
+        MANA_CAP: 100,
+        INFINITE_MANA_VALUE: 10000,
+        SPELL_COOLDOWN_DEFAULT: 2000,
+        SPELL_COOLDOWN_CHANGE: 500,
+        CLICK_CHEAT_THRESHOLD: 10,
+        CLICK_CHEAT_WINDOW: 500,
+        SHAMAN_RESPAWN_TIME: 30.0,
+        SHAMAN_RESPAWN_SEARCH_MAX: 10,
+        SHAMAN_RESPAWN_SEARCH_STEP: 2,
+        DEATH_CLEANUP_TIME: 100,
+        FPS_UPDATE_INTERVAL: 1000,
+    },
+    ANIMATION: {
+        WALK_SPEED: 10,
+        WALK_AMP: 0.8,
+        WALK_SPEED_MULTIPLIER: 3.5,
+        WALK_AMP_MULTIPLIER: 1.5,
+        IDLE_BREATHE_SPEED: 2,
+        IDLE_BREATHE_AMP: 0.02,
+        IDLE_ARM_SWING_SPEED: 1,
+        IDLE_ARM_SWING_AMP: 0.05,
+        STUN_RECOVER_TIME: 5.0,
+        STUCK_THRESHOLD_BASE: 2.0,
+        FORCE_ROTATION_FACTOR: 0.2,
+        FORCE_Y_RANDOM: 2,
+        GET_UP_DURATION: 1.2,
+        UPRIGHT_CORRECTION: 0.8,
+        ROTATION_LERP_SPEED: 5.0,
+        RESET_ANIM_LERP: 0.2,
+        VELOCITY_LERP: 5.0,
+        KNEE_BEND_AMP: 1.5,
+        ELBOW_BEND_AMP: 0.5,
+    },
+    BIOMES: {
+        normal: {
+            bg: 0x7EC8E3, fog: 0x7EC8E3, fogNear: 30, fogFar: 180,
+            sunIntensity: 3.14, sunColor: 0xffffff, waterColor: 0x1E90FF,
+        },
+        winter: {
+            bg: 0x7EC8E3, fog: 0x7EC8E3, fogNear: 30, fogFar: 180,
+            sunIntensity: 3.14, sunColor: 0xffffff, waterColor: 0x1E90FF,
+        },
+        night: {
+            bg: 0x000011, fog: 0x000011, fogNear: 10, fogFar: 80,
+            sunIntensity: 0.5, sunColor: 0x8888ff, waterColor: 0x1E90FF,
+        },
+        jungle: {
+            bg: 0x113311, fog: 0x113311, fogNear: 5, fogFar: 100,
+            sunIntensity: 2.0, sunColor: 0xccffcc, waterColor: 0x004422,
+        },
+        mountain: {
+            bg: 0x8899aa, fog: 0x8899aa, fogNear: 50, fogFar: 300,
+            sunIntensity: 3.5, sunColor: 0xffffff, waterColor: 0x1E90FF,
+        },
+        storm: {
+            bg: 0x444444, fog: 0x444444, fogNear: 10, fogFar: 120,
+            sunIntensity: 1.5, sunColor: 0xaaaaaa, waterColor: 0x1E90FF,
+        },
+        void: {
+            bg: 0x110022, fog: 0x110022, fogNear: 5, fogFar: 150,
+            sunIntensity: 1.2, sunColor: 0xcc88ff, waterColor: 0x220022,
+        },
+        celestial: {
+            bg: 0xfff4cc, fog: 0xfff4cc, fogNear: 100, fogFar: 500,
+            sunIntensity: 4.0, sunColor: 0xffffaa, waterColor: 0xFFFFFF,
+        },
+        cosmic: {
+            bg: 0x000005, fog: 0x000005, fogNear: 20, fogFar: 400,
+            sunIntensity: 2.0, sunColor: 0xffaaff, waterColor: 0x000000,
+        },
+    },
+    WATER_WAVE: {
+        PRIMARY_AMP: 0.15,
+        PRIMARY_FREQ: 0.5,
+        SECONDARY_AMP: 0.05,
+        SECONDARY_FREQ: 1.5,
+        FOAM_DIST: 2.0,
+        WATER_LERP_SPEED: 2.0,
+    },
+    AUDIO: {
+        EXPLORATION_MUSIC: 'IngameMusic.mp3',
+        COMBAT_MUSIC: 'FightMusic.mp3',
+        EXPLORATION_VOLUME: 0.5,
+        COMBAT_VOLUME: 0.6,
+        ENEMY_DETECT_RANGE: 30,
+        MUSIC_CHECK_INTERVAL: 30,
+    },
+    NETWORK: {
+        SYNC_INTERVAL: 120,
+        PEER_DEBUG: 2,
+        GENERATE_ID_LENGTH: 5,
+    },
+    SPAWN: {
+        SEARCH_ATTEMPTS: 50,
+        SEARCH_STEP: 20,
+        TERRAIN_HEIGHT_THRESHOLD: 2.5,
+        ENEMY_SPAWN_DIST: 150,
+        LAND_CONNECT_RADIUS: 3,
+        LAND_CONNECT_TARGET_HEIGHT: 0.5,
+    },
+    CRITTERS: {
+        BUNNY_COUNT: 30,
+        BIRD_COUNT: 20,
+        CLOUD_COUNT: 15,
+        BUNNY_SPAWN_RANGE: 400,
+        BIRD_SPAWN_RANGE: 400,
+        CLOUD_SPAWN_RANGE: 400,
+        BUNNY_HOP_DURATION: 0.5,
+        BUNNY_LAND_CHECK_DIST: 300,
+        BIRD_ALT_MIN: 15,
+        BIRD_ALT_MAX: 50,
+        BIRD_ALT_TARGET: 20,
+        CLOUD_Y_MIN: 30,
+        CLOUD_Y_MAX: 45,
+        CLOUD_SPEED_BASE: 1,
+        CLOUD_SPEED_RANGE: 2,
+        CLOUD_RESPAWN_X: 250,
+        BIRD_RESPAWN_DIST: 300,
+        BUNNY_RESPAWN_DIST: 300,
+    },
+    SAVED_KEYS: {
+        HELP_SHOWN: 'rebeginning_help_shown',
+        MAX_CAMPAIGN_LEVEL: 'rebeginning_max_campaign_level',
+        START_CAMPAIGN: 'rebeginning_start_campaign',
+        SANDBOX_START: 'rebeginning_sandbox_start',
+        SAVE_DATA: 'populous_save',
+        MUSIC_ENABLED: 'musicEnabled',
+    },
+    UI: {
+        UNIT_LIST_TOP: 70,
+        UNIT_LIST_WIDTH: 48,
+        UNIT_LIST_BOTTOM: 220,
+        ENEMY_SPELL_LEFT: 55,
+        ENEMY_SPELL_WIDTH: 30,
+        RIGHT_MENU_TOP: 60,
+        RIGHT_MENU_RIGHT: 10,
+        RIGHT_MENU_WIDTH: 80,
+        RIGHT_MENU_BOTTOM: 20,
+        JOYSTICK_BOTTOM: 20,
+        JOYSTICK_LEFT: 20,
+        JOYSTICK_SIZE: 150,
+        JOYSTICK_BG_SIZE: 120,
+        JOYSTICK_KNOB_SIZE: 50,
+        JOYSTICK_MAX_DIST: 50,
+        MANA_BAR_WIDTH: 200,
+        MANA_BAR_HEIGHT: 10,
+        BUTTON_SIZE: 40,
+        MENU_BTN_WIDTH: 150,
+        ENEMY_SPELL_DISPLAY_TIME: 5000,
+        SELECTION_BOX_BORDER: 1,
+        SELECTION_BOX_BG: 0.1,
+        TAP_THRESHOLD: 10,
+        BOX_DRAG_THRESHOLD: 10,
+    },
+    BUILDING: {
+        HUT_HP: 100,
+        TOWER_HP: 150,
+        WAREIOR_HP: 250,
+        FIRE_HP: 300,
+        SPY_HP: 200,
+        SHIPYARD_HP: 350,
+        HEAL_RATE: 200,
+        HP_BAR_Y_OFFSET: 5,
+        HP_BAR_WIDTH: 2.0,
+        HP_BAR_HEIGHT: 0.3,
+        RALLY_LINE_Y_OFFSET: 0.5,
+        TRAINING_TIME: 2.0,
+        BURN_PARTICLE_CHANCE: 0.25,
+    },
+    PHYSICS: {
+        GRAVITY: { x: 0.0, y: -30.0, z: 0.0 },
+        UNIT_RADIUS: 0.3,
+        LINEAR_DAMPING: 0.5,
+        ANGULAR_DAMPING: 0.5,
+        FIREBALL_BALL_RADIUS: 0.5,
+        FIREBALL_GRAVITY_SCALE: 0,
+        FIREBALL_SPEED: 25,
+        FIREBALL_LINVEL_MULT: 1.0,
+    },
+    NET_CAMPAIGN: {
+        // Campaign level definitions are kept as-is in loadCampaignLevelIfRequested
+    },
+    BUNNY: {
+        HOP_DURATION: 0.5,
+        HOP_DIST_MIN: 0.5,
+        HOP_DIST_MAX: 1.5,
+        IDLE_TIME_MIN: 1,
+        IDLE_TIME_MAX: 3,
+        ARC_HEIGHT: 0.5,
+            JUMP_DURATION_MIN: 0.3,
+        JUMP_DURATION_MAX: 0.5,
+        BODY_SIZE_MIN: 0.2,
+        BODY_SIZE_MAX: 0.3,
+        BODY_SIZE_MULT: 1.7,
+    },
+    BIRD: {
+        SIZE_MIN: 0.3,
+        SIZE_MAX: 0.5,
+        SIZE_MULT: 1.7,
+        SPEED_MIN: 5,
+        SPEED_MAX: 10,
+        FLAP_SPEED_MIN: 10,
+        FLAP_SPEED_MAX: 20,
+        FLAP_ANGLE: 0.5,
+        TURN_SPEED_MIN: 0.5,
+        TURN_SPEED_MAX: 1.0,
+        BANK_FACTOR: 0.5,
+        CHANGE_DIR_CHANCE: 0.01,
+    },
+    CLOUD: {
+        MIN_CHUNKS: 6,
+        MAX_CHUNKS: 12,
+        CENTER_SIZE_MIN: 3.5,
+        CENTER_SIZE_MAX: 5.5,
+        PUFF_SIZE_MIN: 1.5,
+        PUFF_SIZE_MAX: 4.0,
+        OPACITY: 0.5,
+        SCALE_MIN: 1.5,
+        SCALE_MAX: 2.5,
+        SPAWN_OFFSET: -200,
+    },
+    TERRAIN_VEGETATION: {
+        TREE_SPAWN_CHANCE: 0.5,
+        TREE_PER_CHUNK: 6,
+        TREE_HEIGHT_MIN: 3,
+        TREE_HEIGHT_MAX: 8,
+        FLOWER_SPACING: 0.6,
+        FLOWER_FIELD_THRESHOLD: 0.4,
+        FLOWER_SKIP_CHANCE: 0.8,
+        FLOWER_JITTER: 0.8,
+        FLOWER_GROW_MIN_H: 0.5,
+        FLOWER_GROW_MAX_H: 7.0,
+        FLOWER_SCALE_MIN: 0.6,
+        FLOWER_SCALE_MAX: 1.4,
+        FLOWER_SQUASH_MIN: 0.6,
+        FLOWER_SQUASH_MAX: 1.2,
+        FLOWER_TULIP_CHANCE: 0.5,
+        FIELD_NOISE_SCALE: 0.03,
+        COLOR_NOISE_SCALE: 0.05,
+        DAISY_PETALS: 5,
+        TULIP_PETALS: 4,
+    },
 };
 
-const BUILDING_COSTS = { hut: 15, tower: 20, warrior: 30, fire: 40, spy: 40, shipyard: 50 };
+// Allow runtime modification of configurable values
+window.CONFIG = CONFIG;
 
-const FACTION_COLORS = [
-    0x4169E1, // 0: Player (Blue)
-    0xFF4500, // 1: Enemy 1 (Red)
-    0x228B22, // 2: Enemy 2 (Green)
-    0xFFD700, // 3: Enemy 3 (Yellow)
-    0x800080, // 4: Enemy 4 (Purple)
-    0xFF69B4, // 5: Enemy 5 (Pink)
-    0x00CED1, // 6: Enemy 6 (Cyan)
-    0xFF8C00, // 7: Enemy 7 (Orange)
-];
+// --- js/constants.js ---
+const CHUNK_SIZE = CONFIG.TERRAIN.CHUNK_SIZE;
+const CHUNK_RES = CONFIG.TERRAIN.CHUNK_RES;
+const RENDER_DISTANCE = CONFIG.TERRAIN.RENDER_DISTANCE;
+let NOISE_SCALE = CONFIG.TERRAIN.NOISE_SCALE;
+let HEIGHT_MULTIPLIER = CONFIG.TERRAIN.HEIGHT_MULTIPLIER;
+let BRIDGE_HEIGHT = CONFIG.TERRAIN.BRIDGE_HEIGHT;
+let BRIDGE_WIDTH = CONFIG.TERRAIN.BRIDGE_WIDTH;
+const MIN_ZOOM = CONFIG.CAMERA.MIN_ZOOM;
+const MAX_ZOOM = CONFIG.CAMERA.MAX_ZOOM;
 
-function getFactionColor(faction) {
-    return FACTION_COLORS[faction % FACTION_COLORS.length];
-}
+let WATER_LEVEL = CONFIG.TERRAIN.WATER_LEVEL;
+let VISUAL_WATER_LEVEL = CONFIG.TERRAIN.VISUAL_WATER_LEVEL;
+
+const COLORS = CONFIG.COLORS;
+
+const BUILDING_COSTS = CONFIG.COSTS.BUILDING;
+
+const FACTION_COLORS = CONFIG.FACTION_COLORS;
+
+window.getFactionColor = function(faction) {
+    return CONFIG.FACTION_COLORS[faction % CONFIG.FACTION_COLORS.length];
+};
 
 function getFactionMaterial(faction) {
     if (!AssetCache.mats.factionMats) AssetCache.mats.factionMats = {};
@@ -543,7 +1071,7 @@ function getFactionMaterial(faction) {
 function getHpMaterial(faction) {
     if (!AssetCache.mats.hpMats) AssetCache.mats.hpMats = {};
     if (!AssetCache.mats.hpMats[faction]) {
-        const color = faction === 0 ? 0x00FF00 : (faction === 1 ? 0xFF0000 : getFactionColor(faction));
+        const color = faction === 0 ? CONFIG.COLORS.hpGreen : (faction === 1 ? CONFIG.COLORS.hpRed : getFactionColor(faction));
         AssetCache.mats.hpMats[faction] = new THREE.MeshBasicMaterial({color: color});
     }
     return AssetCache.mats.hpMats[faction];
@@ -555,46 +1083,9 @@ window.isAllied = function(f1, f2) {
     return t1 === t2;
 };
 
-const ACTIONS = {
-    'move': { icon: '👣', label: 'Walk', cost: 0 },
-    'blast': { icon: '🔥', label: 'Blast', cost: 10 },
-    'lightning': { icon: '⚡', label: 'Lght', cost: 50 },
-    'raise': { icon: '▲', label: 'Rais', cost: 5 },
-    'lower': { icon: '▼', label: 'Lowr', cost: 5 },
-    'flatten': { icon: '➖', label: 'Flat', cost: 10 },
-    'landbridge': { icon: '🌉', label: 'Bridg', cost: 20 },
-    'swamp': { icon: '🌫️', label: 'Swmp', cost: 80 },
-    'invisibility': { icon: '👻', label: 'Invis', cost: 20 },
-    'shield': { icon: '🛡️', label: 'Shld', cost: 20 },
-    'hypnotise': { icon: '🌀', label: 'Conv', cost: 50 },
-    'swarm': { icon: '🐝', label: 'Swrm', cost: 40 },
-    'tornado': { icon: '🌪️', label: 'Torn', cost: 60 },
-    'firestorm': { icon: '☄️', label: 'Fire', cost: 80 },
-    'volcano': { icon: '🌋', label: 'Volc', cost: 90 },
-    'heal': { icon: '💖', label: 'Heal', cost: 10 },
-    'teleport': { icon: '🌌', label: 'Tele', cost: 90 },
-    'create': { icon: '👶', label: 'Spwn', cost: 50 },
-    'build_hut': { icon: '🏠', label: 'Hut', cost: 15 },
-    'build_tower': { icon: '🗼', label: 'Towr', cost: 20 },
-    'build_warrior': { icon: '⚔️', label: 'War', cost: 30 },
-    'build_fire': { icon: '🔥', label: 'Fire', cost: 40 },
-    'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
-    'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
-    'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
-    'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 80 },
-    'airship_rocket': { icon: '🚀', label: 'Rckt', cost: 10 },
-    'phantom': { icon: '👥', label: 'Phnt', cost: 30 },
-    'blink': { icon: '✨', label: 'Blnk', cost: 20 }
-};
+const ACTIONS = CONFIG.ACTIONS;
 
-const UNIT_ICONS = {
-    'wild': '👷',
-    'warrior': '⚔️',
-    'firewarrior': '🔥',
-    'shaman': '🧙',
-    'spy': '🕵️',
-    'airship': '💨'
-};
+const UNIT_ICONS = CONFIG.UNIT_ICONS;
 
 
 // --- js/state.js ---
@@ -632,7 +1123,7 @@ const state = {
     impactRing: null,
     selectedUnits: [],
     cameraLookAt: null,
-    viewScale: 35,
+    viewScale: CONFIG.CAMERA.INITIAL_VIEW_SCALE,
     currentAction: 'select',
     mana: 100,
 
@@ -646,7 +1137,7 @@ const state = {
     pinchStartScale: 35,
     pinchStartAngle: 0,
     rotateStartCamera: 0,
-    cameraRotation: Math.PI / 4,
+    cameraRotation: CONFIG.CAMERA.INITIAL_ROTATION,
     multiSelectMode: false,
     joystickVector: new THREE.Vector2(0, 0),
     keyboardVector: new THREE.Vector2(0, 0),
@@ -669,7 +1160,7 @@ const state = {
 
 // SpatialHash
 const SpatialHash = {
-    cellSize: 20,
+    cellSize: CONFIG.TERRAIN.CHUNK_SIZE / 2,
     cells: new Map(),
     _queryResult: [],
     update: function() {
@@ -713,7 +1204,7 @@ const SpatialHash = {
 
 // Building SpatialHash for optimized isBlocked queries
 const BuildingSpatialHash = {
-    cellSize: 20,
+    cellSize: CONFIG.TERRAIN.CHUNK_SIZE / 2,
     cells: new Map(),
     dirty: true,
 
@@ -791,9 +1282,9 @@ const NetworkManager = {
         state.network.role = 'host';
 
         // Generate a 5-character alphanumeric ID to use with PeerJS
-        const hostId = generateUUID().substr(0, 5);
+        const hostId = generateUUID().substr(0, CONFIG.NETWORK.GENERATE_ID_LENGTH);
         state.network.peer = new Peer(hostId, {
-             debug: 2
+             debug: CONFIG.NETWORK.PEER_DEBUG
         });
 
         state.network.peer.on('open', (id) => {
@@ -1048,7 +1539,7 @@ window.openCampaignMenu = function() {
     document.getElementById('campaign-menu').style.display = 'flex';
 
     // Update lock status based on localStorage
-    const maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
+    const maxLevel = parseInt(localStorage.getItem(CONFIG.SAVED_KEYS.MAX_CAMPAIGN_LEVEL) || '1');
     for(let i=2; i<=12; i++) {
         const btn = document.getElementById('btn-camp-' + i);
         if(btn) {
@@ -1074,17 +1565,17 @@ window.closeCampaignMenu = function() {
 
 window.startCampaignLevel = function(level) {
     if(confirm("Start Level " + level + "? Unsaved progress will be lost.")) {
-        localStorage.setItem('rebeginning_start_campaign', level);
+        localStorage.setItem(CONFIG.SAVED_KEYS.START_CAMPAIGN, level);
         location.reload();
     }
 }
 
 window.loadCampaignLevelIfRequested = function() {
-    const levelStr = localStorage.getItem('rebeginning_start_campaign');
+    const levelStr = localStorage.getItem(CONFIG.SAVED_KEYS.START_CAMPAIGN);
     if(!levelStr) return false;
 
     const level = parseInt(levelStr);
-    localStorage.removeItem('rebeginning_start_campaign'); // Clear it so standard reloads are normal
+    localStorage.removeItem(CONFIG.SAVED_KEYS.START_CAMPAIGN); // Clear it so standard reloads are normal
 
     state.isCampaign = true;
     state.campaignLevel = level;
@@ -1098,7 +1589,7 @@ window.loadCampaignLevelIfRequested = function() {
 
     window.enemyAIs = [];
     if(level === 1) {
-        state.mana = 500;
+        state.mana = CONFIG.CAMPAGIN.DEFAULT_MANA;
         window.enemyAIs.push(new EnemyAI(1, 'default'));
     } else if (level === 2) {
         window.enemyAIs.push(new EnemyAI(1, 'swarmer'));
@@ -1152,7 +1643,7 @@ window.loadCampaignLevelIfRequested = function() {
         state.teams[5] = 2;
     } else if (level === 12) {
         state.matchSettings.biome = 'cosmic';
-        state.mana = 9999;
+        state.mana = CONFIG.CAMPAGIN.LEVEL_THREE_MANA;
         window.enemyAIs.push(new EnemyAI(1, 'primordial'));
     }
     return true;
@@ -1170,7 +1661,7 @@ const SoundManager = {
     ctx: null,
     explorationMusic: null,
     combatMusic: null,
-    musicEnabled: localStorage.getItem('musicEnabled') !== 'false',
+    musicEnabled: localStorage.getItem(CONFIG.SAVED_KEYS.MUSIC_ENABLED) !== 'false',
     init: function() {
         if (this.ctx && this.explorationMusic) return;
         try {
@@ -1183,14 +1674,14 @@ const SoundManager = {
         }
 
         if (!this.explorationMusic) {
-            this.explorationMusic = new Audio('IngameMusic.mp3');
+            this.explorationMusic = new Audio(CONFIG.AUDIO.EXPLORATION_MUSIC);
             this.explorationMusic.loop = true;
-            this.explorationMusic.volume = 0.5;
+            this.explorationMusic.volume = CONFIG.AUDIO.EXPLORATION_VOLUME;
         }
         if (!this.combatMusic) {
-            this.combatMusic = new Audio('FightMusic.mp3');
+            this.combatMusic = new Audio(CONFIG.AUDIO.COMBAT_MUSIC);
             this.combatMusic.loop = true;
-            this.combatMusic.volume = 0.6;
+            this.combatMusic.volume = CONFIG.AUDIO.COMBAT_VOLUME;
         }
     },
     playTone: function(freq, type, duration, vol=0.1) {
@@ -1288,7 +1779,7 @@ const SoundManager = {
     },
     setMusicEnabled: function(enabled) {
         this.musicEnabled = enabled;
-        localStorage.setItem('musicEnabled', enabled);
+        localStorage.setItem(CONFIG.SAVED_KEYS.MUSIC_ENABLED, enabled);
         if (!enabled) {
             if (this.explorationMusic) this.explorationMusic.pause();
             if (this.combatMusic) this.combatMusic.pause();
@@ -1466,30 +1957,30 @@ const AssetCache = {
         skin: new THREE.MeshStandardMaterial({color: COLORS.skin, roughness: 0.7, metalness: 0.1}),
         blueShirt: new THREE.MeshStandardMaterial({color: COLORS.blue, roughness: 0.7, metalness: 0.1}),
         redShirt: new THREE.MeshStandardMaterial({color: COLORS.red, roughness: 0.7, metalness: 0.1}),
-        eyeWhite: new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.2, metalness: 0.0}),
-        eyeBlack: new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.2, metalness: 0.0}),
-        shoe: new THREE.MeshStandardMaterial({color: 0x332211, roughness: 0.9, metalness: 0.0}),
-        hpBack: new THREE.MeshBasicMaterial({color: 0x880000}),
-        hpGreen: new THREE.MeshBasicMaterial({color: 0x00FF00}),
-        hpRed: new THREE.MeshBasicMaterial({color: 0xFF0000}),
-        selectRing: new THREE.MeshBasicMaterial({color: 0x00FF00, side: THREE.DoubleSide}),
-        marker: new THREE.MeshBasicMaterial({color: 0xFF0000}),
-        flowerStem: new THREE.MeshStandardMaterial({color: 0x228B22, roughness: 0.8, metalness: 0.1}),
-        flowerCenter: new THREE.MeshStandardMaterial({color: 0xFFFF00, roughness: 0.8, metalness: 0.1}),
-        tulipPetalBase: new THREE.MeshStandardMaterial({color: 0xFFFFFF, roughness: 0.6, metalness: 0.1})
+        eyeWhite: new THREE.MeshStandardMaterial({color: COLORS.eyeWhite, roughness: 0.2, metalness: 0.0}),
+        eyeBlack: new THREE.MeshStandardMaterial({color: COLORS.eyeBlack, roughness: 0.2, metalness: 0.0}),
+        shoe: new THREE.MeshStandardMaterial({color: COLORS.shoe, roughness: 0.9, metalness: 0.0}),
+        hpBack: new THREE.MeshBasicMaterial({color: COLORS.hpBack}),
+        hpGreen: new THREE.MeshBasicMaterial({color: COLORS.hpGreen}),
+        hpRed: new THREE.MeshBasicMaterial({color: COLORS.hpRed}),
+        selectRing: new THREE.MeshBasicMaterial({color: COLORS.selectRing, side: THREE.DoubleSide}),
+        marker: new THREE.MeshBasicMaterial({color: COLORS.marker}),
+        flowerStem: new THREE.MeshStandardMaterial({color: COLORS.flowerStem, roughness: 0.8, metalness: 0.1}),
+        flowerCenter: new THREE.MeshStandardMaterial({color: COLORS.flowerCenter, roughness: 0.8, metalness: 0.1}),
+        tulipPetalBase: new THREE.MeshStandardMaterial({color: COLORS.tulipPetalBase, roughness: 0.6, metalness: 0.1})
     }
 };
 
 const FlowerMaterials = [
     new THREE.MeshStandardMaterial({color: 0xFF0000, roughness: 0.6, metalness: 0.1}), // Red
-    new THREE.MeshStandardMaterial({color: 0xFFD700, roughness: 0.6, metalness: 0.1}), // Yellow
+    new THREE.MeshStandardMaterial({color: COLORS.yellow, roughness: 0.6, metalness: 0.1}), // Yellow
     new THREE.MeshStandardMaterial({color: 0xFF69B4, roughness: 0.6, metalness: 0.1}), // Pink
-    new THREE.MeshStandardMaterial({color: 0x4169E1, roughness: 0.6, metalness: 0.1}), // Blue
-    new THREE.MeshStandardMaterial({color: 0xFFFFFF, roughness: 0.6, metalness: 0.1})  // White
+    new THREE.MeshStandardMaterial({color: COLORS.blue, roughness: 0.6, metalness: 0.1}), // Blue
+    new THREE.MeshStandardMaterial({color: COLORS.tulipPetalBase, roughness: 0.6, metalness: 0.1})  // White
 ];
 
 AssetCache.mats.flowerPetalBase = FlowerMaterials[0].clone();
-AssetCache.mats.flowerPetalBase.color.setHex(0xffffff);
+AssetCache.mats.flowerPetalBase.color.setHex(COLORS.tulipPetalBase);
 AssetCache.geos.flowerPetal.translate(0, 0, 0.08);
 AssetCache.geos.tulipPetal.translate(0, 0.06, 0.04);
 
@@ -1549,34 +2040,28 @@ function getBaseHeight(x, z) {
     let ns = NOISE_SCALE;
     let hm = HEIGHT_MULTIPLIER;
 
+    const TC = CONFIG.TERRAIN;
     const biome = (state.matchSettings && state.matchSettings.biome) ? state.matchSettings.biome : 'normal';
-    if (biome === 'mountain') hm *= 2.5;
-    if (biome === 'void') hm *= 1.5;
-    if (biome === 'jungle') ns *= 1.2;
+    if (biome === 'mountain') hm *= TC.BIOME_MOUNTAIN_HEIGHT_MULT;
+    if (biome === 'void') hm *= TC.BIOME_VOID_HEIGHT_MULT;
+    if (biome === 'jungle') ns *= TC.BIOME_JUNGLE_NOISE_MULT;
 
-    y += state.simplex.noise2D(x * ns, z * ns) * 12;
-    y += state.simplex.noise2D(x * ns * 2, z * ns * 2) * 4;
-    y += state.simplex.noise2D(x * ns * 4, z * ns * 4) * 1.5;
-    y += state.simplex.noise2D(x * ns * 8, z * ns * 8) * 0.75;
-    y += state.simplex.noise2D(x * ns * 16, z * ns * 16) * 0.375;
+    for (let o of TC.NOISE_OCTAVES) {
+        y += state.simplex.noise2D(x * ns * o.factor, z * ns * o.factor) * o.amp;
+    }
 
     y *= hm;
 
     if (biome === 'celestial') {
-        // Floating islands: only high peaks remain, others drop to "void" (deep water)
-        if (y < 4.0) y -= 20.0;
+        if (y < TC.CELESTIAL_PEAK_THRESHOLD) y -= TC.CELESTIAL_VOID_DROP;
     }
 
-    // Land bridges using ridge noise
-    // A value close to 0 in noise creates a ridge when inverted.
-    const bridgeNoise = Math.abs(state.simplex.noise2D(x * NOISE_SCALE * 1.5 + 100, z * NOISE_SCALE * 1.5 + 100));
-    // bridgeNoise is between 0 and 1. We want a sharp peak near 0.
+    const bridgeNoise = Math.abs(state.simplex.noise2D(x * NOISE_SCALE * TC.BRIDGE_NOISE_MULT + 100, z * NOISE_SCALE * TC.BRIDGE_NOISE_MULT + 100));
     const finalBridgeHeight = Math.max(0, 1.0 - bridgeNoise * BRIDGE_WIDTH) * BRIDGE_HEIGHT;
     y += finalBridgeHeight;
 
-    // Continuous smoothing
-    if (y < WATER_LEVEL) y -= (WATER_LEVEL - y) * 0.2;
-    if (y > 8.0) y += (y - 8.0) * 0.5;
+    if (y < WATER_LEVEL) y -= (WATER_LEVEL - y) * TC.WATER_SMOOTH_FACTOR;
+    if (y > TC.LAND_HEIGHT_CAP) y += (y - TC.LAND_HEIGHT_CAP) * TC.LAND_ABOVE_CAP_SLOPE;
     return y;
 }
 
@@ -1619,7 +2104,7 @@ function isBlocked(x, z) {
     for(let b of candidates) {
          const dx = x - b.mesh.position.x;
          const dz = z - b.mesh.position.z;
-         if (dx*dx + dz*dz < 4.0) return true;
+         if (dx*dx + dz*dz < CONFIG.TERRAIN.BUILDING_COLLIDE_DIST) return true;
     }
     return false;
 }
@@ -1676,10 +2161,10 @@ const CritterManager = {
     bunnies: [],
     birds: [],
     init: function() {
-        for(let i=0; i<30; i++) {
+        for(let i=0; i<CONFIG.CRITTERS.BUNNY_COUNT; i++) {
             this.spawnBunny(true);
         }
-        for(let i=0; i<20; i++) {
+        for(let i=0; i<CONFIG.CRITTERS.BIRD_COUNT; i++) {
             this.spawnBird(true);
         }
     },
@@ -1736,8 +2221,8 @@ const CritterManager = {
 
         let x, z;
         if(randomPos) {
-            x = (Math.random() - 0.5) * 400;
-            z = (Math.random() - 0.5) * 400;
+            x = (Math.random() - 0.5) * CONFIG.CRITTERS.BUNNY_SPAWN_RANGE;
+            z = (Math.random() - 0.5) * CONFIG.CRITTERS.BUNNY_SPAWN_RANGE;
         } else {
             const angle = Math.random() * Math.PI * 2;
             const dist = 100 + Math.random() * 100;
@@ -1753,8 +2238,8 @@ const CritterManager = {
             // Find a random spot that is land
             let found = false;
             for(let i=0; i<10; i++) {
-                 x = (Math.random() - 0.5) * 400;
-                 z = (Math.random() - 0.5) * 400;
+                 x = (Math.random() - 0.5) * CONFIG.CRITTERS.BUNNY_SPAWN_RANGE;
+                 z = (Math.random() - 0.5) * CONFIG.CRITTERS.BUNNY_SPAWN_RANGE;
                  h = getHeight(x, z);
                  if(h >= VISUAL_WATER_LEVEL) {
                      found = true;
@@ -1801,7 +2286,7 @@ const CritterManager = {
         // Beak
         const beakGeo = new THREE.ConeGeometry(size * 0.15, size * 0.4, 4);
         beakGeo.rotateX(Math.PI / 2);
-        const beakMat = new THREE.MeshStandardMaterial({color: 0xFFA500, roughness: 0.4});
+        const beakMat = new THREE.MeshStandardMaterial({color: COLORS.beak, roughness: 0.4});
         const beak = new THREE.Mesh(beakGeo, beakMat);
         beak.position.set(0, size * 0.2, size * 1.1);
         group.add(beak);
@@ -1832,8 +2317,8 @@ const CritterManager = {
 
         let x, z;
         if(randomPos) {
-            x = (Math.random() - 0.5) * 400;
-            z = (Math.random() - 0.5) * 400;
+            x = (Math.random() - 0.5) * CONFIG.CRITTERS.BIRD_SPAWN_RANGE;
+            z = (Math.random() - 0.5) * CONFIG.CRITTERS.BIRD_SPAWN_RANGE;
         } else {
             // Spawn at edges
             const angle = Math.random() * Math.PI * 2;
@@ -1841,7 +2326,6 @@ const CritterManager = {
             x = Math.cos(angle) * dist;
             z = Math.sin(angle) * dist;
         }
-
         // Target random point on map
         const tx = (Math.random() - 0.5) * 200;
         const tz = (Math.random() - 0.5) * 200;
@@ -1925,7 +2409,7 @@ const CritterManager = {
             }
 
             // Periodically check if far out of bounds and respawn
-            if(Math.abs(b.mesh.position.x) > 300 || Math.abs(b.mesh.position.z) > 300) {
+            if(Math.abs(b.mesh.position.x) > CONFIG.CRITTERS.BUNNY_RESPAWN_DIST || Math.abs(b.mesh.position.z) > CONFIG.CRITTERS.BUNNY_RESPAWN_DIST) {
                  state.scene.remove(b.mesh);
                  this.bunnies.splice(i, 1);
                  this.spawnBunny(true);
@@ -1970,7 +2454,7 @@ const CritterManager = {
             if (b.mesh.position.y < 15) b.mesh.position.y += dt;
 
             // Respawn if far out of bounds
-            if(Math.abs(b.mesh.position.x) > 300 || Math.abs(b.mesh.position.z) > 300) {
+            if(Math.abs(b.mesh.position.x) > CONFIG.CRITTERS.BIRD_RESPAWN_DIST || Math.abs(b.mesh.position.z) > CONFIG.CRITTERS.BIRD_RESPAWN_DIST) {
                  state.scene.remove(b.mesh);
                  this.birds.splice(i, 1);
                  this.spawnBird();
@@ -1982,14 +2466,14 @@ const CritterManager = {
 const CloudManager = {
     clouds: [],
     init: function() {
-        for(let i=0; i<15; i++) {
+        for(let i=0; i<CONFIG.CRITTERS.CLOUD_COUNT; i++) {
             this.spawnCloud(true);
         }
     },
     spawnCloud: function(randomPos=false) {
         const group = new THREE.Group();
         const chunks = 6 + Math.floor(Math.random() * 6);
-        const mat = new THREE.MeshStandardMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.5, flatShading: false, roughness: 0.7, metalness: 0.1});
+        const mat = new THREE.MeshStandardMaterial({color: COLORS.snow, transparent: true, opacity: 0.5, flatShading: false, roughness: 0.7, metalness: 0.1});
 
         // Main center puff
         const centerSize = 3.5 + Math.random() * 2;
@@ -2022,11 +2506,11 @@ const CloudManager = {
 
         let x, z;
         if(randomPos) {
-            x = (Math.random() - 0.5) * 400;
-            z = (Math.random() - 0.5) * 400;
+            x = (Math.random() - 0.5) * CONFIG.CRITTERS.CLOUD_SPAWN_RANGE;
+            z = (Math.random() - 0.5) * CONFIG.CRITTERS.CLOUD_SPAWN_RANGE;
         } else {
             x = -200 - Math.random() * 50; // Start far left
-            z = (Math.random() - 0.5) * 400;
+            z = (Math.random() - 0.5) * CONFIG.CRITTERS.CLOUD_SPAWN_RANGE;
         }
         const y = 30 + Math.random() * 15;
 
@@ -2127,7 +2611,7 @@ function spawnHealing(x, y, z) {
     group.position.set(x, y, z);
 
     // Cross shape
-    const mat = new THREE.MeshBasicMaterial({color: 0x00FF00, transparent: true, opacity: 0.8});
+    const mat = new THREE.MeshBasicMaterial({color: COLORS.hpGreen, transparent: true, opacity: 0.8});
     const vGeo = new THREE.BoxGeometry(0.1, 0.6, 0.1);
     const hGeo = new THREE.BoxGeometry(0.6, 0.1, 0.1);
     const vMesh = new THREE.Mesh(vGeo, mat);
@@ -2257,10 +2741,10 @@ function burnTreesAt(x, z, radius) {
                     const t = tree.mesh.children[0]; // Trunk
                     const l = tree.mesh.children[1]; // Leaves
                     t.material = t.material.clone();
-                    t.material.color.setHex(0x111111); // Black trunk
+                    t.material.color.setHex(COLORS.hairBlack); // Black trunk
 
                     l.material = l.material.clone();
-                    l.material.color.setHex(0x222222); // Charred leaves
+                    l.material.color.setHex(COLORS.charred); // Charred leaves
                     l.scale.set(0.8, 0.5, 0.8); // Shriveled
 
                     // Smoke
@@ -2346,7 +2830,7 @@ function updateChunks(force = false, specificChunks = null) {
 
     const activeKeys = new Set();
     let createdCount = 0;
-    const MAX_CHUNKS_PER_FRAME = 10;
+    const MAX_CHUNKS_PER_FRAME = CONFIG.TERRAIN.MAX_CHUNKS_PER_FRAME;
 
     for(let x = -RENDER_DISTANCE; x <= RENDER_DISTANCE; x++) {
         for(let z = -RENDER_DISTANCE; z <= RENDER_DISTANCE; z++) {
@@ -2742,10 +3226,10 @@ function createChunk(cx, cz) {
                 const treeGroup = new THREE.Group();
                 treeGroup.position.set(lx+offX, h, lz+offZ);
 
-                const t = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.25,1,5), new THREE.MeshStandardMaterial({color: 0x8B4513, roughness: 0.7, metalness: 0.1}));
+                const t = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.25,1,5), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.7, metalness: 0.1}));
                 t.position.y = 0.5; t.castShadow = true; t.receiveShadow = true;
 
-                const l = new THREE.Mesh(new THREE.ConeGeometry(0.9,2.8,5), new THREE.MeshStandardMaterial({color: 0x006400, roughness: 0.7, metalness: 0.1}));
+                const l = new THREE.Mesh(new THREE.ConeGeometry(0.9,2.8,5), new THREE.MeshStandardMaterial({color: COLORS.treeLeaves, roughness: 0.7, metalness: 0.1}));
                 l.position.y = 1.9; l.castShadow = true; l.receiveShadow = true;
 
                 treeGroup.add(t); treeGroup.add(l);
@@ -3024,7 +3508,7 @@ const PF_NEIGHBORS = [
 ];
 
 const Pathfinder = {
-    GRID_SIZE: 2.0,
+    GRID_SIZE: CONFIG.PATHFINDER.GRID_SIZE,
     openHeap: new BinaryHeap(node => node.f),
     openSet: new Map(),
     closedSet: new Set(),
@@ -3052,8 +3536,8 @@ const Pathfinder = {
         openSet.set(getKey(startNode.x, startNode.y), startNode);
 
         let iterations = 0;
-        const MAX_ITER = 10000;
-        const safeH = WATER_LEVEL - 2.2; // All units use Shaman height for water
+        const MAX_ITER = CONFIG.PATHFINDER.MAX_ITERATIONS;
+        const safeH = WATER_LEVEL - CONFIG.PATHFINDER.WATER_SAFE_DEPTH; // All units use Shaman height for water
 
         while(openHeap.size() > 0) {
             iterations++;
@@ -3100,7 +3584,7 @@ const Pathfinder = {
 
                     // Allow entry if close to target (within 3 units / ~1.5 grid cells) to handle large buildings
                     const distToTarget = Math.sqrt((nx - endNode.x)**2 + (ny - endNode.y)**2);
-                    if(!isFlying && distToTarget > 1.5 && isBlocked(wx, wz)) continue; // Building collision
+                    if(!isFlying && distToTarget > CONFIG.PATHFINDER.TARGET_PROXIMITY && isBlocked(wx, wz)) continue; // Building collision
                 }
 
                 // Diagonal corner cutting check
@@ -3115,10 +3599,10 @@ const Pathfinder = {
                 const dist = Math.sqrt(offset.x*offset.x + offset.y*offset.y);
                 const currentH = currentNode.h; // Optimization: Use cached height
                 const dh = Math.abs(h - currentH);
-                if(!isFlying && dh > 2.0) continue;
+                if(!isFlying && dh > CONFIG.PATHFINDER.HEIGHT_DIFF_LIMIT) continue;
 
-                let cost = dist + dh * 0.5;
-                if (h < WATER_LEVEL && state.waterState !== 'frozen') cost += 10.0; // Penalty for water
+                let cost = dist + dh * CONFIG.PATHFINDER.SLOPE_COST_FACTOR;
+                if (h < WATER_LEVEL && state.waterState !== 'frozen') cost += CONFIG.PATHFINDER.WATER_COST_PENALTY; // Penalty for water
                 const gScore = currentNode.g + cost;
 
                 if(!neighbor || gScore < neighbor.g) {
@@ -3141,7 +3625,7 @@ function isWalkableLine(start, end, isFlying, unitHeight = 1.5) {
 
     const dir = end.clone().sub(start).normalize();
     const checkPos = start.clone();
-    const safeH = WATER_LEVEL - 2.2; // All units use Shaman height for water
+    const safeH = WATER_LEVEL - CONFIG.PATHFINDER.WATER_SAFE_DEPTH; // All units use Shaman height for water
 
     for(let i=1; i<steps; i++) {
         checkPos.add(dir);
@@ -3178,14 +3662,14 @@ function smoothPath(path, isFlying, unitHeight) {
 // --- js/projectiles.js ---
 
 class Fireball {
-    constructor(start, end, faction, unitDamage = 27, buildingDamage = 75) {
+    constructor(start, end, faction, unitDamage = CONFIG.COMBAT.FIREBALL_UNIT_DAMAGE, buildingDamage = CONFIG.COMBAT.FIREBALL_BUILDING_DAMAGE) {
         this.id = generateUUID();
-        this.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({color: 0xFF4500}));
+        this.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({color: COLORS.fireBody}));
         this.mesh.position.copy(start); this.target = end; this.dir = end.clone().sub(start).normalize();
         this.faction = faction;
         this.unitDamage = unitDamage;
         this.buildingDamage = buildingDamage;
-        this.speed = 25; this.active = true; this.trailTimer = 0;
+        this.speed = CONFIG.EFFECTS.FIREBALL_SPEED; this.active = true; this.trailTimer = 0;
 
         // Add light
         this.light = new THREE.PointLight(0xFF4500, 1.5, 15);
@@ -3254,7 +3738,7 @@ class Fireball {
         this.trailTimer += dt;
         if(this.trailTimer > 0.02) {
             // High quality trail
-            const trailMat = new THREE.MeshBasicMaterial({color: 0xFF4500, transparent: true, opacity: 0.8});
+            const trailMat = new THREE.MeshBasicMaterial({color: COLORS.fireBody, transparent: true, opacity: 0.8});
             const trailMesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), trailMat);
             trailMesh.position.copy(this.mesh.position);
             trailMesh.position.add(new THREE.Vector3((Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2));
@@ -3319,7 +3803,7 @@ class Volcano extends ActiveEffect {
         super();
         this.x = x; this.z = z;
         this.faction = faction;
-        this.timer = 15.0;
+        this.timer = CONFIG.EFFECTS.VOLCANO_DURATION;
         this.interval = 0;
         SoundManager.playSound('explosion');
 
@@ -3354,7 +3838,7 @@ class Volcano extends ActiveEffect {
         // Visuals: Smoke Clouds
         if(Math.random() < 0.1) {
             const size = 1 + Math.random() * 2;
-            const smokeMesh = new THREE.Mesh(AssetCache.geos.cloud, new THREE.MeshBasicMaterial({color: 0x222222, transparent: true, opacity: 0.8}));
+            const smokeMesh = new THREE.Mesh(AssetCache.geos.cloud, new THREE.MeshBasicMaterial({color: COLORS.smoke, transparent: true, opacity: 0.8}));
             smokeMesh.position.set(this.x + (Math.random()-0.5)*2, getHeight(this.x, this.z), this.z + (Math.random()-0.5)*2);
             smokeMesh.scale.set(size, size, size);
             smokeMesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
@@ -3370,26 +3854,26 @@ class Volcano extends ActiveEffect {
             }));
         }
 
-        if(this.interval > 0.2) {
+        if(this.interval > CONFIG.EFFECTS.VOLCANO_TICK_INTERVAL) {
             this.interval = 0;
             // Continually raise/modify
             const mods = modifyTerrain(this.x, this.z, 5, 0.2);
             updateChunks(true, mods);
 
-            burnTreesAt(this.x, this.z, 10);
+            burnTreesAt(this.x, this.z, CONFIG.EFFECTS.VOLCANO_TICK_RADIUS);
 
             // Push & Damage
-            SpatialHash.query(this.x, this.z, 10).forEach(u => {
+            SpatialHash.query(this.x, this.z, CONFIG.EFFECTS.VOLCANO_TICK_RADIUS).forEach(u => {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(this.x, u.mesh.position.y, this.z));
-                if(dist < 10 && u.faction !== this.faction) {
+                if(dist < CONFIG.EFFECTS.VOLCANO_TICK_RADIUS && u.faction !== this.faction) {
                     const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
                     u.applyForce(dir.multiplyScalar(20).add(new THREE.Vector3(0, 10, 0)));
-                    if (!u.isShaman) u.takeDamage(5);
+                    if (!u.isShaman) u.takeDamage(CONFIG.COMBAT.VOLCANO_TICK_DAMAGE);
                 }
             });
             state.buildings.forEach(b => {
                  const dist = b.mesh.position.distanceTo(new THREE.Vector3(this.x, b.mesh.position.y, this.z));
-                 if(dist < 10 && b.faction !== this.faction) b.takeDamage(10);
+                 if(dist < CONFIG.EFFECTS.VOLCANO_TICK_RADIUS && b.faction !== this.faction) b.takeDamage(CONFIG.COMBAT.VOLCANO_BUILDING_DAMAGE);
             });
         }
         if(this.timer <= 0) {
@@ -3406,8 +3890,8 @@ class Swamp extends ActiveEffect {
         super();
         this.pos = new THREE.Vector3(x, getHeight(x,z)+0.1, z);
         this.faction = faction;
-        this.timer = 30.0;
-        this.radius = 4.0;
+        this.timer = CONFIG.EFFECTS.SWAMP_DURATION;
+        this.radius = CONFIG.EFFECTS.SWAMP_RADIUS;
 
         const geo = new THREE.CylinderGeometry(this.radius, this.radius, 0.2, 16);
         const mat = new THREE.MeshBasicMaterial({color: 0x113311, transparent: true, opacity: 0.6});
@@ -3442,7 +3926,7 @@ class Swamp extends ActiveEffect {
             if(u.state !== 'dead' && !u.isShaman && u.faction !== this.faction) {
                 const dist = Math.sqrt((u.mesh.position.x - this.pos.x)**2 + (u.mesh.position.z - this.pos.z)**2);
                 if(dist < this.radius * 0.8) {
-                 u.takeDamage(10000); // Instant death
+                 u.takeDamage(CONFIG.COMBAT.SWAMP_KILL_DAMAGE); // Instant death
                      spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0x000000);
                 }
             }
@@ -3463,7 +3947,7 @@ class Tornado extends ActiveEffect {
         super();
         this.pos = new THREE.Vector3(x, getHeight(x,z), z);
         this.faction = faction;
-        this.timer = 20.0;
+        this.timer = CONFIG.EFFECTS.TORNADO_DURATION;
         this.moveDelay = 5.0;
         this.angle = Math.random() * Math.PI * 2;
         this.mesh = new THREE.Group();
@@ -3506,17 +3990,17 @@ class Tornado extends ActiveEffect {
         });
 
         // Physics
-        const damagePerSecond = 300;
-        SpatialHash.query(this.pos.x, this.pos.z, 5).forEach(u => {
+        const damagePerSecond = CONFIG.COMBAT.TORNADO_DPS;
+        SpatialHash.query(this.pos.x, this.pos.z, CONFIG.COMBAT.TORNADO_RADIUS).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
-            if(d < 5 && u.faction !== this.faction) {
+            if(d < CONFIG.COMBAT.TORNADO_RADIUS && u.faction !== this.faction) {
                  u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 12.5, (Math.random()-0.5)*10));
                  u.takeDamage(damagePerSecond * dt);
             }
         });
         state.buildings.forEach(b => {
              const d = b.mesh.position.distanceTo(this.pos);
-             if(d < 5 && b.faction !== this.faction) b.takeDamage(damagePerSecond * dt);
+             if(d < CONFIG.COMBAT.TORNADO_RADIUS && b.faction !== this.faction) b.takeDamage(damagePerSecond * dt);
         });
 
         if(this.timer <= 0) {
@@ -3533,13 +4017,13 @@ class Swarm extends ActiveEffect {
         super();
         this.pos = new THREE.Vector3(x, getHeight(x,z)+3, z);
         this.faction = faction;
-        this.timer = 7.0;
+        this.timer = CONFIG.EFFECTS.SWARM_DURATION;
         this.particles = [];
         const geo = new THREE.ConeGeometry(0.1, 0.4, 4);
         geo.rotateX(Math.PI/2); // Point forward
-        const mat = new THREE.MeshBasicMaterial({color: 0x222222});
+        const mat = new THREE.MeshBasicMaterial({color: COLORS.charred});
 
-        for(let i=0; i<15; i++) {
+        for(let i=0; i<CONFIG.EFFECTS.SWARM_PARTICLE_COUNT; i++) {
             const p = new THREE.Mesh(geo, mat);
             p.position.set(this.pos.x + (Math.random()-0.5)*4, this.pos.y + (Math.random()-0.5)*2, this.pos.z + (Math.random()-0.5)*4);
             const targetOffset = new THREE.Vector3((Math.random()-0.5)*4, (Math.random()-0.5)*4, (Math.random()-0.5)*4);
@@ -3595,7 +4079,7 @@ class Swarm extends ActiveEffect {
         SpatialHash.query(this.pos.x, this.pos.z, 4).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 4 && u.faction !== this.faction) {
-                u.takeDamage(25 * dt);
+                u.takeDamage(CONFIG.COMBAT.SWARM_DPS * dt);
             }
         });
 
@@ -3618,7 +4102,7 @@ class Firestorm extends ActiveEffect {
         super();
         this.x = x; this.z = z;
         this.faction = faction;
-        this.timer = 10.0;
+        this.timer = CONFIG.EFFECTS.FIRESTORM_DURATION;
         this.interval = 0;
     }
     update(dt) {
@@ -3647,7 +4131,7 @@ function castLandbridge(caster, x, z) {
     const dirZ = (z - start.z) / dist;
 
     const allMods = new Set();
-    const r = 4; // Radius 4 for width 8
+    const r = CONFIG.SPAWN.LAND_CONNECT_RADIUS + 1;
 
     for(let i=0; i<=steps; i++) {
         const px = start.x + dirX * i;
@@ -3698,13 +4182,13 @@ function executeSpell(type, x, z, caster) {
         caster.mesh.rotation.y = Math.atan2(dx, dz);
     }
     else if (type === 'raise') {
-        const mods = modifyTerrain(x, z, 5, 2.0);
+        const mods = modifyTerrain(x, z, CONFIG.TERRAIN.RAISE_LOWER_RADIUS, CONFIG.TERRAIN.RAISE_AMOUNT);
         updateChunks(true, mods);
         spawnDust(x, getHeight(x, z), z, 0x696969, 5);
         SoundManager.playSound('rumble');
     }
     else if (type === 'lower') {
-        const mods = modifyTerrain(x, z, 5, -2.0);
+        const mods = modifyTerrain(x, z, CONFIG.TERRAIN.RAISE_LOWER_RADIUS, -CONFIG.TERRAIN.RAISE_AMOUNT);
         updateChunks(true, mods);
         spawnDust(x, getHeight(x, z), z, 0xEEDC82, 5);
         SoundManager.playSound('rumble');
@@ -3773,7 +4257,7 @@ function executeSpell(type, x, z, caster) {
             u.damage = 0; u.isPhantom = true; u.maxHp = 1; u.hp = 1;
             u.mesh.traverse(c => { if(c.material) { c.material = c.material.clone(); c.material.transparent = true; c.material.opacity = 0.5; } });
             state.units.push(u);
-            setTimeout(() => { u.takeDamage(1000, true); }, 15000); // Dissipate
+            setTimeout(() => { u.takeDamage(1000, true); }, CONFIG.EFFECTS.PHANTOM_DURATION);
         }
     }
     else if (type === 'blink') {
@@ -3791,7 +4275,7 @@ function executeSpell(type, x, z, caster) {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                 if(dist < 8) {
                     u.setShield(true);
-                    setTimeout(() => u.setShield(false), 20000); // 20s
+                    setTimeout(() => u.setShield(false), CONFIG.EFFECTS.SHIELD_DURATION);
                 }
             }
         });
@@ -3803,7 +4287,7 @@ function executeSpell(type, x, z, caster) {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                 if(dist < 8) {
                     u.setInvisibility(true);
-                    setTimeout(() => u.setInvisibility(false), 30000); // 30s
+                    setTimeout(() => u.setInvisibility(false), CONFIG.EFFECTS.INVISIBILITY_DURATION);
                 }
             }
         });
@@ -3833,7 +4317,7 @@ function executeSpell(type, x, z, caster) {
                  if(dist < 8) {
                      if (u.originalFaction === null) u.originalFaction = u.faction;
                      u.setFaction(caster.faction);
-                     u.conversionTimer = 10.0;
+                     u.conversionTimer = CONFIG.EFFECTS.HYPNOTISE_DURATION;
                      u.state = 'idle'; u.attackTarget = null;
 
                  }
@@ -3932,7 +4416,7 @@ function executeSpell(type, x, z, caster) {
         SpatialHash.query(x, z, 4).forEach(u => {
              const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
              if(dist < 4 && u.faction !== caster.faction) {
-                 u.takeDamage(400);
+                 u.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE);
                  const forceDir = u.mesh.position.clone().sub(new THREE.Vector3(x, h, z)).normalize();
                  forceDir.y += 1.0;
                  u.applyForce(forceDir.multiplyScalar(20));
@@ -3942,11 +4426,11 @@ function executeSpell(type, x, z, caster) {
         });
 
         // Chain Lightning Mod
-        if (state.campaignLevel >= 9) {
+        if (state.campaignLevel >= CONFIG.CAMPAGIN.CHAIN_LIGHTNING_LEVEL) {
             hitUnits.forEach(u => {
                 SpatialHash.query(u.mesh.position.x, u.mesh.position.z, 10).forEach(extra => {
                     if (extra.faction !== caster.faction && !hitUnits.includes(extra)) {
-                        extra.takeDamage(200);
+                        extra.takeDamage(CONFIG.COMBAT.LIGHTNING_CHAIN_DAMAGE);
                         spawnPulse(extra.mesh.position.x, extra.mesh.position.y, extra.mesh.position.z, 0xFFFFFF);
                     }
                 });
@@ -3956,8 +4440,8 @@ function executeSpell(type, x, z, caster) {
         state.buildings.forEach(b => {
              const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
              if(dist < 4 && b.faction !== caster.faction) {
-                 b.takeDamage(400);
-                 hit = true;
+                  b.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE);
+                  hit = true;
              }
         });
     }
@@ -3995,12 +4479,13 @@ window.Humanoid = class Humanoid {
         this.upgradeLevel = 0;
 
         // Stats
-        this.maxHp = 100; this.damage = 5; this.range = 1; this.attackSpeed = 1.0; this.moveSpeed = 6; this.height = 1.5;
-        if(type === 'warrior') { this.maxHp = 200; this.damage = 52.5; }
-        if(type === 'firewarrior') { this.maxHp = 120; this.damage = 5; this.range = 12; this.attackSpeed = 2.0; }
-        if(type === 'spy') { this.damage = 0; }
-        if(type === 'shaman') { this.maxHp = 500; this.damage = 30; this.range = 15; this.height = 2.2; }
-        if(type === 'airship') { this.maxHp = 500; this.damage = 0; this.moveSpeed = 15; this.isVehicle = true; this.passengers = []; this.capacity = 5; this.height = 2.0; }
+        const s = CONFIG.UNIT_STATS;
+        this.maxHp = s.DEFAULT.maxHp; this.damage = s.DEFAULT.damage; this.range = s.DEFAULT.range; this.attackSpeed = s.DEFAULT.attackSpeed; this.moveSpeed = s.DEFAULT.moveSpeed; this.height = s.DEFAULT.height;
+        if(type === 'warrior') { this.maxHp = s.warrior.maxHp; this.damage = s.warrior.damage; }
+        if(type === 'firewarrior') { this.maxHp = s.firewarrior.maxHp; this.damage = s.firewarrior.damage; this.range = s.firewarrior.range; this.attackSpeed = s.firewarrior.attackSpeed; }
+        if(type === 'spy') { this.damage = s.spy.damage; }
+        if(type === 'shaman') { this.maxHp = s.shaman.maxHp; this.damage = s.shaman.damage; this.range = s.shaman.range; this.height = s.shaman.height; }
+        if(type === 'airship') { this.maxHp = s.airship.maxHp; this.damage = s.airship.damage; this.moveSpeed = s.airship.moveSpeed; this.isVehicle = true; this.passengers = []; this.capacity = s.airship.capacity; this.height = s.airship.height; }
 
         if (state.matchSettings && state.matchSettings.doubleSpeed) {
             this.moveSpeed *= 2.0;
@@ -4044,7 +4529,7 @@ window.Humanoid = class Humanoid {
              basket.position.y = 0.5;
              this.mesh.add(basket);
              // Ropes
-             const ropeMat = new THREE.MeshStandardMaterial({color: 0x888888, roughness: 0.7, metalness: 0.1});
+             const ropeMat = new THREE.MeshStandardMaterial({color: COLORS.airshipRope, roughness: 0.7, metalness: 0.1});
              const rope1 = new THREE.Mesh(AssetCache.geos.airshipRope, ropeMat);
              rope1.position.set(0.9, 2, 1.4); this.mesh.add(rope1);
              const rope2 = new THREE.Mesh(AssetCache.geos.airshipRope, ropeMat);
@@ -4054,7 +4539,7 @@ window.Humanoid = class Humanoid {
              const rope4 = new THREE.Mesh(AssetCache.geos.airshipRope, ropeMat);
              rope4.position.set(-0.9, 2, -1.4); this.mesh.add(rope4);
              // Balloon
-             const balloon = new THREE.Mesh(AssetCache.geos.airshipBalloon, new THREE.MeshStandardMaterial({color: 0xEEEEEE, roughness: 0.7, metalness: 0.1}));
+             const balloon = new THREE.Mesh(AssetCache.geos.airshipBalloon, new THREE.MeshStandardMaterial({color: COLORS.airshipBalloon, roughness: 0.7, metalness: 0.1}));
              balloon.scale.set(1, 0.8, 1.5);
              balloon.position.set(0, 4.5, 0);
              this.mesh.add(balloon);
@@ -4070,7 +4555,7 @@ window.Humanoid = class Humanoid {
             headMesh.castShadow = true; headMesh.receiveShadow = true;
             this.head.add(headMesh);
 
-            this.hairMat = new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.8});
+            this.hairMat = new THREE.MeshStandardMaterial({color: COLORS.hairBlack, roughness: 0.8});
             this.hairMesh = new THREE.Mesh(AssetCache.geos.hair, this.hairMat);
             this.head.add(this.hairMesh);
 
@@ -4101,16 +4586,16 @@ window.Humanoid = class Humanoid {
         // Props
         if(this.isShaman) {
             this.mesh.scale.set(1.5, 1.5, 1.5);
-            const mask = new THREE.Mesh(AssetCache.geos.shamanMask, new THREE.MeshStandardMaterial({color: 0xFFD700, emissive: 0x443300, roughness: 0.7, metalness: 0.1, transparent: true, opacity: 0.5}));
+            const mask = new THREE.Mesh(AssetCache.geos.shamanMask, new THREE.MeshStandardMaterial({color: COLORS.yellow, emissive: 0x443300, roughness: 0.7, metalness: 0.1, transparent: true, opacity: 0.5}));
             mask.userData.isFactionColored = true; mask.userData.partType = 'shaman_mask';
             mask.position.z = 0.16; this.head.add(mask);
 
-            const hornMat = new THREE.MeshStandardMaterial({color: 0xFFFFFF, emissive: 0x333333, roughness: 0.7, metalness: 0.1});
+            const hornMat = new THREE.MeshStandardMaterial({color: COLORS.snow, emissive: 0x333333, roughness: 0.7, metalness: 0.1});
             const h1 = new THREE.Mesh(AssetCache.geos.shamanHorn, hornMat); h1.userData.isFactionColored = true; h1.userData.partType = 'shaman_horn'; h1.position.set(0.15, 0.2, 0); h1.rotation.z = -0.3;
             const h2 = new THREE.Mesh(AssetCache.geos.shamanHorn, hornMat); h2.userData.isFactionColored = true; h2.userData.partType = 'shaman_horn'; h2.position.set(-0.15, 0.2, 0); h2.rotation.z = 0.3; this.head.add(h1); this.head.add(h2);
 
             // Cape for Shaman
-            const cape = new THREE.Mesh(AssetCache.geos.cape, new THREE.MeshStandardMaterial({color: 0x330000, roughness: 0.7, metalness: 0.1}));
+            const cape = new THREE.Mesh(AssetCache.geos.cape, new THREE.MeshStandardMaterial({color: COLORS.cloakDark, roughness: 0.7, metalness: 0.1}));
             cape.userData.isFactionColored = true; cape.userData.partType = 'shaman_cape';
             cape.position.set(0, -0.1, -0.22); cape.rotation.x = 0.2;
             this.torso.add(cape);
@@ -4121,33 +4606,33 @@ window.Humanoid = class Humanoid {
         }
         else if (type === 'wild') {
             // Backpack
-            const bag = new THREE.Mesh(AssetCache.geos.backpack, new THREE.MeshStandardMaterial({color: 0x8B4513, roughness: 0.7, metalness: 0.1}));
+            const bag = new THREE.Mesh(AssetCache.geos.backpack, new THREE.MeshStandardMaterial({color: COLORS.bagBrown, roughness: 0.7, metalness: 0.1}));
             bag.position.set(0, 0, -0.22);
             this.torso.add(bag);
         }
         else if (type === 'warrior') {
-            const helm = new THREE.Mesh(AssetCache.geos.warriorHelm, new THREE.MeshStandardMaterial({color: 0x888888, roughness: 0.7, metalness: 0.1}));
+            const helm = new THREE.Mesh(AssetCache.geos.warriorHelm, new THREE.MeshStandardMaterial({color: COLORS.warriorHelm, roughness: 0.7, metalness: 0.1}));
             helm.position.y = 0.1; this.head.add(helm);
-            const crest = new THREE.Mesh(AssetCache.geos.warriorCrest, new THREE.MeshStandardMaterial({color: 0xCC0000, roughness: 0.7, metalness: 0.1}));
+            const crest = new THREE.Mesh(AssetCache.geos.warriorCrest, new THREE.MeshStandardMaterial({color: COLORS.warriorCrest, roughness: 0.7, metalness: 0.1}));
             crest.position.y = 0.25;
             this.head.add(crest);
         }
         else if (type === 'firewarrior') {
-            const mask = new THREE.Mesh(AssetCache.geos.fireMask, new THREE.MeshStandardMaterial({color: 0xFF4500, roughness: 0.7, metalness: 0.1}));
+            const mask = new THREE.Mesh(AssetCache.geos.fireMask, new THREE.MeshStandardMaterial({color: COLORS.fireBody, roughness: 0.7, metalness: 0.1}));
             mask.position.z = 0.16; this.head.add(mask);
             // Glowing eyes
-            const eyeMat = new THREE.MeshBasicMaterial({color: 0xFFFF00});
+            const eyeMat = new THREE.MeshBasicMaterial({color: COLORS.fireEye});
             const eyeL = new THREE.Mesh(AssetCache.geos.fireEye, eyeMat); eyeL.position.set(0.08, 0.05, 0.22);
             const eyeR = new THREE.Mesh(AssetCache.geos.fireEye, eyeMat); eyeR.position.set(-0.08, 0.05, 0.22);
             this.head.add(eyeL); this.head.add(eyeR);
         }
         else if (type === 'spy') {
              // Hood
-             const hood = new THREE.Mesh(AssetCache.geos.spyHood, new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.7, metalness: 0.1}));
+             const hood = new THREE.Mesh(AssetCache.geos.spyHood, new THREE.MeshStandardMaterial({color: COLORS.hoodBlack, roughness: 0.7, metalness: 0.1}));
              hood.position.y = 0.1;
              this.head.add(hood);
              // Cape
-             const cape = new THREE.Mesh(AssetCache.geos.cape, new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.7, metalness: 0.1}));
+             const cape = new THREE.Mesh(AssetCache.geos.cape, new THREE.MeshStandardMaterial({color: COLORS.hoodCape, roughness: 0.7, metalness: 0.1}));
              cape.position.set(0, -0.1, -0.22); cape.rotation.x = 0.1;
              this.torso.add(cape);
         }
@@ -4191,8 +4676,8 @@ window.Humanoid = class Humanoid {
                 return upperGroup;
             };
             let armMat = skinMat;
-            if(this.type === 'firewarrior') armMat = new THREE.MeshStandardMaterial({color: 0xFF4500, emissive: 0xFF2200, roughness: 0.7, metalness: 0.1});
-            if(this.type === 'spy') armMat = new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.7, metalness: 0.1});
+            if(this.type === 'firewarrior') armMat = new THREE.MeshStandardMaterial({color: COLORS.fireBody, emissive: COLORS.fireEmissive, roughness: 0.7, metalness: 0.1});
+            if(this.type === 'spy') armMat = new THREE.MeshStandardMaterial({color: COLORS.spyBody, roughness: 0.7, metalness: 0.1});
 
             this.armL = createLimb(AssetCache.geos.upperArm, AssetCache.geos.lowerArm, armMat, 0.28, 0.15, 0, 0.25, 0.25, true);
             this.armR = createLimb(AssetCache.geos.upperArm, AssetCache.geos.lowerArm, armMat, -0.28, 0.15, 0, 0.25, 0.25, true);
@@ -4200,17 +4685,17 @@ window.Humanoid = class Humanoid {
 
             // Weapons / Tools
             if(type === 'warrior') {
-                const sword = new THREE.Mesh(AssetCache.geos.sword, new THREE.MeshStandardMaterial({color: 0xDDDDDD, roughness: 0.7, metalness: 0.1}));
+                const sword = new THREE.Mesh(AssetCache.geos.sword, new THREE.MeshStandardMaterial({color: COLORS.sword, roughness: 0.7, metalness: 0.1}));
                 sword.position.y = -0.15; sword.position.z = 0.1; sword.rotation.x = Math.PI/2;
                 this.armR.userData.lower.add(sword);
                 // Shield
-                const shield = new THREE.Mesh(AssetCache.geos.shield, new THREE.MeshStandardMaterial({color: 0x8B4513, roughness: 0.7, metalness: 0.1}));
+                const shield = new THREE.Mesh(AssetCache.geos.shield, new THREE.MeshStandardMaterial({color: COLORS.shield, roughness: 0.7, metalness: 0.1}));
                 shield.rotation.z = Math.PI/2; shield.rotation.y = Math.PI/2;
                 shield.position.x = 0.15; shield.position.y = -0.1;
                 this.armL.userData.lower.add(shield);
             }
             else if (type === 'wild') {
-                const tool = new THREE.Mesh(AssetCache.geos.tool, new THREE.MeshStandardMaterial({color: 0x666666, roughness: 0.7, metalness: 0.1}));
+                const tool = new THREE.Mesh(AssetCache.geos.tool, new THREE.MeshStandardMaterial({color: COLORS.tool, roughness: 0.7, metalness: 0.1}));
                 tool.position.y = -0.15; tool.position.z = 0.1; tool.rotation.x = Math.PI/2;
                 this.armR.userData.lower.add(tool);
             }
@@ -4228,7 +4713,7 @@ window.Humanoid = class Humanoid {
         this.lastAttackTime = 0;
         this.path = []; this.pathIndex = 0; this.pathTimer = 0;
         this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
-        this.stuckThreshold = 2.0 + Math.random();
+        this.stuckThreshold = CONFIG.ANIMATION.STUCK_THRESHOLD_BASE + Math.random();
         this.updateTicker = Math.floor(Math.random() * 60);
         this.deathTimer = 0;
         this.nextTargetCheck = Math.random() * 2.0;
@@ -4320,14 +4805,13 @@ window.Humanoid = class Humanoid {
             this.shieldMesh = new THREE.Group();
 
             // Inner glow
-            const inner = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.2, depthWrite: false}));
+            const inner = new THREE.Mesh(new THREE.SphereGeometry(CONFIG.EFFECTS.SHIELD_INNER_RADIUS, 16, 16), new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.2, depthWrite: false}));
             this.shieldMesh.add(inner);
 
-            // Outer wireframe pattern (Dodecahedron looks techy/magical)
-            const outer = new THREE.Mesh(new THREE.DodecahedronGeometry(0.9, 0), new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.8, wireframe: true}));
+            const outer = new THREE.Mesh(new THREE.DodecahedronGeometry(CONFIG.EFFECTS.SHIELD_OUTER_RADIUS, 0), new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.8, wireframe: true}));
             this.shieldMesh.add(outer);
 
-            this.shieldMesh.position.y = 1.0;
+            this.shieldMesh.position.y = CONFIG.EFFECTS.SHIELD_Y_OFFSET;
             this.mesh.add(this.shieldMesh);
         } else if(!active && this.shieldMesh) {
             this.mesh.remove(this.shieldMesh);
@@ -4400,9 +4884,9 @@ window.Humanoid = class Humanoid {
         if (this.rigidBody && typeof this.rigidBody.applyImpulse === 'function') {
             this.rigidBody.applyImpulse({ x: vec.x, y: vec.y, z: vec.z }, true);
             this.rigidBody.applyTorqueImpulse({
-                x: vec.z * 0.2 + (Math.random() - 0.5),
-                y: (Math.random() - 0.5) * 2,
-                z: -vec.x * 0.2 + (Math.random() - 0.5)
+                x: vec.z * CONFIG.ANIMATION.FORCE_ROTATION_FACTOR + (Math.random() - 0.5),
+                y: (Math.random() - 0.5) * CONFIG.ANIMATION.FORCE_Y_RANDOM,
+                z: -vec.x * CONFIG.ANIMATION.FORCE_ROTATION_FACTOR + (Math.random() - 0.5)
             }, true);
         } else {
             this.velocity.add(vec);
@@ -4412,9 +4896,9 @@ window.Humanoid = class Humanoid {
         // Setup initial rotational physics based on the force vector
         if(!this.angularVelocity) this.angularVelocity = new THREE.Vector3();
         // Force on Z pitches around X, Force on X rolls around Z
-        this.angularVelocity.x = vec.z * 0.2 + (Math.random() - 0.5);
-        this.angularVelocity.y = (Math.random() - 0.5) * 2;
-        this.angularVelocity.z = -vec.x * 0.2 + (Math.random() - 0.5);
+        this.angularVelocity.x = vec.z * CONFIG.ANIMATION.FORCE_ROTATION_FACTOR + (Math.random() - 0.5);
+        this.angularVelocity.y = (Math.random() - 0.5) * CONFIG.ANIMATION.FORCE_Y_RANDOM;
+        this.angularVelocity.z = -vec.x * CONFIG.ANIMATION.FORCE_ROTATION_FACTOR + (Math.random() - 0.5);
     }
 
     manualMove(vec, dt = 0.016) {
@@ -4428,7 +4912,7 @@ window.Humanoid = class Humanoid {
              const futureX = this.mesh.position.x + vec.x * speed * 0.1;
              const futureZ = this.mesh.position.z + vec.z * speed * 0.1;
              const futureH = getHeight(futureX, futureZ);
-             const safeH = WATER_LEVEL - 2.2; // Use Shaman height
+             const safeH = WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
 
              // If moving into water deeper than unit height
              const currentH = getHeight(this.mesh.position.x, this.mesh.position.z);
@@ -4511,7 +4995,7 @@ window.Humanoid = class Humanoid {
     findTarget() {
          let minDist = 1000;
          let closest = null;
-         const range = 30;
+         const range = CONFIG.AI.AGGRESSION_RANGE;
          const candidates = SpatialHash.query(this.mesh.position.x, this.mesh.position.z, range);
 
          for(let i=0; i<candidates.length; i++) {
@@ -4617,7 +5101,7 @@ window.Humanoid = class Humanoid {
                  // Spawn Fireball
                  const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
                  const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
-                 state.projectiles.push(new Fireball(startPos, targetPos, this.faction, 5.4, 15)); // 20% of 27/75
+                 state.projectiles.push(new Fireball(startPos, targetPos, this.faction, CONFIG.COMBAT.FIREWARRIOR_BALL_UNIT_DMG, CONFIG.COMBAT.FIREWARRIOR_BULLDING_DMG));
                  SoundManager.playSound('fireball');
             } else if (this.type === 'spy') {
                 // Spy Conversion
@@ -4789,7 +5273,7 @@ window.Humanoid = class Humanoid {
                 targetY += tilt * (this.isShaman ? 1.2 : 0.8);
             }
             if (this.mesh.position.y < targetY) {
-                if(this.velocity.y < -15 && this.state !== 'dead' && !this.isShaman) this.takeDamage(20, true);
+                if(this.velocity.y < CONFIG.COMBAT.FALL_DAMAGE_THRESHOLD && this.state !== 'dead' && !this.isShaman) this.takeDamage(CONFIG.COMBAT.FALL_DAMAGE, true);
 
                 if (this.rigidBody) {
                     const p = this.rigidBody.translation();
@@ -4814,9 +5298,9 @@ window.Humanoid = class Humanoid {
         // Deep Water Damage
         if (this.type !== 'airship' && this.state !== 'dead') {
             const h = groundH;
-            const safeH = WATER_LEVEL - 2.2; // Use Shaman height
+            const safeH = WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
             if (h < safeH) {
-                this.takeDamage(this.maxHp * 0.10 * dt, true);
+                this.takeDamage(this.maxHp * CONFIG.COMBAT.DEEP_WATER_DMG_FACTOR * dt, true);
             }
         }
 
@@ -4851,7 +5335,7 @@ window.Humanoid = class Humanoid {
             this.deathTimer += dt;
             if(this.mesh.rotation.x > -Math.PI/2) this.mesh.rotation.x -= dt * 5;
 
-            if (this.deathTimer > 95) {
+            if (this.deathTimer > CONFIG.CAMPAGIN.DEATH_CLEANUP_TIME - 5) {
                 if(this.mesh.position.y > groundH - 2.0) this.mesh.position.y -= dt * 0.5;
             }
             return;
@@ -4874,7 +5358,7 @@ window.Humanoid = class Humanoid {
                 }
             }
             if(nearBuilding) {
-                this.hp += dt * 10 * 20;
+                this.hp += dt * CONFIG.BUILDING.HEAL_RATE;
                 if(this.hp > this.maxHp) this.hp = this.maxHp;
                 this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
                 this.healTimer = (this.healTimer || 0) + dt * 20;
@@ -5040,7 +5524,7 @@ window.Humanoid = class Humanoid {
                 const dh = nextH - currentH;
 
                 let canMove = true;
-                const safeH = WATER_LEVEL - 2.2; // Use Shaman height
+                const safeH = WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
                 if (this.type !== 'airship' && nextH < safeH && currentH >= safeH) canMove = false;
 
                 if(canMove) {
@@ -5094,7 +5578,7 @@ window.Humanoid = class Humanoid {
                     this.stuckTimer += dt;
                     if(this.stuckTimer > this.stuckThreshold && this.finalDest) {
                         this.stuckTimer = 0;
-                        this.stuckThreshold = 2.0 + Math.random();
+                        this.stuckThreshold = CONFIG.ANIMATION.STUCK_THRESHOLD_BASE + Math.random();
                         const isFlying = (this.type === 'airship');
                         const newPath = Pathfinder.findPath(this.mesh.position, this.finalDest, isFlying, this.height);
                         if (newPath) {
@@ -5157,7 +5641,7 @@ window.Humanoid = class Humanoid {
                 let canMove = true;
                 if(this.type !== 'airship') {
                     const currentH = groundH;
-                    const safeH = WATER_LEVEL - 2.2; // Use Shaman height
+                    const safeH = WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
                     if (nextH < safeH && currentH >= safeH) {
                          if(!this.targetBoat) canMove = false;
                     }
@@ -5364,7 +5848,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
     if(!isLoading) SoundManager.playSound('construct');
     const baseH = getHeight(x, z);
-    const radius = 3;
+    const radius = CONFIG.TERRAIN.BUILDING_RADIUS;
 
     // Auto-Leveling
     if(!isLoading) {
@@ -5390,23 +5874,23 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
     group.position.set(x, baseH, z);
 
     let mesh, maxHp;
-    if (type === 'hut') { mesh = buildHut(); maxHp = 100; }
-    else if (type === 'tower') { mesh = buildTower(); maxHp = 150; }
-    else if (type === 'warrior') { mesh = buildBarracks(); maxHp = 250; }
-    else if (type === 'fire') { mesh = buildFireTemple(); maxHp = 300; }
-    else if (type === 'spy') { mesh = buildSpyHut(); maxHp = 200; }
-    else if (type === 'shipyard') { mesh = buildShipyard(); maxHp = 350; }
+    if (type === 'hut') { mesh = buildHut(); maxHp = CONFIG.BUILDING.HUT_HP; }
+    else if (type === 'tower') { mesh = buildTower(); maxHp = CONFIG.BUILDING.TOWER_HP; }
+    else if (type === 'warrior') { mesh = buildBarracks(); maxHp = CONFIG.BUILDING.WAREIOR_HP; }
+    else if (type === 'fire') { mesh = buildFireTemple(); maxHp = CONFIG.BUILDING.FIRE_HP; }
+    else if (type === 'spy') { mesh = buildSpyHut(); maxHp = CONFIG.BUILDING.SPY_HP; }
+    else if (type === 'shipyard') { mesh = buildShipyard(); maxHp = CONFIG.BUILDING.SHIPYARD_HP; }
 
     if(mesh) {
         group.add(mesh);
 
         // HP Bar for Building
         const hpGroup = new THREE.Group();
-        hpGroup.position.set(0, 5, 0); // High above the building
-        const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.3), new THREE.MeshBasicMaterial({color: 0x880000}));
+        hpGroup.position.set(0, CONFIG.BUILDING.HP_BAR_Y_OFFSET, 0);
+        const bgMesh = new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.BUILDING.HP_BAR_WIDTH, CONFIG.BUILDING.HP_BAR_HEIGHT), new THREE.MeshBasicMaterial({color: COLORS.hpBack}));
         hpGroup.add(bgMesh);
-        const fgGeo = new THREE.PlaneGeometry(2.0, 0.3); fgGeo.translate(1.0, 0, 0);
-        const hpBar = new THREE.Mesh(fgGeo, new THREE.MeshBasicMaterial({color: 0x00FF00}));
+        const fgGeo = new THREE.PlaneGeometry(CONFIG.BUILDING.HP_BAR_WIDTH, CONFIG.BUILDING.HP_BAR_HEIGHT); fgGeo.translate(CONFIG.BUILDING.HP_BAR_WIDTH / 2, 0, 0);
+        const hpBar = new THREE.Mesh(fgGeo, new THREE.MeshBasicMaterial({color: COLORS.hpGreen}));
         hpBar.position.x = -1.0;
         hpGroup.add(hpBar);
         hpGroup.visible = false;
@@ -5535,11 +6019,11 @@ function buildHut() {
     base.position.y = 0.75; base.castShadow = true; base.receiveShadow = true; g.add(base);
     const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 1.5, 16), new THREE.MeshStandardMaterial({color: COLORS.straw, roughness: 1.0, metalness: 0.0}));
     roof.position.y = 1.5 + 0.75; roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.2), new THREE.MeshStandardMaterial({color: 0x220000, roughness: 0.8, metalness: 0.0}));
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.2), new THREE.MeshStandardMaterial({color: COLORS.door, roughness: 0.8, metalness: 0.0}));
     door.position.set(0, 0.5, 1.35); door.castShadow = true; door.receiveShadow = true; g.add(door);
 
     // Add small window
-    const win = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.2), new THREE.MeshStandardMaterial({color: 0x88CCFF, emissive: 0x112233, roughness: 0.2, metalness: 0.8}));
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.2), new THREE.MeshStandardMaterial({color: COLORS.window, emissive: 0x112233, roughness: 0.2, metalness: 0.8}));
     win.position.set(1.0, 1.0, 0.8); win.rotation.y = Math.PI / 4; win.castShadow = true; win.receiveShadow = true; g.add(win);
     return g;
 }
@@ -5573,36 +6057,36 @@ function buildBarracks() {
     roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
 
     // Door and Weapon Rack
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.2), new THREE.MeshStandardMaterial({color: 0x331100, roughness: 0.9, metalness: 0.0}));
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.2), new THREE.MeshStandardMaterial({color: COLORS.barracksDoor, roughness: 0.9, metalness: 0.0}));
     door.position.set(0, 0.6, 1.0); door.castShadow = true; door.receiveShadow = true; g.add(door);
 
     const rack = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 0.3), new THREE.MeshStandardMaterial({color: COLORS.wood, roughness: 0.8, metalness: 0.0}));
     rack.position.set(-1.0, 0.4, 1.1); rack.castShadow = true; rack.receiveShadow = true; g.add(rack);
 
-    const sword = new THREE.Mesh(AssetCache.geos.sword, new THREE.MeshStandardMaterial({color: 0xDDDDDD, roughness: 0.4, metalness: 0.8}));
+    const sword = new THREE.Mesh(AssetCache.geos.sword, new THREE.MeshStandardMaterial({color: COLORS.sword, roughness: 0.4, metalness: 0.8}));
     sword.position.set(-1.0, 0.6, 1.2); sword.rotation.z = Math.PI/4; sword.castShadow = true; sword.receiveShadow = true; g.add(sword);
 
     return g;
 }
 function buildFireTemple() {
     const g = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 1.2, 16), new THREE.MeshStandardMaterial({color: 0x444444, roughness: 0.9, metalness: 0.0}));
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 1.2, 16), new THREE.MeshStandardMaterial({color: COLORS.templeBase, roughness: 0.9, metalness: 0.0}));
     base.position.y = 0.6; base.castShadow = true; base.receiveShadow = true; g.add(base);
     const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2, 16), new THREE.MeshStandardMaterial({color: COLORS.yellow, roughness: 0.4, metalness: 0.6}));
     roof.position.y = 1.2 + 1; roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
 
     // Top Fire effect base
-    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.3, 0.4, 8), new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.8, metalness: 0.2}));
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.3, 0.4, 8), new THREE.MeshStandardMaterial({color: COLORS.templeBowl, roughness: 0.8, metalness: 0.2}));
     bowl.position.y = 3.3; bowl.castShadow = true; bowl.receiveShadow = true; g.add(bowl);
 
-    const flameCore = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), new THREE.MeshStandardMaterial({color: 0xFF4500, emissive: 0xFF2200, roughness: 0.8, metalness: 0.1}));
+    const flameCore = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), new THREE.MeshStandardMaterial({color: COLORS.flameCore, emissive: COLORS.flameEmissive, roughness: 0.8, metalness: 0.1}));
     flameCore.position.y = 3.5; flameCore.scale.set(1, 1.5, 1); g.add(flameCore);
 
     return g;
 }
 function buildSpyHut() {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.8, metalness: 0.2}));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), new THREE.MeshStandardMaterial({color: COLORS.spyBody, roughness: 0.8, metalness: 0.2}));
     body.position.y = 1.5; body.castShadow = true; body.receiveShadow = true; g.add(body);
     const roof = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), new THREE.MeshStandardMaterial({color: COLORS.blue, emissive: 0x000044, roughness: 0.5, metalness: 0.5}));
     roof.position.y = 3.2; roof.castShadow = true; roof.receiveShadow = true; g.add(roof);
@@ -5629,7 +6113,7 @@ function buildShipyard() {
     arm.position.set(0, 3, 1); arm.castShadow = true; arm.receiveShadow = true; g.add(arm);
 
     // Crane rope
-    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 2, 8), new THREE.MeshStandardMaterial({color: 0xDDDDDD, roughness: 1.0, metalness: 0.0}));
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 2, 8), new THREE.MeshStandardMaterial({color: COLORS.craneRope, roughness: 1.0, metalness: 0.0}));
     rope.position.set(-0.8, 2.0, 1); rope.castShadow = true; rope.receiveShadow = true; g.add(rope);
 
     return g;
@@ -5653,9 +6137,9 @@ class EnemyAI {
         this.myShaman = null;
 
         // Track losses for rebuilding
-        this.targetHutCount = 5;
-        if (this.personality === 'swarmer' || this.personality === 'hive') this.targetHutCount = 10;
-        if (this.personality === 'primordial') this.targetHutCount = 20;
+        this.targetHutCount = CONFIG.AI.TARGET_HUT_COUNT_DEFAULT;
+        if (this.personality === 'swarmer' || this.personality === 'hive') this.targetHutCount = CONFIG.AI.TARGET_HUT_COUNT_SWARMER;
+        if (this.personality === 'primordial') this.targetHutCount = CONFIG.AI.TARGET_HUT_COUNT_PRIMORDIAL;
         this.knownUnitCounts = { warrior: 0, firewarrior: 0, spy: 0, airship: 0 };
         this.lossQueue = [];
     }
@@ -5679,7 +6163,7 @@ class EnemyAI {
 
     update(dt) {
         this.timer += dt;
-        if(this.timer > 5.0) {
+        if(this.timer > CONFIG.AI.THINK_INTERVAL) {
             this.timer = 0;
             this.think();
         }
@@ -5699,8 +6183,8 @@ class EnemyAI {
             if (myShaman.state === 'move' && myShaman.path && myShaman.path.length > 0) return;
 
             // Bridge Logic - Frequent check
-            if (state.clock.getElapsedTime() - this.lastBridgeTime > 1.0) {
-                if (state.clock.getElapsedTime() - this.lastPathCheckTime > 1.0) {
+            if (state.clock.getElapsedTime() - this.lastBridgeTime > CONFIG.AI.BRIDGE_COOLDOWN) {
+                if (state.clock.getElapsedTime() - this.lastPathCheckTime > CONFIG.AI.PATH_CHECK_COOLDOWN) {
                     this.lastPathCheckTime = state.clock.getElapsedTime();
                     this.hasPathToPlayer = !!Pathfinder.findPath(myShaman.mesh.position, playerShaman.mesh.position, false, myShaman.height);
                 }
@@ -5815,10 +6299,10 @@ class EnemyAI {
 
         // 2. Expand Base
         // Aggressive expansion: always try if we have at least one building and one brave (busy or idle)
-        const buildingLimit = 15 + this.targetHutCount;
+        const buildingLimit = CONFIG.AI.BUILDING_LIMIT_BASE + this.targetHutCount;
         if (myBuildings.length < buildingLimit && myBraves.length > 0) {
             // Determine which building to build next
-            const targetCounts = { hut: this.targetHutCount, tower: (this.personality === 'fortress' ? 12 : 5), warrior: 2, fire: 2, spy: 2, shipyard: 1 };
+            const targetCounts = { hut: this.targetHutCount, tower: (this.personality === 'fortress' ? CONFIG.AI.TOWER_TARGET_FORTRESS : CONFIG.AI.TOWER_TARGET_DEFAULT), warrior: CONFIG.AI.TRAINING_BUILDING_TARGETS.warrior, fire: CONFIG.AI.TRAINING_BUILDING_TARGETS.fire, spy: CONFIG.AI.TRAINING_BUILDING_TARGETS.spy, shipyard: CONFIG.AI.TRAINING_BUILDING_TARGETS.shipyard };
 
             let typeToBuild = null;
 
@@ -5889,11 +6373,11 @@ class EnemyAI {
         });
 
         // 3. Attack Player
-        let shouldAttack = myUnits.length > 5;
-        if (this.personality === 'swarmer' || this.personality === 'hive' || this.personality === 'primordial') shouldAttack = myUnits.length > 2;
+        let shouldAttack = myUnits.length > CONFIG.AI.ATTACK_THRESHOLD_DEFAULT;
+        if (this.personality === 'swarmer' || this.personality === 'hive' || this.personality === 'primordial') shouldAttack = myUnits.length > CONFIG.AI.ATTACK_THRESHOLD_AGGRESSIVE;
         if (this.personality === 'opportunist') {
             const playerShaman = state.shaman;
-            shouldAttack = myUnits.length > 5 && (
+            shouldAttack = myUnits.length > CONFIG.AI.ATTACK_THRESHOLD_DEFAULT && (
                 !playerShaman || playerShaman.state === 'dead' || state.mana < 20
             );
         }
@@ -5919,9 +6403,9 @@ class EnemyAI {
             const dist = myShaman.mesh.position.distanceTo(target.mesh.position);
 
             // Offensive Spells
-            const spellRange = 10.0 + myShaman.mesh.position.y;
-            let spellCooldown = this.personality === 'sorcerer' ? 2.5 : 5.0;
-            if (this.personality === 'primordial') spellCooldown = 1.0;
+            const spellRange = CONFIG.AI.SHAMAN_SPELL_RANGE_BASE + myShaman.mesh.position.y;
+            let spellCooldown = this.personality === 'sorcerer' ? CONFIG.AI.AI_SPELL_COOLDOWN_SORCERER : CONFIG.AI.AI_SPELL_COOLDOWN_DEFAULT;
+            if (this.personality === 'primordial') spellCooldown = CONFIG.AI.AI_SPELL_COOLDOWN_PRIMORDIAL;
 
             if (state.clock.getElapsedTime() - this.lastSpellTime > spellCooldown) {
                 if (dist < spellRange || this.personality === 'primordial') {
@@ -5941,15 +6425,15 @@ class EnemyAI {
 
             // Move shaman to attack if idle
             // Check cooldown
-            if (state.clock.getElapsedTime() - this.lastBridgeTime > 2.0) {
+            if (state.clock.getElapsedTime() - this.lastBridgeTime > CONFIG.AI.SHAMAN_MOVE_COOLDOWN) {
                 // Check if path already exists
                 if (!Pathfinder.findPath(myShaman.mesh.position, target.mesh.position, false, myShaman.height)) {
                     // Check for water in path
-                    const steps = 10;
+                    const steps = CONFIG.AI.SHAMAN_CHECK_STEPS;
                     const dir = target.mesh.position.clone().sub(myShaman.mesh.position).normalize();
 
                     for(let i=1; i<=steps; i++) {
-                        const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, i * 4.0); // Check ahead 40 units
+                        const checkPos = myShaman.mesh.position.clone().addScaledVector(dir, i * (CONFIG.AI.SHAMAN_CHECK_AHEAD / CONFIG.AI.SHAMAN_CHECK_STEPS)); // Check ahead 40 units
                         if (getHeight(checkPos.x, checkPos.z) < WATER_LEVEL) {
                             // Raise land
                             executeSpell('raise', checkPos.x, checkPos.z, myShaman);
@@ -5961,7 +6445,7 @@ class EnemyAI {
             }
 
             // Also move shaman to attack if idle
-            if (myShaman.state === 'idle' && dist > 20) {
+            if (myShaman.state === 'idle' && dist > CONFIG.AI.SHAMAN_MOVE_DIST) {
                  myShaman.goto(target.mesh.position.x, target.mesh.position.z);
             }
         }
@@ -6238,8 +6722,8 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     if(action === 'upgrade_unit') {
         if(actingUnits.length > 0) {
             actingUnits.forEach(u => {
-                if (state.mana >= 80) {
-                    state.mana -= 80;
+                if (state.mana >= CONFIG.COSTS.UPGRADE_UNIT) {
+                    state.mana -= CONFIG.COSTS.UPGRADE_UNIT;
                     u.upgrade();
                 }
             });
@@ -6252,10 +6736,10 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
         if(actingUnits.length > 0) {
             actingUnits.forEach(u => {
                 if (u.type === 'airship' && u.faction === 0 && (!u.rocketCooldown || u.rocketCooldown <= 0)) {
-                    if (state.mana >= 10) {
-                        state.mana -= 10;
-                        u.rocketCooldown = 30.0;
-                        u.rocketActiveTimer = 5.0;
+                    if (state.mana >= CONFIG.COSTS.AIRSHIP_ROCKET) {
+                        state.mana -= CONFIG.COSTS.AIRSHIP_ROCKET;
+                        u.rocketCooldown = CONFIG.COMBAT.AIRSHIP_ROCKET_COOLDOWN;
+                        u.rocketActiveTimer = CONFIG.COMBAT.AIRSHIP_ROCKET_DURATION;
                         spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xffaa00);
                     }
                 }
@@ -6303,11 +6787,11 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     }
 
     const costs = {
-        blast: 10, lightning: 50, raise: 5, lower: 5, flatten: 10, landbridge: 20,
-        swamp: 80, invisibility: 20, shield: 20, hypnotise: 50, swarm: 20, tornado: 60, firestorm: 80, volcano: 90, heal: 10, teleport: 90, create: 50,
-        phantom: 30, blink: 20,
-        build_hut: BUILDING_COSTS.hut, build_tower: BUILDING_COSTS.tower, build_warrior: BUILDING_COSTS.warrior,
-        build_fire: BUILDING_COSTS.fire, build_spy: BUILDING_COSTS.spy, build_shipyard: BUILDING_COSTS.shipyard, build_airship: 25
+        blast: CONFIG.COSTS.SPELLS.blast, lightning: CONFIG.COSTS.SPELLS.lightning, raise: CONFIG.COSTS.SPELLS.raise, lower: CONFIG.COSTS.SPELLS.lower, flatten: CONFIG.COSTS.SPELLS.flatten, landbridge: CONFIG.COSTS.SPELLS.landbridge,
+        swamp: CONFIG.COSTS.SPELLS.swamp, invisibility: CONFIG.COSTS.SPELLS.invisibility, shield: CONFIG.COSTS.SPELLS.shield, hypnotise: CONFIG.COSTS.SPELLS.hypnotise, swarm: CONFIG.COSTS.SPELLS.swarm, tornado: CONFIG.COSTS.SPELLS.tornado, firestorm: CONFIG.COSTS.SPELLS.firestorm, volcano: CONFIG.COSTS.SPELLS.volcano, heal: CONFIG.COSTS.SPELLS.heal, teleport: CONFIG.COSTS.SPELLS.teleport, create: CONFIG.COSTS.SPELLS.create,
+        phantom: CONFIG.COSTS.SPELLS.phantom, blink: CONFIG.COSTS.SPELLS.blink,
+        build_hut: CONFIG.COSTS.BUILDING.hut, build_tower: CONFIG.COSTS.BUILDING.tower, build_warrior: CONFIG.COSTS.BUILDING.warrior,
+        build_fire: CONFIG.COSTS.BUILDING.fire, build_spy: CONFIG.COSTS.BUILDING.spy, build_shipyard: CONFIG.COSTS.BUILDING.shipyard, build_airship: CONFIG.COSTS.AIRSHIP
     };
 
     if (state.campaignLevel === 12) {
@@ -6513,7 +6997,7 @@ function toggleMultiSelect() {
 window.toggleMultiSelect = toggleMultiSelect;
 
 window.cheatMana = function() {
-    state.mana = 10000;
+    state.mana = CONFIG.CAMPAGIN.INFINITE_MANA_VALUE;
     updateUI();
     alert("Mana set to 10000");
 }
@@ -6689,14 +7173,14 @@ async function init() {
         state.clock = new THREE.Clock();
         state.cameraLookAt = new THREE.Vector3(0, 0, 0);
 
-        state.rangeRing = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 64, 1, true), new THREE.MeshBasicMaterial({color: 0xFFFFFF, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false}));
+        state.rangeRing = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 64, 1, true), new THREE.MeshBasicMaterial({color: COLORS.snow, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false}));
         state.rangeRing.visible = false;
 
         initTerrainResources();
 
         state.scene = new THREE.Scene();
-        state.scene.background = new THREE.Color(0x7EC8E3);
-        state.scene.fog = new THREE.Fog(0x7EC8E3, 30, 180);
+        state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
+        state.scene.fog = new THREE.Fog(CONFIG.BIOMES.normal.fog, CONFIG.BIOMES.normal.fogNear, CONFIG.BIOMES.normal.fogFar);
 
         const aspect = window.innerWidth / window.innerHeight;
         state.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
@@ -6716,7 +7200,7 @@ async function init() {
         state.ambLight = amb;
         state.scene.add(amb);
         state.scene.add(state.rangeRing);
-        state.impactRing = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.1, 32), new THREE.MeshBasicMaterial({color: 0xFF0000, transparent: true, opacity: 0.3}));
+        state.impactRing = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.1, 32), new THREE.MeshBasicMaterial({color: COLORS.hpRed, transparent: true, opacity: 0.3}));
         state.impactRing.visible = false;
         state.scene.add(state.impactRing);
         const sun = new THREE.DirectionalLight(0xffffff, 3.14);
@@ -6735,12 +7219,12 @@ async function init() {
             findSafeSpawnAndStart();
             showCampaignStory(state.campaignLevel);
         } else {
-            const sandboxStart = localStorage.getItem('rebeginning_sandbox_start');
+            const sandboxStart = localStorage.getItem(CONFIG.SAVED_KEYS.SANDBOX_START);
             if (sandboxStart) {
-                localStorage.removeItem('rebeginning_sandbox_start');
+                localStorage.removeItem(CONFIG.SAVED_KEYS.SANDBOX_START);
                 findSafeSpawnAndStart();
             } else {
-                const saveStr = localStorage.getItem('rebeginning_save');
+                const saveStr = localStorage.getItem(CONFIG.SAVED_KEYS.SAVE_DATA);
                 if (saveStr) {
                     try {
                         window.loadGame();
@@ -6807,9 +7291,9 @@ async function init() {
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
 
-        if (!localStorage.getItem('rebeginning_help_shown')) {
+        if (!localStorage.getItem(CONFIG.SAVED_KEYS.HELP_SHOWN)) {
             window.showHelp();
-            localStorage.setItem('rebeginning_help_shown', 'true');
+            localStorage.setItem(CONFIG.SAVED_KEYS.HELP_SHOWN, 'true');
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -6898,7 +7382,7 @@ window.renderTribeMenu = function() {
     // Player
     const pdiv = document.createElement('div');
     pdiv.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;';
-    pdiv.innerHTML = `<span style="color:#${FACTION_COLORS[0].toString(16).padStart(6, '0')}">Player (Team: ${state.teams[0] !== undefined ? state.teams[0] : 0})</span>`;
+    pdiv.innerHTML = `<span style="color:#${CONFIG.FACTION_COLORS[0].toString(16).padStart(6, '0')}">Player (Team: ${state.teams[0] !== undefined ? state.teams[0] : 0})</span>`;
     const pteamInput = document.createElement('input');
     pteamInput.type = 'number';
     pteamInput.style.width = '50px';
@@ -6910,7 +7394,7 @@ window.renderTribeMenu = function() {
     window.enemyAIs.forEach((ai, idx) => {
         const div = document.createElement('div');
         div.style = 'background:#333; padding:10px; border-radius:5px; display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;';
-        const c = FACTION_COLORS[ai.faction % FACTION_COLORS.length].toString(16).padStart(6, '0');
+        const c = CONFIG.FACTION_COLORS[ai.faction % CONFIG.FACTION_COLORS.length].toString(16).padStart(6, '0');
         div.innerHTML = `<span style="color:#${c}">Enemy ${ai.faction} (Team: ${state.teams[ai.faction] !== undefined ? state.teams[ai.faction] : ai.faction})</span>`;
 
         const teamInput = document.createElement('input');
@@ -7124,7 +7608,7 @@ window.closeHelp = function() {
 }
 
 window.cheatUnlockLevels = function() {
-    localStorage.setItem('rebeginning_max_campaign_level', '12');
+    localStorage.setItem(CONFIG.SAVED_KEYS.MAX_CAMPAIGN_LEVEL, '12');
     if (document.getElementById('campaign-menu').style.display !== 'none') {
         window.openCampaignMenu();
     }
@@ -7133,7 +7617,7 @@ window.cheatUnlockLevels = function() {
 
 window.newGame = function() {
     if(confirm("Are you sure? Unsaved progress will be lost.")) {
-        localStorage.setItem('rebeginning_sandbox_start', 'true');
+        localStorage.setItem(CONFIG.SAVED_KEYS.SANDBOX_START, 'true');
         location.reload();
     }
 }
@@ -7184,12 +7668,12 @@ window.saveGame = function() {
             underConstruction: b.underConstruction
         }))
     };
-    localStorage.setItem('populous_save', JSON.stringify(data));
+    localStorage.setItem(CONFIG.SAVED_KEYS.SAVE_DATA, JSON.stringify(data));
     alert('Game Saved!');
 }
 
 window.loadGame = function() {
-    const json = localStorage.getItem('populous_save');
+    const json = localStorage.getItem(CONFIG.SAVED_KEYS.SAVE_DATA);
     if(!json) { alert("No save found!"); return; }
 
     try {
@@ -7629,14 +8113,14 @@ function updateCameraPosition() {
     }
 
     if(!state.isFPV) {
-        const dist = 42.4;
+        const dist = CONFIG.CAMERA.ORTHO_DIST;
         const offsetX = Math.sin(state.cameraRotation) * dist;
         const offsetZ = Math.cos(state.cameraRotation) * dist;
         const targetX = state.cameraLookAt.x + offsetX;
         const targetZ = state.cameraLookAt.z + offsetZ;
-        let targetY = 25 + (state.viewScale / MAX_ZOOM) * 35;
+        let targetY = CONFIG.CAMERA.ORTHO_Y_BASE + (state.viewScale / CONFIG.CAMERA.MAX_ZOOM) * CONFIG.CAMERA.ORTHO_Y_SCALE;
         const groundUnderCamera = getHeight(targetX, targetZ);
-        if(targetY < groundUnderCamera + 5) { targetY = groundUnderCamera + 5; }
+        if(targetY < groundUnderCamera + CONFIG.CAMERA.ORTHO_MIN_GROUND_OFFSET) { targetY = groundUnderCamera + CONFIG.CAMERA.ORTHO_MIN_GROUND_OFFSET; }
         state.orthoCamera.position.set(targetX, targetY, targetZ);
         state.orthoCamera.lookAt(state.cameraLookAt);
     }
@@ -7651,7 +8135,7 @@ function forceLandConnection(x1, z1, x2, z2) {
     const dirX = (x2 - x1) / dist;
     const dirZ = (z2 - z1) / dist;
 
-    const r = 3; // Path radius
+    const r = CONFIG.SPAWN.LAND_CONNECT_RADIUS;
     const allMods = new Set();
 
     for(let i=0; i<=steps; i++) {
@@ -7665,7 +8149,7 @@ function forceLandConnection(x1, z1, x2, z2) {
                     const base = getBaseHeight(ix, iz);
                     const currentMod = state.terrainMods.get(key) || 0;
                     const currentH = base + currentMod;
-                    const targetH = WATER_LEVEL + 0.5;
+                    const targetH = WATER_LEVEL + CONFIG.SPAWN.LAND_CONNECT_TARGET_HEIGHT;
 
                     if(currentH < targetH) {
                         state.terrainMods.set(key, targetH - base);
@@ -7685,7 +8169,7 @@ function forceLandConnection(x1, z1, x2, z2) {
 
 function findSafeSpawnAndStart() {
     let r = 0; let found = false;
-    for(let i=0; i<50; i++) { if(getHeight(r, r) > 2.5) { found = true; break; } r += 20; }
+    for(let i=0; i<CONFIG.SPAWN.SEARCH_ATTEMPTS; i++) { if(getHeight(r, r) > CONFIG.SPAWN.TERRAIN_HEIGHT_THRESHOLD) { found = true; break; } r += CONFIG.SPAWN.SEARCH_STEP; }
     if(!found) r = 0;
     state.cameraLookAt.set(r, 0, r); updateCameraPosition(); updateChunks();
     createShaman(r, r);
@@ -7694,7 +8178,7 @@ function findSafeSpawnAndStart() {
     if(!state.isCampaign) window.enemyAIs = [new EnemyAI(1, 'default')];
     window.enemyAIs.forEach((ai, i) => {
         const angle = (i+1) * Math.PI*2 / (window.enemyAIs.length+1);
-        const startX = r + Math.cos(angle)*150;
+        const startX = r + Math.cos(angle)*CONFIG.SPAWN.ENEMY_SPAWN_DIST;
         const startZ = r + Math.sin(angle)*150;
         ai.init(startX, startZ);
         forceLandConnection(r, r, startX, startZ);
@@ -7718,42 +8202,23 @@ function animate() {
     requestAnimationFrame(animate); const dt = Math.min(state.clock.getDelta(), 0.1);
 
     const biome = state.matchSettings.biome || 'normal';
+    const biomeCfg = CONFIG.BIOMES[biome] || CONFIG.BIOMES.normal;
+    const waterColor = biomeCfg.waterColor;
+    const winterColor = state.waterState === 'frozen' ? 0x88CCFF : waterColor;
+    const targetWaterColor = (biome === 'winter' || (state.matchSettings && state.matchSettings.winter)) ? winterColor : waterColor;
+    if (state.chunkWaterMat) {
+        state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(targetWaterColor), dt * CONFIG.WATER_WAVE.WATER_LERP_SPEED);
+    }
     if (biome === 'winter' || (state.matchSettings && state.matchSettings.winter)) {
         state.waterState = Math.floor(state.clock.getElapsedTime() / 30) % 2 === 0 ? 'liquid' : 'frozen';
-        if (state.chunkWaterMat) {
-            const targetColor = state.waterState === 'frozen' ? 0x88CCFF : 0x1E90FF;
-            state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(targetColor), dt * 2.0);
-        }
-    } else if (biome === 'jungle') {
-        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x004422), dt * 2.0);
-    } else if (biome === 'void') {
-        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x220022), dt * 2.0);
-    } else if (biome === 'celestial') {
-        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0xFFFFFF), dt * 2.0);
-    } else if (biome === 'cosmic') {
-        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x000000), dt * 2.0);
-    } else {
-        if (state.chunkWaterMat) state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(0x1E90FF), dt * 2.0);
     }
 
     // Biome Scene Adjustments
     if (state.scene && state.sunLight) {
-        let targetBg = 0x7EC8E3, targetFog = 0x7EC8E3, fogNear = 30, fogFar = 180, sunInt = 3.14, sunCol = 0xffffff;
-        if (biome === 'night') {
-            targetBg = 0x000011; targetFog = 0x000011; fogNear = 10; fogFar = 80; sunInt = 0.5; sunCol = 0x8888ff;
-        } else if (biome === 'jungle') {
-            targetBg = 0x113311; targetFog = 0x113311; fogNear = 5; fogFar = 100; sunInt = 2.0; sunCol = 0xccffcc;
-        } else if (biome === 'mountain') {
-            targetBg = 0x8899aa; targetFog = 0x8899aa; fogNear = 50; fogFar = 300; sunInt = 3.5;
-        } else if (biome === 'storm') {
-            targetBg = 0x444444; targetFog = 0x444444; fogNear = 10; fogFar = 120; sunInt = 1.5; sunCol = 0xaaaaaa;
-            if (Math.random() < 0.005) { sunInt = 10.0; sunCol = 0xffffff; } // Lightning flash
-        } else if (biome === 'void') {
-            targetBg = 0x110022; targetFog = 0x110022; fogNear = 5; fogFar = 150; sunInt = 1.2; sunCol = 0xcc88ff;
-        } else if (biome === 'celestial') {
-            targetBg = 0xfff4cc; targetFog = 0xfff4cc; fogNear = 100; fogFar = 500; sunInt = 4.0; sunCol = 0xffffaa;
-        } else if (biome === 'cosmic') {
-            targetBg = 0x000005; targetFog = 0x000005; fogNear = 20; fogFar = 400; sunInt = 2.0; sunCol = 0xffaaff;
+        const biomeCfg = CONFIG.BIOMES[biome] || CONFIG.BIOMES.normal;
+        let targetBg = biomeCfg.bg, targetFog = biomeCfg.fog, fogNear = biomeCfg.fogNear, fogFar = biomeCfg.fogFar, sunInt = biomeCfg.sunIntensity, sunCol = biomeCfg.sunColor;
+        if (biome === 'storm') {
+            if (Math.random() < 0.005) { sunInt = 10.0; sunCol = 0xffffff; }
         }
 
         state.scene.background.lerp(new THREE.Color(targetBg), dt);
@@ -7768,7 +8233,7 @@ function animate() {
     if (state.showFps) {
         _framesThisSecond++;
         const now = performance.now();
-        if (now - _lastFpsTime >= 1000) {
+        if (now - _lastFpsTime >= CONFIG.CAMPAGIN.FPS_UPDATE_INTERVAL) {
             const fpsIndicator = document.getElementById('fps-indicator');
             if(fpsIndicator) fpsIndicator.innerText = `FPS: ${_framesThisSecond}`;
             _framesThisSecond = 0;
@@ -7805,14 +8270,14 @@ function animate() {
 
     const playerBraves = state.units.filter(u => u.faction === 0 && u.type === 'wild').length;
     const playerHouses = state.buildings.filter(b => b.faction === 0 && b.type === 'hut' && !b.underConstruction).length;
-    let manaRate = 1.0 + (playerBraves * 0.2) + (playerHouses * 0.2);
+    let manaRate = CONFIG.CAMPAGIN.MANA_RATE_DEFAULT + (playerBraves * CONFIG.CAMPAGIN.MANA_RATE_PER_BRAVE) + (playerHouses * CONFIG.CAMPAGIN.MANA_RATE_PER_HOUSE);
     if (state.campaignLevel === 11) {
         // Global Shaman Aura
-        manaRate *= 1.5;
+        manaRate *= CONFIG.CAMPAGIN.MANA_RATE_LEVEL_11_MULT;
     }
 
     if (isNaN(state.mana)) state.mana = 0;
-    if(state.mana < 100) { state.mana += dt * manaRate; if(isNaN(state.mana)) state.mana = 0; updateUI(); }
+    if(state.mana < CONFIG.CAMPAGIN.MANA_CAP) { state.mana += dt * manaRate; if(isNaN(state.mana)) state.mana = 0; updateUI(); }
 
     if(state.chunkWaterMat && state.chunkWaterMat.uniforms) state.chunkWaterMat.uniforms.time.value += dt;
 
@@ -7886,7 +8351,7 @@ function animate() {
 
     updateChunks();
 
-    if (state.network.role === 'host' && Math.floor(state.clock.elapsedTime * 60) % 120 === 0) {
+    if (state.network.role === 'host' && Math.floor(state.clock.elapsedTime * 60) % CONFIG.NETWORK.SYNC_INTERVAL === 0) {
         NetworkManager.sendFullState();
     }
 
@@ -7894,12 +8359,12 @@ function animate() {
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
 
     // Music Logic
-    if (Math.floor(state.clock.elapsedTime * 60) % 30 === 0) {
+    if (Math.floor(state.clock.elapsedTime * 60) % CONFIG.AUDIO.MUSIC_CHECK_INTERVAL === 0) {
         let enemyInRange = false;
         const playerUnits = state.units.filter(u => u.faction === 0 && u.state !== 'dead');
         for (const u of playerUnits) {
-            const candidates = SpatialHash.query(u.mesh.position.x, u.mesh.position.z, 30);
-            if (candidates.some(c => c.faction !== 0 && c.state !== 'dead' && !c.invisible && u.mesh.position.distanceTo(c.mesh.position) < 30)) {
+            const candidates = SpatialHash.query(u.mesh.position.x, u.mesh.position.z, CONFIG.AUDIO.ENEMY_DETECT_RANGE);
+            if (candidates.some(c => c.faction !== 0 && c.state !== 'dead' && !c.invisible && u.mesh.position.distanceTo(c.mesh.position) < CONFIG.AUDIO.ENEMY_DETECT_RANGE)) {
                 enemyInRange = true;
                 break;
             }
@@ -7907,7 +8372,7 @@ function animate() {
         SoundManager.updateMusic(enemyInRange);
     }
 
-    if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = 10000;
+    if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = CONFIG.CAMPAGIN.INFINITE_MANA_VALUE;
     state.units.forEach(u => u.update(dt));
     state.buildings.forEach(b => b.update(dt));
 
@@ -8038,10 +8503,10 @@ function animate() {
              // Check if there ever were any non allied tribes
              if (window.enemyAIs.some(ai => !window.isAllied(ai.faction, 0))) {
                 if (state.isCampaign) {
-                    let maxLevel = parseInt(localStorage.getItem('rebeginning_max_campaign_level') || '1');
+                    let maxLevel = parseInt(localStorage.getItem(CONFIG.SAVED_KEYS.MAX_CAMPAIGN_LEVEL) || '1');
                     if(state.campaignLevel >= maxLevel && state.campaignLevel < 12) {
                         maxLevel = state.campaignLevel + 1;
-                        localStorage.setItem('rebeginning_max_campaign_level', maxLevel.toString());
+                        localStorage.setItem(CONFIG.SAVED_KEYS.MAX_CAMPAIGN_LEVEL, maxLevel.toString());
                         alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete. Level " + maxLevel + " unlocked!");
                     } else if (state.campaignLevel === 12) {
                         alert("THE CAMPAIGN IS COMPLETE! You have ascended to godhood. Thank you for playing.");
