@@ -305,17 +305,85 @@
 
 <div id="ui-layer">
     <div id="help-overlay" style="display:none;">
-        <h1 style="color:gold; margin-bottom:15px; text-shadow: 2px 2px 0 #000;">CONTROLS</h1>
-        <div style="max-width: 800px; text-align: left; font-size: 16px; line-height: 1.4; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">
-            <p><strong>🖱️ Camera:</strong> Move with <strong>Left Click Drag</strong> or <strong>WASD</strong>. Rotate with <strong>Right Click Drag</strong> or <strong>Two-finger Twist</strong>. Zoom with <strong>Scroll Wheel</strong> or <strong>Pinch</strong>.</p>
-            <p><strong>🎯 Selection:</strong> Click a unit in the world or the list. Toggle <strong>⊕</strong> or hold <strong>Shift</strong> for multi-selection. <strong>Ctrl+A</strong> selects all units.</p>
-            <p><strong>✨ Actions & Spells:</strong> Select with <strong>1-9/0 keys</strong> or the menu. <strong>Click</strong> terrain to execute, or <strong>Right-Click</strong> to move regardless of selection.</p>
-            <p><strong>🖱️ Advanced:</strong> <strong>Right-Click</strong> or <strong>Middle-Click</strong> drag to rotate camera. <strong>Space</strong> centers camera on Shaman. <strong>Esc</strong> clears selection.</p>
-            <p><strong>🎮 Direct Control:</strong> Use <strong>Joystick</strong> or <strong>WASD</strong> to move units. Zoom in fully for <strong>First Person View</strong>.</p>
-            <p><strong>🧙 Shaman:</strong> Your Shaman is your most powerful unit. If they die, they will respawn near your followers after a delay, unless <em>Sudden Death</em> is active.</p>
-            <p><strong>⏸️ Pause:</strong> Access Save/Load and game settings via the <strong>Pause button</strong> (top-right).</p>
+        <h1 style="color:gold; margin-bottom:15px; text-shadow: 2px 2px 0 #000;">GAMEPLAY & CONTROLS</h1>
+        <div style="max-width: 850px; text-align: left; font-size: 15px; line-height: 1.5; background: rgba(255,255,255,0.08); padding: 25px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); max-height: 70vh; overflow-y: auto; margin-bottom: 20px;">
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: gold; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px;">🎯 SELECTION (How to Select Units)</h3>
+                <p>Selecting units is crucial to command your tribe. There are several ways to do this:</p>
+                <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
+                    <li><strong>Single Select:</strong> Click on any unit directly in the 3D world, or click their entry in the sidebar unit list.</li>
+                    <li><strong>Multi-Select:</strong> Hold the <strong>Shift</strong> key or toggle the <strong>⊕ (Multi-select)</strong> button on the bottom bar to add or remove units from your current selection.</li>
+                    <li><strong>Box Selection:</strong> Click and drag your left mouse button in the world to draw a selection box over multiple units at once.</li>
+                    <li><strong>Select All:</strong> Press <strong>Ctrl + A</strong> to instantly select all of your allied units.</li>
+                    <li><strong>Clear Selection:</strong> Press <strong>Escape (Esc)</strong> to clear your current selection.</li>
+                </ul>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: gold; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px;">🔍 FOCUS & ZOOM</h3>
+                <p>Need to find or follow a specific follower? We have a quick shortcut:</p>
+                <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
+                    <li><strong>Double-Click to Zoom & Center:</strong> Simply <strong>double-click</strong> any unit's entry in the sidebar unit list. The camera will immediately center and focus directly on that unit!</li>
+                    <li><strong>Manual Zoom:</strong> Use your mouse <strong>Scroll Wheel</strong> or a touch <strong>Pinch</strong> gesture to adjust camera zoom.</li>
+                </ul>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: gold; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px;">🏠 BUILDINGS (How to Build)</h3>
+                <p>Constructing a base is vital to train specialists and expand your tribe. Follow these steps to build:</p>
+                <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
+                    <li><strong>1. Select a Brave:</strong> Only <strong>Brave</strong> units (not Shamans) can build structures. Select one or more Braves.</li>
+                    <li><strong>2. Open Build Menu:</strong> When a Brave is selected, building icons will appear in the action/spell bar (Hut, Tower, Warrior, Fire, Spy, etc.).</li>
+                    <li><strong>3. Choose Structure:</strong> Click the desired building icon, or press its corresponding number hotkey.</li>
+                    <li><strong>4. Place on Terrain:</strong> Click a location on <strong>dry land</strong> (above water level) that is <strong>close to your selected Brave</strong>. Your Brave will then walk over and build the structure!</li>
+                    <li><em>Note: Each building has a specific Mana cost and unlocks new units and abilities (e.g., training Warriors, Firewarriors, Spies, or Airships).</em></li>
+                </ul>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: gold; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px;">✨ SPELLS & ACTIONS</h3>
+                <p>Command the elements and guide your followers using divine spells and unit abilities:</p>
+                <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
+                    <li><strong>Cast Spells:</strong> Select a spell (like Blast, Lightning, Raise, Lower, Flatten, Swamp, etc.) using the hotkeys <strong>1-9/0</strong> or the menu. Left-click the terrain to execute it.</li>
+                    <li><strong>Spell Conditions:</strong> Spells require your Shaman to be alive, and they consume Mana. You must cast within the Shaman's range (which scales with the Shaman's height).</li>
+                    <li><strong>Move / Attack:</strong> Even when a spell is active, you can always <strong>Right-Click</strong> on the ground to order selected units to move there, or Right-Click an enemy to attack them.</li>
+                    <li><strong>Upgrades:</strong> Select units and click the 'Upgrade' action (50 Mana) to scale up their movement speed, attack damage, and stats dynamically.</li>
+                </ul>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: gold; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px;">🧙 THE SHAMAN & MANA</h3>
+                <p>Your Shaman is your most powerful spiritual leader:</p>
+                <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
+                    <li><strong>Mana:</strong> Mana is your primary resource, automatically generated over time. Use it to cast spells, build structures, and upgrade units.</li>
+                    <li><strong>Respawn:</strong> If your Shaman dies in battle, they will respawn near your followers after a delay, unless <em>Sudden Death</em> is active in Match Settings.</li>
+                </ul>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: gold; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px;">🎮 DIRECT CONTROL & FIRST-PERSON VIEW</h3>
+                <p>Want a closer look at the action?</p>
+                <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
+                    <li><strong>Direct Control:</strong> Select a unit and use the <strong>Joystick</strong> (on mobile) or the <strong>WASD</strong> keys to move them directly.</li>
+                    <li><strong>First-Person View:</strong> Zoom all the way in (scroll wheel fully up) to enter First Person View and experience the world through your unit's eyes!</li>
+                    <li><strong>Camera Control:</strong> Drag with <strong>Left Click</strong> or use <strong>WASD</strong> to pan. Hold <strong>Right Click</strong> or <strong>Middle Click</strong> and drag to rotate the camera. Press <strong>Space</strong> to center camera on selected units.</li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 style="color: gold; margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px;">⏸️ PAUSE MENU & MULTIPLAYER</h3>
+                <p>Press the <strong>Pause button (⏸️)</strong> in the top-right corner to pause the game and access options:</p>
+                <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 0;">
+                    <li><strong>Game Management:</strong> Save/Load games, toggle Fullscreen, or enable the FPS counter.</li>
+                    <li><strong>Campaign:</strong> Choose from 12 campaign levels, each with its own biome, unique AI, and narrative story.</li>
+                    <li><strong>Multiplayer:</strong> Join/host matches with PeerJS using a room ID. Terrain changes and unit commands are synchronized in real-time.</li>
+                    <li><strong>Customization:</strong> Adjust Match Settings (e.g. Winter Biome, Double Speed, No Flyers, Sudden Death), Tribe Configurations, and dynamic Land Generation.</li>
+                </ul>
+            </div>
+
         </div>
-        <button class="menu-btn" style="margin-top: 20px; font-size: 18px; width: auto; padding: 10px 30px;" onclick="closeHelp()">Close</button>
+        <button class="menu-btn" style="margin-top: 10px; font-size: 18px; width: auto; padding: 10px 30px;" onclick="closeHelp()">Close</button>
     </div>
 
     <div id="story-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); flex-direction:column; align-items:center; justify-content:center; z-index:300; color:white; pointer-events:auto; text-align:center; padding: 20px; box-sizing: border-box;">
