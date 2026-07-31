@@ -2165,6 +2165,7 @@ function getHeight(x, z) {
     if (state.heightCache.size > 20000) state.heightCache.clear();
     return h;
 }
+window.getHeight = getHeight;
 
 function isBlocked(x, z) {
     const candidates = BuildingSpatialHash.query(x, z);
@@ -2176,6 +2177,7 @@ function isBlocked(x, z) {
     }
     return false;
 }
+window.isBlocked = isBlocked;
 
 function isBraveNearby(faction, x, z, radius) {
     for(let u of state.units) {
@@ -3685,6 +3687,7 @@ const Pathfinder = {
         return null;
     }
 };
+window.Pathfinder = Pathfinder;
 
 function isWalkableLine(start, end, isFlying, unitHeight = 1.5) {
     const dist = start.distanceTo(end);
@@ -7752,6 +7755,16 @@ window.loadGame = function() {
         state.buildings.forEach(b => state.scene.remove(b.mesh));
         state.buildings.length = 0;
 
+        // Remove existing chunk meshes and dispose of geometries
+        for (let key in state.chunks) {
+            state.scene.remove(state.chunks[key]);
+            if (state.chunks[key].children[0] && state.chunks[key].children[0].geometry) state.chunks[key].children[0].geometry.dispose();
+            if (state.chunks[key].children[1] && state.chunks[key].children[1].geometry) state.chunks[key].children[1].geometry.dispose();
+        }
+        state.chunks = {};
+        lastChunkX = null;
+        lastChunkZ = null;
+
         if (state.physicsWorld) {
             for (let [key, collider] of state.terrainColliders.entries()) {
                 state.physicsWorld.removeCollider(collider);
@@ -7778,15 +7791,10 @@ window.loadGame = function() {
 
         state.terrainMods.clear();
         state.heightCache.clear();
-        const allMods = new Set();
         data.terrainMods.forEach(([k, v]) => {
             state.terrainMods.set(k, v);
-            const [ix, iz] = k.split(',').map(Number);
-            const cx = Math.round(ix / CHUNK_SIZE);
-            const cz = Math.round(iz / CHUNK_SIZE);
-            allMods.add(`${cx},${cz}`);
         });
-        updateChunks(true, allMods);
+        updateChunks(true);
 
         if (data.teams) state.teams = data.teams;
         window.enemyAIs = [];
