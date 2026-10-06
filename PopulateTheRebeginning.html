@@ -559,7 +559,22 @@
 <script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.11.2/rapier.js"></script>
 <script type="module">
 import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
 window.THREE = THREE;
+
+const gltfLoader = new GLTFLoader();
+gltfLoader.load('shaman.gltf', (gltf) => {
+    window.shamanGltfModel = gltf.scene;
+    if (typeof state !== 'undefined' && state && state.units) {
+        state.units.forEach(unit => {
+            if (unit.isShaman && typeof unit.setupGltfMesh === 'function') {
+                unit.setupGltfMesh();
+            }
+        });
+    }
+}, undefined, (err) => {
+    console.warn('Could not load shaman.gltf:', err);
+});
 
 let RAPIER = null;
 
@@ -4615,7 +4630,10 @@ window.Humanoid = class Humanoid {
              balloon.position.set(0, 4.5, 0);
              this.mesh.add(balloon);
         } else {
-            this.torso = new THREE.Group(); this.torso.position.y = 0.9; this.mesh.add(this.torso);
+            this.proceduralGroup = new THREE.Group();
+            this.mesh.add(this.proceduralGroup);
+
+            this.torso = new THREE.Group(); this.torso.position.y = 0.9; this.proceduralGroup.add(this.torso);
             const tMesh = new THREE.Mesh(AssetCache.geos.torso, shirtMat); tMesh.userData.isFactionColored = true; tMesh.castShadow = true; tMesh.receiveShadow = true; this.torso.add(tMesh);
 
             const neck = new THREE.Mesh(AssetCache.geos.neck, skinMat); neck.position.y = 0.25; neck.castShadow = true; neck.receiveShadow = true; this.torso.add(neck);
@@ -4773,7 +4791,7 @@ window.Humanoid = class Humanoid {
 
             this.legL = createLimb(AssetCache.geos.upperLeg, AssetCache.geos.lowerLeg, shirtMat, 0.12, 0.65, 0, 0.3, 0.3, false);
             this.legR = createLimb(AssetCache.geos.upperLeg, AssetCache.geos.lowerLeg, shirtMat, -0.12, 0.65, 0, 0.3, 0.3, false);
-            this.mesh.add(this.legL); this.mesh.add(this.legR);
+            this.proceduralGroup.add(this.legL); this.proceduralGroup.add(this.legR);
         }
 
         // Initialize at terrain height without arbitrary downward offset to prevent foot clipping
@@ -4796,7 +4814,59 @@ window.Humanoid = class Humanoid {
 
 
         applyUnitTexture(this);
+        if (this.isShaman) {
+            this.setupGltfMesh();
+        }
         this.initPhysics(x, z);
+    }
+
+    setupGltfMesh(modelOverride) {
+        if (!this.isShaman) return;
+        const gltfTemplate = modelOverride || window.shamanGltfModel;
+        if (!gltfTemplate) return;
+
+        if (this.proceduralGroup) {
+            this.mesh.remove(this.proceduralGroup);
+            this.proceduralGroup = null;
+        }
+        if (this.gltfModelInstance) {
+            this.mesh.remove(this.gltfModelInstance);
+        }
+
+        const model = gltfTemplate.clone(true);
+        this.gltfModelInstance = model;
+        this.mesh.add(model);
+
+        const torsoNode = model.getObjectByName('Torso');
+        const headNode = model.getObjectByName('Head');
+        const armLNode = model.getObjectByName('ArmL');
+        const armRNode = model.getObjectByName('ArmR');
+        const legLNode = model.getObjectByName('LegL');
+        const legRNode = model.getObjectByName('LegR');
+        const staffNode = model.getObjectByName('Staff');
+        const headdressNode = model.getObjectByName('Headdress');
+
+        if (torsoNode) this.torso = torsoNode;
+        if (headNode) this.head = headNode;
+        if (armLNode) this.armL = armLNode;
+        if (armRNode) this.armR = armRNode;
+        if (legLNode) this.legL = legLNode;
+        if (legRNode) this.legR = legRNode;
+        if (staffNode) this.staff = staffNode;
+        if (headdressNode) this.headdress = headdressNode;
+
+        const factionMat = getFactionMaterial(this.faction);
+        model.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                if (child.name.includes('Torso') || child.name.includes('Leg')) {
+                    child.material = factionMat;
+                }
+            }
+        });
+
+        applyUnitTexture(this);
     }
 
     initPhysics(x, z) {
