@@ -4,7 +4,7 @@ import struct
 import base64
 import os
 
-# --- Geometry Generation Functions ---
+# --- High Definition Geometry Generation Helpers ---
 
 def create_box_mesh(dx, dy, dz, offset=(0, 0, 0)):
     hx, hy, hz = dx / 2.0, dy / 2.0, dz / 2.0
@@ -47,7 +47,7 @@ def create_box_mesh(dx, dy, dz, offset=(0, 0, 0)):
 
     return {'positions': positions, 'normals': normals, 'uvs': uvs, 'indices': indices}
 
-def create_cylinder_mesh(radius_top, radius_bottom, height, segments=8, offset=(0, 0, 0), rot_z=0.0):
+def create_cylinder_mesh(radius_top, radius_bottom, height, segments=16, offset=(0, 0, 0), rot_z=0.0, rot_x=0.0):
     ox, oy, oz = offset
     positions = []
     normals = []
@@ -55,19 +55,24 @@ def create_cylinder_mesh(radius_top, radius_bottom, height, segments=8, offset=(
     indices = []
 
     half_h = height / 2.0
-    cos_rz = math.cos(rot_z)
-    sin_rz = math.sin(rot_z)
+
+    cos_rx, sin_rx = math.cos(rot_x), math.sin(rot_x)
+    cos_rz, sin_rz = math.cos(rot_z), math.sin(rot_z)
 
     def transform(x, y, z):
-        # Rotate around Z, then add offset
-        rx = x * cos_rz - y * sin_rz
-        ry = x * sin_rz + y * cos_rz
-        return [ox + rx, oy + ry, oz + z]
+        # Rotate X then Z then translate
+        y1 = y * cos_rx - z * sin_rx
+        z1 = y * sin_rx + z * cos_rx
+        rx = x * cos_rz - y1 * sin_rz
+        ry = x * sin_rz + y1 * cos_rz
+        return [ox + rx, oy + ry, oz + z1]
 
     def transform_norm(nx, ny, nz):
-        rx = nx * cos_rz - ny * sin_rz
-        ry = nx * sin_rz + ny * cos_rz
-        return [rx, ry, nz]
+        ny1 = ny * cos_rx - nz * sin_rx
+        nz1 = ny * sin_rx + nz * cos_rx
+        rx = nx * cos_rz - ny1 * sin_rz
+        ry = nx * sin_rz + ny1 * cos_rz
+        return [rx, ry, nz1]
 
     side_verts_bottom = []
     side_verts_top = []
@@ -96,8 +101,9 @@ def create_cylinder_mesh(radius_top, radius_bottom, height, segments=8, offset=(
 
     return {'positions': positions, 'normals': normals, 'uvs': uvs, 'indices': indices}
 
-def create_sphere_mesh(radius, lat_segments=8, lon_segments=10, offset=(0, 0, 0)):
+def create_sphere_mesh(radius, lat_segments=16, lon_segments=20, offset=(0, 0, 0), scale=(1.0, 1.0, 1.0)):
     ox, oy, oz = offset
+    sx, sy, sz = scale
     positions = []
     normals = []
     uvs = []
@@ -119,7 +125,7 @@ def create_sphere_mesh(radius, lat_segments=8, lon_segments=10, offset=(0, 0, 0)
             ny = sin_lat
             nz = cos_lat * sin_lon
 
-            positions.append([ox + radius * nx, oy + radius * ny, oz + radius * nz])
+            positions.append([ox + radius * sx * nx, oy + radius * sy * ny, oz + radius * sz * nz])
             normals.append([nx, ny, nz])
             uvs.append([u, v])
 
@@ -131,45 +137,62 @@ def create_sphere_mesh(radius, lat_segments=8, lon_segments=10, offset=(0, 0, 0)
 
     return {'positions': positions, 'normals': normals, 'uvs': uvs, 'indices': indices}
 
-def create_feather_mesh(width, height, offset=(0, 0, 0), tilt_z=0.0):
-    # Feather modeled as a tapered diamond box
+def create_feather_mesh(width, height, offset=(0, 0, 0), tilt_z=0.0, curve_forward=0.1):
+    # Detailed curved feather with rib
     ox, oy, oz = offset
     cos_t = math.cos(tilt_z)
     sin_t = math.sin(tilt_z)
 
-    # 4 points along feather body
-    pts = [
-        [0, 0, 0],
-        [-width/2, height*0.4, 0],
-        [0, height, 0],
-        [width/2, height*0.4, 0]
-    ]
-
+    steps = 8
     positions = []
     normals = []
     uvs = []
     indices = []
 
-    transformed_pts = []
-    for px, py, pz in pts:
-        rx = px * cos_t - py * sin_t
-        ry = px * sin_t + py * cos_t
-        transformed_pts.append([ox + rx, oy + ry, oz + pz])
+    left_verts = []
+    right_verts = []
+    spine_verts = []
 
-    norm_f = [-sin_t, cos_t, 1.0]
-    norm_b = [-sin_t, cos_t, -1.0]
+    for s in range(steps + 1):
+        t = s / steps
+        y = t * height
+        z = math.sin(t * math.pi * 0.8) * curve_forward
+        w = math.sin(t * math.pi) * (width / 2.0)
 
-    # Front face
-    positions.extend(transformed_pts)
-    normals.extend([norm_f]*4)
-    uvs.extend([[0.5,0], [0,0.4], [0.5,1.0], [1,0.4]])
-    indices.extend([0, 1, 2, 0, 2, 3])
+        # Center spine
+        spine_verts.append([0, y, z])
+        left_verts.append([-w, y, z])
+        right_verts.append([w, y, z])
 
-    # Back face
-    positions.extend(transformed_pts)
-    normals.extend([norm_b]*4)
-    uvs.extend([[0.5,0], [0,0.4], [0.5,1.0], [1,0.4]])
-    indices.extend([4, 6, 5, 4, 7, 6])
+    def transform(x, y, z):
+        rx = x * cos_t - y * sin_t
+        ry = x * sin_t + y * cos_t
+        return [ox + rx, oy + ry, oz + z]
+
+    idx = 0
+    for s in range(steps):
+        p_l1 = transform(*left_verts[s])
+        p_r1 = transform(*right_verts[s])
+        p_s1 = transform(*spine_verts[s])
+        p_l2 = transform(*left_verts[s+1])
+        p_r2 = transform(*right_verts[s+1])
+        p_s2 = transform(*spine_verts[s+1])
+
+        n_front = [0, 0, 1.0]
+
+        # Left quad
+        positions.extend([p_l1, p_s1, p_s2, p_l2])
+        normals.extend([n_front]*4)
+        uvs.extend([[0, s/steps], [0.5, s/steps], [0.5, (s+1)/steps], [0, (s+1)/steps]])
+        indices.extend([idx, idx+1, idx+2, idx, idx+2, idx+3])
+        idx += 4
+
+        # Right quad
+        positions.extend([p_s1, p_r1, p_r2, p_s2])
+        normals.extend([n_front]*4)
+        uvs.extend([[0.5, s/steps], [1.0, s/steps], [1.0, (s+1)/steps], [0.5, (s+1)/steps]])
+        indices.extend([idx, idx+1, idx+2, idx, idx+2, idx+3])
+        idx += 4
 
     return {'positions': positions, 'normals': normals, 'uvs': uvs, 'indices': indices}
 
@@ -194,59 +217,77 @@ def merge_meshes(mesh_list):
         'indices': combined_indices
     }
 
-# --- Build Node Geometry Parts ---
+# --- Construct High Definition Shaman Mesh Components ---
 
-# 1. Torso
-robe = create_cylinder_mesh(0.22, 0.38, 0.6, segments=10, offset=(0, -0.1, 0))
-chest = create_box_mesh(0.48, 0.35, 0.28, offset=(0, 0.2, 0))
-cape = create_box_mesh(0.45, 0.7, 0.05, offset=(0, 0.0, -0.2))
-belt = create_cylinder_mesh(0.27, 0.27, 0.08, segments=10, offset=(0, -0.12, 0))
-torso_mesh = merge_meshes([robe, chest, cape, belt])
+# 1. Torso & Layered Robes
+robe_skirt = create_cylinder_mesh(0.24, 0.42, 0.65, segments=20, offset=(0, -0.12, 0))
+tunic_chest = create_cylinder_mesh(0.26, 0.24, 0.38, segments=20, offset=(0, 0.22, 0))
+shoulder_pads_l = create_sphere_mesh(0.12, offset=(0.28, 0.32, 0), scale=(1.2, 0.8, 1.0))
+shoulder_pads_r = create_sphere_mesh(0.12, offset=(-0.28, 0.32, 0), scale=(1.2, 0.8, 1.0))
+shaman_cape = create_box_mesh(0.48, 0.78, 0.06, offset=(0, 0.05, -0.22))
+cape_collar = create_cylinder_mesh(0.28, 0.26, 0.12, segments=16, offset=(0, 0.35, -0.05))
+belt_ring = create_cylinder_mesh(0.28, 0.28, 0.09, segments=20, offset=(0, -0.1, 0))
+belt_pendant = create_box_mesh(0.12, 0.22, 0.05, offset=(0, -0.25, 0.26))
+torso_mesh = merge_meshes([robe_skirt, tunic_chest, shoulder_pads_l, shoulder_pads_r, shaman_cape, cape_collar, belt_ring, belt_pendant])
 
-# 2. Head
-head_base = create_sphere_mesh(0.16, offset=(0, 0.12, 0))
-mask = create_box_mesh(0.26, 0.3, 0.1, offset=(0, 0.12, 0.14))
-horn1 = create_cylinder_mesh(0.01, 0.04, 0.3, segments=6, offset=(0.15, 0.2, 0.08), rot_z=-0.3)
-horn2 = create_cylinder_mesh(0.01, 0.04, 0.3, segments=6, offset=(-0.15, 0.2, 0.08), rot_z=0.3)
-head_mesh = merge_meshes([head_base, mask, horn1, horn2])
+# 2. Head & Carved Ceremonial Mask
+head_sphere = create_sphere_mesh(0.16, lat_segments=16, lon_segments=20, offset=(0, 0.12, 0))
+mask_main = create_box_mesh(0.28, 0.32, 0.1, offset=(0, 0.12, 0.15))
+mask_crest = create_box_mesh(0.14, 0.18, 0.08, offset=(0, 0.30, 0.16))
+jaw_ridge = create_cylinder_mesh(0.12, 0.08, 0.15, segments=12, offset=(0, -0.02, 0.16), rot_x=0.3)
+tusk_l1 = create_cylinder_mesh(0.01, 0.045, 0.35, segments=12, offset=(0.18, 0.22, 0.08), rot_z=-0.4)
+tusk_r1 = create_cylinder_mesh(0.01, 0.045, 0.35, segments=12, offset=(-0.18, 0.22, 0.08), rot_z=0.4)
+tusk_l2 = create_cylinder_mesh(0.01, 0.035, 0.25, segments=12, offset=(0.16, 0.08, 0.12), rot_z=-0.6)
+tusk_r2 = create_cylinder_mesh(0.01, 0.035, 0.25, segments=12, offset=(-0.16, 0.08, 0.12), rot_z=0.6)
+head_mesh = merge_meshes([head_sphere, mask_main, mask_crest, jaw_ridge, tusk_l1, tusk_r1, tusk_l2, tusk_r2])
 
-# 3. Headdress
-f_center = create_feather_mesh(0.12, 0.65, offset=(0, 0.0, 0), tilt_z=0.0)
-f_left1 = create_feather_mesh(0.11, 0.55, offset=(-0.05, 0.0, 0), tilt_z=-0.25)
-f_right1 = create_feather_mesh(0.11, 0.55, offset=(0.05, 0.0, 0), tilt_z=0.25)
-f_left2 = create_feather_mesh(0.10, 0.45, offset=(-0.1, 0.0, 0), tilt_z=-0.5)
-f_right2 = create_feather_mesh(0.10, 0.45, offset=(0.1, 0.0, 0), tilt_z=0.5)
-crown_base = create_cylinder_mesh(0.16, 0.18, 0.08, segments=8, offset=(0, -0.04, 0))
-headdress_mesh = merge_meshes([f_center, f_left1, f_right1, f_left2, f_right2, crown_base])
+# 3. High Definition Feather Crown Headdress
+f_c = create_feather_mesh(0.14, 0.75, offset=(0, 0.0, 0), tilt_z=0.0, curve_forward=0.15)
+f_l1 = create_feather_mesh(0.13, 0.68, offset=(-0.06, 0.0, 0), tilt_z=-0.22, curve_forward=0.12)
+f_r1 = create_feather_mesh(0.13, 0.68, offset=(0.06, 0.0, 0), tilt_z=0.22, curve_forward=0.12)
+f_l2 = create_feather_mesh(0.12, 0.58, offset=(-0.12, 0.0, 0), tilt_z=-0.44, curve_forward=0.10)
+f_r2 = create_feather_mesh(0.12, 0.58, offset=(0.12, 0.0, 0), tilt_z=0.44, curve_forward=0.10)
+f_l3 = create_feather_mesh(0.10, 0.48, offset=(-0.18, 0.0, 0), tilt_z=-0.66, curve_forward=0.08)
+f_r3 = create_feather_mesh(0.10, 0.48, offset=(0.18, 0.0, 0), tilt_z=0.66, curve_forward=0.08)
+crown_circlet = create_cylinder_mesh(0.18, 0.20, 0.1, segments=20, offset=(0, -0.04, 0))
+headdress_mesh = merge_meshes([f_c, f_l1, f_r1, f_l2, f_r2, f_l3, f_r3, crown_circlet])
 
-# 4. ArmL
-armL_upper = create_cylinder_mesh(0.07, 0.06, 0.25, segments=8, offset=(0, -0.12, 0))
-armL_lower = create_cylinder_mesh(0.06, 0.05, 0.25, segments=8, offset=(0, -0.32, 0))
-armL_hand = create_sphere_mesh(0.055, offset=(0, -0.46, 0))
-armL_mesh = merge_meshes([armL_upper, armL_lower, armL_hand])
+# 4. Left Arm (ArmL)
+armL_upper = create_cylinder_mesh(0.075, 0.065, 0.28, segments=16, offset=(0, -0.14, 0))
+armL_lower = create_cylinder_mesh(0.065, 0.055, 0.28, segments=16, offset=(0, -0.36, 0))
+armL_guard = create_cylinder_mesh(0.07, 0.068, 0.12, segments=16, offset=(0, -0.34, 0))
+armL_hand = create_sphere_mesh(0.06, lat_segments=12, lon_segments=16, offset=(0, -0.52, 0))
+armL_mesh = merge_meshes([armL_upper, armL_lower, armL_guard, armL_hand])
 
-# 5. ArmR
-armR_upper = create_cylinder_mesh(0.07, 0.06, 0.25, segments=8, offset=(0, -0.12, 0))
-armR_lower = create_cylinder_mesh(0.06, 0.05, 0.25, segments=8, offset=(0, -0.32, 0))
-armR_hand = create_sphere_mesh(0.055, offset=(0, -0.46, 0))
-armR_mesh = merge_meshes([armR_upper, armR_lower, armR_hand])
+# 5. Right Arm (ArmR)
+armR_upper = create_cylinder_mesh(0.075, 0.065, 0.28, segments=16, offset=(0, -0.14, 0))
+armR_lower = create_cylinder_mesh(0.065, 0.055, 0.28, segments=16, offset=(0, -0.36, 0))
+armR_guard = create_cylinder_mesh(0.07, 0.068, 0.12, segments=16, offset=(0, -0.34, 0))
+armR_hand = create_sphere_mesh(0.06, lat_segments=12, lon_segments=16, offset=(0, -0.52, 0))
+armR_mesh = merge_meshes([armR_upper, armR_lower, armR_guard, armR_hand])
 
-# 6. Staff
-shaft = create_cylinder_mesh(0.035, 0.035, 1.8, segments=8, offset=(0, 0.2, 0))
-totem = create_box_mesh(0.18, 0.18, 0.18, offset=(0, 0.95, 0))
-orb = create_sphere_mesh(0.1, offset=(0, 1.12, 0))
-staff_mesh = merge_meshes([shaft, totem, orb])
+# 6. Shaman Staff with Twisted Shaft, Totem & Mystical Orb
+staff_shaft1 = create_cylinder_mesh(0.04, 0.038, 0.9, segments=12, offset=(0, -0.1, 0))
+staff_shaft2 = create_cylinder_mesh(0.038, 0.042, 0.9, segments=12, offset=(0, 0.7, 0), rot_z=0.08)
+totem_head = create_box_mesh(0.22, 0.22, 0.22, offset=(0, 1.15, 0))
+totem_skull = create_sphere_mesh(0.12, offset=(0, 1.28, 0.08))
+prong_l = create_cylinder_mesh(0.015, 0.03, 0.35, segments=12, offset=(0.1, 1.35, 0), rot_z=-0.35)
+prong_r = create_cylinder_mesh(0.015, 0.03, 0.35, segments=12, offset=(-0.1, 1.35, 0), rot_z=0.35)
+mystic_orb = create_sphere_mesh(0.12, lat_segments=16, lon_segments=20, offset=(0, 1.42, 0))
+talisman1 = create_feather_mesh(0.06, 0.3, offset=(-0.12, 1.0, 0), tilt_z=-0.3)
+talisman2 = create_feather_mesh(0.06, 0.3, offset=(0.12, 1.0, 0), tilt_z=0.3)
+staff_mesh = merge_meshes([staff_shaft1, staff_shaft2, totem_head, totem_skull, prong_l, prong_r, mystic_orb, talisman1, talisman2])
 
-# 7. LegL
-legL_upper = create_cylinder_mesh(0.08, 0.07, 0.3, segments=8, offset=(0, -0.15, 0))
-legL_lower = create_cylinder_mesh(0.07, 0.06, 0.3, segments=8, offset=(0, -0.4, 0))
-legL_foot = create_box_mesh(0.1, 0.08, 0.2, offset=(0, -0.56, 0.05))
+# 7. Left Leg (LegL)
+legL_upper = create_cylinder_mesh(0.085, 0.075, 0.32, segments=16, offset=(0, -0.16, 0))
+legL_lower = create_cylinder_mesh(0.075, 0.065, 0.32, segments=16, offset=(0, -0.42, 0))
+legL_foot = create_box_mesh(0.11, 0.09, 0.22, offset=(0, -0.58, 0.06))
 legL_mesh = merge_meshes([legL_upper, legL_lower, legL_foot])
 
-# 8. LegR
-legR_upper = create_cylinder_mesh(0.08, 0.07, 0.3, segments=8, offset=(0, -0.15, 0))
-legR_lower = create_cylinder_mesh(0.07, 0.06, 0.3, segments=8, offset=(0, -0.4, 0))
-legR_foot = create_box_mesh(0.1, 0.08, 0.2, offset=(0, -0.56, 0.05))
+# 8. Right Leg (LegR)
+legR_upper = create_cylinder_mesh(0.085, 0.075, 0.32, segments=16, offset=(0, -0.16, 0))
+legR_lower = create_cylinder_mesh(0.075, 0.065, 0.32, segments=16, offset=(0, -0.42, 0))
+legR_foot = create_box_mesh(0.11, 0.09, 0.22, offset=(0, -0.58, 0.06))
 legR_mesh = merge_meshes([legR_upper, legR_lower, legR_foot])
 
 # Map nodes
@@ -264,12 +305,12 @@ node_configs = [
 # --- Generate shaman.obj and shaman.mtl ---
 
 def generate_obj_mtl():
-    mtl_content = """# Populous Shaman Materials
+    mtl_content = """# Populous HD Shaman Materials
 newmtl ShamanRobe
 Kd 0.85 0.25 0.10
 Ka 0.20 0.05 0.02
-Ks 0.1 0.1 0.1
-Ns 10
+Ks 0.15 0.15 0.15
+Ns 15
 
 newmtl ShamanSkin
 Kd 0.82 0.70 0.55
@@ -279,34 +320,33 @@ Ns 5
 
 newmtl ShamanMask
 Kd 0.95 0.85 0.30
-Ka 0.20 0.20 0.05
-Ks 0.3 0.3 0.3
-Ns 30
+Ka 0.25 0.22 0.08
+Ks 0.4 0.4 0.4
+Ns 40
 
 newmtl ShamanFeather
-Kd 0.95 0.95 0.95
-Ka 0.20 0.20 0.20
-Ks 0.1 0.1 0.1
-Ns 10
+Kd 0.98 0.98 0.98
+Ka 0.25 0.25 0.25
+Ks 0.2 0.2 0.2
+Ns 20
 
 newmtl ShamanStaff
 Kd 0.45 0.28 0.12
-Ka 0.10 0.05 0.02
-Ks 0.1 0.1 0.1
-Ns 5
+Ka 0.12 0.06 0.03
+Ks 0.15 0.15 0.15
+Ns 10
 
 newmtl ShamanOrb
 Kd 1.00 0.84 0.00
-Ka 0.40 0.30 0.00
-Ks 0.8 0.8 0.8
-Ns 50
+Ka 0.50 0.40 0.00
+Ks 0.9 0.9 0.9
+Ns 80
 """
     with open('shaman.mtl', 'w') as f:
         f.write(mtl_content)
 
-    obj_lines = ["# Populous Shaman OBJ Model", "mtllib shaman.mtl\n"]
+    obj_lines = ["# Populous HD Shaman OBJ Model", "mtllib shaman.mtl\n"]
 
-    # Material map per node name
     mat_map = {
         'Torso': 'ShamanRobe',
         'Head': 'ShamanMask',
@@ -318,15 +358,12 @@ Ns 50
         'LegR': 'ShamanRobe'
     }
 
-    # Helper to calculate world positions for OBJ export
     def get_world_transform(node_name):
-        # Accumulate translations
         chain = []
         curr = node_name
         while curr:
             cfg = next(c for c in node_configs if c['name'] == curr)
             chain.append(cfg['translation'])
-            # find parent
             parent_cfg = next((c for c in node_configs if curr in c['children']), None)
             curr = parent_cfg['name'] if parent_cfg else None
 
@@ -348,17 +385,13 @@ Ns 50
         obj_lines.append(f"g {name}")
         obj_lines.append(f"usemtl {mat}")
 
-        # Vertices
         for px, py, pz in mesh['positions']:
             obj_lines.append(f"v {px+tx:.4f} {py+ty:.4f} {pz+tz:.4f}")
-        # Normals
         for nx, ny, nz in mesh['normals']:
             obj_lines.append(f"vn {nx:.4f} {ny:.4f} {nz:.4f}")
-        # UVs
         for u, v in mesh['uvs']:
             obj_lines.append(f"vt {u:.4f} {v:.4f}")
 
-        # Faces
         for i in range(0, len(mesh['indices']), 3):
             i1 = mesh['indices'][i] + v_offset
             i2 = mesh['indices'][i+1] + v_offset
@@ -370,7 +403,7 @@ Ns 50
     with open('shaman.obj', 'w') as f:
         f.write("\n".join(obj_lines))
 
-# --- Generate shaman.gltf (GLTF 2.0 with embedded binary buffer) ---
+# --- Generate shaman.gltf and shaman_data.js ---
 
 def generate_gltf():
     buffer_bytes = bytearray()
@@ -379,12 +412,12 @@ def generate_gltf():
     meshes = []
     nodes = []
     materials = [
-        {'name': 'ShamanRobe', 'pbrMetallicRoughness': {'baseColorFactor': [0.85, 0.25, 0.10, 1.0], 'roughnessFactor': 0.7, 'metallicFactor': 0.1}},
-        {'name': 'ShamanSkin', 'pbrMetallicRoughness': {'baseColorFactor': [0.82, 0.70, 0.55, 1.0], 'roughnessFactor': 0.7, 'metallicFactor': 0.1}},
-        {'name': 'ShamanMask', 'pbrMetallicRoughness': {'baseColorFactor': [0.95, 0.85, 0.30, 0.8], 'roughnessFactor': 0.6, 'metallicFactor': 0.2}},
-        {'name': 'ShamanFeather', 'pbrMetallicRoughness': {'baseColorFactor': [0.95, 0.95, 0.95, 1.0], 'roughnessFactor': 0.8, 'metallicFactor': 0.1}},
-        {'name': 'ShamanStaff', 'pbrMetallicRoughness': {'baseColorFactor': [0.45, 0.28, 0.12, 1.0], 'roughnessFactor': 0.8, 'metallicFactor': 0.1}},
-        {'name': 'ShamanOrb', 'pbrMetallicRoughness': {'baseColorFactor': [1.0, 0.84, 0.0, 1.0], 'roughnessFactor': 0.2, 'metallicFactor': 0.8}},
+        {'name': 'ShamanRobe', 'pbrMetallicRoughness': {'baseColorFactor': [0.85, 0.25, 0.10, 1.0], 'roughnessFactor': 0.6, 'metallicFactor': 0.1}},
+        {'name': 'ShamanSkin', 'pbrMetallicRoughness': {'baseColorFactor': [0.82, 0.70, 0.55, 1.0], 'roughnessFactor': 0.7, 'metallicFactor': 0.05}},
+        {'name': 'ShamanMask', 'pbrMetallicRoughness': {'baseColorFactor': [0.95, 0.85, 0.30, 0.9], 'roughnessFactor': 0.4, 'metallicFactor': 0.3}},
+        {'name': 'ShamanFeather', 'pbrMetallicRoughness': {'baseColorFactor': [0.98, 0.98, 0.98, 1.0], 'roughnessFactor': 0.8, 'metallicFactor': 0.05}},
+        {'name': 'ShamanStaff', 'pbrMetallicRoughness': {'baseColorFactor': [0.45, 0.28, 0.12, 1.0], 'roughnessFactor': 0.7, 'metallicFactor': 0.1}},
+        {'name': 'ShamanOrb', 'pbrMetallicRoughness': {'baseColorFactor': [1.0, 0.84, 0.0, 1.0], 'roughnessFactor': 0.1, 'metallicFactor': 0.9}},
     ]
 
     mat_indices = {
@@ -459,9 +492,8 @@ def generate_gltf():
         # 4. Pack Indices
         idx_bytes = bytearray()
         for idx in mesh_data['indices']:
-            idx_bytes.extend(struct.pack('<H', idx)) # unsigned short
+            idx_bytes.extend(struct.pack('<H', idx))
 
-        # Pad bufferView to 4-byte boundary
         if len(buffer_bytes) % 4 != 0:
             buffer_bytes.extend(b'\x00' * (4 - (len(buffer_bytes) % 4)))
 
@@ -500,8 +532,8 @@ def generate_gltf():
     base64_buffer = base64.b64encode(buffer_bytes).decode('ascii')
 
     gltf_dict = {
-        'asset': {'version': '2.0', 'generator': 'generate_shaman_gltf.py'},
-        'scenes': [{'nodes': [0]}], # Node 0 is Torso
+        'asset': {'version': '2.0', 'generator': 'generate_shaman_gltf.py (HD)'},
+        'scenes': [{'nodes': [0]}],
         'nodes': nodes,
         'meshes': meshes,
         'materials': materials,
@@ -519,4 +551,4 @@ def generate_gltf():
 if __name__ == '__main__':
     generate_obj_mtl()
     generate_gltf()
-    print("Successfully generated shaman.obj, shaman.mtl, shaman.gltf, and shaman_data.js")
+    print("Successfully generated HD shaman.obj, shaman.mtl, shaman.gltf, and shaman_data.js")
