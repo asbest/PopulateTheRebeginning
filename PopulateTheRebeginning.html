@@ -557,24 +557,116 @@
 <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.11.2/rapier.js"></script>
+<script src="shaman_data.js"></script>
 <script type="module">
 import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
 window.THREE = THREE;
 
-const gltfLoader = new GLTFLoader();
-gltfLoader.load('shaman.gltf', (gltf) => {
-    window.shamanGltfModel = gltf.scene;
-    if (typeof state !== 'undefined' && state && state.units) {
-        state.units.forEach(unit => {
-            if (unit.isShaman && typeof unit.setupGltfMesh === 'function') {
-                unit.setupGltfMesh();
-            }
-        });
+function parseAndBuildGltf(gltfData) {
+    const uri = gltfData.buffers[0].uri;
+    const base64Str = uri.split(',')[1];
+    const binaryStr = atob(base64Str);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
     }
-}, undefined, (err) => {
-    console.warn('Could not load shaman.gltf:', err);
-});
+    const arrayBuffer = bytes.buffer;
+
+    const materials = gltfData.materials.map(mat => {
+        const pbr = mat.pbrMetallicRoughness || {};
+        const col = pbr.baseColorFactor || [1, 1, 1, 1];
+        return new THREE.MeshStandardMaterial({
+            color: new THREE.Color(col[0], col[1], col[2]),
+            roughness: pbr.roughnessFactor !== undefined ? pbr.roughnessFactor : 0.7,
+            metalness: pbr.metallicFactor !== undefined ? pbr.metallicFactor : 0.1,
+            transparent: col[3] < 1.0,
+            opacity: col[3]
+        });
+    });
+
+    function getAccessorArray(accIdx) {
+        if (accIdx === undefined) return null;
+        const acc = gltfData.accessors[accIdx];
+        const bv = gltfData.bufferViews[acc.bufferView];
+        const byteOffset = (bv.byteOffset || 0) + (acc.byteOffset || 0);
+        if (acc.componentType === 5126) {
+            return new Float32Array(arrayBuffer, byteOffset, acc.count * (acc.type === 'VEC3' ? 3 : acc.type === 'VEC2' ? 2 : 1));
+        } else if (acc.componentType === 5123) {
+            return new Uint16Array(arrayBuffer, byteOffset, acc.count);
+        }
+        return null;
+    }
+
+    const compiledMeshes = gltfData.meshes.map(meshData => {
+        const group = new THREE.Group();
+        meshData.primitives.forEach(prim => {
+            const geo = new THREE.BufferGeometry();
+            const posArr = getAccessorArray(prim.attributes.POSITION);
+            if (posArr) geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+            const normArr = getAccessorArray(prim.attributes.NORMAL);
+            if (normArr) geo.setAttribute('normal', new THREE.BufferAttribute(normArr, 3));
+            const uvArr = getAccessorArray(prim.attributes.TEXCOORD_0);
+            if (uvArr) geo.setAttribute('uv', new THREE.BufferAttribute(uvArr, 2));
+            const idxArr = getAccessorArray(prim.indices);
+            if (idxArr) geo.setIndex(new THREE.BufferAttribute(idxArr, 1));
+
+            const mat = materials[prim.material] || new THREE.MeshStandardMaterial({ color: 0x888888 });
+            const mesh = new THREE.Mesh(geo, mat);
+            group.add(mesh);
+        });
+        return group;
+    });
+
+    const nodeObjects = gltfData.nodes.map((nodeData) => {
+        const grp = new THREE.Group();
+        grp.name = nodeData.name;
+        if (nodeData.translation) grp.position.set(...nodeData.translation);
+        if (nodeData.mesh !== undefined) {
+            grp.add(compiledMeshes[nodeData.mesh].clone());
+        }
+        return grp;
+    });
+
+    gltfData.nodes.forEach((nodeData, idx) => {
+        if (nodeData.children) {
+            nodeData.children.forEach(childIdx => {
+                nodeObjects[idx].add(nodeObjects[childIdx]);
+            });
+        }
+    });
+
+    return nodeObjects[0];
+}
+
+function loadShamanModel() {
+    if (window.shamanGltfData) {
+        window.shamanGltfModel = parseAndBuildGltf(window.shamanGltfData);
+        if (window.state && window.state.units) {
+            window.state.units.forEach(unit => {
+                if (unit.isShaman && typeof unit.setupGltfMesh === 'function') {
+                    unit.setupGltfMesh();
+                }
+            });
+        }
+        return;
+    }
+    fetch('shaman.gltf')
+        .then(res => res.json())
+        .then(gltfData => {
+            window.shamanGltfModel = parseAndBuildGltf(gltfData);
+            if (window.state && window.state.units) {
+                window.state.units.forEach(unit => {
+                    if (unit.isShaman && typeof unit.setupGltfMesh === 'function') {
+                        unit.setupGltfMesh();
+                    }
+                });
+            }
+        })
+        .catch(err => {
+            console.warn('Could not load shaman.gltf:', err);
+        });
+}
+loadShamanModel();
 
 let RAPIER = null;
 

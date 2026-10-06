@@ -513,7 +513,10 @@ def generate_gltf():
     with open('shaman.gltf', 'w') as f:
         json.dump(gltf_dict, f, indent=2)
 
+    with open('shaman_data.js', 'w') as f:
+        f.write('window.shamanGltfData = ' + json.dumps(gltf_dict) + ';\n')
+
 if __name__ == '__main__':
     generate_obj_mtl()
     generate_gltf()
-    print("Successfully generated shaman.obj, shaman.mtl, and shaman.gltf")
+    print("Successfully generated shaman.obj, shaman.mtl, shaman.gltf, and shaman_data.js")
