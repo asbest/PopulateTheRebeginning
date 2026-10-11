@@ -3665,72 +3665,40 @@ class Fireball {
     constructor(start, end, faction, unitDamage = CONFIG.COMBAT.FIREBALL_UNIT_DAMAGE, buildingDamage = CONFIG.COMBAT.FIREBALL_BUILDING_DAMAGE) {
         this.id = generateUUID();
         this.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshBasicMaterial({color: COLORS.fireBody}));
-        this.mesh.position.copy(start); this.target = end; this.dir = end.clone().sub(start).normalize();
+        this.start = start.clone(); this.target = end.clone();
+        this.mesh.position.copy(start);
         this.faction = faction;
         this.unitDamage = unitDamage;
         this.buildingDamage = buildingDamage;
         this.speed = CONFIG.EFFECTS.FIREBALL_SPEED; this.active = true; this.trailTimer = 0;
+        this.travel = 0;
+        this.duration = Math.max(0.1, start.distanceTo(end) / this.speed);
+        // A straight line into lower terrain can strike the caster's own hillside.
+        // Loft the shot over every sampled point and let it land at the clicked target.
+        this.arcHeight = 3;
+        const steps = Math.max(4, Math.ceil(Math.hypot(end.x-start.x, end.z-start.z)));
+        for (let i = 1; i < steps; i++) {
+            const t = i / steps;
+            const x = THREE.MathUtils.lerp(start.x, end.x, t);
+            const z = THREE.MathUtils.lerp(start.z, end.z, t);
+            const directY = THREE.MathUtils.lerp(start.y, end.y, t);
+            this.arcHeight = Math.max(this.arcHeight,
+                (getHeight(x, z) + 1.5 - directY) / (4 * t * (1 - t)));
+        }
 
         // Add light
         this.light = new THREE.PointLight(0xFF4500, 1.5, 15);
         this.mesh.add(this.light);
 
         state.scene.add(this.mesh);
-        this.initPhysics(start);
-    }
-    initPhysics(start) {
-        if (!state.physicsWorld || typeof RAPIER === 'undefined') return;
-        const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
-            .setTranslation(start.x, start.y, start.z)
-            .setLinvel(this.dir.x * this.speed, this.dir.y * this.speed, this.dir.z * this.speed)
-            .setGravityScale(0);
-        this.rigidBody = state.physicsWorld.createRigidBody(rigidBodyDesc);
-
-        const colliderDesc = RAPIER.ColliderDesc.ball(0.5)
-            .setSensor(true)
-            .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
-        this.collider = state.physicsWorld.createCollider(colliderDesc, this.rigidBody);
-        state.rigidBodies.set(this.id, this.rigidBody);
     }
     update(dt) {
         if(!this.active) return false;
-
-        if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
-            const pos = this.rigidBody.translation();
-            this.mesh.position.set(pos.x, pos.y, pos.z);
-
-            // Manual terrain check as sensors might not hit heightfields reliably if speed is too high
-            const h = getHeight(pos.x, pos.z);
-            if (h > pos.y) {
-                this.explode();
-                return false;
-            }
-
-            // Rapier intersection check
-            if (state.physicsWorld) {
-                let hitSomething = false;
-                state.physicsWorld.intersectionsWith(this.collider, (otherCollider) => {
-                    if (otherCollider.handle !== this.collider.handle) {
-                        hitSomething = true;
-                    }
-                });
-                if (hitSomething) {
-                    this.explode();
-                    return false;
-                }
-            }
-        } else {
-            const moveDist = this.speed * dt;
-            this.mesh.position.addScaledVector(this.dir, moveDist);
-            const h = getHeight(this.mesh.position.x, this.mesh.position.z);
-            if (h > this.mesh.position.y) {
-                 this.explode();
-                 return false;
-            }
-        }
-
-        const distToTarget = this.mesh.position.distanceTo(this.target);
-        if (distToTarget <= 1.0) {
+        this.travel += dt;
+        const t = Math.min(1, this.travel / this.duration);
+        this.mesh.position.lerpVectors(this.start, this.target, t);
+        this.mesh.position.y += 4 * t * (1 - t) * this.arcHeight;
+        if (t >= 1) {
              this.explode();
              return false;
         }
@@ -3753,11 +3721,6 @@ class Fireball {
         return true;
     }
     explode() {
-        if (state.physicsWorld && this.rigidBody) {
-            state.physicsWorld.removeRigidBody(this.rigidBody);
-            this.rigidBody = null;
-            state.rigidBodies.delete(this.id);
-        }
         state.scene.remove(this.mesh);
         this.mesh.geometry.dispose();
         this.mesh.material.dispose();
@@ -6031,7 +5994,7 @@ class EnemyAI {
                 if(pending){
                     const builder=nearest(builders.filter(u=>Pathfinder.findPath(u.mesh.position,new THREE.Vector3(pending.x,0,pending.z),false,u.height)),pending);
                     if(!builder)this.pendingBuild=null;
-                    else if(this.distance(builder.mesh.position,pending)<=10){createBuilding(type,pending.x,pending.z,this.faction);this.pendingBuild=null;}
+                    else if(this.distance(builder.mesh.position,pending)<=3){createBuilding(type,pending.x,pending.z,this.faction);this.pendingBuild=null;}
                     else if(!this.moveUnit(builder,pending,'builder'))this.pendingBuild=null;
                 }
             }
@@ -6236,7 +6199,7 @@ function updateContextMenus() {
     const menu = document.getElementById('right-menu');
     menu.innerHTML = '';
 
-    const hasShaman = state.selectedUnits.some(u => u.isShaman);
+    const hasShaman = state.selectedUnits.some(u => u.isShaman && u.state !== 'dead');
     const hasBrave = state.selectedUnits.some(u => u.type === 'wild');
     const hasSpy = state.selectedUnits.some(u => u.type === 'spy');
     const hasSelection = state.selectedUnits.length > 0;
@@ -6248,7 +6211,8 @@ function updateContextMenus() {
 
     let visibleActions = [];
 
-    if (hasShaman) {
+    // Spells belong to the living Shaman, even when no unit is selected.
+    if (hasShaman || (!hasSelection && state.shaman && state.shaman.state !== 'dead')) {
         visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom', 'blink'];
     } else if (hasBrave) {
         visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy'];

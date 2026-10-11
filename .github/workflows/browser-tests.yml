@@ -19,6 +19,7 @@ jobs:
           node tests/strategy.mjs
           node tests/materials.mjs
           node tests/strategy-long.mjs
+          node tests/live-gameplay.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
