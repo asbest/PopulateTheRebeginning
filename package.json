@@ -1,0 +1,10 @@
+{
+  "name": "populate-the-rebeginning",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node tests/browser.mjs && node tests/locomotion.mjs && node tests/spells.mjs && node tests/strategy.mjs && node tests/materials.mjs && node tests/strategy-long.mjs"
+  },
+  "devDependencies": { "playwright": "1.62.1" }
+}

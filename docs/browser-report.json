@@ -1,0 +1,386 @@
+{
+  "date": "2026-10-11T17:15:05.466Z",
+  "results": [
+    {
+      "name": "Local entry point and WebGL renderer",
+      "pass": true,
+      "detail": {
+        "url": "http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1",
+        "renderer": "WebGL 2.0 (OpenGL ES 3.0 Chromium)",
+        "physics": true,
+        "units": 3
+      }
+    },
+    {
+      "name": "Six detailed faction-colored building meshes",
+      "pass": true,
+      "detail": [
+        {
+          "kind": "hut",
+          "meshes": 63
+        },
+        {
+          "kind": "tower",
+          "meshes": 32
+        },
+        {
+          "kind": "warrior",
+          "meshes": 23
+        },
+        {
+          "kind": "fire",
+          "meshes": 15
+        },
+        {
+          "kind": "spy",
+          "meshes": 63
+        },
+        {
+          "kind": "shipyard",
+          "meshes": 26
+        }
+      ]
+    },
+    {
+      "name": "All six unit types retain animation rig and statistics",
+      "pass": true,
+      "detail": [
+        {
+          "kind": "wild",
+          "hp": 100
+        },
+        {
+          "kind": "warrior",
+          "hp": 200
+        },
+        {
+          "kind": "firewarrior",
+          "hp": 120
+        },
+        {
+          "kind": "spy",
+          "hp": 100
+        },
+        {
+          "kind": "shaman",
+          "hp": 500
+        },
+        {
+          "kind": "airship",
+          "hp": 500
+        }
+      ]
+    },
+    {
+      "name": "Replacement character meshes, HD materials, pivots and conversion",
+      "pass": true,
+      "detail": {
+        "dimensions": {
+          "skin": [
+            1254,
+            1254
+          ],
+          "cloth": [
+            1254,
+            1254
+          ],
+          "leather": [
+            1254,
+            1254
+          ],
+          "gold": [
+            1254,
+            1254
+          ]
+        },
+        "roles": [
+          "wild",
+          "shaman",
+          "warrior",
+          "firewarrior",
+          "spy",
+          "airship"
+        ]
+      }
+    },
+    {
+      "name": "New character combat animations retain damage, fireballs and spy conversion",
+      "pass": true,
+      "detail": [
+        {
+          "type": "wild",
+          "damage": 5
+        },
+        {
+          "type": "warrior",
+          "damage": 52.5
+        },
+        {
+          "type": "shaman",
+          "damage": 30
+        },
+        {
+          "type": "firewarrior",
+          "damage": 0
+        },
+        {
+          "type": "spy",
+          "damage": 0
+        }
+      ]
+    },
+    {
+      "name": "Move command establishes a reachable destination",
+      "pass": true,
+      "detail": {
+        "target": {
+          "x": 44,
+          "y": 0,
+          "z": 42
+        }
+      }
+    },
+    {
+      "name": "Spell mana cost and visual effects",
+      "pass": true,
+      "detail": {
+        "mana": 490,
+        "effects": 1
+      }
+    },
+    {
+      "name": "Terrain deformation updates ground height",
+      "pass": true,
+      "detail": {
+        "before": 16.05036559086232,
+        "after": 18.056327515716085
+      }
+    },
+    {
+      "name": "Building construction keeps original mana cost",
+      "pass": true,
+      "detail": {
+        "mana": 485,
+        "time": 15
+      }
+    },
+    {
+      "name": "Building rally point and training queue",
+      "pass": true,
+      "detail": {
+        "rally": {
+          "x": 43.02113342285156,
+          "z": 41.71533966064453
+        }
+      }
+    },
+    {
+      "name": "Save and reload keeps tribe, world and buildings",
+      "pass": true,
+      "detail": {
+        "units": 11,
+        "buildings": 3,
+        "mana": 485
+      }
+    },
+    {
+      "name": "SVG unit portraits and spell symbols render as graphics",
+      "pass": true
+    },
+    {
+      "name": "Airship cargo, upgrades, rally points and campaign survive save/load",
+      "pass": true,
+      "detail": {
+        "units": 13,
+        "passengers": 1,
+        "upgrades": 1,
+        "transported": "transported",
+        "y": 18,
+        "rally": true,
+        "training": 1,
+        "level": 4,
+        "suddenDeath": true
+      }
+    },
+    {
+      "name": "Keyboard selection, action hotkeys and pointer controls",
+      "pass": true
+    },
+    {
+      "name": "Desktop HUD screenshot renders without shader errors",
+      "pass": true,
+      "detail": {
+        "errors": 0
+      }
+    },
+    {
+      "name": "Mobile viewport keeps touch controls and actions visible",
+      "pass": true,
+      "detail": {
+        "right": {
+          "x": 284,
+          "width": 102
+        },
+        "joystick": {
+          "x": 20,
+          "y": 674
+        },
+        "canvas": true
+      }
+    },
+    {
+      "name": "Touch selection and spell targeting on a phone viewport",
+      "pass": true,
+      "detail": {
+        "mana": 490
+      }
+    },
+    {
+      "name": "Campaign 1 startup",
+      "pass": true,
+      "detail": {
+        "level": 1,
+        "isCampaign": true,
+        "biome": "normal",
+        "ai": 1,
+        "units": 3
+      }
+    },
+    {
+      "name": "Campaign 2 startup",
+      "pass": true,
+      "detail": {
+        "level": 2,
+        "isCampaign": true,
+        "biome": "normal",
+        "ai": 2,
+        "units": 5
+      }
+    },
+    {
+      "name": "Campaign 3 startup",
+      "pass": true,
+      "detail": {
+        "level": 3,
+        "isCampaign": true,
+        "biome": "normal",
+        "ai": 1,
+        "units": 3
+      }
+    },
+    {
+      "name": "Campaign 4 startup",
+      "pass": true,
+      "detail": {
+        "level": 4,
+        "isCampaign": true,
+        "biome": "normal",
+        "ai": 1,
+        "units": 3
+      }
+    },
+    {
+      "name": "Campaign 5 startup",
+      "pass": true,
+      "detail": {
+        "level": 5,
+        "isCampaign": true,
+        "biome": "normal",
+        "ai": 3,
+        "units": 7
+      }
+    },
+    {
+      "name": "Campaign 6 startup",
+      "pass": true,
+      "detail": {
+        "level": 6,
+        "isCampaign": true,
+        "biome": "night",
+        "ai": 1,
+        "units": 3
+      }
+    },
+    {
+      "name": "Campaign 7 startup",
+      "pass": true,
+      "detail": {
+        "level": 7,
+        "isCampaign": true,
+        "biome": "mountain",
+        "ai": 1,
+        "units": 3
+      }
+    },
+    {
+      "name": "Campaign 8 startup",
+      "pass": true,
+      "detail": {
+        "level": 8,
+        "isCampaign": true,
+        "biome": "jungle",
+        "ai": 3,
+        "units": 7
+      }
+    },
+    {
+      "name": "Campaign 9 startup",
+      "pass": true,
+      "detail": {
+        "level": 9,
+        "isCampaign": true,
+        "biome": "storm",
+        "ai": 1,
+        "units": 3
+      }
+    },
+    {
+      "name": "Campaign 10 startup",
+      "pass": true,
+      "detail": {
+        "level": 10,
+        "isCampaign": true,
+        "biome": "void",
+        "ai": 1,
+        "units": 3
+      }
+    },
+    {
+      "name": "Campaign 11 startup",
+      "pass": true,
+      "detail": {
+        "level": 11,
+        "isCampaign": true,
+        "biome": "celestial",
+        "ai": 5,
+        "units": 11
+      }
+    },
+    {
+      "name": "Campaign 12 startup",
+      "pass": true,
+      "detail": {
+        "level": 12,
+        "isCampaign": true,
+        "biome": "cosmic",
+        "ai": 1,
+        "units": 3
+      }
+    },
+    {
+      "name": "No runtime errors or failed local asset requests",
+      "pass": true,
+      "detail": {
+        "errors": 0,
+        "failed": 0
+      }
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "url": "http://127.0.0.1:8765/PopulateTheRebeginning.html",
+      "reason": "net::ERR_ABORTED"
+    }
+  ]
+}

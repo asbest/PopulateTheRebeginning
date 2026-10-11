@@ -1,0 +1,385 @@
+{
+  "results": [
+    {
+      "name": "Player and enemy reach real-world destinations and return uphill through the live frame loop",
+      "pass": true,
+      "detail": {
+        "routes": [
+          {
+            "faction": 0,
+            "start": {
+              "x": 40,
+              "y": 16.775066507932475,
+              "z": 40
+            },
+            "end": {
+              "x": 48,
+              "z": 40
+            }
+          },
+          {
+            "faction": 1,
+            "start": {
+              "x": -122.93691761051582,
+              "y": 6.314464371524094,
+              "z": 36.002665868514455
+            },
+            "end": {
+              "x": -122.93691761051582,
+              "z": 28.002665868514455
+            }
+          }
+        ],
+        "outward": [
+          {
+            "faction": 0,
+            "distance": 6.567410103948826
+          },
+          {
+            "faction": 1,
+            "distance": 7.227122110394363
+          }
+        ],
+        "returnedBoth": true
+      }
+    },
+    {
+      "name": "Terrain collider matches render triangles across the whole chunk",
+      "pass": true,
+      "detail": {
+        "samples": 16,
+        "maxError": 0.000003814697265625
+      }
+    },
+    {
+      "name": "Heading survives physics synchronization and wraps without snapping",
+      "pass": true,
+      "detail": {
+        "error": 0.000001960609912888392
+      }
+    },
+    {
+      "name": "Foot soles follow flat ground, uphill, downhill and stopped stance",
+      "pass": true,
+      "detail": [
+        {
+          "type": "wild",
+          "slope": 0,
+          "maxError": 0.005852974144994159
+        },
+        {
+          "type": "shaman",
+          "slope": 0,
+          "maxError": 0.008721367670113465
+        },
+        {
+          "type": "warrior",
+          "slope": 0,
+          "maxError": 0.005852974144994159
+        },
+        {
+          "type": "firewarrior",
+          "slope": 0,
+          "maxError": 0.005852974144994159
+        },
+        {
+          "type": "spy",
+          "slope": 0,
+          "maxError": 0.005852974144994159
+        },
+        {
+          "type": "wild",
+          "slope": 0.15,
+          "maxError": 0.006487354607942773
+        },
+        {
+          "type": "shaman",
+          "slope": 0.15,
+          "maxError": 0.009703358571204454
+        },
+        {
+          "type": "warrior",
+          "slope": 0.15,
+          "maxError": 0.006487354607942773
+        },
+        {
+          "type": "firewarrior",
+          "slope": 0.15,
+          "maxError": 0.006487354607942773
+        },
+        {
+          "type": "spy",
+          "slope": 0.15,
+          "maxError": 0.006487354607942773
+        },
+        {
+          "type": "wild",
+          "slope": -0.15,
+          "maxError": 0.005774085153517093
+        },
+        {
+          "type": "shaman",
+          "slope": -0.15,
+          "maxError": 0.008731762936007907
+        },
+        {
+          "type": "warrior",
+          "slope": -0.15,
+          "maxError": 0.005774085153517093
+        },
+        {
+          "type": "firewarrior",
+          "slope": -0.15,
+          "maxError": 0.005774085153517093
+        },
+        {
+          "type": "spy",
+          "slope": -0.15,
+          "maxError": 0.005774085153517093
+        }
+      ]
+    },
+    {
+      "name": "Full sandal meshes and hips stay above steep terrain in every human role",
+      "pass": true,
+      "detail": [
+        {
+          "type": "wild",
+          "sx": 0,
+          "sz": 2,
+          "minHip": 0.5533762252836851,
+          "minSole": 0.00017843783346949138
+        },
+        {
+          "type": "wild",
+          "sx": 0,
+          "sz": -2,
+          "minHip": 0.5558921679643439,
+          "minSole": 0.0001784378334690473
+        },
+        {
+          "type": "wild",
+          "sx": 2,
+          "sz": 0,
+          "minHip": 0.5850151449721658,
+          "minSole": -0.003268898742973647
+        },
+        {
+          "type": "wild",
+          "sx": -2,
+          "sz": 0,
+          "minHip": 0.5850433615691578,
+          "minSole": -0.0032688987429737304
+        },
+        {
+          "type": "wild",
+          "sx": 0.75,
+          "sz": 0.75,
+          "minHip": 0.5479742687533256,
+          "minSole": 0.0006262124014970727
+        },
+        {
+          "type": "warrior",
+          "sx": 0,
+          "sz": 2,
+          "minHip": 0.5533762252836851,
+          "minSole": 0.00017843783346949138
+        },
+        {
+          "type": "warrior",
+          "sx": 0,
+          "sz": -2,
+          "minHip": 0.5558921679643439,
+          "minSole": 0.0001784378334690473
+        },
+        {
+          "type": "warrior",
+          "sx": 2,
+          "sz": 0,
+          "minHip": 0.5850151449721658,
+          "minSole": -0.003268898742973647
+        },
+        {
+          "type": "warrior",
+          "sx": -2,
+          "sz": 0,
+          "minHip": 0.5850433615691578,
+          "minSole": -0.0032688987429737304
+        },
+        {
+          "type": "warrior",
+          "sx": 0.75,
+          "sz": 0.75,
+          "minHip": 0.5479742687533256,
+          "minSole": 0.0006262124014970727
+        },
+        {
+          "type": "shaman",
+          "sx": 0,
+          "sz": 2,
+          "minHip": 0.553322204924639,
+          "minSole": -0.00019503122951980423
+        },
+        {
+          "type": "shaman",
+          "sx": 0,
+          "sz": -2,
+          "minHip": 0.5560468521918456,
+          "minSole": -0.00019503122951952667
+        },
+        {
+          "type": "shaman",
+          "sx": 2,
+          "sz": 0,
+          "minHip": 0.5902351303095312,
+          "minSole": -0.0033493062733421786
+        },
+        {
+          "type": "shaman",
+          "sx": -2,
+          "sz": 0,
+          "minHip": 0.5902399721934795,
+          "minSole": -0.0033493062733422987
+        },
+        {
+          "type": "shaman",
+          "sx": 0.75,
+          "sz": 0.75,
+          "minHip": 0.5476091619285517,
+          "minSole": 0.0005308269273263851
+        },
+        {
+          "type": "firewarrior",
+          "sx": 0,
+          "sz": 2,
+          "minHip": 0.5533762252836851,
+          "minSole": 0.00017843783346949138
+        },
+        {
+          "type": "firewarrior",
+          "sx": 0,
+          "sz": -2,
+          "minHip": 0.5558921679643439,
+          "minSole": 0.0001784378334690473
+        },
+        {
+          "type": "firewarrior",
+          "sx": 2,
+          "sz": 0,
+          "minHip": 0.5850151449721658,
+          "minSole": -0.003268898742973647
+        },
+        {
+          "type": "firewarrior",
+          "sx": -2,
+          "sz": 0,
+          "minHip": 0.5850433615691578,
+          "minSole": -0.0032688987429737304
+        },
+        {
+          "type": "firewarrior",
+          "sx": 0.75,
+          "sz": 0.75,
+          "minHip": 0.5479742687533256,
+          "minSole": 0.0006262124014970727
+        },
+        {
+          "type": "spy",
+          "sx": 0,
+          "sz": 2,
+          "minHip": 0.5533762252836851,
+          "minSole": 0.00017843783346949138
+        },
+        {
+          "type": "spy",
+          "sx": 0,
+          "sz": -2,
+          "minHip": 0.5558921679643439,
+          "minSole": 0.0001784378334690473
+        },
+        {
+          "type": "spy",
+          "sx": 2,
+          "sz": 0,
+          "minHip": 0.5850151449721658,
+          "minSole": -0.003268898742973647
+        },
+        {
+          "type": "spy",
+          "sx": -2,
+          "sz": 0,
+          "minHip": 0.5850433615691578,
+          "minSole": -0.0032688987429737304
+        },
+        {
+          "type": "spy",
+          "sx": 0.75,
+          "sz": 0.75,
+          "minHip": 0.5479742687533256,
+          "minSole": 0.0006262124014970727
+        }
+      ]
+    },
+    {
+      "name": "Walking lands ahead, keeps a connected pelvis and swings opposite arms at 30/60/120 FPS",
+      "pass": true,
+      "detail": [
+        {
+          "fps": 30,
+          "contacts": 9,
+          "minLanding": 0.27620000000000733,
+          "minPelvis": 0.534296886903751,
+          "maxKnee": 1.20560259865068,
+          "armProduct": -10.471355914896318
+        },
+        {
+          "fps": 60,
+          "contacts": 9,
+          "minLanding": 0.2962000000000029,
+          "minPelvis": 0.5342920802939958,
+          "maxKnee": 1.2095946799462696,
+          "armProduct": -20.38282383458226
+        },
+        {
+          "fps": 120,
+          "contacts": 9,
+          "minLanding": 0.3062000000000029,
+          "minPelvis": 0.533636309560929,
+          "maxKnee": 1.2113697430449812,
+          "armProduct": -40.135056378173566
+        }
+      ]
+    },
+    {
+      "name": "Real Rapier movement follows terrain and brakes at idle",
+      "pass": true,
+      "detail": {
+        "travelled": 9.660022735595703,
+        "maxGap": 0,
+        "stoppedSpeed": 0
+      }
+    },
+    {
+      "name": "Knockback remains physical and does not trigger ground adhesion",
+      "pass": true,
+      "detail": {
+        "rise": 1.5502957094926697,
+        "state": "stunned"
+      }
+    },
+    {
+      "name": "Saving and rebuilding terrain keeps the physics solver usable",
+      "pass": true,
+      "detail": {
+        "seconds": 8,
+        "bodies": 1,
+        "colliders": 10
+      }
+    },
+    {
+      "name": "No movement runtime errors",
+      "pass": true
+    }
+  ],
+  "errors": []
+}

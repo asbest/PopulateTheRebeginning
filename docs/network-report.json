@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "tests": [
+    "PeerJS host signaling",
+    "Two-browser WebRTC connection",
+    "Initial tribe synchronization",
+    "Client command reaches host",
+    "Client spell executes on host with correct mana",
+    "Shield visual status synchronizes to client"
+  ]
+}

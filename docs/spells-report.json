@@ -1,0 +1,211 @@
+{
+  "date": "2026-10-09T14:28:17.426Z",
+  "results": [
+    {
+      "name": "All referenced configuration fields exist",
+      "pass": true,
+      "detail": 160
+    },
+    {
+      "name": "Spell effect and exact mana: blast",
+      "pass": true,
+      "detail": {
+        "cost": 10,
+        "enemyHealth": 973,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: lightning",
+      "pass": true,
+      "detail": {
+        "cost": 50,
+        "enemyHealth": 600,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: raise",
+      "pass": true,
+      "detail": {
+        "cost": 5,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: lower",
+      "pass": true,
+      "detail": {
+        "cost": 5,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: flatten",
+      "pass": true,
+      "detail": {
+        "cost": 10,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: landbridge",
+      "pass": true,
+      "detail": {
+        "cost": 20,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: swamp",
+      "pass": true,
+      "detail": {
+        "cost": 80,
+        "enemyHealth": -9000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: invisibility",
+      "pass": true,
+      "detail": {
+        "cost": 20,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: shield",
+      "pass": true,
+      "detail": {
+        "cost": 20,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: hypnotise",
+      "pass": true,
+      "detail": {
+        "cost": 50,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: swarm",
+      "pass": true,
+      "detail": {
+        "cost": 40,
+        "enemyHealth": 962.2500000000034,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: tornado",
+      "pass": true,
+      "detail": {
+        "cost": 60,
+        "enemyHealth": 547,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: firestorm",
+      "pass": true,
+      "detail": {
+        "cost": 80,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: volcano",
+      "pass": true,
+      "detail": {
+        "cost": 90,
+        "enemyHealth": 965,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: heal",
+      "pass": true,
+      "detail": {
+        "cost": 10,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: teleport",
+      "pass": true,
+      "detail": {
+        "cost": 90,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: create",
+      "pass": true,
+      "detail": {
+        "cost": 50,
+        "enemyHealth": 1000,
+        "unitCount": 6
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: phantom",
+      "pass": true,
+      "detail": {
+        "cost": 30,
+        "enemyHealth": 1000,
+        "unitCount": 8
+      }
+    },
+    {
+      "name": "Spell effect and exact mana: blink",
+      "pass": true,
+      "detail": {
+        "cost": 20,
+        "enemyHealth": 1000,
+        "unitCount": 5
+      }
+    },
+    {
+      "name": "Every spell rejects insufficient mana, out-of-range targets and a dead caster",
+      "pass": true,
+      "detail": 19
+    },
+    {
+      "name": "Airship unload action synchronizes physics and does not charge mana",
+      "pass": true
+    },
+    {
+      "name": "No shipyard means no airship mana charge",
+      "pass": true
+    },
+    {
+      "name": "Shield/invisibility refresh, expire on simulation time and survive save/load",
+      "pass": true
+    },
+    {
+      "name": "Phantoms expire even when shielded and are not permanent after loading",
+      "pass": true
+    },
+    {
+      "name": "Spy hypnotise uses its short range and divine campaign spells remain free",
+      "pass": true
+    },
+    {
+      "name": "No spell runtime errors",
+      "pass": true
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,147 @@
+{
+  "date": "2026-10-11T15:58:47.355Z",
+  "results": [
+    {
+      "name": "default: 20 minutes",
+      "pass": true,
+      "seed": 84721,
+      "detail": {
+        "classes": {
+          "shaman": true,
+          "wild": true,
+          "warrior": true,
+          "firewarrior": true,
+          "spy": true
+        },
+        "attackDistance": 3407.411310634968,
+        "defended": false,
+        "recovered": false,
+        "raidDamage": false,
+        "peakBuildings": 11,
+        "peakPopulation": 15,
+        "shamanAlive": true,
+        "plan": {
+          "workers": 4,
+          "army": 9,
+          "buildings": 11,
+          "threats": 0,
+          "reserve": 3,
+          "state": "attack",
+          "classes": {
+            "warrior": 5,
+            "firewarrior": 3,
+            "spy": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "swarmer: 15 minutes with raid and worker losses",
+      "pass": true,
+      "seed": 29107,
+      "detail": {
+        "classes": {
+          "shaman": true,
+          "wild": true,
+          "warrior": true,
+          "firewarrior": true,
+          "spy": true
+        },
+        "attackDistance": 2786.9547280259726,
+        "defended": true,
+        "recovered": true,
+        "raidDamage": true,
+        "peakBuildings": 15,
+        "peakPopulation": 13,
+        "shamanAlive": true,
+        "plan": {
+          "workers": 2,
+          "army": 6,
+          "buildings": 15,
+          "threats": 0,
+          "reserve": 2,
+          "state": "attack",
+          "classes": {
+            "warrior": 4,
+            "firewarrior": 2,
+            "spy": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "sorcerer: 15 minutes",
+      "pass": true,
+      "seed": 71283,
+      "detail": {
+        "classes": {
+          "shaman": true,
+          "wild": true,
+          "warrior": true,
+          "firewarrior": true,
+          "spy": true
+        },
+        "attackDistance": 1102.7660595521975,
+        "defended": false,
+        "recovered": false,
+        "raidDamage": false,
+        "peakBuildings": 7,
+        "peakPopulation": 14,
+        "shamanAlive": true,
+        "plan": {
+          "workers": 4,
+          "army": 5,
+          "buildings": 7,
+          "threats": 0,
+          "reserve": 2,
+          "state": "expand",
+          "classes": {
+            "warrior": 1,
+            "firewarrior": 3,
+            "spy": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "fortress: 15 minutes",
+      "pass": true,
+      "seed": 41827,
+      "detail": {
+        "classes": {
+          "shaman": true,
+          "wild": true,
+          "warrior": true,
+          "firewarrior": true,
+          "spy": true
+        },
+        "attackDistance": 3208.5869583847725,
+        "defended": false,
+        "recovered": false,
+        "raidDamage": false,
+        "peakBuildings": 14,
+        "peakPopulation": 16,
+        "shamanAlive": true,
+        "plan": {
+          "workers": 2,
+          "army": 8,
+          "buildings": 14,
+          "threats": 0,
+          "reserve": 3,
+          "state": "attack",
+          "classes": {
+            "warrior": 3,
+            "firewarrior": 4,
+            "spy": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "No runtime errors during long simulations",
+      "pass": true,
+      "detail": []
+    }
+  ],
+  "errors": []
+}

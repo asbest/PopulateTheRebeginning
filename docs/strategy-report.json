@@ -1,0 +1,199 @@
+{
+  "results": [
+    {
+      "name": "Four-minute economy expands its own faction and physically trains mixed classes",
+      "pass": true,
+      "detail": {
+        "classes": {
+          "wild": 3,
+          "warrior": 17,
+          "firewarrior": 12,
+          "spy": 6
+        },
+        "buildings": [
+          "hut",
+          "hut",
+          "warrior",
+          "fire",
+          "spy",
+          "hut",
+          "hut",
+          "tower",
+          "tower",
+          "hut",
+          "hut",
+          "hut",
+          "hut",
+          "hut",
+          "hut",
+          "hut",
+          "hut",
+          "hut",
+          "hut"
+        ],
+        "plan": {
+          "workers": 3,
+          "army": 35,
+          "buildings": 19,
+          "threats": 0,
+          "reserve": 11,
+          "state": "attack",
+          "classes": {
+            "warrior": 18,
+            "firewarrior": 12,
+            "spy": 6
+          }
+        }
+      }
+    },
+    {
+      "name": "Attack force leaves defenders and builders at home",
+      "pass": true,
+      "detail": {
+        "attack": 29,
+        "guard": 13
+      }
+    },
+    {
+      "name": "Raid recalls troops and shelters workers",
+      "pass": true,
+      "detail": {
+        "workers": 2,
+        "army": 43,
+        "buildings": 19,
+        "threats": 1,
+        "reserve": 13,
+        "state": "defend",
+        "classes": {
+          "warrior": 22,
+          "firewarrior": 14,
+          "spy": 7
+        }
+      }
+    },
+    {
+      "name": "Wounded shaman and troops retreat instead of charging",
+      "pass": true,
+      "detail": {
+        "soldier": "retreat",
+        "shaman": "retreat"
+      }
+    },
+    {
+      "name": "Lost economy recovers followers",
+      "pass": true
+    },
+    {
+      "name": "Units leave building footprints and shed obsolete roles after conversion",
+      "pass": true
+    },
+    {
+      "name": "Natural starting landscape supports mixed troops and an offensive within eight minutes",
+      "pass": true,
+      "detail": {
+        "units": [
+          "shaman",
+          "wild",
+          "firewarrior",
+          "spy",
+          "warrior",
+          "warrior",
+          "wild",
+          "spy",
+          "wild",
+          "warrior",
+          "warrior",
+          "wild"
+        ],
+        "buildings": [
+          "hut",
+          "hut",
+          "warrior",
+          "fire",
+          "spy",
+          "hut",
+          "hut"
+        ],
+        "plan": {
+          "workers": 4,
+          "army": 7,
+          "buildings": 7,
+          "threats": 0,
+          "reserve": 3,
+          "state": "attack",
+          "classes": {
+            "warrior": 4,
+            "firewarrior": 2,
+            "spy": 2
+          }
+        },
+        "pending": null,
+        "workers": [
+          {
+            "p": {
+              "x": -114.31437683105469,
+              "y": -2.53682903842855,
+              "z": 43.02686309814453
+            },
+            "role": "builder",
+            "state": "idle",
+            "dest": {
+              "x": -120.64932111293898,
+              "y": 0,
+              "z": 48.52881144510561
+            }
+          },
+          {
+            "p": {
+              "x": -120.87245178222656,
+              "y": -0.16481153855170305,
+              "z": 29.935476303100586
+            },
+            "role": "builder",
+            "state": "idle",
+            "dest": {
+              "x": -120.64932111293898,
+              "y": 0,
+              "z": 48.52881144510561
+            }
+          },
+          {
+            "p": {
+              "x": -118.93090057373047,
+              "y": -2.222622235902236,
+              "z": 30.511077880859375
+            },
+            "role": "train",
+            "state": "idle",
+            "dest": {
+              "x": -128.18058754175152,
+              "y": 0,
+              "z": 28.711725044480772
+            }
+          },
+          {
+            "p": {
+              "x": -122.53947448730469,
+              "y": 3.053555390857582,
+              "z": 31.50235366821289
+            },
+            "role": "train",
+            "state": "move",
+            "dest": {
+              "x": -128.18058754175152,
+              "y": 0,
+              "z": 28.711725044480772
+            }
+          }
+        ],
+        "sawAttack": true,
+        "sawSpy": true
+      }
+    },
+    {
+      "name": "No AI runtime errors",
+      "pass": true
+    }
+  ],
+  "errors": []
+}
