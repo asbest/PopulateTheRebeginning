@@ -21,7 +21,7 @@ try {
  await page.goto(url+'/?test=1',{waitUntil:'load',timeout:60000});
  // The index redirect deliberately resolves relative to the current host.
  await page.goto(url+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
- await page.waitForFunction(()=>window.gameTestAPI && window.state?.shaman && window.state.renderer,{timeout:60000});
+ await page.waitForFunction(()=>window.gameTestAPI && window.state?.shaman && window.state.renderer,null,{timeout:90000});
  await check('Local entry point and WebGL renderer',async()=>{
   const data=await page.evaluate(()=>({url:location.href,renderer:state.renderer.getContext().getParameter(state.renderer.getContext().VERSION),physics:!!state.physicsWorld,units:state.units.length}));
   if(!data.url.startsWith(url)||!data.physics||data.units<2)throw new Error(JSON.stringify(data));return data;
@@ -119,6 +119,14 @@ try {
   if(await page.evaluate(()=>state.selectedUnits.length)<2)throw new Error('Select all failed');
   await page.keyboard.press('Escape');
   if(await page.evaluate(()=>state.selectedUnits.length)!==0)throw new Error('Escape failed');
+  const stableList=await page.evaluate(()=>{
+   const first=document.querySelector('#unit-list .unit-item'),id=first?.dataset.unitId;
+   gameTestAPI.updateUnitList();const sameRefresh=first===document.querySelector(`[data-unit-id="${id}"]`);
+   const probe={id:'ui-stability-probe',isShaman:false,faction:1,type:'wild',hp:1,maxHp:1,state:'idle',selectRing:{visible:false},mesh:{position:new THREE.Vector3()}};
+   state.units.push(probe);gameTestAPI.updateUnitList();const sameRosterChange=first===document.querySelector(`[data-unit-id="${id}"]`);
+   state.units.pop();gameTestAPI.updateUnitList();return {sameRefresh,sameRosterChange,connected:first?.isConnected};
+  });
+  if(!stableList.sameRefresh||!stableList.sameRosterChange||!stableList.connected)throw new Error('Unit list replaced an active pointer target: '+JSON.stringify(stableList));
   await page.locator('#unit-list .unit-item').first().click();
   await page.keyboard.press('1');
   if(await page.evaluate(()=>state.currentAction)!=='blast')throw new Error('Spell hotkey failed');
@@ -144,7 +152,7 @@ try {
   const phone=await mobile.newPage();phone.on('dialog',d=>d.accept());phone.on('pageerror',e=>errors.push(String(e)));
   try {
    await phone.goto(url+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
-   await phone.waitForFunction(()=>window.gameTestAPI&&state.shaman,{timeout:60000});
+   await phone.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
    await phone.evaluate(()=>{window.closeHelp();window.closeStoryOverlay();state.mana=500;state.isPaused=false;});
    await phone.locator('#unit-list .unit-item').first().tap();
    await phone.locator('#btn-blast').tap();
@@ -162,7 +170,7 @@ try {
   await check('Campaign '+level+' startup',async()=>{
    await page.evaluate(level=>{localStorage.setItem(CONFIG.SAVED_KEYS.START_CAMPAIGN,String(level));},level);
    await page.goto(url+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
-   await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,{timeout:60000});
+   await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
    const data=await page.evaluate(()=>({level:state.campaignLevel,isCampaign:state.isCampaign,biome:state.matchSettings.biome,ai:window.enemyAIs.length,units:state.units.length}));
    if(data.level!==level||!data.isCampaign||data.ai<1||data.units<2)throw new Error(JSON.stringify(data));return data;
   });

@@ -6575,7 +6575,6 @@ window.unloadSelected = unloadSelected;
 
 function updateUnitList() {
     const list = document.getElementById('unit-list');
-    list.innerHTML = '';
 
     // Sort: Shaman first, then Player units, then Enemy units
     const sortedUnits = [...state.units].sort((a,b) => {
@@ -6583,70 +6582,74 @@ function updateUnitList() {
         if (!a.isShaman && b.isShaman) return 1;
         if (a.faction !== b.faction) return a.faction - b.faction;
         return 0;
-    });
+    }).filter(u => u.state !== 'dead');
+    const existing = new Map(Array.from(list.children).map(item => [item.dataset.unitId, item]));
 
-    sortedUnits.forEach(u => {
-        if(u.state === 'dead') return;
-
-        const item = document.createElement('div');
-        item.className = 'unit-item';
-        if(u.faction === 1) item.classList.add('enemy');
-        if(state.selectedUnits.includes(u)) item.classList.add('selected');
-
-        const icon = UNIT_ICONS[u.type] || '?';
-        item.innerHTML = icon; // Icons are trusted project-authored SVG, not external text.
-        item.setAttribute('role', 'button');
-        item.setAttribute('tabindex', '0');
+    sortedUnits.forEach((u,index) => {
+        let item = existing.get(u.id);
+        if(!item) {
+            item = document.createElement('div');
+            item.className = 'unit-item';
+            item.dataset.unitId = u.id;
+            item.innerHTML = UNIT_ICONS[u.type] || '?'; // Icons are trusted project-authored SVG, not external text.
+            item.setAttribute('role', 'button');
+            item.setAttribute('tabindex', '0');
+            const hpDiv = document.createElement('div');
+            hpDiv.className = 'hp-indicator';
+            const hpVal = document.createElement('div');
+            hpVal.className = 'hp-val';
+            hpDiv.appendChild(hpVal);
+            item.appendChild(hpDiv);
+            item._hpVal = hpVal;
+            item.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item.click(); } };
+            item.onclick = (e) => {
+                e.stopPropagation();
+                const unit=item._unitRef;
+                if(!unit||unit.state==='dead')return;
+                if(unit.faction === 0) {
+                     if(state.multiSelectMode) {
+                         if(state.selectedUnits.includes(unit)) {
+                             state.selectedUnits = state.selectedUnits.filter(x => x !== unit);
+                             unit.selectRing.visible = false;
+                         } else {
+                             state.selectedUnits.push(unit);
+                             unit.selectRing.visible = true;
+                         }
+                     } else {
+                         if (state.selectedUnits.length === 1 && state.selectedUnits[0] === unit) {
+                             unit.selectRing.visible = false;
+                             state.selectedUnits = [];
+                         } else {
+                             state.selectedUnits.forEach(x => x.selectRing.visible = false);
+                             state.selectedUnits = [unit];
+                             unit.selectRing.visible = true;
+                         }
+                     }
+                     selectAction('move');
+                     updateContextMenus();
+                }
+                updateUnitListSelection();
+            };
+            item.ondblclick = (e) => {
+                e.stopPropagation();
+                const unit=item._unitRef;
+                if(!unit||unit.state==='dead')return;
+                state.cameraLookAt.copy(unit.mesh.position);
+                updateCameraPosition();
+            };
+        }
+        item._unitRef = u;
+        item.classList.toggle('enemy',u.faction === 1);
+        item.classList.toggle('selected',state.selectedUnits.includes(u));
         item.setAttribute('aria-label', `${u.type}, tribe ${u.faction}, ${Math.round(u.hp)} health`);
-        item.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item.click(); } };
-
-        // HP Bar
-        const hpDiv = document.createElement('div');
-        hpDiv.className = 'hp-indicator';
-        const hpVal = document.createElement('div');
-        hpVal.className = 'hp-val';
+        const hpVal = item._hpVal;
         hpVal.style.width = (u.hp / u.maxHp * 100) + '%';
-        hpDiv.appendChild(hpVal);
-        item.appendChild(hpDiv);
-
-        item.onclick = (e) => {
-            e.stopPropagation();
-
-            if(u.faction === 0) {
-                 if(state.multiSelectMode) {
-                     if(state.selectedUnits.includes(u)) {
-                         state.selectedUnits = state.selectedUnits.filter(x => x !== u);
-                         u.selectRing.visible = false;
-                     } else {
-                         state.selectedUnits.push(u);
-                         u.selectRing.visible = true;
-                     }
-                 } else {
-                     if (state.selectedUnits.length === 1 && state.selectedUnits[0] === u) {
-                         u.selectRing.visible = false;
-                         state.selectedUnits = [];
-                     } else {
-                         state.selectedUnits.forEach(x => x.selectRing.visible = false);
-                         state.selectedUnits = [u];
-                         u.selectRing.visible = true;
-                     }
-                 }
-                 selectAction('move');
-                 updateContextMenus();
-            }
-            updateUnitListSelection();
-        };
-
-        item.ondblclick = (e) => {
-            e.stopPropagation();
-            state.cameraLookAt.copy(u.mesh.position);
-            updateCameraPosition();
-        };
-
         u.listItem = item;
         u.hpValItem = hpVal;
-        list.appendChild(item);
+        if(list.children[index]!==item)list.insertBefore(item,list.children[index]||null);
+        existing.delete(u.id);
     });
+    existing.forEach(item=>item.remove());
 }
 
 function performBoxSelection(x1, y1, x2, y2, isShift) {
