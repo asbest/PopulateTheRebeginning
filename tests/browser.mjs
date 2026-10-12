@@ -16,6 +16,16 @@ page.on('console',m=>{if(m.type()==='error' && /THREE|Shader|WebGL|Init failed|R
 page.on('requestfailed',r=>requests.push({url:r.url(),reason:r.failure()?.errorText}));
 page.on('dialog',d=>d.accept());
 async function check(name,fn){try{const detail=await fn();results.push({name,pass:true,detail});console.log('PASS '+name);}catch(e){results.push({name,pass:false,detail:String(e)});console.log('FAIL '+name+' '+String(e));}}
+async function controlCenter(target,selector){
+ return target.evaluate(selector=>{
+  const element=document.querySelector(selector);
+  if(!element)throw new Error('Missing control: '+selector);
+  element.scrollIntoView({block:'nearest',inline:'nearest'});
+  const rect=element.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)throw new Error('Hidden control: '+selector);
+  return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+ },selector);
+}
 const url=process.env.GAME_URL || 'http://127.0.0.1:8765';
 try {
  await page.goto(url+'/?test=1',{waitUntil:'load',timeout:60000});
@@ -113,7 +123,7 @@ try {
   if(after.units!==before.units||after.passengers!==1||after.upgrades!==1||after.transported!=='transported'||after.y!==18||!after.rally||after.training!==1||after.level!==4||!after.suddenDeath)throw new Error(JSON.stringify({before,after}));return after;
  });
  await check('Keyboard selection, action hotkeys and pointer controls',async()=>{
-  await page.evaluate(()=>{state.isPaused=false;window.closeStoryOverlay();document.getElementById('pause-menu').style.display='none';});
+  await page.evaluate(()=>{state.isPaused=true;window.closeStoryOverlay();document.getElementById('pause-menu').style.display='none';gameTestAPI.updateUnitList();});
   await page.keyboard.press('Control+a');
   if(await page.evaluate(()=>state.selectedUnits.length)<2)throw new Error('Select all failed');
   await page.keyboard.press('Escape');
@@ -126,7 +136,9 @@ try {
    state.units.pop();gameTestAPI.updateUnitList();return {sameRefresh,sameRosterChange,connected:first?.isConnected};
   });
   if(!stableList.sameRefresh||!stableList.sameRosterChange||!stableList.connected)throw new Error('Unit list replaced an active pointer target: '+JSON.stringify(stableList));
-  await page.locator('#unit-list .unit-item').first().click();
+  const unitPoint=await controlCenter(page,'#unit-list .unit-item');
+  await page.mouse.click(unitPoint.x,unitPoint.y);
+  if(await page.evaluate(()=>state.selectedUnits.length)!==1)throw new Error('Pointer unit selection failed');
   await page.keyboard.press('1');
   if(await page.evaluate(()=>state.currentAction)!=='blast')throw new Error('Spell hotkey failed');
   await page.keyboard.press('Space');
@@ -152,9 +164,12 @@ try {
   try {
    await phone.goto(url+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
    await phone.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
-   await phone.evaluate(()=>{window.closeHelp();window.closeStoryOverlay();state.mana=500;state.isPaused=false;});
-   await phone.locator('#unit-list .unit-item').first().tap();
-   await phone.locator('#btn-blast').tap();
+   await phone.evaluate(()=>{window.closeHelp();window.closeStoryOverlay();document.getElementById('pause-menu').style.display='none';state.mana=500;state.isPaused=true;gameTestAPI.updateUnitList();});
+   const unitPoint=await controlCenter(phone,'#unit-list .unit-item');
+   await phone.touchscreen.tap(unitPoint.x,unitPoint.y);
+   if(await phone.evaluate(()=>state.selectedUnits.length)!==1)throw new Error('Touch unit selection failed');
+   const blastPoint=await controlCenter(phone,'#btn-blast');
+   await phone.touchscreen.tap(blastPoint.x,blastPoint.y);
    if(await phone.evaluate(()=>state.currentAction)!=='blast')throw new Error('Touch action selection failed');
    const point=await phone.evaluate(()=>{const p=state.shaman.mesh.position.clone();p.x+=1;const v=p.project(state.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2};});
    await phone.touchscreen.tap(point.x,point.y);
