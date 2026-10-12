@@ -404,6 +404,7 @@
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFps()">Toggle FPS</button>
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-toggle-music" onclick="toggleMusic()">Music: On</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFullscreen()">Toggle Fullscreen</button>
+            <button class="menu-btn" style="margin:0; width:100%;" id="btn-graphics-quality" onclick="cycleGraphicsQuality()">Graphics: High</button>
 
             <button class="menu-btn" style="margin:0; width:100%;" onclick="openTribeMenu()">Tribes</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleMatchSettings()">Match Settings</button>
@@ -1356,7 +1357,14 @@ window.setGraphicsQuality=function(tier='high'){
         for(const layer of [cover.grass,cover.stones,cover.bushes])if(layer?.mesh)layer.mesh.count=Math.floor(layer.data.length*profile.cover);
     }
     try{localStorage.setItem('graphics-quality',tier);}catch(e){}
+    const graphicsBtn=document.getElementById('btn-graphics-quality');
+    if(graphicsBtn)graphicsBtn.innerText=`Graphics: ${{low:'Low',medium:'Medium',high:'High',ultra:'Ultra'}[state.graphicsQuality.tier]||'High'}`;
     return state.graphicsQuality;
+};
+window.cycleGraphicsQuality=function(){
+    const tiers=['low','medium','high','ultra'];
+    const current=state.graphicsQuality?.tier||'high';
+    return window.setGraphicsQuality(tiers[(Math.max(0,tiers.indexOf(current))+1)%tiers.length]);
 };
 
 
@@ -7566,6 +7574,8 @@ window.togglePause = function() {
         if (state.isPaused) {
             const musicBtn = document.getElementById('btn-toggle-music');
             if (musicBtn) musicBtn.innerText = SoundManager.musicEnabled ? "Music: On" : "Music: Off";
+            const graphicsBtn = document.getElementById('btn-graphics-quality');
+            if (graphicsBtn) graphicsBtn.innerText = `Graphics: ${{low:'Low',medium:'Medium',high:'High',ultra:'Ultra'}[state.graphicsQuality?.tier]||'High'}`;
         }
     }
 }

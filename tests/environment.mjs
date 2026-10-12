@@ -33,10 +33,14 @@ try{
   const spray={alive:Array.from(gameTestAPI.WaterSprayManager.life||[]).filter(v=>v>0).length,name:gameTestAPI.WaterSprayManager.points?.name};
   const low=window.setGraphicsQuality('low'),lowGrass=covers.reduce((n,c)=>n+(c.grass?.mesh?.count||0),0);
   const ultra=window.setGraphicsQuality('ultra');window.setGraphicsQuality('high');
+  if(state.isPaused)togglePause();togglePause();document.getElementById('btn-graphics-quality').click();
+  const graphicsUi={menu:document.getElementById('pause-menu').style.display,label:document.getElementById('btn-graphics-quality')?.innerText,
+   tier:state.graphicsQuality.tier,saved:localStorage.getItem('graphics-quality')};
+  window.setGraphicsQuality('high');togglePause();
   return {chunks:chunks.length,grass,stones,bushes,basePositions:bases?.count||0,contacts:contacts.length,construction,damaged,
    marksAdded:gameTestAPI.SurfaceMarks.marks.length-marksBefore,
    sky:state.skyDome?.name,rim:state.rimLight?.intensity,quality:state.graphicsQuality,
-   profiles:{low:{tier:low.tier,grass:lowGrass,pixel:low.maxPixelRatio},ultra:{tier:ultra.tier,pixel:ultra.maxPixelRatio}},
+   profiles:{low:{tier:low.tier,grass:lowGrass,pixel:low.maxPixelRatio},ultra:{tier:ultra.tier,pixel:ultra.maxPixelRatio}},graphicsUi,
    water:{depthWrite:water.depthWrite,hasFresnel:/fresnel/.test(water.fragmentShader),hasWaveNormal:/vWaveNormal/.test(water.vertexShader),
     vertical:/pos\.y\+=height/.test(water.vertexShader),gerstner:/horizontal/.test(water.vertexShader),breakers:/shoreFoam/.test(water.fragmentShader)},
    cloudMotion,spray,skyShader:{scattering:/horizonHaze/.test(state.skyDome.material.fragmentShader),
@@ -46,6 +50,7 @@ try{
  if(errors.length||result.grass<100||result.stones<10||result.bushes<10||result.basePositions<1||result.contacts<2||
     result.construction.name!=='Construction scaffolding'||result.construction.parts<10||!result.damaged||result.marksAdded!==1||
     result.profiles.low.tier!=='low'||result.profiles.low.grass>=result.grass||result.profiles.ultra.tier!=='ultra'||result.profiles.ultra.pixel<1.8||
+    result.graphicsUi.menu!=='flex'||result.graphicsUi.tier!=='ultra'||result.graphicsUi.saved!=='ultra'||!result.graphicsUi.label?.includes('Ultra')||
     result.sky!=='Procedural atmosphere'||!result.rim||result.water.depthWrite||!result.water.hasFresnel||!result.water.hasWaveNormal||
     !result.water.vertical||!result.water.gerstner||!result.water.breakers||result.cloudMotion.distance<=0||result.cloudMotion.puff<=0||!result.cloudMotion.shadow||
     result.spray.name!=='Shore spray'||result.spray.alive<1||!result.skyShader.scattering||!result.skyShader.cirrus||!result.skyShader.night||
