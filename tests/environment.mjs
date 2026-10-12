@@ -15,7 +15,11 @@ try{
   const chunks=Object.values(state.chunks),covers=chunks.map(c=>c.userData?.groundCover).filter(Boolean);
   const grass=covers.reduce((n,c)=>n+(c.grass?.mesh?.count||0),0),stones=covers.reduce((n,c)=>n+(c.stones?.mesh?.count||0),0),
    bushes=covers.reduce((n,c)=>n+(c.bushes?.mesh?.count||0),0);
-  const bases=covers.find(c=>c.grass?.mesh)?.grass.mesh.geometry.attributes.aBasePos;
+  const grassMesh=covers.find(c=>c.grass?.mesh)?.grass.mesh,grassGeo=grassMesh.geometry,bases=grassGeo.attributes.aBasePos;
+  const vertexColors=grassGeo.attributes.color.array;
+  const grassVolume={triangles:grassGeo.index.count/3,normals:grassGeo.attributes.normal.count,
+   vertices:grassGeo.attributes.position.count,minColor:Math.min(...vertexColors),instanceColors:grassMesh.instanceColor?.count||0,
+   photoMap:!!grassMesh.material.map,emissive:grassMesh.material.emissiveIntensity,stableCulling:!grassMesh.frustumCulled};
   const contacts=[];state.shaman.mesh.traverse(n=>{if(n.userData?.contactShadow)contacts.push(n);});
   const hut=gameTestAPI.createBuilding('hut',state.shaman.mesh.position.x+6,state.shaman.mesh.position.z,0);
   hut.mesh.traverse(n=>{if(n.userData?.contactShadow)contacts.push(n);});
@@ -37,7 +41,7 @@ try{
   const graphicsUi={menu:document.getElementById('pause-menu').style.display,label:document.getElementById('btn-graphics-quality')?.innerText,
    tier:state.graphicsQuality.tier,saved:localStorage.getItem('graphics-quality')};
   window.setGraphicsQuality('high');togglePause();
-  return {chunks:chunks.length,grass,stones,bushes,basePositions:bases?.count||0,contacts:contacts.length,construction,damaged,
+  return {chunks:chunks.length,grass,stones,bushes,basePositions:bases?.count||0,grassVolume,contacts:contacts.length,construction,damaged,
    marksAdded:gameTestAPI.SurfaceMarks.marks.length-marksBefore,
    sky:state.skyDome?.name,rim:state.rimLight?.intensity,quality:state.graphicsQuality,
    profiles:{low:{tier:low.tier,grass:lowGrass,pixel:low.maxPixelRatio},ultra:{tier:ultra.tier,pixel:ultra.maxPixelRatio}},graphicsUi,
@@ -48,6 +52,8 @@ try{
    wind:{cache:treeMaterial.customProgramCacheKey?.(),advanced:Art.uniforms.windTime.value>firstWind}};
  });
  if(errors.length||result.grass<100||result.stones<10||result.bushes<10||result.basePositions<1||result.contacts<2||
+    result.grassVolume.triangles<220||result.grassVolume.normals!==result.grassVolume.vertices||result.grassVolume.minColor<.18||
+    result.grassVolume.instanceColors<1||result.grassVolume.photoMap||result.grassVolume.emissive<.14||!result.grassVolume.stableCulling||
     result.construction.name!=='Construction scaffolding'||result.construction.parts<10||!result.damaged||result.marksAdded!==1||
     result.profiles.low.tier!=='low'||result.profiles.low.grass>=result.grass||result.profiles.ultra.tier!=='ultra'||result.profiles.ultra.pixel<1.8||
     result.graphicsUi.menu!=='flex'||result.graphicsUi.tier!=='ultra'||result.graphicsUi.saved!=='ultra'||!result.graphicsUi.label?.includes('Ultra')||

@@ -3513,17 +3513,35 @@ function updateChunkDecorations(chunk, cx, cz) {
 function createGroundCover(grp,cx,cz) {
     if(!groundCoverGrassGeo) {
         groundCoverGrassGeo=new THREE.BufferGeometry();
-        const bladePositions=[],bladeUvs=[];
-        for(let blade=0;blade<6;blade++){
-            const a=blade*Math.PI/3,dx=Math.cos(a),dz=Math.sin(a),px=-dz*.065,pz=dx*.065,h=.48+(blade%3)*.09,lean=.06+(blade%2)*.035;
-            bladePositions.push(px,0,pz,-px,0,-pz,dx*lean,h,dz*lean);bladeUvs.push(0,0,1,0,.5,1);
+        const bladePositions=[],bladeUvs=[],bladeColors=[],bladeIndices=[],segments=4,sides=4,bladeCount=7;
+        for(let blade=0;blade<bladeCount;blade++){
+            const a=blade*2.39996+.37,dx=Math.cos(a),dz=Math.sin(a),lx=-dz,lz=dx;
+            const rootRadius=blade===0?.018:.06+(blade%4)*.04,rootX=dx*rootRadius,rootZ=dz*rootRadius;
+            const h=.42+(blade%4)*.055,width=.029-(blade%3)*.0025,lean=.065+(blade%3)*.028;
+            const vertexStart=bladePositions.length/3;
+            for(let ring=0;ring<=segments;ring++){
+                const t=ring/segments,curve=t*t,halfWidth=Math.max(.0008,width*(1-Math.pow(t,1.3)*.985));
+                const halfDepth=Math.max(.0007,halfWidth*.14),centerX=rootX+dx*lean*curve,centerZ=rootZ+dz*lean*curve;
+                const shade=(.58+t*.42)*(.84+(blade%4)*.035),green=.9+t*.08;
+                const corners=[[-1,-1],[1,-1],[1,1],[-1,1]];
+                for(let side=0;side<sides;side++){
+                    const [across,depth]=corners[side];
+                    bladePositions.push(centerX+lx*halfWidth*across+dx*halfDepth*depth,h*t,centerZ+lz*halfWidth*across+dz*halfDepth*depth);
+                    bladeUvs.push(side/(sides-1),t);
+                    bladeColors.push(.66*shade,green*shade,.4*shade);
+                }
+            }
+            for(let ring=0;ring<segments;ring++)for(let side=0;side<sides;side++){
+                const next=(side+1)%sides,a0=vertexStart+ring*sides+side,b0=vertexStart+ring*sides+next;
+                const a1=a0+sides,b1=b0+sides;bladeIndices.push(a0,b0,a1,b0,b1,a1);
+            }
         }
         groundCoverGrassGeo.setAttribute('position',new THREE.Float32BufferAttribute(bladePositions,3));
-        groundCoverGrassGeo.setAttribute('uv',new THREE.Float32BufferAttribute(bladeUvs,2));groundCoverGrassGeo.computeVertexNormals();
-        groundCoverGrassMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.98,
-            map:Art.textures.grass,normalMap:Art.blender.texture('grass','normal'),
-            roughnessMap:Art.blender.texture('grass','roughness'),side:THREE.DoubleSide,vertexColors:true,
-            emissive:0x0c1d07,emissiveIntensity:.12});
+        groundCoverGrassGeo.setAttribute('uv',new THREE.Float32BufferAttribute(bladeUvs,2));
+        groundCoverGrassGeo.setAttribute('color',new THREE.Float32BufferAttribute(bladeColors,3));
+        groundCoverGrassGeo.setIndex(bladeIndices);groundCoverGrassGeo.computeVertexNormals();groundCoverGrassGeo.computeBoundingSphere();
+        groundCoverGrassMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.92,metalness:0,
+            side:THREE.DoubleSide,vertexColors:true,emissive:0x102909,emissiveIntensity:.16});
         addWindShader(groundCoverGrassMat);
         groundCoverStoneGeo=new THREE.DodecahedronGeometry(.24,0);
         groundCoverStoneMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.94,
@@ -3546,10 +3564,10 @@ function createGroundCover(grp,cx,cz) {
             const slope=Math.sqrt(hx*hx+hz*hz);
             if(h<=WATER_LEVEL+(isGrass?.4:.12)||(isGrass&&h>17)||(!isGrass&&h>36)||(isGrass&&slope>.8))continue;
             target.push({x,z,rx:isGrass ? 0 : (rand()-.5)*.8,ry:rand()*Math.PI*2,rz:isGrass ? 0 : (rand()-.5)*.8,
-                scale:(isGrass ? .42 : .45)+rand()*(isGrass ? .75 : .95),height:isGrass ? .7+rand()*.9 : 1});
+                scale:(isGrass ? .42 : .45)+rand()*(isGrass ? .75 : .95),height:isGrass ? .7+rand()*.9 : 1,tone:rand()});
         }
     };
-    populate(grassData,Math.floor(150*density),true);populate(stoneData,Math.floor(20*density),false);
+    populate(grassData,Math.floor(220*density),true);populate(stoneData,Math.floor(20*density),false);
     populate(bushData,Math.floor((state.matchSettings.biome==='jungle'?32:12)*density),true);
     const makeLayer=(data,geometry,material,isGrass,isBush=false)=>{
         if(!data.length)return null;
@@ -3558,11 +3576,19 @@ function createGroundCover(grp,cx,cz) {
         data.forEach((d,i)=>{
             const h=getHeight(d.x,d.z);dummy.position.set(d.x,h+(isGrass?0:.08),d.z);dummy.rotation.set(d.rx,d.ry,d.rz);
             dummy.scale.setScalar(d.scale);if(isGrass)dummy.scale.y*=d.height;dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
+            if(isGrass){
+                const tint=new THREE.Color();
+                if(isBush)tint.setHSL(.285+d.tone*.035,.48,.56+d.tone*.07);
+                else tint.setHSL(.255+d.tone*.035,.62+d.tone*.08,.47+d.tone*.08);
+                mesh.setColorAt(i,tint);
+            }
             bases.set([d.x,h,d.z],i*3);
         });
         geo.setAttribute('aBasePos',new THREE.InstancedBufferAttribute(bases,3));
-        mesh.instanceMatrix.needsUpdate=true;
-        mesh.castShadow=isBush;mesh.receiveShadow=!isGrass||isBush;mesh.frustumCulled=true;mesh.userData.groundCover=isBush?'bush':isGrass?'grass':'stone';grp.add(mesh);
+        mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+        mesh.castShadow=isBush;mesh.receiveShadow=!isGrass||isBush;
+        // Three r128 does not calculate per-instance bounds; culling against the tiny source mesh made distant clusters vanish or flash black.
+        mesh.frustumCulled=false;mesh.userData.groundCover=isBush?'bush':isGrass?'grass':'stone';grp.add(mesh);
         return {mesh,data};
     };
     grp.userData.groundCover={grass:makeLayer(grassData,groundCoverGrassGeo,groundCoverGrassMat,true),
