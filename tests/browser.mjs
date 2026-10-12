@@ -19,12 +19,11 @@ async function check(name,fn){try{const detail=await fn();results.push({name,pas
 const url=process.env.GAME_URL || 'http://127.0.0.1:8765';
 try {
  await page.goto(url+'/?test=1',{waitUntil:'load',timeout:60000});
- // The index redirect deliberately resolves relative to the current host.
- await page.goto(url+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
+ await page.waitForURL(current=>current.pathname.endsWith('/PopulateTheRebeginning.html') && current.searchParams.has('test'),{timeout:60000});
  await page.waitForFunction(()=>window.gameTestAPI && window.state?.shaman && window.state.renderer,null,{timeout:90000});
  await check('Local entry point and WebGL renderer',async()=>{
   const data=await page.evaluate(()=>({url:location.href,renderer:state.renderer.getContext().getParameter(state.renderer.getContext().VERSION),physics:!!state.physicsWorld,units:state.units.length}));
-  if(!data.url.startsWith(url)||!data.physics||data.units<2)throw new Error(JSON.stringify(data));return data;
+  if(!data.url.startsWith(url)||!new URL(data.url).searchParams.has('test')||!data.physics||data.units<2)throw new Error(JSON.stringify(data));return data;
  });
  await page.evaluate(()=>{window.closeHelp();window.closeStoryOverlay();if(state.isPaused)window.togglePause();});
  await page.waitForTimeout(1200);
