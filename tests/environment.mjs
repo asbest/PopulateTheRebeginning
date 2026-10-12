@@ -25,19 +25,30 @@ try{
   gameTestAPI.SurfaceMarks.add(hut.mesh.position.x,hut.mesh.position.z,{radius:1,life:2});
   const water=state.chunkWaterMat,tree=Art.tree(),treeMaterial=tree.children[1].material;
   const firstWind=Art.uniforms.windTime.value;Art.uniforms.windTime.value=firstWind+1;
+  const cloud=gameTestAPI.CloudManager.clouds[0],cloudBefore=cloud.mesh.position.clone(),puffBefore=cloud.puffs[0].mesh.position.y;
+  gameTestAPI.CloudManager.update(.5);
+  const cloudMotion={distance:cloud.mesh.position.distanceTo(cloudBefore),puff:Math.abs(cloud.puffs[0].mesh.position.y-puffBefore),shadow:cloud.shadow.userData.cloudShadow};
+  let shore=null;for(let x=-160;x<=160&&!shore;x+=3)for(let z=-160;z<=160;z+=3){const h=getHeight(x,z);if(Math.min(Math.abs(h-CONFIG.TERRAIN.VISUAL_WATER_LEVEL),Math.abs(h-CONFIG.TERRAIN.WATER_LEVEL))<.3){shore={x,z};break;}}
+  if(shore){state.cameraLookAt.set(shore.x,0,shore.z);for(let i=0;i<180;i++)gameTestAPI.WaterSprayManager.update(1/60);}
+  const spray={alive:Array.from(gameTestAPI.WaterSprayManager.life||[]).filter(v=>v>0).length,name:gameTestAPI.WaterSprayManager.points?.name};
   const low=window.setGraphicsQuality('low'),lowGrass=covers.reduce((n,c)=>n+(c.grass?.mesh?.count||0),0);
   const ultra=window.setGraphicsQuality('ultra');window.setGraphicsQuality('high');
   return {chunks:chunks.length,grass,stones,bushes,basePositions:bases?.count||0,contacts:contacts.length,construction,damaged,
    marksAdded:gameTestAPI.SurfaceMarks.marks.length-marksBefore,
    sky:state.skyDome?.name,rim:state.rimLight?.intensity,quality:state.graphicsQuality,
    profiles:{low:{tier:low.tier,grass:lowGrass,pixel:low.maxPixelRatio},ultra:{tier:ultra.tier,pixel:ultra.maxPixelRatio}},
-   water:{depthWrite:water.depthWrite,hasFresnel:/fresnel/.test(water.fragmentShader),hasWaveNormal:/vWaveNormal/.test(water.vertexShader)},
+   water:{depthWrite:water.depthWrite,hasFresnel:/fresnel/.test(water.fragmentShader),hasWaveNormal:/vWaveNormal/.test(water.vertexShader),
+    vertical:/pos\.y\+=height/.test(water.vertexShader),gerstner:/horizontal/.test(water.vertexShader),breakers:/shoreFoam/.test(water.fragmentShader)},
+   cloudMotion,spray,skyShader:{scattering:/horizonHaze/.test(state.skyDome.material.fragmentShader),
+    cirrus:/skyFbm/.test(state.skyDome.material.fragmentShader),night:/nightMix/.test(state.skyDome.material.fragmentShader)},
    wind:{cache:treeMaterial.customProgramCacheKey?.(),advanced:Art.uniforms.windTime.value>firstWind}};
  });
  if(errors.length||result.grass<100||result.stones<10||result.bushes<10||result.basePositions<1||result.contacts<2||
     result.construction.name!=='Construction scaffolding'||result.construction.parts<10||!result.damaged||result.marksAdded!==1||
     result.profiles.low.tier!=='low'||result.profiles.low.grass>=result.grass||result.profiles.ultra.tier!=='ultra'||result.profiles.ultra.pixel<1.8||
     result.sky!=='Procedural atmosphere'||!result.rim||result.water.depthWrite||!result.water.hasFresnel||!result.water.hasWaveNormal||
+    !result.water.vertical||!result.water.gerstner||!result.water.breakers||result.cloudMotion.distance<=0||result.cloudMotion.puff<=0||!result.cloudMotion.shadow||
+    result.spray.name!=='Shore spray'||result.spray.alive<1||!result.skyShader.scattering||!result.skyShader.cirrus||!result.skyShader.night||
     result.wind.cache!=='island-tree-wind-v1'||!result.wind.advanced||!result.quality?.maxPixelRatio)
    throw new Error(JSON.stringify({errors,result}));
  console.log('PASS layered environment rendering, instancing, water, atmosphere, contact and adaptive quality',result);
