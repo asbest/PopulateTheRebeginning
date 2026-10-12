@@ -1342,6 +1342,22 @@ window.joystickVector = state.joystickVector;
 window.keyboardVector = state.keyboardVector;
 window.state = state;
 window.flowerUniforms = { uTime: { value: 0 } };
+window.setGraphicsQuality=function(tier='high'){
+    const profiles={low:{pixel:1,cover:.38,shadow:1024},medium:{pixel:1.2,cover:.68,shadow:1536},
+        high:{pixel:1.5,cover:1,shadow:2048},ultra:{pixel:1.8,cover:1,shadow:3072}};
+    const profile=profiles[tier]||profiles.high;
+    state.graphicsQuality={...(state.graphicsQuality||{}),tier,coverDensity:profile.cover,maxPixelRatio:profile.pixel,
+        dynamicScale:state.graphicsQuality?.dynamicScale||1,lastAdjustment:performance.now(),averageFps:state.graphicsQuality?.averageFps||60};
+    if(state.renderer)state.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,profile.pixel)*state.graphicsQuality.dynamicScale);
+    if(state.sunLight&&state.sunLight.shadow.mapSize.width!==profile.shadow){state.sunLight.shadow.mapSize.set(profile.shadow,profile.shadow);
+        if(state.sunLight.shadow.map){state.sunLight.shadow.map.dispose();state.sunLight.shadow.map=null;}}
+    for(const chunk of Object.values(state.chunks||{})){
+        const cover=chunk.userData?.groundCover;if(!cover)continue;
+        for(const layer of [cover.grass,cover.stones,cover.bushes])if(layer?.mesh)layer.mesh.count=Math.floor(layer.data.length*profile.cover);
+    }
+    try{localStorage.setItem('graphics-quality',tier);}catch(e){}
+    return state.graphicsQuality;
+};
 
 
 // --- js/network.js ---
@@ -1556,6 +1572,7 @@ const NetworkManager = {
                 b.underConstruction = bData.underConstruction;
                 b.constructionTimer = bData.constructionTimer;
                 if(b.hpBar) b.hpBar.scale.x = Math.max(0, b.hp / b.maxHp);
+                if(b.damageVisual)b.damageVisual.visible=b.hp/b.maxHp<.7;
                 if(b.underConstruction) {
                      const progress = 1.0 - (b.constructionTimer / 5.0);
                      b.visualMesh.scale.y = Math.max(0.01, progress);
@@ -2708,6 +2725,49 @@ class VisualEffect {
     }
 }
 
+const SurfaceMarks={
+    marks:[],geometry:new THREE.CircleGeometry(1,32),textures:{},
+    texture(kind){
+        if(this.textures[kind])return this.textures[kind];
+        const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const ctx=canvas.getContext('2d');
+        if(kind==='foot'){
+            ctx.fillStyle='rgba(255,255,255,.86)';ctx.beginPath();ctx.ellipse(64,68,22,38,0,0,Math.PI*2);ctx.fill();
+            for(let i=0;i<4;i++){ctx.beginPath();ctx.ellipse(43+i*14,27-Math.abs(1.5-i)*3,6,10,(i-1.5)*.16,0,Math.PI*2);ctx.fill();}
+        }else{
+            const g=ctx.createRadialGradient(64,64,8,64,64,62);g.addColorStop(0,'rgba(255,255,255,.82)');
+            g.addColorStop(.45,'rgba(255,255,255,.62)');g.addColorStop(.72,'rgba(255,255,255,.18)');g.addColorStop(1,'rgba(255,255,255,0)');
+            ctx.fillStyle=g;ctx.fillRect(0,0,128,128);
+            ctx.globalCompositeOperation='destination-out';for(let i=0;i<34;i++){const a=i*2.399,d=12+(i%8)*5;
+                ctx.beginPath();ctx.arc(64+Math.sin(a)*d,64+Math.cos(a)*d,2+(i%4),0,Math.PI*2);ctx.fill();}
+        }
+        const texture=new THREE.CanvasTexture(canvas);texture.encoding=THREE.sRGBEncoding;this.textures[kind]=texture;return texture;
+    },
+    add(x,z,{kind='scorch',radius=2,color=0x25160f,life=90,opacity=.68,rotation=Math.random()*Math.PI*2}={}){
+        const y=getHeight(x,z);if(y<WATER_LEVEL-.1)return null;
+        const material=new THREE.MeshBasicMaterial({color,map:this.texture(kind==='foot'?'foot':'scorch'),transparent:true,
+            opacity,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,side:THREE.DoubleSide,toneMapped:true});
+        const mesh=new THREE.Mesh(this.geometry,material);mesh.rotation.set(-Math.PI/2,0,rotation);mesh.position.set(x,y+.035,z);
+        mesh.scale.set(radius,kind==='foot'?radius*1.55:radius,radius);mesh.renderOrder=2;state.scene.add(mesh);
+        this.marks.push({mesh,life,maxLife:life});
+        while(this.marks.length>140){const old=this.marks.shift();state.scene.remove(old.mesh);old.mesh.material.dispose();}
+        return mesh;
+    },
+    update(dt){
+        for(let i=this.marks.length-1;i>=0;i--){const m=this.marks[i];m.life-=dt;
+            if(m.life<8)m.mesh.material.opacity*=Math.max(0,1-dt*.7);
+            if(m.life<=0){state.scene.remove(m.mesh);m.mesh.material.dispose();this.marks.splice(i,1);}
+        }
+    }
+};
+
+function spawnSmoke(pos,color=0x4b4540,size=.55,life=2.2){
+    const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.5,1),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.28,depthWrite:false}));
+    mesh.position.copy(pos);mesh.scale.setScalar(size);state.particles.push(new VisualEffect(mesh,life,(eff,dt)=>{
+        const p=1-eff.life/eff.maxLife;eff.mesh.position.y+=dt*(.65+p*.8);eff.mesh.position.x+=Math.sin(eff.maxLife*17+p*5)*dt*.13;
+        eff.mesh.scale.setScalar(size*(1+p*2.4));eff.mesh.material.opacity=.28*(1-p)*(1-p);eff.mesh.rotation.y+=dt*.35;
+    }));
+}
+
 function spawnExplosion(x, y, z, color, count) {
     count = Math.max(1, Math.floor(count / 2));
     const pos = new THREE.Vector3(x, y, z);
@@ -2810,7 +2870,7 @@ function spawnDust(x, y, z, color, radius) {
 // --- js/terrain.js ---
 
 let chunkTerrainMat, chunkWaterGeo, chunkWaterMat;
-let groundCoverGrassGeo, groundCoverGrassMat, groundCoverStoneGeo, groundCoverStoneMat;
+let groundCoverGrassGeo, groundCoverGrassMat, groundCoverStoneGeo, groundCoverStoneMat,groundCoverBushGeo,groundCoverBushMat;
 
 // Shared objects for performance
 const _cWater = new THREE.Color(COLORS.water);
@@ -3384,15 +3444,16 @@ function updateChunkDecorations(chunk, cx, cz) {
 
     if (chunk.userData.groundCover) {
         const cover=chunk.userData.groundCover, dummy=new THREE.Object3D();
-        for (const layer of [cover.grass,cover.stones]) {
+        for (const layer of [cover.grass,cover.stones,cover.bushes]) {
             if(!layer?.mesh)continue;
             for(let i=0;i<layer.data.length;i++) {
                 const d=layer.data[i],h=getHeight(d.x,d.z);
-                const visible=h>WATER_LEVEL+(layer===cover.grass ? .4 : .15)&&h<(layer===cover.grass ? 18 : 34);
+                const vegetated=layer===cover.grass||layer===cover.bushes;
+                const visible=h>WATER_LEVEL+(vegetated ? .4 : .15)&&h<(vegetated ? 18 : 34);
                 dummy.position.set(d.x,h+(layer===cover.stones ? .08 : 0),d.z);
                 dummy.rotation.set(d.rx,d.ry,d.rz);
                 dummy.scale.setScalar(visible?d.scale:0);
-                if(layer===cover.grass)dummy.scale.y*=d.height;
+                if(vegetated)dummy.scale.y*=d.height;
                 dummy.updateMatrix();layer.mesh.setMatrixAt(i,dummy.matrix);
                 const base=layer.mesh.geometry.attributes.aBasePos;
                 if(base){base.setXYZ(i,d.x,h,d.z);base.needsUpdate=true;}
@@ -3405,22 +3466,35 @@ function updateChunkDecorations(chunk, cx, cz) {
 
 function createGroundCover(grp,cx,cz) {
     if(!groundCoverGrassGeo) {
-        groundCoverGrassGeo=new THREE.ConeGeometry(.16,.68,4,2);
-        groundCoverGrassGeo.translate(0,.34,0);
-        groundCoverGrassMat=new THREE.MeshStandardMaterial({color:0x78c94b,roughness:.98,
+        groundCoverGrassGeo=new THREE.BufferGeometry();
+        const bladePositions=[],bladeUvs=[];
+        for(let blade=0;blade<6;blade++){
+            const a=blade*Math.PI/3,dx=Math.cos(a),dz=Math.sin(a),px=-dz*.065,pz=dx*.065,h=.48+(blade%3)*.09,lean=.06+(blade%2)*.035;
+            bladePositions.push(px,0,pz,-px,0,-pz,dx*lean,h,dz*lean);bladeUvs.push(0,0,1,0,.5,1);
+        }
+        groundCoverGrassGeo.setAttribute('position',new THREE.Float32BufferAttribute(bladePositions,3));
+        groundCoverGrassGeo.setAttribute('uv',new THREE.Float32BufferAttribute(bladeUvs,2));groundCoverGrassGeo.computeVertexNormals();
+        groundCoverGrassMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.98,
             map:Art.textures.grass,normalMap:Art.blender.texture('grass','normal'),
-            roughnessMap:Art.blender.texture('grass','roughness'),side:THREE.DoubleSide,vertexColors:true});
+            roughnessMap:Art.blender.texture('grass','roughness'),side:THREE.DoubleSide,vertexColors:true,
+            emissive:0x0c1d07,emissiveIntensity:.12});
         addWindShader(groundCoverGrassMat);
         groundCoverStoneGeo=new THREE.DodecahedronGeometry(.24,0);
-        groundCoverStoneMat=new THREE.MeshStandardMaterial({color:0xb4aa91,roughness:.94,
+        groundCoverStoneMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.94,
             map:Art.blender.texture('gravel','map'),normalMap:Art.blender.texture('gravel','normal'),
             roughnessMap:Art.blender.texture('gravel','roughness'),vertexColors:true});
+        groundCoverBushGeo=new THREE.IcosahedronGeometry(.48,1);groundCoverBushGeo.scale(1,.72,1);groundCoverBushGeo.translate(0,.36,0);
+        groundCoverBushMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.96,
+            map:Art.blender.texture('foliage','map'),normalMap:Art.blender.texture('foliage','normal'),
+            roughnessMap:Art.blender.texture('foliage','roughness'),side:THREE.DoubleSide,vertexColors:true,
+            emissive:0x081608,emissiveIntensity:.1});
+        addWindShader(groundCoverBushMat);
     }
     const seed=((cx*73856093)^(cz*19349663)^0x4a39b70d)>>>0,rand=mulberry32(seed);
     const density=state.graphicsQuality?.coverDensity||1;
-    const grassData=[],stoneData=[],offX=cx*CHUNK_SIZE,offZ=cz*CHUNK_SIZE;
+    const grassData=[],stoneData=[],bushData=[],offX=cx*CHUNK_SIZE,offZ=cz*CHUNK_SIZE;
     const populate=(target,total,isGrass)=>{
-        for(let i=0;i<total;i++) {
+        for(let i=0;target.length<total&&i<total*4;i++) {
             const x=offX+(rand()-.5)*CHUNK_SIZE,z=offZ+(rand()-.5)*CHUNK_SIZE,h=getHeight(x,z);
             const hx=getHeight(x+.45,z)-getHeight(x-.45,z),hz=getHeight(x,z+.45)-getHeight(x,z-.45);
             const slope=Math.sqrt(hx*hx+hz*hz);
@@ -3430,21 +3504,24 @@ function createGroundCover(grp,cx,cz) {
         }
     };
     populate(grassData,Math.floor(150*density),true);populate(stoneData,Math.floor(20*density),false);
-    const makeLayer=(data,geometry,material,isGrass)=>{
+    populate(bushData,Math.floor((state.matchSettings.biome==='jungle'?32:12)*density),true);
+    const makeLayer=(data,geometry,material,isGrass,isBush=false)=>{
         if(!data.length)return null;
         const geo=geometry.clone(),mesh=new THREE.InstancedMesh(geo,material,data.length),dummy=new THREE.Object3D();
-        const bases=new Float32Array(data.length*3),color=new THREE.Color();
+        const bases=new Float32Array(data.length*3);
         data.forEach((d,i)=>{
             const h=getHeight(d.x,d.z);dummy.position.set(d.x,h+(isGrass?0:.08),d.z);dummy.rotation.set(d.rx,d.ry,d.rz);
             dummy.scale.setScalar(d.scale);if(isGrass)dummy.scale.y*=d.height;dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
-            bases.set([d.x,h,d.z],i*3);color.setHex(isGrass?[0x73c948,0x5daf3e,0x8bd45b][i%3]:[0xa89d84,0x817967,0xc0b59d][i%3]);mesh.setColorAt(i,color);
+            bases.set([d.x,h,d.z],i*3);
         });
         geo.setAttribute('aBasePos',new THREE.InstancedBufferAttribute(bases,3));
-        mesh.castShadow=false;mesh.receiveShadow=!isGrass;mesh.frustumCulled=true;mesh.userData.groundCover=isGrass?'grass':'stone';grp.add(mesh);
+        mesh.instanceMatrix.needsUpdate=true;
+        mesh.castShadow=isBush;mesh.receiveShadow=!isGrass||isBush;mesh.frustumCulled=true;mesh.userData.groundCover=isBush?'bush':isGrass?'grass':'stone';grp.add(mesh);
         return {mesh,data};
     };
     grp.userData.groundCover={grass:makeLayer(grassData,groundCoverGrassGeo,groundCoverGrassMat,true),
-        stones:makeLayer(stoneData,groundCoverStoneGeo,groundCoverStoneMat,false)};
+        stones:makeLayer(stoneData,groundCoverStoneGeo,groundCoverStoneMat,false),
+        bushes:makeLayer(bushData,groundCoverBushGeo,groundCoverBushMat,true,true)};
 }
 
 function createChunk(cx, cz) {
@@ -4002,7 +4079,9 @@ class Fireball {
         this.corona.material.dispose();
         this.light.dispose();
         this.active = false;
+        SurfaceMarks.add(this.mesh.position.x,this.mesh.position.z,{radius:2.8,life:120,opacity:.76});
         spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFF4500, 20);
+        for(let i=0;i<5;i++)spawnSmoke(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.5,.2,(Math.random()-.5)*1.5)),0x3a302c,.45+Math.random()*.35,1.8+Math.random()*1.5);
         SoundManager.playSound('explosion');
         const impactPos = this.mesh.position;
         burnTreesAt(impactPos.x, impactPos.z, 8); // Burn trees
@@ -4045,6 +4124,7 @@ class Volcano extends ActiveEffect {
         this.timer = CONFIG.EFFECTS.VOLCANO_DURATION;
         this.interval = 0;
         SoundManager.playSound('explosion');
+        SurfaceMarks.add(x,z,{radius:5.5,color:0x35140b,life:CONFIG.EFFECTS.VOLCANO_DURATION+90,opacity:.82});
 
         // Add persistent light
         this.light = new THREE.PointLight(0xFF4500, 2, 20);
@@ -4603,6 +4683,7 @@ function executeSpell(type, x, z, caster) {
     else if (type === 'lightning') {
         SoundManager.playSound('explosion');
         const h = getHeight(x,z);
+        SurfaceMarks.add(x,z,{radius:1.5,color:0x29221c,life:38,opacity:.52});
 
         // Jagged Lightning Bolt
         const boltGroup = new THREE.Group();
@@ -4792,6 +4873,7 @@ window.Humanoid = class Humanoid {
         this.burnTimer = 0;
         this.attackPhase = 0;
         this.attackFired = false;
+        this.lastFootprintPos=this.mesh.position.clone();this.footstepSide=1;
 
 
 
@@ -5950,6 +6032,36 @@ window.Humanoid = class Humanoid {
 
 // --- js/building.js ---
 
+function createConstructionRig(radius,height) {
+    const group=new THREE.Group();group.name='Construction scaffolding';
+    const wood=new THREE.MeshStandardMaterial({color:0xb28250,roughness:.92,map:Art.textures.wood,
+        normalMap:Art.blender.texture('wood','normal'),roughnessMap:Art.blender.texture('wood','roughness')});
+    const rope=new THREE.MeshStandardMaterial({color:0xa88c65,roughness:1,map:Art.blender.texture('rope','map'),
+        normalMap:Art.blender.texture('rope','normal'),roughnessMap:Art.blender.texture('rope','roughness')});
+    const beamGeo=new THREE.CylinderGeometry(.045,.065,height,7),railGeo=new THREE.CylinderGeometry(.035,.035,radius*1.8,6);
+    for(let i=0;i<8;i++){
+        const a=i*Math.PI/4,post=new THREE.Mesh(beamGeo,wood);post.position.set(Math.sin(a)*radius,height*.5,Math.cos(a)*radius);post.castShadow=true;group.add(post);
+        if(i%2===0){const rail=new THREE.Mesh(railGeo,rope);rail.position.set(Math.sin(a)*radius,height*(.35+(i%4)*.14),Math.cos(a)*radius);rail.rotation.z=Math.PI/2;rail.rotation.y=a;group.add(rail);}
+    }
+    for(const y of [.28,.58,.86]){
+        const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.038,5,32),rope);ring.rotation.x=Math.PI/2;ring.position.y=height*y;group.add(ring);
+    }
+    return group;
+}
+
+function createBuildingDamageVisual(radius,height){
+    const group=new THREE.Group();group.name='Structural damage';group.visible=false;
+    const charred=new THREE.MeshStandardMaterial({color:0x241b16,roughness:1,map:Art.blender.texture('dark','map'),
+        normalMap:Art.blender.texture('dark','normal'),roughnessMap:Art.blender.texture('dark','roughness')});
+    for(let i=0;i<7;i++){
+        const shard=new THREE.Mesh(new THREE.BoxGeometry(.12,.8+(i%3)*.3,.1),charred);const a=i*2.399;
+        shard.position.set(Math.sin(a)*radius*(.55+(i%2)*.3),.65+(i%3)*.42,Math.cos(a)*radius*(.55+(i%2)*.3));
+        shard.rotation.set((i%2-.5)*.45,a,(i%3-1)*.3);shard.castShadow=true;group.add(shard);
+    }
+    const crack=new THREE.Mesh(new THREE.RingGeometry(radius*.35,radius*.39,9),new THREE.MeshBasicMaterial({color:0x160f0c,transparent:true,opacity:.7,side:THREE.DoubleSide,depthWrite:false}));
+    crack.rotation.x=-Math.PI/2;crack.position.y=.06;group.add(crack);return group;
+}
+
 function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = false, id = null) {
     if(!isLoading && getHeight(x, z) < WATER_LEVEL) return null;
 
@@ -5990,8 +6102,12 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
     if(mesh) {
         const footprint={hut:2.9,tower:2.1,warrior:3.4,fire:3.0,spy:2.9,shipyard:3.8}[type]||2.5;
+        const structureHeight={hut:3.1,tower:5.7,warrior:3.2,fire:4.1,spy:3.2,shipyard:4.4}[type]||3.5;
         group.add(createContactShadow(footprint));
         group.add(mesh);
+        const constructionRig=createConstructionRig(footprint*.63,structureHeight);group.add(constructionRig);
+        const damageVisual=createBuildingDamageVisual(footprint,structureHeight);group.add(damageVisual);
+        constructionRig.onBeforeRender=()=>{constructionRig.visible=mesh.scale.y<.985;};
 
         // HP Bar for Building
         const hpGroup = new THREE.Group();
@@ -6025,6 +6141,9 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             totalBuildTime: buildTime,
             underConstruction: true,
             burnTimer: 0,
+            constructionRig:constructionRig,
+            damageVisual:damageVisual,
+            smokeTimer:0,
             trainingQueue: [],
             rallyPoint: null,
             rallyLine: null,
@@ -6047,6 +6166,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             takeDamage: function(amount, silent = false) {
                 this.hp -= amount;
                 this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
+                this.damageVisual.visible=this.hp/this.maxHp<.7;
                 if (!silent) spawnPulse(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z, 0xFF4500);
                 if(this.hp <= 0) {
                     this.destroy();
@@ -6062,12 +6182,15 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             update: function(dt) {
                 const isSelected = (state.selectedBuilding === this);
                 const isDamaged = this.hp < this.maxHp;
+                this.damageVisual.visible=this.hp/this.maxHp<.7;
                 this.hpGroup.visible = isSelected || isDamaged;
                 if (this.hpGroup.visible) this.hpGroup.lookAt(state.camera.position);
                 if (state.network.role === 'client') return;
 
                 if(this.burnTimer > 0) {
                     this.burnTimer -= dt;
+                    this.smokeTimer-=dt;
+                    if(this.smokeTimer<=0){this.smokeTimer=.18+Math.random()*.2;spawnSmoke(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.5,1.6+Math.random()*1.4,(Math.random()-.5)*1.5)),0x332d2a,.5+Math.random()*.4,2.2);}
                     if(Math.random() < 0.25) {
                         state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5)*2, 2, (Math.random()-0.5)*2)), 0xFF4500, 0.15, 0.5));
                     }
@@ -6077,11 +6200,14 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                     this.constructionTimer -= dt;
                     const progress = 1.0 - (this.constructionTimer / this.totalBuildTime);
                     this.visualMesh.scale.y = Math.max(0.01, progress);
+                    this.constructionRig.scale.y=.18+.82*Math.max(0,progress);
+                    this.constructionRig.rotation.y+=dt*.025;
 
                     if(this.constructionTimer <= 0) {
                         this.underConstruction = false;
                         BuildingSpatialHash.markDirty();
                         this.visualMesh.scale.y = 1.0;
+                        this.constructionRig.visible=false;
                         spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFFFFFF, 10);
 
                         // On Complete Logic
@@ -7081,7 +7207,8 @@ async function init() {
         updateCameraZoom();
 
         const memory=navigator.deviceMemory||8,cores=navigator.hardwareConcurrency||8;
-        const tier=memory<=4||cores<=4?'medium':'high';
+        const automaticTier=memory<=4||cores<=4?'medium':'high';
+        let tier=automaticTier;try{const saved=localStorage.getItem('graphics-quality');if(['low','medium','high','ultra'].includes(saved))tier=saved;}catch(e){}
         state.graphicsQuality={tier,coverDensity:tier==='high'?1:.68,maxPixelRatio:tier==='high'?1.5:1.2,
             dynamicScale:1,lastAdjustment:performance.now(),averageFps:60};
         state.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -7116,6 +7243,7 @@ async function init() {
         state.scene.add(sun);
         state.rimLight=new THREE.DirectionalLight(0x8fc8ff,.42);
         state.rimLight.position.set(-45,35,-55);state.scene.add(state.rimLight);
+        window.setGraphicsQuality(tier);
 
         state.raycaster = new THREE.Raycaster();
 
@@ -7200,7 +7328,7 @@ async function init() {
             localStorage.setItem(CONFIG.SAVED_KEYS.HELP_SHOWN, 'true');
         }
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, Locomotion, CritterManager, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
+            window.gameTestAPI = { CONFIG, Locomotion, CritterManager, SurfaceMarks, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -8205,6 +8333,9 @@ function animate() {
         if (biome === 'storm') {
             if (Math.random() < 0.005) { sunInt = 10.0; sunCol = 0xffffff; }
         }
+        const daylight=biome==='normal'||biome==='jungle'||biome==='mountain'
+            ? .94+Math.sin((state.clock?.elapsedTime||0)*.003)*.06 : 1;
+        sunInt*=daylight;
 
         state.scene.background.lerp(new THREE.Color(targetBg), dt);
         state.scene.fog.color.lerp(new THREE.Color(targetFog), dt);
@@ -8212,6 +8343,8 @@ function animate() {
         state.scene.fog.far += (fogFar - state.scene.fog.far) * dt;
         state.sunLight.intensity += (sunInt - state.sunLight.intensity) * dt;
         state.sunLight.color.lerp(new THREE.Color(sunCol), dt);
+        const exposureTarget=((biome==='night'||biome==='cosmic') ? .62 : biome==='storm' ? .69 : .76)*(.96+daylight*.04);
+        state.renderer.toneMappingExposure+=(exposureTarget-state.renderer.toneMappingExposure)*Math.min(1,dt*.45);
         if(state.skyDome) {
             state.skyDome.position.copy(state.camera.position);
             state.skyDome.material.uniforms.topColor.value.lerp(new THREE.Color(targetBg).multiplyScalar(.78),dt*.7);
@@ -8382,6 +8515,19 @@ function animate() {
     if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = CONFIG.CAMPAGIN.INFINITE_MANA_VALUE;
     state.units.forEach(u => u.update(dt));
     state.buildings.forEach(b => b.update(dt));
+    if(state.graphicsQuality?.tier==='high'){
+        for(const u of state.units){
+            if(u.isVehicle||u.state==='dead'||u.state==='transported'||!u.isGrounded||u.mesh.position.distanceToSquared(state.camera.position)>6400)continue;
+            if(!u.lastFootprintPos)u.lastFootprintPos=u.mesh.position.clone();
+            if(u.mesh.position.distanceToSquared(u.lastFootprintPos)>1.15){
+                const side=u.footstepSide||1,a=u.mesh.rotation.y,offset=.12*side;
+                SurfaceMarks.add(u.mesh.position.x+Math.cos(a)*offset,u.mesh.position.z-Math.sin(a)*offset,
+                    {kind:'foot',radius:u.isShaman ? .15 : .105,color:0x3c3025,life:18,opacity:.18,rotation:-a});
+                u.footstepSide=-side;u.lastFootprintPos.copy(u.mesh.position);
+            }
+        }
+    }
+    SurfaceMarks.update(dt);
 
     _inputVector.copy(state.joystickVector).add(state.keyboardVector).clampLength(0, 1);
     const inputVector = _inputVector;

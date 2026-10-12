@@ -13,19 +13,30 @@ try{
  const result=await page.evaluate(()=>{
   closeHelp();closeStoryOverlay();
   const chunks=Object.values(state.chunks),covers=chunks.map(c=>c.userData?.groundCover).filter(Boolean);
-  const grass=covers.reduce((n,c)=>n+(c.grass?.mesh?.count||0),0),stones=covers.reduce((n,c)=>n+(c.stones?.mesh?.count||0),0);
+  const grass=covers.reduce((n,c)=>n+(c.grass?.mesh?.count||0),0),stones=covers.reduce((n,c)=>n+(c.stones?.mesh?.count||0),0),
+   bushes=covers.reduce((n,c)=>n+(c.bushes?.mesh?.count||0),0);
   const bases=covers.find(c=>c.grass?.mesh)?.grass.mesh.geometry.attributes.aBasePos;
   const contacts=[];state.shaman.mesh.traverse(n=>{if(n.userData?.contactShadow)contacts.push(n);});
   const hut=gameTestAPI.createBuilding('hut',state.shaman.mesh.position.x+6,state.shaman.mesh.position.z,0);
   hut.mesh.traverse(n=>{if(n.userData?.contactShadow)contacts.push(n);});
+  const construction={name:hut.constructionRig?.name,parts:hut.constructionRig?.children.length};
+  hut.takeDamage(hut.maxHp*.45,true);const damaged=hut.damageVisual?.visible;
+  const marksBefore=gameTestAPI.SurfaceMarks.marks.length;
+  gameTestAPI.SurfaceMarks.add(hut.mesh.position.x,hut.mesh.position.z,{radius:1,life:2});
   const water=state.chunkWaterMat,tree=Art.tree(),treeMaterial=tree.children[1].material;
   const firstWind=Art.uniforms.windTime.value;Art.uniforms.windTime.value=firstWind+1;
-  return {chunks:chunks.length,grass,stones,basePositions:bases?.count||0,contacts:contacts.length,
+  const low=window.setGraphicsQuality('low'),lowGrass=covers.reduce((n,c)=>n+(c.grass?.mesh?.count||0),0);
+  const ultra=window.setGraphicsQuality('ultra');window.setGraphicsQuality('high');
+  return {chunks:chunks.length,grass,stones,bushes,basePositions:bases?.count||0,contacts:contacts.length,construction,damaged,
+   marksAdded:gameTestAPI.SurfaceMarks.marks.length-marksBefore,
    sky:state.skyDome?.name,rim:state.rimLight?.intensity,quality:state.graphicsQuality,
+   profiles:{low:{tier:low.tier,grass:lowGrass,pixel:low.maxPixelRatio},ultra:{tier:ultra.tier,pixel:ultra.maxPixelRatio}},
    water:{depthWrite:water.depthWrite,hasFresnel:/fresnel/.test(water.fragmentShader),hasWaveNormal:/vWaveNormal/.test(water.vertexShader)},
    wind:{cache:treeMaterial.customProgramCacheKey?.(),advanced:Art.uniforms.windTime.value>firstWind}};
  });
- if(errors.length||result.grass<100||result.stones<10||result.basePositions<1||result.contacts<2||
+ if(errors.length||result.grass<100||result.stones<10||result.bushes<10||result.basePositions<1||result.contacts<2||
+    result.construction.name!=='Construction scaffolding'||result.construction.parts<10||!result.damaged||result.marksAdded!==1||
+    result.profiles.low.tier!=='low'||result.profiles.low.grass>=result.grass||result.profiles.ultra.tier!=='ultra'||result.profiles.ultra.pixel<1.8||
     result.sky!=='Procedural atmosphere'||!result.rim||result.water.depthWrite||!result.water.hasFresnel||!result.water.hasWaveNormal||
     result.wind.cache!=='island-tree-wind-v1'||!result.wind.advanced||!result.quality?.maxPixelRatio)
    throw new Error(JSON.stringify({errors,result}));
