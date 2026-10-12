@@ -44,6 +44,11 @@ try {
         const wildlife=gameTestAPI.CritterManager;
         const bunny=wildlife.bunnies[0],bird=wildlife.birds[0];
         if(!bunny?.rig||!bird?.head||!birdWing)throw new Error('Articulated wildlife rigs were not spawned');
+        const focus=wildlife.focus(),nearBunnies=wildlife.bunnies.filter(a=>Math.hypot(a.mesh.position.x-focus.x,a.mesh.position.z-focus.z)<CONFIG.CRITTERS.BUNNY_SPAWN_RANGE*.55).length,
+            nearBirds=wildlife.birds.filter(a=>Math.hypot(a.mesh.position.x-focus.x,a.mesh.position.z-focus.z)<CONFIG.CRITTERS.BIRD_SPAWN_RANGE*.55).length;
+        const bunnySize=new THREE.Box3().setFromObject(bunny.mesh).getSize(new THREE.Vector3()),birdSize=new THREE.Box3().setFromObject(bird.mesh).getSize(new THREE.Vector3());
+        if(nearBunnies<CONFIG.CRITTERS.BUNNY_COUNT*.75||nearBirds<CONFIG.CRITTERS.BIRD_COUNT*.75||bunny.mesh.name!=='Wild rabbit'||bird.mesh.name!=='Wild bird'||
+            bunnySize.length()<.7||birdSize.length()<1.4)throw new Error('Wildlife is not visible near the camera: '+JSON.stringify({nearBunnies,nearBirds,bunnySize,birdSize}));
         const animalParts=['body','head','earL','earR','frontLegL','frontLegR','hindLegL','hindLegR','tail'];
         for(const key of animalParts) {
             const lod=bunny.mesh.getObjectByName('Blender detail LOD critter/bunny/'+key);
@@ -68,8 +73,8 @@ try {
             throw new Error('Wildlife animation or terrain contact failed: '+JSON.stringify({maxHop,minClearance,earMotion,wingMotion}));
         if(!Number.isFinite(bird.mesh.position.y)||bird.mesh.position.y<getHeight(bird.mesh.position.x,bird.mesh.position.z)+7)
             throw new Error('Bird lost flight clearance');
-        bunny.mesh.position.x=CONFIG.CRITTERS.BUNNY_RESPAWN_DIST+2;
-        bird.mesh.position.x=CONFIG.CRITTERS.BIRD_RESPAWN_DIST+2;
+        bunny.mesh.position.x=focus.x+CONFIG.CRITTERS.BUNNY_RESPAWN_DIST+2;
+        bird.mesh.position.x=focus.x+CONFIG.CRITTERS.BIRD_RESPAWN_DIST+2;
         wildlife.update(1/60);
         if(wildlife.bunnies.includes(bunny)||wildlife.birds.includes(bird))
             throw new Error('Wildlife failed to respawn after leaving the map');
@@ -77,7 +82,7 @@ try {
             const normal=Art.blender.texture(kind,'normal'),rough=Art.blender.texture(kind,'roughness'),albedo=Art.blender.texture(kind,'map');
             return {kind,albedo:[albedo.image?.width,albedo.image?.height],normal:[normal.image?.width,normal.image?.height],rough:[rough.image?.width,rough.image?.height]};
         });
-        return {keys:keys.length,buildings,roles,treeDetails:count(tree),wildlife:{maxHop,minClearance,earMotion,wingMotion},textures};
+        return {keys:keys.length,buildings,roles,treeDetails:count(tree),wildlife:{maxHop,minClearance,earMotion,wingMotion,nearBunnies,nearBirds,bunnySize,birdSize},textures};
     });
     await page.waitForFunction(()=>['grass','stone','wood','thatch','skin','cloth','rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff','dirt','mud','gravel','moss'].every(k=>
         ['map','normal','roughness'].every(type=>Art.blender.texture(k,type).image?.width>=1000)),null,{timeout:30000});

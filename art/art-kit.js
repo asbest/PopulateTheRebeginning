@@ -166,7 +166,9 @@ export function createArtKit(T) {
             crownGeometry.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));
             return crownGeometry;
         });
-        const crown=new T.Mesh(crownGeometry,crownMaterial);crown.castShadow=crown.receiveShadow=true;p.add(crown);
+        // A full shadow pass over all 24 leaf clusters turns the canopy into
+        // detached black circles at the normal RTS camera distance.
+        const crown=new T.Mesh(crownGeometry,crownMaterial);crown.castShadow=false;crown.receiveShadow=true;p.add(crown);
         for(let i=0;i<4;i++) {
             const a=i*Math.PI/2+0.4;
             beam(p,[0,1.65,0],[Math.sin(a)*0.83,2.55,Math.cos(a)*0.83],0.065,0x5c4932);

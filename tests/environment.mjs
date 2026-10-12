@@ -16,10 +16,15 @@ try{
   const grass=covers.reduce((n,c)=>n+(c.grass?.mesh?.count||0),0),stones=covers.reduce((n,c)=>n+(c.stones?.mesh?.count||0),0),
    bushes=covers.reduce((n,c)=>n+(c.bushes?.mesh?.count||0),0);
   const grassMesh=covers.find(c=>c.grass?.mesh)?.grass.mesh,grassGeo=grassMesh.geometry,bases=grassGeo.attributes.aBasePos;
+  const stoneMesh=covers.find(c=>c.stones?.mesh)?.stones.mesh;
+  const bushMesh=covers.find(c=>c.bushes?.mesh)?.bushes.mesh;
   const vertexColors=grassGeo.attributes.color.array;
   const grassVolume={triangles:grassGeo.index.count/3,normals:grassGeo.attributes.normal.count,
    vertices:grassGeo.attributes.position.count,minColor:Math.min(...vertexColors),instanceColors:grassMesh.instanceColor?.count||0,
    photoMap:!!grassMesh.material.map,emissive:grassMesh.material.emissiveIntensity,stableCulling:!grassMesh.frustumCulled};
+  const stoneStyle={normalMap:!!stoneMesh.material.normalMap,receiveShadow:stoneMesh.receiveShadow,
+   emissive:stoneMesh.material.emissiveIntensity,instanceColors:stoneMesh.instanceColor?.count||0,
+   vertexColors:stoneMesh.geometry.attributes.color?.count||0,bushVertexColors:bushMesh.geometry.attributes.color?.count||0,ratio:stones/grass};
   const contacts=[];state.shaman.mesh.traverse(n=>{if(n.userData?.contactShadow)contacts.push(n);});
   const hut=gameTestAPI.createBuilding('hut',state.shaman.mesh.position.x+6,state.shaman.mesh.position.z,0);
   hut.mesh.traverse(n=>{if(n.userData?.contactShadow)contacts.push(n);});
@@ -28,6 +33,9 @@ try{
   const marksBefore=gameTestAPI.SurfaceMarks.marks.length;
   gameTestAPI.SurfaceMarks.add(hut.mesh.position.x,hut.mesh.position.z,{radius:1,life:2});
   const water=state.chunkWaterMat,tree=Art.tree(),treeMaterial=tree.children[1].material;
+  const trees=chunks.flatMap(chunk=>chunk.userData.trees||[]);
+  const treeShadows={count:trees.length,unsafeCrowns:trees.filter(item=>item.mesh.children[1]?.castShadow).length,
+   softContacts:trees.filter(item=>item.mesh.getObjectByName('Tree canopy contact shadow')).length};
   const firstWind=Art.uniforms.windTime.value;Art.uniforms.windTime.value=firstWind+1;
   const cloud=gameTestAPI.CloudManager.clouds[0],cloudBefore=cloud.mesh.position.clone(),puffBefore=cloud.puffs[0].mesh.position.y;
   gameTestAPI.CloudManager.update(.5);
@@ -41,7 +49,7 @@ try{
   const graphicsUi={menu:document.getElementById('pause-menu').style.display,label:document.getElementById('btn-graphics-quality')?.innerText,
    tier:state.graphicsQuality.tier,saved:localStorage.getItem('graphics-quality')};
   window.setGraphicsQuality('high');togglePause();
-  return {chunks:chunks.length,grass,stones,bushes,basePositions:bases?.count||0,grassVolume,contacts:contacts.length,construction,damaged,
+  return {chunks:chunks.length,grass,stones,bushes,basePositions:bases?.count||0,grassVolume,stoneStyle,contacts:contacts.length,construction,damaged,
    marksAdded:gameTestAPI.SurfaceMarks.marks.length-marksBefore,
    sky:state.skyDome?.name,rim:state.rimLight?.intensity,quality:state.graphicsQuality,
    profiles:{low:{tier:low.tier,grass:lowGrass,pixel:low.maxPixelRatio},ultra:{tier:ultra.tier,pixel:ultra.maxPixelRatio}},graphicsUi,
@@ -49,11 +57,14 @@ try{
     vertical:/pos\.y\+=height/.test(water.vertexShader),gerstner:/horizontal/.test(water.vertexShader),breakers:/shoreFoam/.test(water.fragmentShader)},
    cloudMotion,spray,skyShader:{scattering:/horizonHaze/.test(state.skyDome.material.fragmentShader),
     cirrus:/skyFbm/.test(state.skyDome.material.fragmentShader),night:/nightMix/.test(state.skyDome.material.fragmentShader)},
-   wind:{cache:treeMaterial.customProgramCacheKey?.(),advanced:Art.uniforms.windTime.value>firstWind}};
+   wind:{cache:treeMaterial.customProgramCacheKey?.(),advanced:Art.uniforms.windTime.value>firstWind},treeShadows};
  });
  if(errors.length||result.grass<100||result.stones<10||result.bushes<10||result.basePositions<1||result.contacts<2||
     result.grassVolume.triangles<220||result.grassVolume.normals!==result.grassVolume.vertices||result.grassVolume.minColor<.18||
     result.grassVolume.instanceColors<1||result.grassVolume.photoMap||result.grassVolume.emissive<.14||!result.grassVolume.stableCulling||
+    result.stoneStyle.normalMap||result.stoneStyle.receiveShadow||result.stoneStyle.emissive<.14||result.stoneStyle.instanceColors<1||
+    result.stoneStyle.vertexColors<1||result.stoneStyle.bushVertexColors<1||result.stoneStyle.ratio>.08||
+    result.treeShadows.count<1||result.treeShadows.unsafeCrowns||result.treeShadows.softContacts!==result.treeShadows.count||
     result.construction.name!=='Construction scaffolding'||result.construction.parts<10||!result.damaged||result.marksAdded!==1||
     result.profiles.low.tier!=='low'||result.profiles.low.grass>=result.grass||result.profiles.ultra.tier!=='ultra'||result.profiles.ultra.pixel<1.8||
     result.graphicsUi.menu!=='flex'||result.graphicsUi.tier!=='ultra'||result.graphicsUi.saved!=='ultra'||!result.graphicsUi.label?.includes('Ultra')||

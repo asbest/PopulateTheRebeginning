@@ -972,21 +972,21 @@ const CONFIG = {
         BUNNY_COUNT: 30,
         BIRD_COUNT: 20,
         CLOUD_COUNT: 15,
-        BUNNY_SPAWN_RANGE: 400,
-        BIRD_SPAWN_RANGE: 400,
+        BUNNY_SPAWN_RANGE: 150,
+        BIRD_SPAWN_RANGE: 220,
         CLOUD_SPAWN_RANGE: 400,
         BUNNY_HOP_DURATION: 0.5,
         BUNNY_LAND_CHECK_DIST: 300,
-        BIRD_ALT_MIN: 15,
-        BIRD_ALT_MAX: 50,
-        BIRD_ALT_TARGET: 20,
+        BIRD_ALT_MIN: 11,
+        BIRD_ALT_MAX: 24,
+        BIRD_ALT_TARGET: 16,
         CLOUD_Y_MIN: 30,
         CLOUD_Y_MAX: 45,
         CLOUD_SPEED_BASE: 1,
         CLOUD_SPEED_RANGE: 2,
         CLOUD_RESPAWN_X: 250,
-        BIRD_RESPAWN_DIST: 300,
-        BUNNY_RESPAWN_DIST: 300,
+        BIRD_RESPAWN_DIST: 190,
+        BUNNY_RESPAWN_DIST: 125,
     },
     SAVED_KEYS: {
         HELP_SHOWN: 'rebeginning_help_shown',
@@ -2195,23 +2195,25 @@ class Particle {
 const CritterManager = {
     bunnies: [],
     birds: [],
+    refillTimer: 0,
+    focus: function() {
+        return state.cameraLookAt || state.shaman?.mesh.position || {x:0,z:0};
+    },
     init: function() {
-        for(let i=0; i<CONFIG.CRITTERS.BUNNY_COUNT; i++) {
-            this.spawnBunny(true);
-        }
-        for(let i=0; i<CONFIG.CRITTERS.BIRD_COUNT; i++) {
-            this.spawnBird(true);
-        }
+        let attempts=0;
+        while(this.bunnies.length<CONFIG.CRITTERS.BUNNY_COUNT&&attempts++<CONFIG.CRITTERS.BUNNY_COUNT*4)this.spawnBunny(true);
+        for(let i=0; i<CONFIG.CRITTERS.BIRD_COUNT; i++)this.spawnBird(true);
     },
 
     spawnBunny: function(randomPos=false) {
         const group = new THREE.Group();
+        group.name='Wild rabbit';group.userData.wildlife='rabbit';
         const color = [0xb1987c,0xd0bda0,0xa9a49a,0xd4cbc0][Math.floor(Math.random()*4)];
         const mat = new THREE.MeshStandardMaterial({color: color, roughness: 0.88,
             map:Art.blender.texture('fur','map'),normalMap:Art.blender.texture('fur','normal'),
-            roughnessMap:Art.blender.texture('fur','roughness')});
+            roughnessMap:Art.blender.texture('fur','roughness'),emissive:new THREE.Color(color).multiplyScalar(.08),emissiveIntensity:.18});
 
-        const bodySize = (0.2 + Math.random() * 0.1) * 1.7;
+        const bodySize = (0.28 + Math.random() * 0.1) * 1.8;
         const bodyGeo = new THREE.SphereGeometry(bodySize * 0.6, 16, 16);
         const body = new THREE.Mesh(bodyGeo, mat);
         body.scale.set(1.0, 0.8, 1.2);
@@ -2289,7 +2291,7 @@ const CritterManager = {
             let coat=null;
             group.traverse(node=>{
                 if(node.isMesh&&node.material?.name==='Blender/fur') {
-                    if(!coat){coat=node.material.clone();coat.color.setHex(color);}
+                    if(!coat){coat=node.material.clone();coat.color.setHex(color);coat.emissive.setHex(color).multiplyScalar(.08);coat.emissiveIntensity=.18;}
                     node.material=coat;
                 }
             });
@@ -2297,35 +2299,15 @@ const CritterManager = {
         }
 
 
-        let x, z;
-        if(randomPos) {
-            x = (Math.random() - 0.5) * CONFIG.CRITTERS.BUNNY_SPAWN_RANGE;
-            z = (Math.random() - 0.5) * CONFIG.CRITTERS.BUNNY_SPAWN_RANGE;
-        } else {
-            const angle = Math.random() * Math.PI * 2;
-            const dist = 100 + Math.random() * 100;
-            x = Math.cos(angle) * dist;
-            z = Math.sin(angle) * dist;
+        const focus=this.focus(),radius=CONFIG.CRITTERS.BUNNY_SPAWN_RANGE*.5;
+        let x=focus.x,z=focus.z,h=getHeight(x,z),found=false;
+        for(let i=0;i<32;i++) {
+            const angle=Math.random()*Math.PI*2,dist=(randomPos?8:radius*.72)+Math.sqrt(Math.random())*(randomPos?radius-8:radius*.25);
+            x=focus.x+Math.cos(angle)*dist;z=focus.z+Math.sin(angle)*dist;h=getHeight(x,z);
+            const slope=Math.abs(getHeight(x+.5,z)-getHeight(x-.5,z))+Math.abs(getHeight(x,z+.5)-getHeight(x,z-.5));
+            if(h>VISUAL_WATER_LEVEL+.35&&h<18&&slope<1.45){found=true;break;}
         }
-
-        group.position.set(x, 0, z);
-
-        // Ensure starting on land
-        let h = getHeight(x, z);
-        if (h < VISUAL_WATER_LEVEL) {
-            // Find a random spot that is land
-            let found = false;
-            for(let i=0; i<10; i++) {
-                 x = (Math.random() - 0.5) * CONFIG.CRITTERS.BUNNY_SPAWN_RANGE;
-                 z = (Math.random() - 0.5) * CONFIG.CRITTERS.BUNNY_SPAWN_RANGE;
-                 h = getHeight(x, z);
-                 if(h >= VISUAL_WATER_LEVEL) {
-                     found = true;
-                     break;
-                 }
-            }
-            if(!found) return; // Try again later if we couldn't find land
-        }
+        if(!found){mat.dispose();return false;}
         group.position.set(x,h,z);
 
         state.scene.add(group);
@@ -2344,15 +2326,17 @@ const CritterManager = {
             age:0,
             facing:Math.random()*Math.PI*2
         });
+        return true;
     },
     spawnBird: function(randomPos=false) {
         const group = new THREE.Group();
-        const color = [0x817e75,0x9e988c,0xb2a28a,0x7e9295][Math.floor(Math.random()*4)];
+        group.name='Wild bird';group.userData.wildlife='bird';
+        const color = [0xa69980,0xc2b28f,0x8ea5ad,0xb58f73][Math.floor(Math.random()*4)];
         const mat = new THREE.MeshStandardMaterial({color: color, side: THREE.DoubleSide, roughness: 0.84,
             map:Art.blender.texture('feather','map'),normalMap:Art.blender.texture('feather','normal'),
-            roughnessMap:Art.blender.texture('feather','roughness')});
+            roughnessMap:Art.blender.texture('feather','roughness'),emissive:new THREE.Color(color).multiplyScalar(.07),emissiveIntensity:.16});
 
-        const size = (0.3 + Math.random() * 0.2) * 1.7;
+        const size = (0.44 + Math.random() * 0.18) * 1.8;
 
         // Body
         const bodyGeo = new THREE.SphereGeometry(size * 0.5, 12, 12);
@@ -2429,32 +2413,25 @@ const CritterManager = {
             let plumage=null;
             group.traverse(node=>{
                 if(node.isMesh&&node.material?.name==='Blender/feather') {
-                    if(!plumage){plumage=node.material.clone();plumage.color.setHex(color);}
+                    if(!plumage){plumage=node.material.clone();plumage.color.setHex(color);plumage.emissive.setHex(color).multiplyScalar(.07);plumage.emissiveIntensity=.16;}
                     node.material=plumage;
                 }
             });
             group.userData.plumage=plumage;
         }
 
-        let x, z;
-        if(randomPos) {
-            x = (Math.random() - 0.5) * CONFIG.CRITTERS.BIRD_SPAWN_RANGE;
-            z = (Math.random() - 0.5) * CONFIG.CRITTERS.BIRD_SPAWN_RANGE;
-        } else {
-            // Spawn at edges
-            const angle = Math.random() * Math.PI * 2;
-            const dist = 200;
-            x = Math.cos(angle) * dist;
-            z = Math.sin(angle) * dist;
-        }
+        const focus=this.focus(),radius=CONFIG.CRITTERS.BIRD_SPAWN_RANGE*.5;
+        const spawnAngle=Math.random()*Math.PI*2;
+        const spawnDist=randomPos?18+Math.sqrt(Math.random())*(radius-18):radius*.9;
+        const x=focus.x+Math.cos(spawnAngle)*spawnDist,z=focus.z+Math.sin(spawnAngle)*spawnDist;
         // Target random point on map
-        const tx = (Math.random() - 0.5) * 200;
-        const tz = (Math.random() - 0.5) * 200;
+        const tx = focus.x+(Math.random()-.5)*radius;
+        const tz = focus.z+(Math.random()-.5)*radius;
         const dx = tx - x;
         const dz = tz - z;
         const angle = Math.atan2(dx, dz);
 
-        const y = 20 + Math.random() * 20;
+        const y = getHeight(x,z)+CONFIG.CRITTERS.BIRD_ALT_MIN+Math.random()*(CONFIG.CRITTERS.BIRD_ALT_MAX-CONFIG.CRITTERS.BIRD_ALT_MIN);
 
         group.position.set(x, y, z);
         group.rotation.y = angle;
@@ -2478,6 +2455,7 @@ const CritterManager = {
             turnTimer:1+Math.random()*3,
             flapMix:1
         });
+        return true;
     },
     update: function(dt) {
         // Update Bunnies
@@ -2562,7 +2540,8 @@ const CritterManager = {
             }
 
             // Periodically check if far out of bounds and respawn
-            if(Math.abs(b.mesh.position.x) > CONFIG.CRITTERS.BUNNY_RESPAWN_DIST || Math.abs(b.mesh.position.z) > CONFIG.CRITTERS.BUNNY_RESPAWN_DIST) {
+            const bunnyFocus=this.focus();
+            if(Math.hypot(b.mesh.position.x-bunnyFocus.x,b.mesh.position.z-bunnyFocus.z) > CONFIG.CRITTERS.BUNNY_RESPAWN_DIST) {
                  state.scene.remove(b.mesh);
                  b.rig?.userData.coat?.dispose();
                  this.bunnies.splice(i, 1);
@@ -2622,12 +2601,19 @@ const CritterManager = {
                 b.mesh.position.y+(desiredY-b.mesh.position.y)*Math.min(1,dt*2.5));
 
             // Respawn if far out of bounds
-            if(Math.abs(b.mesh.position.x) > CONFIG.CRITTERS.BIRD_RESPAWN_DIST || Math.abs(b.mesh.position.z) > CONFIG.CRITTERS.BIRD_RESPAWN_DIST) {
+            const birdFocus=this.focus();
+            if(Math.hypot(b.mesh.position.x-birdFocus.x,b.mesh.position.z-birdFocus.z) > CONFIG.CRITTERS.BIRD_RESPAWN_DIST) {
                  state.scene.remove(b.mesh);
                  b.mesh.userData.plumage?.dispose();
                  this.birds.splice(i, 1);
                  this.spawnBird();
             }
+        }
+        this.refillTimer-=dt;
+        if(this.refillTimer<=0) {
+            if(this.bunnies.length<CONFIG.CRITTERS.BUNNY_COUNT)this.spawnBunny(true);
+            if(this.birds.length<CONFIG.CRITTERS.BIRD_COUNT)this.spawnBird(true);
+            this.refillTimer=.5;
         }
     }
 };
@@ -3496,7 +3482,7 @@ function updateChunkDecorations(chunk, cx, cz) {
                 const d=layer.data[i],h=getHeight(d.x,d.z);
                 const vegetated=layer===cover.grass||layer===cover.bushes;
                 const visible=h>WATER_LEVEL+(vegetated ? .4 : .15)&&h<(vegetated ? 18 : 34);
-                dummy.position.set(d.x,h+(layer===cover.stones ? .08 : 0),d.z);
+                dummy.position.set(d.x,h+(layer===cover.stones ? .03 : 0),d.z);
                 dummy.rotation.set(d.rx,d.ry,d.rz);
                 dummy.scale.setScalar(visible?d.scale:0);
                 if(vegetated)dummy.scale.y*=d.height;
@@ -3543,11 +3529,16 @@ function createGroundCover(grp,cx,cz) {
         groundCoverGrassMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.92,metalness:0,
             side:THREE.DoubleSide,vertexColors:true,emissive:0x102909,emissiveIntensity:.16});
         addWindShader(groundCoverGrassMat);
-        groundCoverStoneGeo=new THREE.DodecahedronGeometry(.24,0);
-        groundCoverStoneMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.94,
-            map:Art.blender.texture('gravel','map'),normalMap:Art.blender.texture('gravel','normal'),
-            roughnessMap:Art.blender.texture('gravel','roughness'),vertexColors:true});
+        groundCoverStoneGeo=new THREE.DodecahedronGeometry(.22,1);
+        groundCoverStoneGeo.scale(1,.62,.86);groundCoverStoneGeo.translate(0,.11,0);
+        const stoneVertexColors=new Float32Array(groundCoverStoneGeo.attributes.position.count*3);stoneVertexColors.fill(1);
+        groundCoverStoneGeo.setAttribute('color',new THREE.Float32BufferAttribute(stoneVertexColors,3));
+        groundCoverStoneMat=new THREE.MeshStandardMaterial({color:0xd8cdb6,roughness:.92,metalness:0,
+            map:Art.blender.texture('gravel','map'),roughnessMap:Art.blender.texture('gravel','roughness'),
+            vertexColors:true,emissive:0x292722,emissiveIntensity:.16});
         groundCoverBushGeo=new THREE.IcosahedronGeometry(.48,1);groundCoverBushGeo.scale(1,.72,1);groundCoverBushGeo.translate(0,.36,0);
+        const bushVertexColors=new Float32Array(groundCoverBushGeo.attributes.position.count*3);bushVertexColors.fill(1);
+        groundCoverBushGeo.setAttribute('color',new THREE.Float32BufferAttribute(bushVertexColors,3));
         groundCoverBushMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.96,
             map:Art.blender.texture('foliage','map'),normalMap:Art.blender.texture('foliage','normal'),
             roughnessMap:Art.blender.texture('foliage','roughness'),side:THREE.DoubleSide,vertexColors:true,
@@ -3567,26 +3558,27 @@ function createGroundCover(grp,cx,cz) {
                 scale:(isGrass ? .42 : .45)+rand()*(isGrass ? .75 : .95),height:isGrass ? .7+rand()*.9 : 1,tone:rand()});
         }
     };
-    populate(grassData,Math.floor(220*density),true);populate(stoneData,Math.floor(20*density),false);
+    populate(grassData,Math.floor(220*density),true);populate(stoneData,Math.floor(9*density),false);
     populate(bushData,Math.floor((state.matchSettings.biome==='jungle'?32:12)*density),true);
     const makeLayer=(data,geometry,material,isGrass,isBush=false)=>{
         if(!data.length)return null;
         const geo=geometry.clone(),mesh=new THREE.InstancedMesh(geo,material,data.length),dummy=new THREE.Object3D();
         const bases=new Float32Array(data.length*3);
         data.forEach((d,i)=>{
-            const h=getHeight(d.x,d.z);dummy.position.set(d.x,h+(isGrass?0:.08),d.z);dummy.rotation.set(d.rx,d.ry,d.rz);
-            dummy.scale.setScalar(d.scale);if(isGrass)dummy.scale.y*=d.height;dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
-            if(isGrass){
-                const tint=new THREE.Color();
-                if(isBush)tint.setHSL(.285+d.tone*.035,.48,.56+d.tone*.07);
-                else tint.setHSL(.255+d.tone*.035,.62+d.tone*.08,.47+d.tone*.08);
-                mesh.setColorAt(i,tint);
-            }
+            const h=getHeight(d.x,d.z);dummy.position.set(d.x,h+(isGrass?0:.03),d.z);dummy.rotation.set(d.rx,d.ry,d.rz);
+            dummy.scale.setScalar(d.scale);if(isGrass)dummy.scale.y*=d.height;
+            else dummy.scale.multiply(new THREE.Vector3(.82+d.tone*.34,.72+d.tone*.28,.84+(1-d.tone)*.3));
+            dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
+            const tint=new THREE.Color();
+            if(isBush)tint.setHSL(.285+d.tone*.035,.48,.56+d.tone*.07);
+            else if(isGrass)tint.setHSL(.255+d.tone*.035,.62+d.tone*.08,.47+d.tone*.08);
+            else tint.setHSL(.085+d.tone*.035,.1+d.tone*.08,.66+d.tone*.1);
+            mesh.setColorAt(i,tint);
             bases.set([d.x,h,d.z],i*3);
         });
         geo.setAttribute('aBasePos',new THREE.InstancedBufferAttribute(bases,3));
         mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
-        mesh.castShadow=isBush;mesh.receiveShadow=!isGrass||isBush;
+        mesh.castShadow=isBush;mesh.receiveShadow=isBush;
         // Three r128 does not calculate per-instance bounds; culling against the tiny source mesh made distant clusters vanish or flash black.
         mesh.frustumCulled=false;mesh.userData.groundCover=isBush?'bush':isGrass?'grass':'stone';grp.add(mesh);
         return {mesh,data};
@@ -3637,6 +3629,7 @@ function createChunk(cx, cz) {
                 treeGroup.position.set(lx+offX, h, lz+offZ);
                 treeGroup.rotation.y=chunkRandom()*Math.PI*2;
                 const treeScale=.78+chunkRandom()*.48;treeGroup.scale.set(treeScale,.9+chunkRandom()*.35,treeScale);
+                const treeShadow=createContactShadow(1.45);treeShadow.name='Tree canopy contact shadow';treeGroup.add(treeShadow);
                 grp.add(treeGroup);
 
                 grp.userData.trees.push({
