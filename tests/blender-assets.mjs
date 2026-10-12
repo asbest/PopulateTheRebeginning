@@ -44,6 +44,8 @@ try {
         const wildlife=gameTestAPI.CritterManager;
         const bunny=wildlife.bunnies[0],bird=wildlife.birds[0];
         if(!bunny?.rig||!bird?.head||!birdWing)throw new Error('Articulated wildlife rigs were not spawned');
+        if(CONFIG.CRITTERS.BUNNY_COUNT!==15||CONFIG.CRITTERS.BIRD_COUNT!==10)
+            throw new Error('Wildlife population was not halved: '+JSON.stringify({bunnies:CONFIG.CRITTERS.BUNNY_COUNT,birds:CONFIG.CRITTERS.BIRD_COUNT}));
         const focus=wildlife.focus(),nearBunnies=wildlife.bunnies.filter(a=>Math.hypot(a.mesh.position.x-focus.x,a.mesh.position.z-focus.z)<CONFIG.CRITTERS.BUNNY_SPAWN_RANGE*.55).length,
             nearBirds=wildlife.birds.filter(a=>Math.hypot(a.mesh.position.x-focus.x,a.mesh.position.z-focus.z)<CONFIG.CRITTERS.BIRD_SPAWN_RANGE*.55).length;
         const bunnySize=new THREE.Box3().setFromObject(bunny.mesh).getSize(new THREE.Vector3()),birdSize=new THREE.Box3().setFromObject(bird.mesh).getSize(new THREE.Vector3());
