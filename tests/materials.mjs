@@ -24,13 +24,27 @@ try {
   Object.assign(state.orthoCamera,{left:-8*aspect,right:8*aspect,top:8,bottom:-8});
   state.orthoCamera.updateProjectionMatrix();window.updateCameraPosition();gameTestAPI.updateChunks(true);
   const images=[];hut.mesh.traverse(child=>{if(child.isMesh&&child.material?.map?.image)images.push([child.material.map.image.width,child.material.map.image.height]);});
-  return {images,viewScale:state.viewScale};
+  const terrainSamples=[];
+  for(const chunk of Object.values(state.chunks)){
+   const mesh=chunk?.children?.[0],position=mesh?.geometry?.attributes?.position,color=mesh?.geometry?.attributes?.color;
+   if(!position||!color)continue;
+   for(let i=0;i<position.count;i+=97){
+    const h=position.getY(i),r=color.getX(i),g=color.getY(i),b=color.getZ(i);
+    if(h>CONFIG.TERRAIN.WATER_LEVEL+2&&h<17)terrainSamples.push({r,g,b,h});
+   }
+  }
+  const luminance=terrainSamples.map(c=>.2126*c.r+.7152*c.g+.0722*c.b);
+  const range=luminance.length?Math.max(...luminance)-Math.min(...luminance):0;
+  const terrainMaterial=Object.values(state.chunks).find(chunk=>chunk?.children?.[0]?.material)?.children[0].material;
+  return {images,viewScale:state.viewScale,grass:CONFIG.COLORS.grass,terrainSamples:terrainSamples.length,grassVariation:range,
+   shaderVersion:terrainMaterial?.customProgramCacheKey?.()};
  });
  await page.waitForTimeout(1000);
  await fs.mkdir(path.join(root,'test-results'),{recursive:true});
  await page.screenshot({path:path.join(root,'test-results/materials-close.png')});
  const assets=await Promise.all(['grass','stone','thatch','wood'].map(async name=>({name,bytes:(await fs.stat(path.join(root,'art/materials',name+'.png'))).size})));
- const report={pass:errors.length===0&&detail.images.some(([w,h])=>w>=1000&&h>=1000)&&assets.every(a=>a.bytes>1000000),detail,assets,errors};
+ const report={pass:errors.length===0&&detail.images.some(([w,h])=>w>=1000&&h>=1000)&&assets.every(a=>a.bytes>1000000)&&
+  detail.grass===0x65bd38&&detail.terrainSamples>10&&detail.grassVariation>.01&&detail.shaderVersion==='island-terrain-detail-v4',detail,assets,errors};
  await fs.writeFile(path.join(root,'test-results/materials-report.json'),JSON.stringify(report,null,2));
  console.log(JSON.stringify(report));process.exitCode=report.pass?0:1;
 }finally{await browser.close();}

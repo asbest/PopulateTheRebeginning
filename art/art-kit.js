@@ -186,14 +186,28 @@ export function createArtKit(T) {
             shader.vertexShader='varying vec3 vArtPosition;\nvarying vec3 vArtNormal;\n'+shader.vertexShader;
             shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
                 '#include <begin_vertex>\nvArtPosition = (modelMatrix * vec4(position,1.0)).xyz;\nvArtNormal = normalize(mat3(modelMatrix) * normal);');
-            shader.fragmentShader='uniform sampler2D artGrass;\nuniform sampler2D artRock;\nuniform sampler2D artSand;\nvarying vec3 vArtPosition;\nvarying vec3 vArtNormal;\n'+shader.fragmentShader;
+            shader.fragmentShader=`uniform sampler2D artGrass;
+                uniform sampler2D artRock;
+                uniform sampler2D artSand;
+                varying vec3 vArtPosition;
+                varying vec3 vArtNormal;
+                float artTerrainHash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+                float artTerrainNoise(vec2 p) {
+                    vec2 cell=floor(p), f=fract(p);
+                    f=f*f*(3.0-2.0*f);
+                    return mix(mix(artTerrainHash(cell),artTerrainHash(cell+vec2(1.0,0.0)),f.x),
+                               mix(artTerrainHash(cell+vec2(0.0,1.0)),artTerrainHash(cell+vec2(1.0,1.0)),f.x),f.y);
+                }
+            `+shader.fragmentShader;
             shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
                 float slope = 1.0 - abs(normalize(vArtNormal).y);
+                float artPatch=artTerrainNoise(vArtPosition.xz*0.045);
+                vec2 warp=vec2(artPatch-0.5,0.5-artPatch)*0.45;
                 float grassWeight=smoothstep(0.035,0.15,diffuseColor.g-max(diffuseColor.r,diffuseColor.b));
                 float sandWeight=smoothstep(0.035,0.14,diffuseColor.r-diffuseColor.g);
-                vec3 grassA=pow(texture2D(artGrass,vArtPosition.xz*0.5).rgb,vec3(2.2));
-                vec3 grassB=pow(texture2D(artGrass,mat2(0.8,-0.6,0.6,0.8)*vArtPosition.xz*0.17).rgb,vec3(2.2));
-                vec3 grass=mix(grassA,grassB,0.22);
+                vec3 grassA=pow(texture2D(artGrass,vArtPosition.xz*0.5+warp).rgb,vec3(2.2));
+                vec3 grassB=pow(texture2D(artGrass,mat2(0.8,-0.6,0.6,0.8)*vArtPosition.xz*0.17+warp*0.28).rgb,vec3(2.2));
+                vec3 grass=mix(grassA,grassB,0.26);
                 vec3 sand=pow(texture2D(artSand,vArtPosition.xz*0.27).rgb,vec3(2.2));
                 vec3 weights=pow(abs(normalize(vArtNormal)),vec3(4.0));
                 weights/=max(weights.x+weights.y+weights.z,0.0001);
@@ -201,12 +215,12 @@ export function createArtKit(T) {
                 vec3 rockY=pow(texture2D(artRock,vArtPosition.xz*0.34).rgb,vec3(2.2));
                 vec3 rockZ=pow(texture2D(artRock,vArtPosition.xy*0.34).rgb,vec3(2.2));
                 vec3 rock=rockX*weights.x+rockY*weights.y+rockZ*weights.z;
-                diffuseColor.rgb=mix(diffuseColor.rgb,grass*1.42,grassWeight*0.66*(1.0-smoothstep(0.25,0.65,slope)));
-                diffuseColor.rgb=mix(diffuseColor.rgb,sand*1.20,sandWeight*0.49*(1.0-smoothstep(0.35,0.75,slope)));
-                diffuseColor.rgb=mix(diffuseColor.rgb,rock*1.32,smoothstep(0.36,0.72,slope)*0.82);
+                diffuseColor.rgb=mix(diffuseColor.rgb,grass*1.58*(0.92+0.18*artPatch),grassWeight*0.66*(1.0-smoothstep(0.25,0.65,slope)));
+                diffuseColor.rgb=mix(diffuseColor.rgb,sand*1.20*(0.94+0.12*artPatch),sandWeight*0.49*(1.0-smoothstep(0.35,0.75,slope)));
+                diffuseColor.rgb=mix(diffuseColor.rgb,rock*1.32*(0.95+0.10*artPatch),smoothstep(0.36,0.72,slope+(artPatch-0.5)*0.10)*0.82);
             `);
         };
-        material.customProgramCacheKey=()=> 'island-terrain-detail-v3';
+        material.customProgramCacheKey=()=> 'island-terrain-detail-v4';
     }
     return {building,tree,dress,terrainDetail,textures,palette,ready:blender.ready,blender};
 }
