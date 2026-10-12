@@ -25,7 +25,8 @@ export function createBlenderPack(T) {
         fur:{color:0xb8a58b,map:'fur',metalness:0,normalScale:.24},
         feather:{color:0x9e967d,map:'feather',metalness:0,normalScale:.21}
     };
-    const crafted=new Set(['rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff']);
+    const crafted=new Set(['rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff',
+        'dirt','mud','gravel','moss']);
     function texture(kind,type) {
         const key=kind+'/'+type;
         if(!surfaces.has(key)) {

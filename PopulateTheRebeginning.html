@@ -1878,12 +1878,29 @@ const SoundManager = {
 // --- js/assets.js ---
 
 const MaterialCache = new Map();
+let contactShadowGeometry,contactShadowMaterial;
 
 function getBasicMaterial(color) {
     if (!MaterialCache.has(color)) {
         MaterialCache.set(color, new THREE.MeshBasicMaterial({color: color}));
     }
     return MaterialCache.get(color);
+}
+
+function createContactShadow(scale=1) {
+    if(!contactShadowMaterial) {
+        const canvas=document.createElement('canvas');canvas.width=canvas.height=128;
+        const ctx=canvas.getContext('2d'),gradient=ctx.createRadialGradient(64,64,2,64,64,62);
+        gradient.addColorStop(0,'rgba(14,20,18,.46)');gradient.addColorStop(.42,'rgba(14,20,18,.27)');
+        gradient.addColorStop(1,'rgba(14,20,18,0)');ctx.fillStyle=gradient;ctx.fillRect(0,0,128,128);
+        const texture=new THREE.CanvasTexture(canvas);
+        contactShadowMaterial=new THREE.MeshBasicMaterial({map:texture,transparent:true,opacity:.72,
+            depthWrite:false,toneMapped:false,side:THREE.DoubleSide});
+        contactShadowGeometry=new THREE.PlaneGeometry(1,1);
+    }
+    const shadow=new THREE.Mesh(contactShadowGeometry,contactShadowMaterial);
+    shadow.rotation.x=-Math.PI/2;shadow.position.y=.025;shadow.scale.set(scale*1.5,scale,scale);
+    shadow.renderOrder=1;shadow.userData.contactShadow=true;return shadow;
 }
 
 
@@ -2734,16 +2751,18 @@ function spawnExplosion(x, y, z, color, count) {
 }
 
 function spawnPulse(x, y, z, color) {
-    const geo = new THREE.RingGeometry(0.1, 0.5, 32);
-    const mat = new THREE.MeshBasicMaterial({color: color, transparent: true, opacity: 1.0, side: THREE.DoubleSide, depthWrite: false});
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI/2;
-    mesh.position.set(x, y + 0.1, z); // Slightly above ground
-
-    state.particles.push(new VisualEffect(mesh, 0.6, (eff, dt) => {
+    const mesh=new THREE.Group();mesh.position.set(x,y+.1,z);mesh.rotation.x=-Math.PI/2;
+    const material=()=>new THREE.MeshBasicMaterial({color,transparent:true,opacity:1,side:THREE.DoubleSide,
+        depthWrite:false,blending:THREE.AdditiveBlending});
+    const inner=new THREE.Mesh(new THREE.RingGeometry(.1,.46,48),material());
+    const outer=new THREE.Mesh(new THREE.RingGeometry(.58,.64,64),material());outer.material.opacity=.62;
+    const glyph=new THREE.Mesh(new THREE.TorusKnotGeometry(.26,.018,48,5,2,3),material());glyph.scale.z=.08;glyph.material.opacity=.48;
+    mesh.add(inner,outer,glyph);
+    state.particles.push(new VisualEffect(mesh, 0.7, (eff, dt) => {
         const progress = 1.0 - (eff.life / eff.maxLife);
-        eff.mesh.scale.setScalar(1.0 + progress * 10.0);
-        eff.mesh.material.opacity = eff.life / eff.maxLife;
+        eff.mesh.scale.setScalar(1.0 + progress * 9.0);eff.mesh.rotation.z+=dt*1.8;
+        inner.material.opacity=1-progress;outer.material.opacity=.62*(1-progress)*(1-progress);glyph.material.opacity=.48*(1-progress);
+        outer.rotation.z-=dt*3.1;glyph.rotation.z+=dt*4.4;
     }));
 }
 
@@ -2791,6 +2810,7 @@ function spawnDust(x, y, z, color, radius) {
 // --- js/terrain.js ---
 
 let chunkTerrainMat, chunkWaterGeo, chunkWaterMat;
+let groundCoverGrassGeo, groundCoverGrassMat, groundCoverStoneGeo, groundCoverStoneMat;
 
 // Shared objects for performance
 const _cWater = new THREE.Color(COLORS.water);
@@ -2818,6 +2838,8 @@ function initTerrainResources() {
         varying vec2 vUv;
         varying float vFoam;
         varying vec2 vWorldXZ;
+        varying vec3 vWorldPosition;
+        varying vec3 vWaveNormal;
         void main() {
             vUv = uv;
             vFoam = foam;
@@ -2835,28 +2857,42 @@ function initTerrainResources() {
             height += sin(worldPosition.z * 1.2 + time * 1.3) * 0.05;
 
             pos.z += height;
+            float dx=cos(worldPosition.x*.5+time)*.075+cos(worldPosition.x*1.5+time*1.5)*.075;
+            float dz=cos(worldPosition.z*.4+time)*.06+cos(worldPosition.z*1.2+time*1.3)*.06;
+            vWaveNormal=normalize(vec3(-dx,1.0,-dz));
+            vWorldPosition=(modelMatrix*vec4(pos,1.0)).xyz;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
         }
     `;
     const waterFragmentShader = `
         uniform vec3 color;
+        uniform vec3 skyColor;
+        uniform vec3 sunDirection;
         uniform float time;
         varying vec2 vUv;
         varying float vFoam;
         varying vec2 vWorldXZ;
+        varying vec3 vWorldPosition;
+        varying vec3 vWaveNormal;
         void main() {
             float swell = sin(vWorldXZ.x * 0.43 + time * 0.7) * cos(vWorldXZ.y * 0.37 - time * 0.56);
             float detail = sin(vWorldXZ.x * 1.21 - time * 1.3 + sin(vWorldXZ.y * 0.45)) * sin(vWorldXZ.y * 0.86 + time);
             vec3 deep = color * vec3(0.35,0.69,0.98);
             vec3 lagoon = vec3(0.035,0.62,0.70);
+            vec3 viewDir=normalize(cameraPosition-vWorldPosition);
+            vec3 normal=normalize(vWaveNormal+vec3(detail*.035,0.0,swell*.025));
+            float fresnel=pow(1.0-max(dot(viewDir,normal),0.0),3.2);
+            vec3 reflected=mix(skyColor,vec3(0.82,0.91,1.0),pow(max(dot(reflect(-viewDir,normal),normalize(sunDirection)),0.0),64.0));
             vec3 baseColor = mix(deep,lagoon,clamp(vFoam * 0.45 + swell * 0.08,0.0,0.7));
             baseColor += vec3(0.016,0.047,0.056) * detail;
+            baseColor=mix(baseColor,reflected,.12+fresnel*.58);
             float f = vFoam;
             float ripples = sin(vWorldXZ.x * 2.4 + time * 1.5) * cos(vWorldXZ.y * 2.1 - time * 1.2) * 0.5 + 0.5;
             float pulse = sin(f * 20.0 - time * 4.0) * 0.5 + 0.5;
             float foamAmount = smoothstep(0.2, 0.7, f * 0.8 + ripples * 0.2 * f + pulse * 0.1 * f);
             vec3 finalColor = mix(baseColor, vec3(0.83, 0.95, 0.9), foamAmount * 0.82);
-            float glint = pow(max(0.0, ripples * (0.55 + swell * 0.45)), 12.0) * 0.10;
+            float glint = pow(max(dot(reflect(-normalize(sunDirection),normal),viewDir),0.0),72.0)*1.25+
+                pow(max(0.0, ripples * (0.55 + swell * 0.45)), 12.0) * 0.07;
             finalColor += vec3(glint);
             float finalAlpha = mix(0.87, 0.98, foamAmount);
             gl_FragColor = vec4(finalColor, finalAlpha);
@@ -2867,11 +2903,14 @@ function initTerrainResources() {
     chunkWaterMat = new THREE.ShaderMaterial({
         uniforms: {
             time: { value: 0 },
-            color: { value: new THREE.Color(COLORS.water).convertSRGBToLinear() }
+            color: { value: new THREE.Color(COLORS.water).convertSRGBToLinear() },
+            skyColor:{value:new THREE.Color(CONFIG.BIOMES.normal.bg).convertSRGBToLinear()},
+            sunDirection:{value:new THREE.Vector3(.42,.84,.34).normalize()}
         },
         vertexShader: waterVertexShader,
         fragmentShader: waterFragmentShader,
         transparent: true,
+        depthWrite:false,
         side: THREE.DoubleSide
     });
 
@@ -3343,6 +3382,69 @@ function updateChunkDecorations(chunk, cx, cz) {
         }
     }
 
+    if (chunk.userData.groundCover) {
+        const cover=chunk.userData.groundCover, dummy=new THREE.Object3D();
+        for (const layer of [cover.grass,cover.stones]) {
+            if(!layer?.mesh)continue;
+            for(let i=0;i<layer.data.length;i++) {
+                const d=layer.data[i],h=getHeight(d.x,d.z);
+                const visible=h>WATER_LEVEL+(layer===cover.grass ? .4 : .15)&&h<(layer===cover.grass ? 18 : 34);
+                dummy.position.set(d.x,h+(layer===cover.stones ? .08 : 0),d.z);
+                dummy.rotation.set(d.rx,d.ry,d.rz);
+                dummy.scale.setScalar(visible?d.scale:0);
+                if(layer===cover.grass)dummy.scale.y*=d.height;
+                dummy.updateMatrix();layer.mesh.setMatrixAt(i,dummy.matrix);
+                const base=layer.mesh.geometry.attributes.aBasePos;
+                if(base){base.setXYZ(i,d.x,h,d.z);base.needsUpdate=true;}
+            }
+            layer.mesh.instanceMatrix.needsUpdate=true;
+        }
+    }
+
+}
+
+function createGroundCover(grp,cx,cz) {
+    if(!groundCoverGrassGeo) {
+        groundCoverGrassGeo=new THREE.ConeGeometry(.16,.68,4,2);
+        groundCoverGrassGeo.translate(0,.34,0);
+        groundCoverGrassMat=new THREE.MeshStandardMaterial({color:0x78c94b,roughness:.98,
+            map:Art.textures.grass,normalMap:Art.blender.texture('grass','normal'),
+            roughnessMap:Art.blender.texture('grass','roughness'),side:THREE.DoubleSide,vertexColors:true});
+        addWindShader(groundCoverGrassMat);
+        groundCoverStoneGeo=new THREE.DodecahedronGeometry(.24,0);
+        groundCoverStoneMat=new THREE.MeshStandardMaterial({color:0xb4aa91,roughness:.94,
+            map:Art.blender.texture('gravel','map'),normalMap:Art.blender.texture('gravel','normal'),
+            roughnessMap:Art.blender.texture('gravel','roughness'),vertexColors:true});
+    }
+    const seed=((cx*73856093)^(cz*19349663)^0x4a39b70d)>>>0,rand=mulberry32(seed);
+    const density=state.graphicsQuality?.coverDensity||1;
+    const grassData=[],stoneData=[],offX=cx*CHUNK_SIZE,offZ=cz*CHUNK_SIZE;
+    const populate=(target,total,isGrass)=>{
+        for(let i=0;i<total;i++) {
+            const x=offX+(rand()-.5)*CHUNK_SIZE,z=offZ+(rand()-.5)*CHUNK_SIZE,h=getHeight(x,z);
+            const hx=getHeight(x+.45,z)-getHeight(x-.45,z),hz=getHeight(x,z+.45)-getHeight(x,z-.45);
+            const slope=Math.sqrt(hx*hx+hz*hz);
+            if(h<=WATER_LEVEL+(isGrass?.4:.12)||(isGrass&&h>17)||(!isGrass&&h>36)||(isGrass&&slope>.8))continue;
+            target.push({x,z,rx:isGrass ? 0 : (rand()-.5)*.8,ry:rand()*Math.PI*2,rz:isGrass ? 0 : (rand()-.5)*.8,
+                scale:(isGrass ? .42 : .45)+rand()*(isGrass ? .75 : .95),height:isGrass ? .7+rand()*.9 : 1});
+        }
+    };
+    populate(grassData,Math.floor(150*density),true);populate(stoneData,Math.floor(20*density),false);
+    const makeLayer=(data,geometry,material,isGrass)=>{
+        if(!data.length)return null;
+        const geo=geometry.clone(),mesh=new THREE.InstancedMesh(geo,material,data.length),dummy=new THREE.Object3D();
+        const bases=new Float32Array(data.length*3),color=new THREE.Color();
+        data.forEach((d,i)=>{
+            const h=getHeight(d.x,d.z);dummy.position.set(d.x,h+(isGrass?0:.08),d.z);dummy.rotation.set(d.rx,d.ry,d.rz);
+            dummy.scale.setScalar(d.scale);if(isGrass)dummy.scale.y*=d.height;dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
+            bases.set([d.x,h,d.z],i*3);color.setHex(isGrass?[0x73c948,0x5daf3e,0x8bd45b][i%3]:[0xa89d84,0x817967,0xc0b59d][i%3]);mesh.setColorAt(i,color);
+        });
+        geo.setAttribute('aBasePos',new THREE.InstancedBufferAttribute(bases,3));
+        mesh.castShadow=false;mesh.receiveShadow=!isGrass;mesh.frustumCulled=true;mesh.userData.groundCover=isGrass?'grass':'stone';grp.add(mesh);
+        return {mesh,data};
+    };
+    grp.userData.groundCover={grass:makeLayer(grassData,groundCoverGrassGeo,groundCoverGrassMat,true),
+        stones:makeLayer(stoneData,groundCoverStoneGeo,groundCoverStoneMat,false)};
 }
 
 function createChunk(cx, cz) {
@@ -3374,14 +3476,18 @@ function createChunk(cx, cz) {
 
     updateChunkPhysics(cx, cz, geo);
 
-    grp.userData = { trees: [], flowers: [] };
+    grp.userData = { trees: [], flowers: [], groundCover: null };
+    createGroundCover(grp,cx,cz);
+    const chunkRandom=mulberry32(((cx*92837111)^(cz*689287499)^0x7f4a7c15)>>>0);
     for(let k=0; k<6; k++) {
-        if(Math.random() > 0.5) {
-             const lx = (Math.random()-0.5)*CHUNK_SIZE; const lz = (Math.random()-0.5)*CHUNK_SIZE;
+        if(chunkRandom() > 0.42) {
+             const lx = (chunkRandom()-0.5)*CHUNK_SIZE; const lz = (chunkRandom()-0.5)*CHUNK_SIZE;
              const h = getHeight(lx+offX, lz+offZ);
              if(h > 3 && h < 8) {
                 const treeGroup = Art.tree();
                 treeGroup.position.set(lx+offX, h, lz+offZ);
+                treeGroup.rotation.y=chunkRandom()*Math.PI*2;
+                const treeScale=.78+chunkRandom()*.48;treeGroup.scale.set(treeScale,.9+chunkRandom()*.35,treeScale);
                 grp.add(treeGroup);
 
                 grp.userData.trees.push({
@@ -4654,6 +4760,20 @@ window.Humanoid = class Humanoid {
         }
 
         Characters.build(this, getFactionColor(faction));
+        const variantSeed=[...this.id].reduce((sum,ch)=>(sum*33+ch.charCodeAt(0))>>>0,5381);
+        if(type!=='airship') {
+            const tone=[0xf1d7c4,0xd8b59c,0xbc8d70,0x8f654f][variantSeed%4],skinVariant=new THREE.Color(tone).convertSRGBToLinear();
+            let personalSkin=null;
+            this.mesh.traverse(part=>{
+                if(part.isMesh&&part.material?.userData?.characterKind==='skin') {
+                    if(!personalSkin){personalSkin=part.material.clone();personalSkin.color.copy(skinVariant);personalSkin.name+=' variant';}
+                    part.material=personalSkin;
+                }
+            });
+            if(this.hairMat)this.hairMat.color.setHex([0x211914,0x4b2d1d,0x7a4327,0xc36f32][(variantSeed>>>3)%4]).convertSRGBToLinear();
+            if(this.torso)this.torso.scale.x=.96+((variantSeed>>>6)%9)*.01;
+        }
+        if(type!=='airship'){this.contactShadow=createContactShadow(type==='shaman' ? .62 : .47);this.mesh.add(this.contactShadow);}
 
         // Initialize at terrain height without arbitrary downward offset to prevent foot clipping
         this.mesh.position.set(x, getHeight(x,z), z);
@@ -5869,6 +5989,8 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
     else if (type === 'shipyard') { mesh = buildShipyard(faction); maxHp = CONFIG.BUILDING.SHIPYARD_HP; }
 
     if(mesh) {
+        const footprint={hut:2.9,tower:2.1,warrior:3.4,fire:3.0,spy:2.9,shipyard:3.8}[type]||2.5;
+        group.add(createContactShadow(footprint));
         group.add(mesh);
 
         // HP Bar for Building
@@ -6851,6 +6973,22 @@ window.onload = () => setTimeout(init, 100);
 
 window.enemyAIs = [];
 
+function createSkyDome() {
+    const material=new THREE.ShaderMaterial({
+        uniforms:{topColor:{value:new THREE.Color(0x3997dd)},horizonColor:{value:new THREE.Color(0xb8e4f5)},
+            sunDirection:{value:new THREE.Vector3(.42,.84,.34).normalize()},time:{value:0}},
+        vertexShader:`varying vec3 vSkyDirection;void main(){vSkyDirection=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+        fragmentShader:`uniform vec3 topColor;uniform vec3 horizonColor;uniform vec3 sunDirection;uniform float time;varying vec3 vSkyDirection;
+            void main(){float horizon=pow(clamp(vSkyDirection.y*.5+.5,0.0,1.0),.58);vec3 c=mix(horizonColor,topColor,horizon);
+            float sun=pow(max(dot(normalize(vSkyDirection),normalize(sunDirection)),0.0),180.0);
+            float haze=pow(1.0-abs(vSkyDirection.y),5.0);c+=vec3(1.0,.62,.25)*sun*1.65+vec3(.08,.11,.12)*haze;
+            gl_FragColor=vec4(c,1.0);\n#include <tonemapping_fragment>\n#include <encodings_fragment>}`,
+        side:THREE.BackSide,depthWrite:false,depthTest:false,fog:false
+    });
+    const sky=new THREE.Mesh(new THREE.SphereGeometry(430,32,18),material);sky.frustumCulled=false;sky.renderOrder=-1000;
+    sky.name='Procedural atmosphere';return sky;
+}
+
 async function init() {
     console.log("Initializing Game...");
 
@@ -6942,8 +7080,12 @@ async function init() {
         state.camera = state.orthoCamera;
         updateCameraZoom();
 
+        const memory=navigator.deviceMemory||8,cores=navigator.hardwareConcurrency||8;
+        const tier=memory<=4||cores<=4?'medium':'high';
+        state.graphicsQuality={tier,coverDensity:tier==='high'?1:.68,maxPixelRatio:tier==='high'?1.5:1.2,
+            dynamicScale:1,lastAdjustment:performance.now(),averageFps:60};
         state.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        state.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+        state.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, state.graphicsQuality.maxPixelRatio));
         state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         state.renderer.toneMappingExposure = 0.75;
         state.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -6956,6 +7098,7 @@ async function init() {
         const amb = new THREE.HemisphereLight(0xd6e9ec, 0x56604a, 0.65);
         state.ambLight = amb;
         state.scene.add(amb);
+        state.skyDome=createSkyDome();state.scene.add(state.skyDome);
         state.scene.add(state.rangeRing);
         state.impactRing = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.1, 32), new THREE.MeshBasicMaterial({color: COLORS.hpRed, transparent: true, opacity: 0.3}));
         state.impactRing.visible = false;
@@ -6971,6 +7114,8 @@ async function init() {
         sun.shadow.bias = -0.0003;
         sun.shadow.normalBias = 0.035;
         state.scene.add(sun);
+        state.rimLight=new THREE.DirectionalLight(0x8fc8ff,.42);
+        state.rimLight.position.set(-45,35,-55);state.scene.add(state.rimLight);
 
         state.raycaster = new THREE.Raycaster();
 
@@ -8032,6 +8177,7 @@ const _inputVector = new THREE.Vector2();
 
 let _framesThisSecond = 0;
 let _lastFpsTime = performance.now();
+let _qualityFrames=0,_qualityWindowStart=performance.now();
 
 function animate() {
     requestAnimationFrame(animate);
@@ -8045,6 +8191,8 @@ function animate() {
     const targetWaterColor = (biome === 'winter' || (state.matchSettings && state.matchSettings.winter)) ? winterColor : waterColor;
     if (state.chunkWaterMat) {
         state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(targetWaterColor).convertSRGBToLinear(), dt * CONFIG.WATER_WAVE.WATER_LERP_SPEED);
+        state.chunkWaterMat.uniforms.skyColor.value.lerp(new THREE.Color(biomeCfg.bg).convertSRGBToLinear(),dt*.7);
+        if(state.sunLight)state.chunkWaterMat.uniforms.sunDirection.value.copy(state.sunLight.position).sub(state.sunLight.target.position).normalize();
     }
     if (biome === 'winter' || (state.matchSettings && state.matchSettings.winter)) {
         state.waterState = Math.floor(state.clock.getElapsedTime() / 30) % 2 === 0 ? 'liquid' : 'frozen';
@@ -8064,6 +8212,25 @@ function animate() {
         state.scene.fog.far += (fogFar - state.scene.fog.far) * dt;
         state.sunLight.intensity += (sunInt - state.sunLight.intensity) * dt;
         state.sunLight.color.lerp(new THREE.Color(sunCol), dt);
+        if(state.skyDome) {
+            state.skyDome.position.copy(state.camera.position);
+            state.skyDome.material.uniforms.topColor.value.lerp(new THREE.Color(targetBg).multiplyScalar(.78),dt*.7);
+            state.skyDome.material.uniforms.horizonColor.value.lerp(new THREE.Color(targetFog).lerp(new THREE.Color(0xffffff),.2),dt*.7);
+            state.skyDome.material.uniforms.sunDirection.value.copy(state.sunLight.position).sub(state.sunLight.target.position).normalize();
+            state.skyDome.material.uniforms.time.value=state.clock?.elapsedTime||0;
+        }
+    }
+
+    _qualityFrames++;
+    if(state.graphicsQuality&&frameTime-_qualityWindowStart>5000) {
+        const fps=_qualityFrames*1000/(frameTime-_qualityWindowStart);state.graphicsQuality.averageFps=fps;
+        let scale=state.graphicsQuality.dynamicScale;
+        if(fps<36)scale=Math.max(.67,scale-.1);else if(fps>56)scale=Math.min(1,scale+.05);
+        if(Math.abs(scale-state.graphicsQuality.dynamicScale)>.001) {
+            state.graphicsQuality.dynamicScale=scale;
+            state.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,state.graphicsQuality.maxPixelRatio)*scale);
+        }
+        _qualityFrames=0;_qualityWindowStart=frameTime;
     }
 
 
@@ -8088,6 +8255,7 @@ function animate() {
 
     if (state.clock) {
         window.flowerUniforms.uTime.value = state.clock.getElapsedTime();
+        if(Art.uniforms)Art.uniforms.windTime.value=state.clock.getElapsedTime();
     }
 
     _inputVector.copy(state.joystickVector).add(state.keyboardVector).clampLength(0, 1);

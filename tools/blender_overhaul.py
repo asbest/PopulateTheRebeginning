@@ -481,6 +481,8 @@ def crafted_maps():
         "fur":(0xe2d4b9,.91,.13),"feather":(0xd6d4c8,.82,.11),
         "rope":(0xe0d2b3,.94,.15),"sand":(0xe9d0a1,.97,.12),
         "cliff":(0xb9ae98,.93,.24),
+        "dirt":(0x927653,.91,.19),"mud":(0x665440,.72,.16),
+        "gravel":(0xa69b83,.89,.27),"moss":(0x5f8e43,.96,.20),
     }
     for number,(name,(color,roughness,strength)) in enumerate(surfaces.items()):
         noise=surface_noise(size,200+number)
@@ -505,6 +507,14 @@ def crafted_maps():
             pattern=np.sin(math.tau*(x*14+y*42))*.21
         elif name=="cliff":
             pattern=np.abs(np.sin(math.tau*(y*9+noise*.7)))*.13+np.sin(math.tau*(x*21+y*15))*.06
+        elif name=="dirt":
+            pattern=np.sin(math.tau*(x*23+y*17+noise*.55))*.11+np.maximum(0,grain-.62)*.24
+        elif name=="mud":
+            pattern=np.sin(math.tau*(x*5+y*3+noise*.75))*.08-np.maximum(0,grain-.68)*.17
+        elif name=="gravel":
+            pattern=np.maximum(0,np.sin(math.tau*x*43)*np.sin(math.tau*y*47))*.24+grain*.12
+        elif name=="moss":
+            pattern=np.sin(math.tau*(x*11-y*7+noise*.8))*.13+np.maximum(0,noise-.5)*.2
         else:
             pattern=np.sin(math.tau*x*187)*np.sin(math.tau*y*173)*.10
         height=np.clip(.5+noise*.33+grain*.24+pattern,.02,.98)

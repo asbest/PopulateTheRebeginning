@@ -43,8 +43,13 @@ try {
  await fs.mkdir(path.join(root,'test-results'),{recursive:true});
  await page.screenshot({path:path.join(root,'test-results/materials-close.png')});
  const assets=await Promise.all(['grass','stone','thatch','wood'].map(async name=>({name,bytes:(await fs.stat(path.join(root,'art/materials',name+'.png'))).size})));
+ const terrainLayers=await Promise.all(['dirt','mud','gravel','moss'].map(async name=>({name,
+  albedo:(await fs.stat(path.join(root,'art/blender',name+'-albedo.png'))).size,
+  normal:(await fs.stat(path.join(root,'art/blender',name+'-normal.png'))).size,
+  roughness:(await fs.stat(path.join(root,'art/blender',name+'-roughness.png'))).size})));
  const report={pass:errors.length===0&&detail.images.some(([w,h])=>w>=1000&&h>=1000)&&assets.every(a=>a.bytes>1000000)&&
-  detail.grass===0x65bd38&&detail.terrainSamples>10&&detail.grassVariation>.01&&detail.shaderVersion==='island-terrain-detail-v4',detail,assets,errors};
+  terrainLayers.every(a=>a.albedo>400000&&a.normal>200000&&a.roughness>100000)&&
+  detail.grass===0x65bd38&&detail.terrainSamples>10&&detail.grassVariation>.01&&detail.shaderVersion==='island-terrain-detail-v5',detail,assets,terrainLayers,errors};
  await fs.writeFile(path.join(root,'test-results/materials-report.json'),JSON.stringify(report,null,2));
  console.log(JSON.stringify(report));process.exitCode=report.pass?0:1;
 }finally{await browser.close();}

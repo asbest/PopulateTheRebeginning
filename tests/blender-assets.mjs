@@ -73,14 +73,14 @@ try {
         wildlife.update(1/60);
         if(wildlife.bunnies.includes(bunny)||wildlife.birds.includes(bird))
             throw new Error('Wildlife failed to respawn after leaving the map');
-        const textures=['grass','stone','wood','thatch','skin','cloth','rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff'].map(kind=>{
+        const textures=['grass','stone','wood','thatch','skin','cloth','rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff','dirt','mud','gravel','moss'].map(kind=>{
             const normal=Art.blender.texture(kind,'normal'),rough=Art.blender.texture(kind,'roughness'),albedo=Art.blender.texture(kind,'map');
             return {kind,albedo:[albedo.image?.width,albedo.image?.height],normal:[normal.image?.width,normal.image?.height],rough:[rough.image?.width,rough.image?.height]};
         });
         return {keys:keys.length,buildings,roles,treeDetails:count(tree),wildlife:{maxHop,minClearance,earMotion,wingMotion},textures};
     });
-    await page.waitForFunction(()=>['grass','stone','wood','thatch','skin','cloth','rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff'].every(k=>
+    await page.waitForFunction(()=>['grass','stone','wood','thatch','skin','cloth','rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff','dirt','mud','gravel','moss'].every(k=>
         ['map','normal','roughness'].every(type=>Art.blender.texture(k,type).image?.width>=1000)),null,{timeout:30000});
     if(errors.length||missing.length)throw new Error(JSON.stringify({errors,missing}));
-    console.log('PASS indexed Blender model integration and seventeen full-resolution PBR material sets',result);
+    console.log('PASS indexed Blender model integration and twenty-one full-resolution PBR material sets',result);
 } finally {await browser.close();}
