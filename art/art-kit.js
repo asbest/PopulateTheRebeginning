@@ -29,16 +29,19 @@ export function createArtKit(T) {
         t.magFilter=T.LinearFilter;
         return t;
     }
-    const textures={wood:surface('wood'),stone:surface('stone'),thatch:surface('thatch'),grass:surface('grass'),cloth:blender.texture('cloth','map')};
+    const textures={wood:surface('wood'),stone:surface('stone'),thatch:surface('thatch'),grass:surface('grass'),
+        sand:blender.texture('sand','map'),cliff:blender.texture('cliff','map'),
+        bronze:blender.texture('bronze','map'),cloth:blender.texture('cloth','map')};
     function material(color,kind='wood',metal=0,emission=0) {
         const key=[color,kind,metal,emission].join('/');
         if(!mats.has(key)) {
-            const detailed=kind==='stone'||kind==='thatch'||kind==='wood'||kind==='cloth';
+            const source=metal>.4?'bronze':kind;
+            const detailed=source==='bronze'||kind==='stone'||kind==='thatch'||kind==='wood'||kind==='cloth';
             const tint=new T.Color(color);
             if(detailed&&!metal)tint.lerp(new T.Color(0xffffff),kind==='wood'?0.75:0.45);
-            mats.set(key,new T.MeshStandardMaterial({color:tint,map:textures[kind],
-                normalMap:detailed?blender.texture(kind,'normal'):null,
-                roughnessMap:detailed?blender.texture(kind,'roughness'):null,
+            mats.set(key,new T.MeshStandardMaterial({color:tint,map:textures[source],
+                normalMap:detailed?blender.texture(source,'normal'):null,
+                roughnessMap:detailed?blender.texture(source,'roughness'):null,
                 normalScale:new T.Vector2(kind==='stone'?.44:.28,kind==='stone'?.44:.28),
                 roughness:metal?0.55:1,metalness:metal,emissive:emission}));
         }
@@ -178,18 +181,32 @@ export function createArtKit(T) {
         material.roughness=0.94; material.metalness=0;
         material.onBeforeCompile = shader => {
             shader.uniforms.artGrass={value:textures.grass};
-            shader.vertexShader='varying vec3 vArtPosition;\n'+shader.vertexShader;
-            shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvArtPosition = (modelMatrix * vec4(position,1.0)).xyz;');
-            shader.fragmentShader='uniform sampler2D artGrass;\nvarying vec3 vArtPosition;\n'+shader.fragmentShader;
+            shader.uniforms.artRock={value:textures.cliff};
+            shader.uniforms.artSand={value:textures.sand};
+            shader.vertexShader='varying vec3 vArtPosition;\nvarying vec3 vArtNormal;\n'+shader.vertexShader;
+            shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
+                '#include <begin_vertex>\nvArtPosition = (modelMatrix * vec4(position,1.0)).xyz;\nvArtNormal = normalize(mat3(modelMatrix) * normal);');
+            shader.fragmentShader='uniform sampler2D artGrass;\nuniform sampler2D artRock;\nuniform sampler2D artSand;\nvarying vec3 vArtPosition;\nvarying vec3 vArtNormal;\n'+shader.fragmentShader;
             shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+                float slope = 1.0 - abs(normalize(vArtNormal).y);
                 float grassWeight=smoothstep(0.035,0.15,diffuseColor.g-max(diffuseColor.r,diffuseColor.b));
+                float sandWeight=smoothstep(0.035,0.14,diffuseColor.r-diffuseColor.g);
                 vec3 grassA=pow(texture2D(artGrass,vArtPosition.xz*0.5).rgb,vec3(2.2));
                 vec3 grassB=pow(texture2D(artGrass,mat2(0.8,-0.6,0.6,0.8)*vArtPosition.xz*0.17).rgb,vec3(2.2));
                 vec3 grass=mix(grassA,grassB,0.22);
-                diffuseColor.rgb=mix(diffuseColor.rgb,grass*1.5,grassWeight*0.65);
+                vec3 sand=pow(texture2D(artSand,vArtPosition.xz*0.27).rgb,vec3(2.2));
+                vec3 weights=pow(abs(normalize(vArtNormal)),vec3(4.0));
+                weights/=max(weights.x+weights.y+weights.z,0.0001);
+                vec3 rockX=pow(texture2D(artRock,vArtPosition.zy*0.34).rgb,vec3(2.2));
+                vec3 rockY=pow(texture2D(artRock,vArtPosition.xz*0.34).rgb,vec3(2.2));
+                vec3 rockZ=pow(texture2D(artRock,vArtPosition.xy*0.34).rgb,vec3(2.2));
+                vec3 rock=rockX*weights.x+rockY*weights.y+rockZ*weights.z;
+                diffuseColor.rgb=mix(diffuseColor.rgb,grass*1.42,grassWeight*0.66*(1.0-smoothstep(0.25,0.65,slope)));
+                diffuseColor.rgb=mix(diffuseColor.rgb,sand*1.20,sandWeight*0.49*(1.0-smoothstep(0.35,0.75,slope)));
+                diffuseColor.rgb=mix(diffuseColor.rgb,rock*1.32,smoothstep(0.36,0.72,slope)*0.82);
             `);
         };
-        material.customProgramCacheKey=()=> 'island-terrain-detail-v2';
+        material.customProgramCacheKey=()=> 'island-terrain-detail-v3';
     }
     return {building,tree,dress,terrainDetail,textures,palette,ready:blender.ready,blender};
 }

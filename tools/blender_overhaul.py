@@ -45,6 +45,12 @@ def box(key, material, name, p, s):
          (x-a,y-b,z+c),(x+a,y-b,z+c),(x+a,y+b,z+c),(x-a,y+b,z+c)]
     put(key, material, name, v, [(0,1,5,4),(3,7,6,2),(4,5,6,7),
                                   (1,0,3,2),(0,4,7,3),(5,1,2,6)])
+    # Broad highlights on masonry, timber and shingles read much better at RTS scale.
+    if material in {"stone", "wood", "thatch", "dark"}:
+        bevel = objects[-1].modifiers.new("Soft hand-worked edges", "BEVEL")
+        bevel.width = min(s) * (.11 if material == "stone" else .08)
+        bevel.segments = 1
+        bevel.affect = "EDGES"
 
 
 def beam(key, material, name, start, end, radius, sides=8, radius_end=None):
@@ -225,6 +231,47 @@ for role in ("wild","warrior","shaman","firewarrior","spy"):
     else:
         for i in range(8):
             gem(torso,"ivory",f"Worked bone stitch {i}",((i-4)*.035,-.08,.151),.012,.021,.009)
+    # Larger role-specific forms establish silhouettes before the micro-detail is visible.
+    for side in (-1,1):
+        beam(torso,"leather",f"Shoulder harness {side}",(side*.16,.21,-.07),
+             (side*.11,-.19,.155),.024,8,.017)
+        for part in ("legL","legR"):
+            leg=f"character/{role}/{part}"
+            for turn in range(3):
+                beam(leg,"leather",f"Cross-laced gaiter {side}-{turn}",
+                     (side*.052,-.13-turn*.105,-.052),
+                     (-side*.052,-.18-turn*.105,.056),.009,6)
+        for part in ("armL","armR"):
+            arm=f"character/{role}/{part}"
+            gem(arm,"bronze" if role in ("warrior","firewarrior") else "ivory",
+                f"Wrist clasp {side}",(side*.045,-.16,.05),.024,.032,.013)
+    if role == "warrior":
+        for side in (-1,1):
+            for row in range(3):
+                gem(torso,"bronze",f"Layered shoulder plate {side}-{row}",
+                    (side*(.17+row*.035),.17-row*.055,.045),.09,.042,.105)
+    elif role == "shaman":
+        for side in (-1,1):
+            for i in range(6):
+                leaf(torso,"feather",f"Ceremonial mantle fringe {side}-{i}",
+                     (side*(.07+i*.025),-.27,-.13),(side*.4,-1),.23,.045)
+        for i in range(7):
+            gem(head,"ivory",f"Forehead shell inlay {i}",((i-3)*.033,.10,.11),.019,.028,.013)
+    elif role == "firewarrior":
+        for side in (-1,1):
+            for i in range(4):
+                gem(torso,"ember",f"Volcanic chest shard {side}-{i}",
+                    (side*(.045+i*.04),.12-i*.07,.16),.026,.055,.018)
+    elif role == "spy":
+        for side in (-1,1):
+            for i in range(5):
+                leaf(torso,"dark",f"Layered stealth cloak {side}-{i}",
+                     (side*.13,-.15-i*.07,-.17),(side*.18,-1),.31,.09)
+    else:
+        for side in (-1,1):
+            for i in range(4):
+                gem(torso,"ivory",f"Carved tribal talisman {side}-{i}",
+                    (side*(.09+i*.02),-.12-i*.048,.155),.025,.04,.012)
 
 key="character/airship/root"
 for i in range(18):
@@ -283,27 +330,138 @@ for side in (-1,1):
             leaf("critter/bird/root","feather",f"Flight plumage {side}-{row}-{i}",
                  (side*(.10+row*.10),.11-i*.014,-.10+i*.09),
                  (side*.9,.3),.16+row*.035,.045)
+    wing="critter/bird/wingL" if side<0 else "critter/bird/wingR"
+    outline=[(side*.13,.02,.09),(side*.42,.05,.15),(side*1.30,.03,-.12),
+             (side*1.05,-.02,-.30),(side*.48,-.035,-.37)]
+    put(wing,"feather",f"Curved flight wing {side}",outline,
+        [(0,1,4),(1,2,3),(1,3,4),(4,1,0),(3,2,1),(4,3,1)])
+    for i in range(8):
+        leaf(wing,"feather",f"Layered primary feather {side}-{i}",
+             (side*(.25+i*.125),.03-i*.004,-.19),
+             (side*.65,-.75),.23+i*.024,.068)
+for i in range(9):
+    spread=(i-4)*.23
+    leaf("critter/bird/tail","feather",f"Fan tail feather {i}",
+         (spread*.04,0,-.28),(spread,-1),.42+.12*(1-abs(spread)),.065)
 
 
 def export():
     groups={}
+    depsgraph=bpy.context.evaluated_depsgraph_get()
     for obj in objects:
-        mesh=obj.data
+        evaluated=obj.evaluated_get(depsgraph)
+        mesh=evaluated.to_mesh()
         mesh.calc_loop_triangles()
         key=obj["browser_model"]
         material=obj["material_key"]
-        group=groups.setdefault(key,{}).setdefault(material,{"position":[],"normal":[],"uv":[]})
+        group=groups.setdefault(key,{}).setdefault(material,{"position":[],"normal":[],"uv":[],"index":[]})
+        lookup=group.setdefault("_lookup",{})
         for tri in mesh.loop_triangles:
             nx,ny,nz=tri.normal
             for vertex_id in tri.vertices:
                 bx,by,bz=mesh.vertices[vertex_id].co
                 x,y,z=bx,bz,-by
-                group["position"].extend((round(x,5),round(y,5),round(z,5)))
-                group["normal"].extend((round(nx,5),round(nz,5),round(-ny,5)))
-                group["uv"].extend((round(x*.38+z*.09,5),round(y*.41+z*.19,5)))
-    payload={"version":1,"blender":bpy.app.version_string,"models":groups}
+                item=(round(x,5),round(y,5),round(z,5),
+                      round(nx,5),round(nz,5),round(-ny,5),
+                      round(x*.38+z*.09,5),round(y*.41+z*.19,5))
+                if item not in lookup:
+                    lookup[item]=len(group["position"])//3
+                    group["position"].extend(item[:3])
+                    group["normal"].extend(item[3:6])
+                    group["uv"].extend(item[6:])
+                group["index"].append(lookup[item])
+        evaluated.to_mesh_clear()
+    for model in groups.values():
+        for group in model.values():
+            del group["_lookup"]
+    payload={"version":2,"blender":bpy.app.version_string,"models":groups}
     (OUT/"mesh-pack.json").write_text(json.dumps(payload,separators=(",",":")),encoding="utf8")
-    return len(groups),sum(len(part["position"])//3 for group in groups.values() for part in group.values())
+    return len(groups),sum(len(part["index"]) for group in groups.values() for part in group.values())
+
+
+def surface_noise(size, seed, octaves=5):
+    rng=np.random.default_rng(seed)
+    x,y=np.meshgrid(np.arange(size,dtype=np.float32)/size,
+                    np.arange(size,dtype=np.float32)/size)
+    result=np.zeros((size,size),dtype=np.float32)
+    total=0.
+    for octave in range(octaves):
+        frequency=2**(octave+1)
+        amplitude=.55**octave
+        phase=rng.uniform(0,math.tau,4)
+        layer=(np.sin(math.tau*(x*frequency)+phase[0])*
+               np.sin(math.tau*(y*frequency)+phase[1])+
+               .45*np.cos(math.tau*(x*frequency*2+y*frequency)+phase[2])+
+               .3*np.sin(math.tau*(x*frequency-y*frequency*2)+phase[3]))
+        result+=amplitude*layer
+        total+=amplitude*1.75
+    return result/total
+
+
+def save_rgb(name, rgb):
+    height,width=rgb.shape[:2]
+    image=bpy.data.images.new(name,width=width,height=height,alpha=True,float_buffer=False)
+    pixels=np.empty((height,width,4),dtype=np.float32)
+    pixels[:,:,:3]=np.clip(rgb,0,1)
+    pixels[:,:,3]=1
+    image.pixels.foreach_set(pixels.ravel())
+    image.filepath_raw=str(OUT/(name+".png"))
+    image.file_format="PNG"
+    image.save()
+    bpy.data.images.remove(image)
+
+
+def crafted_maps():
+    size=1024
+    x,y=np.meshgrid(np.arange(size,dtype=np.float32)/size,
+                    np.arange(size,dtype=np.float32)/size)
+    surfaces={
+        "leather":(0xdecbb6,.82,.12),"bronze":(0xe6d7b0,.38,.12),
+        "ivory":(0xeee4cd,.59,.07),"dark":(0xbcc6c6,.84,.14),
+        "ember":(0xe9b69b,.68,.22),"foliage":(0xd9e6b2,.91,.12),
+        "fur":(0xe2d4b9,.91,.13),"feather":(0xd6d4c8,.82,.11),
+        "rope":(0xe0d2b3,.94,.15),"sand":(0xe9d0a1,.97,.12),
+        "cliff":(0xb9ae98,.93,.24),
+    }
+    for number,(name,(color,roughness,strength)) in enumerate(surfaces.items()):
+        noise=surface_noise(size,200+number)
+        grain=surface_noise(size,400+number,7)
+        if name=="leather":
+            pattern=np.sin(math.tau*(x*72+y*5))*.13+np.cos(math.tau*y*121)*.07
+        elif name=="bronze":
+            pattern=np.cos(math.tau*x*83)*np.cos(math.tau*y*71)*.11
+        elif name=="ivory":
+            pattern=np.sin(math.tau*(x*29+y*3))*.12
+        elif name=="dark":
+            pattern=np.sin(math.tau*(x*12+y*19+noise*.6))*.19
+        elif name=="ember":
+            pattern=np.maximum(0,np.sin(math.tau*(x*8+y*11+noise*.5))-.8)*.95
+        elif name=="foliage":
+            pattern=np.sin(math.tau*(x*7+y*2))*.12+np.sin(math.tau*(x*37-y*23))*.06
+        elif name=="fur":
+            pattern=np.sin(math.tau*(x*170+y*17))*.10
+        elif name=="feather":
+            pattern=np.sin(math.tau*(y*115+np.abs(x-.5)*23))*.13
+        elif name=="rope":
+            pattern=np.sin(math.tau*(x*14+y*42))*.21
+        elif name=="cliff":
+            pattern=np.abs(np.sin(math.tau*(y*9+noise*.7)))*.13+np.sin(math.tau*(x*21+y*15))*.06
+        else:
+            pattern=np.sin(math.tau*x*187)*np.sin(math.tau*y*173)*.10
+        height=np.clip(.5+noise*.33+grain*.24+pattern,.02,.98)
+        base=np.array([(color>>16&255),(color>>8&255),(color&255)],dtype=np.float32)/255
+        value=np.clip(.90+noise*.26+grain*.13+pattern*.31,.55,1.15)
+        albedo=np.clip(base[None,None,:]*value[:,:,None],0,1)
+        dx=(np.roll(height,-1,axis=1)-np.roll(height,1,axis=1))*strength
+        dy=(np.roll(height,-1,axis=0)-np.roll(height,1,axis=0))*strength
+        normal=np.stack((-dx,-dy,np.ones_like(dx)),axis=-1)
+        normal/=np.maximum(np.linalg.norm(normal,axis=-1,keepdims=True),1e-6)
+        normal=normal*.5+.5
+        rough=np.clip(roughness+noise*.16+grain*.10-pattern*.15,.18,.99)
+        save_rgb(name+"-albedo",albedo)
+        save_rgb(name+"-normal",normal)
+        save_rgb(name+"-roughness",np.repeat(rough[:,:,None],3,axis=2))
+        print("CRAFTED PBR",name,size,flush=True)
 
 
 def maps():
@@ -320,8 +478,9 @@ def maps():
         image.pixels.foreach_get(rgba)
         color=rgba.reshape(height,width,4)[:,:,:3]
         lum=np.dot(color,np.array([.2126,.7152,.0722],dtype=np.float32))
-        dx=(np.roll(lum,-1,axis=1)-np.roll(lum,1,axis=1))*strength
-        dy=(np.roll(lum,-1,axis=0)-np.roll(lum,1,axis=0))*strength
+        physical_height=.58*lum+.42*surface_noise(width,100+len(name))
+        dx=(np.roll(physical_height,-1,axis=1)-np.roll(physical_height,1,axis=1))*strength
+        dy=(np.roll(physical_height,-1,axis=0)-np.roll(physical_height,1,axis=0))*strength
         normal=np.stack((-dx,-dy,np.ones_like(dx)),axis=-1)
         normal/=np.maximum(np.linalg.norm(normal,axis=-1,keepdims=True),1e-6)
         normal=normal*.5+.5
@@ -338,18 +497,19 @@ def maps():
             bpy.data.images.remove(out)
         bpy.data.images.remove(image)
         print("PBR",name,width,height,flush=True)
+    crafted_maps()
 
 
 def assign_blender_materials():
     specifications={
         "stone":("stone",0xe7d6b5,0),"wood":("wood",0xe8d7b9,0),
-        "thatch":("thatch",0xf4dfaf,0),"rope":("thatch",0xcab391,0),
-        "leather":("wood",0x8c6446,0),"bronze":("wood",0xc6a46a,.68),
-        "ivory":("stone",0xf0e1bc,0),"dark":("wood",0x53626b,.08),
-        "faction":("cloth",0x387bb7,0),"ember":("stone",0xffa653,.15),
-        "leaf0":("grass",0x80b262,0),"leaf1":("grass",0x609349,0),
-        "leaf2":("grass",0xacc46b,0),"fur":("cloth",0xb8a58b,0),
-        "feather":("cloth",0x9e967d,0)}
+        "thatch":("thatch",0xf4dfaf,0),"rope":("rope",0xcab391,0),
+        "leather":("leather",0x8c6446,0),"bronze":("bronze",0xc6a46a,.68),
+        "ivory":("ivory",0xf0e1bc,0),"dark":("dark",0x53626b,.08),
+        "faction":("cloth",0x387bb7,0),"ember":("ember",0xffa653,.15),
+        "leaf0":("foliage",0x80b262,0),"leaf1":("foliage",0x609349,0),
+        "leaf2":("foliage",0xacc46b,0),"fur":("fur",0xb8a58b,0),
+        "feather":("feather",0x9e967d,0)}
     made={}
     for key,(source,color,metallic) in specifications.items():
         mat=bpy.data.materials.new("PBR · "+key)
@@ -362,9 +522,13 @@ def assign_blender_materials():
         base=nodes.new("ShaderNodeTexImage")
         base.label="Project-authored albedo"
         base.location=(-650,250)
-        base_path=ROOT/("art/character-cloth.png" if source=="cloth" else "art/materials/"+source+".png")
+        crafted=source in {"rope","leather","bronze","ivory","dark","ember","foliage","fur","feather"}
+        base_path=(OUT/(source+"-albedo.png") if crafted else
+                   ROOT/("art/character-cloth.png" if source=="cloth" else "art/materials/"+source+".png"))
         base.image=bpy.data.images.load(str(base_path),check_existing=True)
-        base.image.filepath="//../character-cloth.png" if source=="cloth" else "//../materials/"+source+".png"
+        base.image.filepath=("//"+source+"-albedo.png" if crafted else
+                             "//../character-cloth.png" if source=="cloth" else
+                             "//../materials/"+source+".png")
         tint=nodes.new("ShaderNodeMixRGB")
         tint.blend_type="MULTIPLY"
         tint.inputs[0].default_value=1

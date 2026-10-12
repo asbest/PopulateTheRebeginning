@@ -19,6 +19,7 @@ export function createLocomotion(T) {
         u.poseTick=u.updateTicker;dt=clamp(dt,.001,.1);
         const p=u.mesh.position,scale=u.mesh.scale.y;
         const g=u.gait||(u.gait={last:p.clone(),phase:0,speed:0,vx:0,vz:0,feet:[{},{}],pelvis:.615});
+        g.idleTime=(g.idleTime||0)+dt;
         const dx=p.x-g.last.x,dz=p.z-g.last.z,distance=Math.hypot(dx,dz);g.last.copy(p);
         const travel=distance<Math.max(2,u.moveSpeed*dt*3)?distance:0;
         if(travel!==distance){g.feet=[{},{}];g.vx=g.vz=0;}
@@ -126,13 +127,18 @@ export function createLocomotion(T) {
             if(networkAttack){u.armR.rotation.x=-Math.PI/2-strike*Math.PI/2;u.armL.rotation.x=-.4-strike*.4;}
             u.armR.userData.lower.rotation.x=-.16-strike*.4;u.armL.userData.lower.rotation.x=-.16-strike*.25;
         }
-        u.torso.position.set(sway,.9+g.pelvis-.615,0);
+        const breath=Math.sin(g.idleTime*2.3)*.004*(1-weight);
+        u.torso.position.set(sway,.9+g.pelvis-.615+breath,0);
         u.torso.rotation.x=smooth(u.torso.rotation.x,.015*weight+.10*run,12,dt);
         u.torso.rotation.y=smooth(u.torso.rotation.y,-Math.sin(g.phase*Math.PI*2)*.035*weight,12,dt);
         u.torso.rotation.z=smooth(u.torso.rotation.z,-sway*.8,12,dt);
         u.head.rotation.y=smooth(u.head.rotation.y,clamp(wrap((u.turnTarget??yaw)-yaw),-.2,.2)*.35-u.torso.rotation.y*.5,10,dt);
+        u.head.rotation.x=smooth(u.head.rotation.x,breath*.9-.02*run,8,dt);
         const cape=u.torso.getObjectByName(u.isShaman?'CeremonialCape':'SpyCloak');
-        if(cape)cape.rotation.x=smooth(cape.rotation.x,-.14-.08*weight+Math.sin(g.phase*Math.PI*2)*.02*weight,8,dt);
+        if(cape){
+            cape.rotation.x=smooth(cape.rotation.x,-.14-.08*weight+Math.sin(g.phase*Math.PI*2)*.02*weight,8,dt);
+            cape.rotation.z=smooth(cape.rotation.z,Math.sin(g.phase*Math.PI*2)*.035*weight,7,dt);
+        }
         // Cloth stays anchored to the torso instead of kicking forward as a rigid board with the thigh.
         u.torso.updateMatrix();
         for(const leg of [u.legL,u.legR])for(const panel of leg.children.filter(n=>n.name==='SplitRobe')){

@@ -27,7 +27,7 @@ The complete game runs on Three.js. The four 1254 × 1254 source textures are in
 
 ## 3D models
 
-The editable Blender 5.2 source is [`art/blender/Overhaul.blend`](art/blender/Overhaul.blend). Its exported model pack adds sculpted details to every building, character role, airship, tree, bird, rabbit and instanced flower while preserving the animation rig and game mechanics. Six full-resolution PBR normal/roughness material sets improve the surfaces. The original structural meshes and pivots remain in `art/characters.js` and `art/art-kit.js`; [`art/blender-pack.js`](art/blender-pack.js) integrates the Blender details in the browser. See the [Blender source and regeneration guide](docs/BLENDER-OVERHAUL.md) and the live gallery at **http://127.0.0.1:8765/art/characters.html**.
+The editable Blender 5.2 source is [`art/blender/Overhaul.blend`](art/blender/Overhaul.blend). Its indexed model pack adds bevelled and role-specific details to every building, character role, airship, tree, bird, rabbit and instanced flower while preserving the animation rig and game mechanics. Seventeen full-resolution PBR material sets cover the structures, characters, vegetation, wildlife and terrain; distant fine details use LOD. Grass, sand and triplanar natural rock improve the landscape, and close-range sun shadows track the camera. The original structural meshes and pivots remain in `art/characters.js` and `art/art-kit.js`; [`art/blender-pack.js`](art/blender-pack.js) integrates the Blender details in the browser. See the [Blender source and regeneration guide](docs/BLENDER-OVERHAUL.md) and the live gallery at **http://127.0.0.1:8765/art/characters.html**.
 
 ## Verification
 

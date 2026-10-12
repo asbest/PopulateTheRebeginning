@@ -17,36 +17,29 @@ export function createCharacters(T) {
     hairTexture.wrapS=hairTexture.wrapT=T.RepeatWrapping;
     hairTexture.encoding=T.sRGBEncoding;
     hairTexture.anisotropy=4;
-    const atlas = new T.TextureLoader().load(new URL('./character-materials.png', import.meta.url).href);
-    atlas.encoding = T.sRGBEncoding; atlas.anisotropy = 4;
     const tiles = {};
-    for (const [kind, x, y] of [['skin',0,1],['cloth',1,1],['leather',0,0],['gold',1,0]]) {
-        const map=atlas.clone(); map.image=atlas.image; map.offset.set(x*.5+.003,y*.5+.003); map.repeat.set(.494,.494);
-        map.wrapS=map.wrapT=T.ClampToEdgeWrapping; tiles[kind]=map;
-    }
-    // Texture.clone before ImageLoader completes requires explicit image propagation.
-    const atlasReady = new Promise((resolve,reject)=>{
-        new T.ImageLoader().load(atlas.image?.src || new URL('./character-materials.png',import.meta.url).href, image=>{
-            atlas.image=image; atlas.needsUpdate=true;
-            ['leather','gold'].forEach(kind=>{tiles[kind].image=image;tiles[kind].needsUpdate=true;}); resolve(image);
-        },undefined,reject);
-    });
     const detailReady=['skin','cloth'].map(kind=>new Promise((resolve,reject)=>{
-        const map=tiles[kind];map.offset.set(0,0);map.repeat.set(1,1);
+        const map=new T.Texture();map.encoding=T.sRGBEncoding;map.anisotropy=8;
+        tiles[kind]=map;
         new T.ImageLoader().load(new URL(kind==='skin'?'./character-skin-v2.png':'./character-cloth.png',import.meta.url).href,image=>{
             map.userData={dedicated:true};map.image=image;map.needsUpdate=true;resolve(image);
         },undefined,reject);
     }));
-    const ready=Promise.all([atlasReady,...detailReady,blender.ready]);
+    const ready=Promise.all([...detailReady,blender.ready]);
     function mat(kind,color=0xffffff) {
+        if(color===0xffffff&&kind==='leather')color=0x8d6443;
+        if(color===0xffffff&&kind==='gold')color=0xc5a45f;
         const key=kind+'/'+color;
         if(!materials.has(key)) {
-            const m=new T.MeshStandardMaterial({color,map:kind==='hair'?hairTexture:tiles[kind]||null,roughness:kind==='gold'?.39:kind==='skin'?.67:kind==='hair'?.79:.89,metalness:kind==='gold'?.72:0});
+            const crafted=kind==='leather'?'leather':kind==='gold'?'bronze':null;
+            const m=new T.MeshStandardMaterial({color,map:kind==='hair'?hairTexture:crafted?blender.texture(crafted,'map'):tiles[kind]||null,
+                roughness:kind==='gold'?.39:kind==='skin'?.67:kind==='hair'?.79:.89,metalness:kind==='gold'?.72:0});
             m.color.convertSRGBToLinear();
-            if(kind==='skin'||kind==='cloth'){
-                m.normalMap=blender.texture(kind,'normal');
-                m.roughnessMap=blender.texture(kind,'roughness');
-                m.normalScale.setScalar(kind==='skin'?.22:.3);
+            if(kind==='skin'||kind==='cloth'||crafted){
+                const source=crafted||kind;
+                m.normalMap=blender.texture(source,'normal');
+                m.roughnessMap=blender.texture(source,'roughness');
+                m.normalScale.setScalar(kind==='skin' ? .22 : crafted ? .32 : .3);
                 m.roughness=1;
             } else if(tiles[kind]){m.bumpMap=tiles[kind];m.bumpScale=.003;}
             if(kind==='hair'){m.bumpMap=hairTexture;m.bumpScale=.012;}
@@ -200,5 +193,5 @@ export function createCharacters(T) {
         for(const z of [-1.65,0,1.65])mesh(root,geo('hoop',()=>new T.TorusGeometry(1,.025,6,32)),gold,[0,4.5,z],[1.83,1.46,1],'BalloonHoop');
     }
     function setFaction(u,color){u.mesh.traverse(n=>{if(n.userData.characterFaction)n.material=mat('cloth',color);});}
-    return {build,setFaction,ready,atlas,tiles};
+    return {build,setFaction,ready,atlas:null,tiles};
 }
