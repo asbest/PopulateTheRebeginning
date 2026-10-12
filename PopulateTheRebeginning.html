@@ -2164,7 +2164,7 @@ const CritterManager = {
 
     spawnBunny: function(randomPos=false) {
         const group = new THREE.Group();
-        const color = [0x7c6652,0xb29570,0x8b8278,0xb8afa1][Math.floor(Math.random()*4)];
+        const color = [0xb1987c,0xd0bda0,0xa9a49a,0xd4cbc0][Math.floor(Math.random()*4)];
         const mat = new THREE.MeshStandardMaterial({color: color, roughness: 0.88,
             map:Art.blender.texture('fur','map'),normalMap:Art.blender.texture('fur','normal'),
             roughnessMap:Art.blender.texture('fur','roughness')});
@@ -2218,6 +2218,42 @@ const CritterManager = {
         Art.blender.attach(bunnyDetail,'critter/bunny/root');
         group.add(bunnyDetail);
 
+        // Each Blender-authored part lives under a joint, so ears, head and
+        // feet can react independently to takeoff, landing and idle motion.
+        let bunnyRig=null;
+        if(Art.blender.models?.['critter/bunny/body']) {
+            for(const primitive of [body,head,leftEar,rightEar,frontLeftLeg,frontRightLeg,backLeftLeg,backRightLeg]) primitive.visible=false;
+            bunnyRig=new THREE.Group();
+            bunnyRig.scale.setScalar(bodySize/0.42);
+            group.add(bunnyRig);
+            Art.blender.attach(bunnyRig,'critter/bunny/body');
+            const headJoint=new THREE.Group();
+            headJoint.position.set(0,.36,.20);
+            bunnyRig.add(headJoint);
+            Art.blender.attach(headJoint,'critter/bunny/head');
+            const ears=[],frontLegs=[],hindLegs=[];
+            for(const side of [-1,1]) {
+                const suffix=side<0?'L':'R';
+                const ear=new THREE.Group();ear.position.set(side*.085,.155,-.025);
+                headJoint.add(ear);Art.blender.attach(ear,'critter/bunny/ear'+suffix);ears.push(ear);
+                for(const [kind,z,list] of [['frontLeg',.215,frontLegs],['hindLeg',-.22,hindLegs]]) {
+                    const leg=new THREE.Group();leg.position.set(side*.17,.18,z);
+                    bunnyRig.add(leg);Art.blender.attach(leg,'critter/bunny/'+kind+suffix);list.push(leg);
+                }
+            }
+            const tailJoint=new THREE.Group();tailJoint.position.set(0,.25,-.36);
+            bunnyRig.add(tailJoint);Art.blender.attach(tailJoint,'critter/bunny/tail');
+            bunnyRig.userData.joints={head:headJoint,ears,frontLegs,hindLegs,tail:tailJoint};
+            let coat=null;
+            group.traverse(node=>{
+                if(node.isMesh&&node.material?.name==='Blender/fur') {
+                    if(!coat){coat=node.material.clone();coat.color.setHex(color);}
+                    node.material=coat;
+                }
+            });
+            bunnyRig.userData.coat=coat;
+        }
+
 
         let x, z;
         if(randomPos) {
@@ -2248,7 +2284,7 @@ const CritterManager = {
             }
             if(!found) return; // Try again later if we couldn't find land
         }
-        group.position.y = h;
+        group.position.set(x,h,z);
 
         state.scene.add(group);
 
@@ -2260,12 +2296,16 @@ const CritterManager = {
             targetZ: z,
             startY: h,
             jumpTime: 0,
-            jumpDuration: 0.5
+            jumpDuration: 0.5,
+            rig:bunnyRig,
+            phase:Math.random()*Math.PI*2,
+            age:0,
+            facing:Math.random()*Math.PI*2
         });
     },
     spawnBird: function(randomPos=false) {
         const group = new THREE.Group();
-        const color = [0x514c43,0x745f51,0x9a886e,0x56656b][Math.floor(Math.random()*4)];
+        const color = [0x817e75,0x9e988c,0xb2a28a,0x7e9295][Math.floor(Math.random()*4)];
         const mat = new THREE.MeshStandardMaterial({color: color, side: THREE.DoubleSide, roughness: 0.84,
             map:Art.blender.texture('feather','map'),normalMap:Art.blender.texture('feather','normal'),
             roughnessMap:Art.blender.texture('feather','roughness')});
@@ -2334,6 +2374,25 @@ const CritterManager = {
         birdDetail.scale.setScalar(size/0.68);
         Art.blender.attach(birdDetail,'critter/bird/root');
         group.add(birdDetail);
+        let headJoint=null,tailJoint=null;
+        if(Art.blender.models?.['critter/bird/body']) {
+            body.visible=false;head.visible=false;beak.visible=false;
+            const bodyDetail=new THREE.Group();bodyDetail.scale.setScalar(size/0.68);
+            group.add(bodyDetail);Art.blender.attach(bodyDetail,'critter/bird/body');
+            headJoint=new THREE.Group();headJoint.position.set(0,.13*size/.68,.47*size/.68);
+            group.add(headJoint);
+            const headDetail=new THREE.Group();headDetail.scale.setScalar(size/0.68);
+            headJoint.add(headDetail);Art.blender.attach(headDetail,'critter/bird/head');
+            tailJoint=tailDetail;
+            let plumage=null;
+            group.traverse(node=>{
+                if(node.isMesh&&node.material?.name==='Blender/feather') {
+                    if(!plumage){plumage=node.material.clone();plumage.color.setHex(color);}
+                    node.material=plumage;
+                }
+            });
+            group.userData.plumage=plumage;
+        }
 
         let x, z;
         if(randomPos) {
@@ -2368,19 +2427,29 @@ const CritterManager = {
             flapSpeed: 10 + Math.random() * 10,
             flapOffset: Math.random() * Math.PI * 2,
             targetAngle: angle,
-            turnSpeed: 0.5 + Math.random() * 0.5
+            turnSpeed: 0.5 + Math.random() * 0.5,
+            head:headJoint,
+            tail:tailJoint,
+            altitude:y,
+            phase:Math.random()*Math.PI*2,
+            age:0,
+            turnTimer:1+Math.random()*3,
+            flapMix:1
         });
     },
     update: function(dt) {
         // Update Bunnies
         for(let i = this.bunnies.length - 1; i >= 0; i--) {
             const b = this.bunnies[i];
+            b.age+=dt;
+            const joints=b.rig?.userData.joints;
 
             if(b.state === 'idle') {
                 b.timer -= dt;
+                // A planted rabbit follows terrain deformation without sinking.
+                b.mesh.position.y=getHeight(b.mesh.position.x,b.mesh.position.z);
                 if(b.timer <= 0) {
                     b.state = 'hopping';
-                    b.timer = 0.5 + Math.random(); // hop sequence duration
 
                     // Pick a random nearby target
                     const angle = Math.random() * Math.PI * 2;
@@ -2388,8 +2457,7 @@ const CritterManager = {
                     b.targetX = b.mesh.position.x + Math.sin(angle) * dist;
                     b.targetZ = b.mesh.position.z + Math.cos(angle) * dist;
 
-                    // Look at target
-                    b.mesh.lookAt(b.targetX, b.mesh.position.y, b.targetZ);
+                    b.facing=Math.atan2(b.targetX-b.mesh.position.x,b.targetZ-b.mesh.position.z);
 
                     b.jumpTime = 0;
                     b.jumpDuration = 0.3 + Math.random() * 0.2;
@@ -2406,53 +2474,85 @@ const CritterManager = {
                      b.timer = 1 + Math.random() * 3;
                 }
 
-                // Interpolate XZ
-                b.mesh.position.x = b.startX + (b.targetX - b.startX) * t;
-                b.mesh.position.z = b.startZ + (b.targetZ - b.startZ) * t;
+                // Smooth acceleration and braking keep the paws from skating.
+                const travel=t*t*(3-2*t);
+                b.mesh.position.x = b.startX + (b.targetX - b.startX) * travel;
+                b.mesh.position.z = b.startZ + (b.targetZ - b.startZ) * travel;
 
                 // Get ground height
                 const h = getHeight(b.mesh.position.x, b.mesh.position.z);
 
                 // Add arc
-                const arcHeight = Math.sin(t * Math.PI) * 0.5;
+                const arcHeight = Math.sin(t * Math.PI) * Math.min(.52,.18+Math.hypot(b.targetX-b.startX,b.targetZ-b.startZ)*.17);
 
                 // Interpolate Y between startY and current target ground height + arc
-                b.mesh.position.y = b.startY + (h - b.startY) * t + arcHeight;
+                b.mesh.position.y = Math.max(h,b.startY + (h - b.startY) * travel + arcHeight);
 
                 // If bunny hops into deep water, respawn it
                 if(t === 1 && h < VISUAL_WATER_LEVEL - 1) {
                      state.scene.remove(b.mesh);
+                     b.rig?.userData.coat?.dispose();
                      this.bunnies.splice(i, 1);
                      this.spawnBunny(true);
                      continue;
                 }
             }
+            const airborne=b.state==='hopping';
+            const phase=airborne?Math.min(1,b.jumpTime/b.jumpDuration):0;
+            const spring=airborne?Math.sin(Math.PI*phase):0;
+            let turn=b.facing-b.mesh.rotation.y;
+            while(turn>Math.PI)turn-=2*Math.PI;
+            while(turn<-Math.PI)turn+=2*Math.PI;
+            b.mesh.rotation.y+=turn*Math.min(1,dt*9);
+            if(joints) {
+                const breathe=Math.sin(b.age*3+b.phase);
+                b.rig.scale.y=b.rig.scale.x*(1+(airborne?.025*spring:.012*breathe));
+                b.rig.rotation.x=(airborne?-.12*Math.sin(phase*Math.PI*2):0);
+                joints.head.rotation.x=(airborne?-.09*spring:.045*breathe);
+                joints.head.rotation.y=airborne?0:.11*Math.sin(b.age*1.7+b.phase);
+                joints.ears.forEach((ear,index)=>{
+                    ear.rotation.x=-.15-(airborne?.42*spring:.07*Math.sin(b.age*4+b.phase+index));
+                    ear.rotation.z=(index?1:-1)*(.08+.06*Math.sin(b.age*2.5+b.phase));
+                });
+                joints.frontLegs.forEach(leg=>{leg.rotation.x=airborne?-.56*spring:0;});
+                joints.hindLegs.forEach(leg=>{leg.rotation.x=airborne?.62*spring:0;});
+                joints.tail.rotation.x=airborne?.18*spring:.05*breathe;
+            }
 
             // Periodically check if far out of bounds and respawn
             if(Math.abs(b.mesh.position.x) > CONFIG.CRITTERS.BUNNY_RESPAWN_DIST || Math.abs(b.mesh.position.z) > CONFIG.CRITTERS.BUNNY_RESPAWN_DIST) {
                  state.scene.remove(b.mesh);
+                 b.rig?.userData.coat?.dispose();
                  this.bunnies.splice(i, 1);
                  this.spawnBunny(true);
             }
         }
 
         // Update Birds
-        const time = state.clock ? state.clock.getElapsedTime() : 0;
         for(let i = this.birds.length - 1; i >= 0; i--) {
             const b = this.birds[i];
+            b.age+=dt;
 
             // Move forward
             b.mesh.position.x += Math.sin(b.mesh.rotation.y) * b.speed * dt;
             b.mesh.position.z += Math.cos(b.mesh.rotation.y) * b.speed * dt;
 
             // Flap wings
-            const flapAngle = Math.sin(time * b.flapSpeed + b.flapOffset) * 0.5;
-            b.leftWing.rotation.z = flapAngle;
-            b.rightWing.rotation.z = -flapAngle;
+            const glide=.5+.5*Math.sin(b.age*.6+b.phase);
+            b.flapMix+=((glide>.68?.2:1)-b.flapMix)*Math.min(1,dt*2.5);
+            const cycle=b.age*b.flapSpeed+b.flapOffset;
+            // A strong downstroke, slower recovery, and intermittent soaring.
+            const flap=Math.sin(cycle)+.18*Math.sin(cycle*2);
+            const flapAngle=.10+b.flapMix*.58*flap;
+            b.leftWing.rotation.z=flapAngle;
+            b.rightWing.rotation.z=-flapAngle;
+            b.leftWing.rotation.x=b.rightWing.rotation.x=-.06-.10*Math.max(0,-flap);
 
             // Slowly change target angle
-            if(Math.random() < 0.01) {
+            b.turnTimer-=dt;
+            if(b.turnTimer<=0) {
                  b.targetAngle += (Math.random() - 0.5) * Math.PI;
+                 b.turnTimer=1+Math.random()*3;
             }
 
             // Interpolate rotation
@@ -2461,21 +2561,28 @@ const CritterManager = {
             while(diff < -Math.PI) diff += Math.PI * 2;
             while(diff > Math.PI) diff -= Math.PI * 2;
 
-            b.mesh.rotation.y += diff * b.turnSpeed * dt;
+            b.mesh.rotation.y += diff * Math.min(1,b.turnSpeed * dt);
 
             // Bank based on turning
-            b.mesh.rotation.z = -diff * 0.5;
+            const bank=THREE.MathUtils.clamp(-diff*.33,-.38,.38);
+            b.mesh.rotation.z+= (bank-b.mesh.rotation.z)*Math.min(1,dt*3);
+            b.mesh.rotation.x=.025*Math.sin(cycle)+.07*(1-b.flapMix);
+            if(b.head) {
+                b.head.rotation.z=-b.mesh.rotation.z*.45;
+                b.head.rotation.y=THREE.MathUtils.clamp(diff*.2,-.2,.2);
+            }
+            if(b.tail) b.tail.rotation.y=THREE.MathUtils.clamp(-diff*.18,-.18,.18);
 
             // Add slight bobbing
-            b.mesh.position.y += Math.sin(time * 2 + b.flapOffset) * dt;
-
-            // Maintain altitude roughly
-            if (b.mesh.position.y > 50) b.mesh.position.y -= dt;
-            if (b.mesh.position.y < 15) b.mesh.position.y += dt;
+            const safeAltitude=Math.max(b.altitude,getHeight(b.mesh.position.x,b.mesh.position.z)+8);
+            const desiredY=safeAltitude+.23*Math.sin(cycle)+.7*Math.sin(b.age*.5+b.phase);
+            b.mesh.position.y=Math.max(getHeight(b.mesh.position.x,b.mesh.position.z)+8,
+                b.mesh.position.y+(desiredY-b.mesh.position.y)*Math.min(1,dt*2.5));
 
             // Respawn if far out of bounds
             if(Math.abs(b.mesh.position.x) > CONFIG.CRITTERS.BIRD_RESPAWN_DIST || Math.abs(b.mesh.position.z) > CONFIG.CRITTERS.BIRD_RESPAWN_DIST) {
                  state.scene.remove(b.mesh);
+                 b.mesh.userData.plumage?.dispose();
                  this.birds.splice(i, 1);
                  this.spawnBird();
             }
@@ -5070,6 +5177,14 @@ window.Humanoid = class Humanoid {
         const groundH = getSurfaceHeight(this.mesh.position.x, this.mesh.position.z);
 
         if (this.type === 'airship') {
+            if(this.airshipVisual) {
+                const follow=1-Math.exp(-3*Math.min(dt,.1));
+                const roll=THREE.MathUtils.clamp(-this.velocity.x*.011,-.11,.11);
+                const pitch=THREE.MathUtils.clamp(this.velocity.z*.009,-.09,.09);
+                this.airshipVisual.rotation.z+=(roll-this.airshipVisual.rotation.z)*follow;
+                this.airshipVisual.rotation.x+=(pitch-this.airshipVisual.rotation.x)*follow;
+                this.airshipVisual.position.y=.055*Math.sin(this.animTime*1.8);
+            }
             let targetAlt = Math.max(groundH, WATER_LEVEL) + 8.0; // Fly above water or ground
 
             if (this.rocketCooldown) {
@@ -6928,7 +7043,7 @@ async function init() {
             localStorage.setItem(CONFIG.SAVED_KEYS.HELP_SHOWN, 'true');
         }
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, Locomotion, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
+            window.gameTestAPI = { CONFIG, Locomotion, CritterManager, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
         }
     } catch(e) {
         console.error("Init failed:", e);

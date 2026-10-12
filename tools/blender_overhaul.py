@@ -93,6 +93,38 @@ def gem(key, material, name, center, sx, sy, sz):
     put(key,material,name,vertices,faces)
 
 
+def ellipsoid(key, material, name, center, radii, segments=24, rings=12):
+    """Closed, smooth organic volume in browser coordinates."""
+    cx,cy,cz=center
+    rx,ry,rz=radii
+    vertices=[]
+    for j in range(rings+1):
+        theta=math.pi*j/rings
+        for i in range(segments):
+            phi=2*math.pi*i/segments
+            vertices.append((cx+rx*math.sin(theta)*math.cos(phi),
+                             cy+ry*math.cos(theta),
+                             cz+rz*math.sin(theta)*math.sin(phi)))
+    faces=[]
+    for j in range(rings):
+        for i in range(segments):
+            a=j*segments+i
+            b=j*segments+(i+1)%segments
+            c=b+segments
+            d=a+segments
+            faces.append((a,b,c,d))
+    put(key,material,name,vertices,faces)
+    mesh=objects[-1].data
+    uv=mesh.uv_layers.new(name="Organic UV")
+    for face_index,polygon in enumerate(mesh.polygons):
+        polygon.use_smooth=True
+        row=face_index//segments
+        column=face_index%segments
+        corners=((column,row),(column+1,row),(column+1,row+1),(column,row+1))
+        for loop_id,(u,v) in zip(polygon.loop_indices,corners):
+            uv.data[loop_id].uv=(u/segments*3,v/rings*2)
+
+
 def leaf(key, material, name, center, direction, length=.34, width=.12):
     x,y,z=center
     dx,dz=direction
@@ -310,39 +342,61 @@ for i in range(16):
              (math.sin(a)*reach,2.45+(j%3)*.12,math.cos(a)*reach),
              (math.sin(a+(j-2)*.43),math.cos(a+(j-2)*.43)),.36+.05*j,.11)
 
-# Wildlife is also Blender-authored, scaled to each creature's procedural body size.
+# Complete wildlife silhouettes. Moving parts use local pivot coordinates.
+ellipsoid("critter/bunny/body","fur","Rabbit torso",(0,.19,-.055),(.225,.18,.33),32,18)
+ellipsoid("critter/bunny/body","ivory","Chest bib",(0,.14,.205),(.13,.12,.085),20,12)
+ellipsoid("critter/bunny/head","fur","Rabbit head",(0,.045,.055),(.155,.14,.165),28,16)
+ellipsoid("critter/bunny/head","ivory","Muzzle",(0,-.035,.18),(.10,.065,.07),20,12)
+gem("critter/bunny/head","leather","Nose",(0,-.018,.247),.033,.021,.016)
 for side in (-1,1):
-    beam("critter/bunny/root","ivory",f"Whisker {side} A",(side*.12,.32,.29),
-         (side*.29,.35,.38),.004,5)
-    beam("critter/bunny/root","ivory",f"Whisker {side} B",(side*.12,.31,.29),
-         (side*.28,.26,.38),.004,5)
-    gem("critter/bunny/root","dark",f"Glossy eye {side}",(side*.13,.39,.20),.025,.027,.015)
-    gem("critter/bunny/root","leather",f"Inner ear {side}",(side*.085,.70,.21),.045,.15,.018)
-for i in range(24):
+    ellipsoid("critter/bunny/head","dark",f"Eye {side}",(side*.128,.073,.113),(.023,.026,.014),14,8)
+    gem("critter/bunny/head","ivory",f"Catchlight {side}",(side*.133,.083,.125),.006,.006,.005)
+    for row in (-1,0,1):
+        beam("critter/bunny/head","ivory",f"Whisker {side} {row}",
+             (side*.07,-.046,.227),(side*.24,-.04+row*.04,.26),.0028,5)
+    ear=f"critter/bunny/ear{'L' if side<0 else 'R'}"
+    ellipsoid(ear,"fur",f"Tapered ear {side}",(side*.015,.135,0),(.057,.17,.033),18,12)
+    ellipsoid(ear,"leather",f"Ear velvet {side}",(side*.015,.14,.029),(.037,.125,.009),18,10)
+    for position in ("front","hind"):
+        key=f"critter/bunny/{position}Leg{'L' if side<0 else 'R'}"
+        ellipsoid(key,"fur",f"{position} leg {side}",(0,-.065,0),
+                  (.065,.105,.075) if position=="front" else (.095,.12,.11),20,12)
+        ellipsoid(key,"ivory",f"{position} paw {side}",(0,-.145,.052),(.065,.034,.105),18,10)
+ellipsoid("critter/bunny/tail","ivory","Cottontail",(0,.02,0),(.09,.09,.09),20,12)
+for i in range(26):
     a=i*2.399963
     leaf("critter/bunny/root","fur",f"Fur tuft {i}",
-         (math.sin(a)*.16,.32+math.sin(i)*.05,math.cos(a)*.19),
-         (math.sin(a),math.cos(a)),.10,.025)
+         (math.sin(a)*.18,.26+math.sin(i)*.04,math.cos(a)*.22),
+         (math.sin(a),math.cos(a)),.075,.018)
+
+ellipsoid("critter/bird/body","feather","Streamlined body",(0,.02,-.025),(.31,.245,.54),32,18)
+ellipsoid("critter/bird/body","ivory","Breast plumage",(0,-.115,.25),(.22,.105,.245),24,14)
+ellipsoid("critter/bird/head","feather","Bird head",(0,0,.035),(.22,.205,.23),28,16)
 for side in (-1,1):
-    gem("critter/bird/root","dark",f"Bird eye {side}",(side*.21,.18,.53),.028,.028,.014)
-    for row in range(4):
-        for i in range(8):
-            leaf("critter/bird/root","feather",f"Flight plumage {side}-{row}-{i}",
-                 (side*(.10+row*.10),.11-i*.014,-.10+i*.09),
-                 (side*.9,.3),.16+row*.035,.045)
+    ellipsoid("critter/bird/head","dark",f"Bright eye {side}",(side*.194,.045,.125),(.027,.03,.018),14,8)
+    gem("critter/bird/head","ivory",f"Eye glint {side}",(side*.204,.058,.138),.007,.008,.005)
     wing="critter/bird/wingL" if side<0 else "critter/bird/wingR"
+    ellipsoid(wing,"feather",f"Wing shoulder {side}",(side*.21,.015,-.075),(.26,.07,.21),20,10)
     outline=[(side*.13,.02,.09),(side*.42,.05,.15),(side*1.30,.03,-.12),
              (side*1.05,-.02,-.30),(side*.48,-.035,-.37)]
-    put(wing,"feather",f"Curved flight wing {side}",outline,
+    put(wing,"feather",f"Swept flight wing {side}",outline,
         [(0,1,4),(1,2,3),(1,3,4),(4,1,0),(3,2,1),(4,3,1)])
+    for i in range(9):
+        x=side*(.28+i*.112)
+        ellipsoid(wing,"feather",f"Primary feather {side}-{i}",
+                  (x,-.012,-.18-i*.013),(.055,.013,.24-i*.007),14,6)
     for i in range(8):
-        leaf(wing,"feather",f"Layered primary feather {side}-{i}",
-             (side*(.25+i*.125),.03-i*.004,-.19),
-             (side*.65,-.75),.23+i*.024,.068)
+        leaf("critter/bird/root","feather",f"Mantle feather {side}-{i}",
+             (side*(.13+i*.016),.17,-.28+i*.09),(side*.5,.8),.12,.035)
+beam("critter/bird/head","bronze","Tapered upper beak",(0,-.035,.225),
+     (0,-.082,.45),.058,12,.006)
+beam("critter/bird/head","dark","Beak seam",(0,-.085,.26),
+     (0,-.09,.41),.012,10,.003)
 for i in range(9):
     spread=(i-4)*.23
     leaf("critter/bird/tail","feather",f"Fan tail feather {i}",
          (spread*.04,0,-.28),(spread,-1),.42+.12*(1-abs(spread)),.065)
+ellipsoid("critter/bird/tail","feather","Tail covert",(0,.025,-.38),(.18,.055,.20),20,10)
 
 
 def export():
@@ -357,13 +411,18 @@ def export():
         group=groups.setdefault(key,{}).setdefault(material,{"position":[],"normal":[],"uv":[],"index":[]})
         lookup=group.setdefault("_lookup",{})
         for tri in mesh.loop_triangles:
-            nx,ny,nz=tri.normal
-            for vertex_id in tri.vertices:
+            for loop_id in tri.loops:
+                vertex_id=mesh.loops[loop_id].vertex_index
+                nx,ny,nz=mesh.corner_normals[loop_id].vector
                 bx,by,bz=mesh.vertices[vertex_id].co
                 x,y,z=bx,bz,-by
+                if mesh.uv_layers.active:
+                    u,v=mesh.uv_layers.active.data[loop_id].uv
+                else:
+                    u,v=x*.38+z*.09,y*.41+z*.19
                 item=(round(x,5),round(y,5),round(z,5),
                       round(nx,5),round(nz,5),round(-ny,5),
-                      round(x*.38+z*.09,5),round(y*.41+z*.19,5))
+                      round(u,5),round(v,5))
                 if item not in lookup:
                     lookup[item]=len(group["position"])//3
                     group["position"].extend(item[:3])

@@ -95,7 +95,7 @@ export function createBlenderPack(T) {
         const lod=new T.LOD();
         lod.name='Blender detail LOD '+key;
         lod.addLevel(near,0);
-        const distance=key.startsWith('critter/bird/wing')||key==='critter/bird/tail'
+        const distance=key.startsWith('critter/bird/')||key.startsWith('critter/bunny/')
             ? 100000 : key.startsWith('building/')?85:55;
         lod.addLevel(new T.Group(),distance);
         parent.add(lod);

@@ -21,7 +21,8 @@ try {
         const required=[...['hut','spy','tower','warrior','fire','shipyard'].map(k=>'building/'+k+'/root'),
             ...['wild','warrior','shaman','firewarrior','spy'].flatMap(k=>['torso','head','armL','armR','legL','legR'].map(p=>'character/'+k+'/'+p)),
             'character/airship/root','tree/trunk','tree/crown','critter/bunny/root','critter/bird/root',
-            'critter/bird/wingL','critter/bird/wingR','critter/bird/tail',
+            ...['body','head','earL','earR','frontLegL','frontLegR','hindLegL','hindLegR','tail'].map(k=>'critter/bunny/'+k),
+            ...['body','head','wingL','wingR','tail'].map(k=>'critter/bird/'+k),
             ...['stem','center','petal','tulip'].map(k=>'prop/flower/'+k)];
         const absent=required.filter(k=>!keys.includes(k));
         if(absent.length)throw new Error('Missing Blender models: '+absent.join(','));
@@ -40,11 +41,43 @@ try {
         if(count(tree.children[0])<1||count(tree.children[1])<1)throw new Error('Tree detail was not attached to burnable trunk/crown');
         const birdWing=state.scene.getObjectByName('Blender detail LOD critter/bird/wingL');
         if(!birdWing||birdWing.parent.parent.children[0].visible)throw new Error('Animated bird wing did not replace the old flat plane');
+        const wildlife=gameTestAPI.CritterManager;
+        const bunny=wildlife.bunnies[0],bird=wildlife.birds[0];
+        if(!bunny?.rig||!bird?.head||!birdWing)throw new Error('Articulated wildlife rigs were not spawned');
+        const animalParts=['body','head','earL','earR','frontLegL','frontLegR','hindLegL','hindLegR','tail'];
+        for(const key of animalParts) {
+            const lod=bunny.mesh.getObjectByName('Blender detail LOD critter/bunny/'+key);
+            if(!lod)throw new Error('Missing bunny rig part '+key);
+        }
+        for(const key of ['body','head','wingL','wingR','tail']) {
+            if(!bird.mesh.getObjectByName('Blender detail LOD critter/bird/'+key))throw new Error('Missing bird rig part '+key);
+        }
+        bunny.timer=0;
+        let maxHop=0,earMotion=0,wingMotion=0,minClearance=Infinity;
+        const initialEar=bunny.rig.userData.joints.ears[0].rotation.x;
+        const initialWing=bird.leftWing.rotation.z;
+        for(let i=0;i<70;i++) {
+            wildlife.update(1/60);
+            const ground=getHeight(bunny.mesh.position.x,bunny.mesh.position.z);
+            maxHop=Math.max(maxHop,bunny.mesh.position.y-ground);
+            minClearance=Math.min(minClearance,bunny.mesh.position.y-ground);
+            earMotion=Math.max(earMotion,Math.abs(bunny.rig.userData.joints.ears[0].rotation.x-initialEar));
+            wingMotion=Math.max(wingMotion,Math.abs(bird.leftWing.rotation.z-initialWing));
+        }
+        if(maxHop<.1||minClearance<-.04||earMotion<.05||wingMotion<.1)
+            throw new Error('Wildlife animation or terrain contact failed: '+JSON.stringify({maxHop,minClearance,earMotion,wingMotion}));
+        if(!Number.isFinite(bird.mesh.position.y)||bird.mesh.position.y<getHeight(bird.mesh.position.x,bird.mesh.position.z)+7)
+            throw new Error('Bird lost flight clearance');
+        bunny.mesh.position.x=CONFIG.CRITTERS.BUNNY_RESPAWN_DIST+2;
+        bird.mesh.position.x=CONFIG.CRITTERS.BIRD_RESPAWN_DIST+2;
+        wildlife.update(1/60);
+        if(wildlife.bunnies.includes(bunny)||wildlife.birds.includes(bird))
+            throw new Error('Wildlife failed to respawn after leaving the map');
         const textures=['grass','stone','wood','thatch','skin','cloth','rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff'].map(kind=>{
             const normal=Art.blender.texture(kind,'normal'),rough=Art.blender.texture(kind,'roughness'),albedo=Art.blender.texture(kind,'map');
             return {kind,albedo:[albedo.image?.width,albedo.image?.height],normal:[normal.image?.width,normal.image?.height],rough:[rough.image?.width,rough.image?.height]};
         });
-        return {keys:keys.length,buildings,roles,treeDetails:count(tree),birdWing:true,textures};
+        return {keys:keys.length,buildings,roles,treeDetails:count(tree),wildlife:{maxHop,minClearance,earMotion,wingMotion},textures};
     });
     await page.waitForFunction(()=>['grass','stone','wood','thatch','skin','cloth','rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff'].every(k=>
         ['map','normal','roughness'].every(type=>Art.blender.texture(k,type).image?.width>=1000)),null,{timeout:30000});

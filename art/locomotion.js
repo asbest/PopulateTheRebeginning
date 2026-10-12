@@ -114,6 +114,7 @@ export function createLocomotion(T) {
         }
         const networkAttack=u.networkTarget&&u.state==='combat'&&g.speed<.2;
         const attacking=networkAttack||u.state==='combat'&&u.attackTarget&&Math.hypot(u.attackTarget.mesh.position.x-p.x,u.attackTarget.mesh.position.z-p.z)<=u.range;
+        const strike=attacking?Math.sin((u.attackPhase||0)*Math.PI):0;
         if(!attacking){
             for(const [arm,foot,side] of [[u.armL,g.feet[1],1],[u.armR,g.feet[0],-1]]){
                 // Opposite arm and leg move forward together. Do not invert the opposite leg a second time.
@@ -123,14 +124,14 @@ export function createLocomotion(T) {
                 arm.userData.lower.rotation.x=smooth(arm.userData.lower.rotation.x,-.16-.55*run,12,dt);
             }
         }else{
-            const strike=Math.sin((u.attackPhase||0)*Math.PI);
             if(networkAttack){u.armR.rotation.x=-Math.PI/2-strike*Math.PI/2;u.armL.rotation.x=-.4-strike*.4;}
             u.armR.userData.lower.rotation.x=-.16-strike*.4;u.armL.userData.lower.rotation.x=-.16-strike*.25;
         }
         const breath=Math.sin(g.idleTime*2.3)*.004*(1-weight);
         u.torso.position.set(sway,.9+g.pelvis-.615+breath,0);
-        u.torso.rotation.x=smooth(u.torso.rotation.x,.015*weight+.10*run,12,dt);
-        u.torso.rotation.y=smooth(u.torso.rotation.y,-Math.sin(g.phase*Math.PI*2)*.035*weight,12,dt);
+        const handedness=u.type==='spy'?-1:1;
+        u.torso.rotation.x=smooth(u.torso.rotation.x,.015*weight+.10*run-.065*strike,12,dt);
+        u.torso.rotation.y=smooth(u.torso.rotation.y,-Math.sin(g.phase*Math.PI*2)*.035*weight+.11*strike*handedness,12,dt);
         u.torso.rotation.z=smooth(u.torso.rotation.z,-sway*.8,12,dt);
         u.head.rotation.y=smooth(u.head.rotation.y,clamp(wrap((u.turnTarget??yaw)-yaw),-.2,.2)*.35-u.torso.rotation.y*.5,10,dt);
         u.head.rotation.x=smooth(u.head.rotation.x,breath*.9-.02*run,8,dt);

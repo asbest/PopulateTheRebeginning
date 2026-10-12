@@ -86,7 +86,12 @@ export function createCharacters(T) {
     function build(u,color) {
         const root=u.mesh, role=u.type, faction=mat('cloth',color), female=role==='shaman';
         root.userData.characterVersion=2;root.userData.characterRole=role;
-        if(role==='airship'){airship(root,faction);blender.attach(root,'character/airship/root',color);return;}
+        if(role==='airship'){
+            const visual=new T.Group();visual.name='AirshipVisual';root.add(visual);
+            airship(visual,faction);blender.attach(visual,'character/airship/root',color);
+            u.airshipVisual=visual;
+            return;
+        }
         u.torso=new T.Group();u.torso.name='Torso';u.torso.position.y=.9;root.add(u.torso);
         const chest=role==='warrior'?.25:female?.185:.205;
         mesh(u.torso,loft([[-.27,.14,.095],[-.16,.145,.10],[-.02,chest*.85,.125],[.14,chest,.115],[.23,.13,.08],[.26,.07,.065]]),skin,[0,0,0],[1,1,1],'AnatomicalBody');
