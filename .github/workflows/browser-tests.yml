@@ -14,6 +14,7 @@ jobs:
         run: |
           node tools/serve.mjs > /tmp/populate-server.log 2>&1 &
           node tests/browser.mjs
+          node tests/blender-assets.mjs
           node tests/locomotion.mjs
           node tests/spells.mjs
           node tests/strategy.mjs

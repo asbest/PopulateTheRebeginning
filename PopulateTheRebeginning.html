@@ -2164,8 +2164,9 @@ const CritterManager = {
 
     spawnBunny: function(randomPos=false) {
         const group = new THREE.Group();
-        const color = new THREE.Color().setHSL(Math.random(), 0.8 + Math.random()*0.2, 0.4 + Math.random()*0.4);
-        const mat = new THREE.MeshStandardMaterial({color: color, roughness: 0.8});
+        const color = [0x7c6652,0xb29570,0x8b8278,0xb8afa1][Math.floor(Math.random()*4)];
+        const mat = new THREE.MeshStandardMaterial({color: color, roughness: 0.88,
+            normalMap:Art.blender.texture('cloth','normal'),roughnessMap:Art.blender.texture('cloth','roughness')});
 
         const bodySize = (0.2 + Math.random() * 0.1) * 1.7;
         const bodyGeo = new THREE.SphereGeometry(bodySize * 0.6, 16, 16);
@@ -2210,6 +2211,11 @@ const CritterManager = {
         const backRightLeg = new THREE.Mesh(legGeo, mat);
         backRightLeg.position.set(bodySize * 0.3, bodySize * 0.1, -bodySize * 0.4);
         group.add(backRightLeg);
+
+        const bunnyDetail=new THREE.Group();
+        bunnyDetail.scale.setScalar(bodySize/0.42);
+        Art.blender.attach(bunnyDetail,'critter/bunny/root');
+        group.add(bunnyDetail);
 
 
         let x, z;
@@ -2258,8 +2264,9 @@ const CritterManager = {
     },
     spawnBird: function(randomPos=false) {
         const group = new THREE.Group();
-        const color = new THREE.Color().setHSL(Math.random(), 0.8 + Math.random()*0.2, 0.4 + Math.random()*0.4);
-        const mat = new THREE.MeshStandardMaterial({color: color, side: THREE.DoubleSide, roughness: 0.6});
+        const color = [0x514c43,0x745f51,0x9a886e,0x56656b][Math.floor(Math.random()*4)];
+        const mat = new THREE.MeshStandardMaterial({color: color, side: THREE.DoubleSide, roughness: 0.84,
+            normalMap:Art.blender.texture('cloth','normal'),roughnessMap:Art.blender.texture('cloth','roughness')});
 
         const size = (0.3 + Math.random() * 0.2) * 1.7;
 
@@ -2307,6 +2314,11 @@ const CritterManager = {
         const rightWingGroup = new THREE.Group();
         rightWingGroup.add(rightWing);
         group.add(rightWingGroup);
+
+        const birdDetail=new THREE.Group();
+        birdDetail.scale.setScalar(size/0.68);
+        Art.blender.attach(birdDetail,'critter/bird/root');
+        group.add(birdDetail);
 
         let x, z;
         if(randomPos) {
@@ -3286,11 +3298,11 @@ function createChunk(cx, cz) {
     if (flowerDataList.length > 0) {
         const dummy = new THREE.Object3D();
 
-        const stemGeo = AssetCache.geos.flowerStem.clone();
-        const centerGeo = AssetCache.geos.flowerCenter.clone();
-        const petalGeo = AssetCache.geos.flowerPetal.clone();
+        const stemGeo = (Art.blender.getGeometry('prop/flower/stem','leaf0') || AssetCache.geos.flowerStem).clone();
+        const centerGeo = (Art.blender.getGeometry('prop/flower/center','bronze') || AssetCache.geos.flowerCenter).clone();
+        const petalGeo = (Art.blender.getGeometry('prop/flower/petal','ivory') || AssetCache.geos.flowerPetal).clone();
 
-        const tulipPetalGeo = AssetCache.geos.tulipPetal.clone();
+        const tulipPetalGeo = (Art.blender.getGeometry('prop/flower/tulip','faction') || AssetCache.geos.tulipPetal).clone();
 
         const numFlowers = flowerDataList.length;
         let numDaisies = 0;
@@ -6744,6 +6756,7 @@ async function init() {
 
     const checkCampaign = window.loadCampaignLevelIfRequested();
     try {
+        await Promise.all([Art.ready, Characters.ready]);
 
         state.clock = new THREE.Clock();
         state.cameraLookAt = new THREE.Vector3(0, 0, 0);

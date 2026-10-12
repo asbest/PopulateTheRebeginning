@@ -27,7 +27,7 @@ The complete game runs on Three.js. The four 1254 × 1254 source textures are in
 
 ## 3D models
 
-The character, building and vegetation meshes used by the browser game are authored in `art/characters.js` and `art/art-kit.js`. Edit these files to change the models in the game directly. The live model gallery is available at **http://127.0.0.1:8765/art/characters.html**.
+The editable Blender 5.2 source is [`art/blender/Overhaul.blend`](art/blender/Overhaul.blend). Its exported model pack adds sculpted details to every building, character role, airship, tree, bird, rabbit and instanced flower while preserving the animation rig and game mechanics. Six full-resolution PBR normal/roughness material sets improve the surfaces. The original structural meshes and pivots remain in `art/characters.js` and `art/art-kit.js`; [`art/blender-pack.js`](art/blender-pack.js) integrates the Blender details in the browser. See the [Blender source and regeneration guide](docs/BLENDER-OVERHAUL.md) and the live gallery at **http://127.0.0.1:8765/art/characters.html**.
 
 ## Verification
 

@@ -1,5 +1,8 @@
 # Art sources
 
+- `blender/Overhaul.blend`: editable Blender 5.2 source for 45 model parts covering buildings, characters, the airship, trees, wildlife and flowers. `blender/mesh-pack.json` is the corresponding optimized browser export; the source generator is `tools/blender_overhaul.py`. Six PBR normal/roughness pairs are generated beside it. See [the Blender guide](../docs/BLENDER-OVERHAUL.md).
+- `blender-pack.js`: loads and shares the Blender-authored geometry and PBR maps across web-game instances. It retains the existing articulated pivots and has a fallback to the original meshes.
+
 - `art-kit.js`: original project-authored browser building and vegetation meshes with textured reed roofs, structural timber, stone foundations and branched leaf canopies. Trees preserve the trunk/crown layout expected by the original burn mechanic.
 - `characters.js`: complete replacement character meshes, sculpted faces with finer features, anatomical limb profiles, articulated elbows/knees, role outfits and hand-bound weapons. The five human roles and airship use the original gameplay pivots, stats and collisions. Geometry and materials are shared between instances; hair receives a shared 512 × 512 strand map.
 - `character-skin-v2.png`, `character-cloth.png`: independently generated **1254 × 1254** native-resolution skin and embroidered linen textures. The previous `character-skin.png` remains as a source reference. `character-materials.png` is a **1254 × 1254** atlas with leather and bronze quadrants (627 × 627 per quadrant). No upscaled 4K claim. Color maps also provide subtle shader bump detail; these are not scanned normal maps.

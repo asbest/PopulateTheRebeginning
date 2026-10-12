@@ -1,6 +1,8 @@
 // Original tribal character meshes. Shared geometry and atlas materials keep large armies affordable.
+import {createBlenderPack} from './blender-pack.js';
 // The public pivots match the gameplay rig; collision shapes and unit statistics are untouched.
 export function createCharacters(T) {
+    const blender=createBlenderPack(T);
     const cache = new Map(), materials = new Map();
     const hairCanvas=document.createElement('canvas');hairCanvas.width=hairCanvas.height=512;
     const hairContext=hairCanvas.getContext('2d');
@@ -35,13 +37,18 @@ export function createCharacters(T) {
             map.userData={dedicated:true};map.image=image;map.needsUpdate=true;resolve(image);
         },undefined,reject);
     }));
-    const ready=Promise.all([atlasReady,...detailReady]);
+    const ready=Promise.all([atlasReady,...detailReady,blender.ready]);
     function mat(kind,color=0xffffff) {
         const key=kind+'/'+color;
         if(!materials.has(key)) {
             const m=new T.MeshStandardMaterial({color,map:kind==='hair'?hairTexture:tiles[kind]||null,roughness:kind==='gold'?.39:kind==='skin'?.67:kind==='hair'?.79:.89,metalness:kind==='gold'?.72:0});
             m.color.convertSRGBToLinear();
-            if(tiles[kind]){m.bumpMap=tiles[kind];m.bumpScale=kind==='skin'?.002:kind==='cloth'?.004:.003;}
+            if(kind==='skin'||kind==='cloth'){
+                m.normalMap=blender.texture(kind,'normal');
+                m.roughnessMap=blender.texture(kind,'roughness');
+                m.normalScale.setScalar(kind==='skin'?.22:.3);
+                m.roughness=1;
+            } else if(tiles[kind]){m.bumpMap=tiles[kind];m.bumpScale=.003;}
             if(kind==='hair'){m.bumpMap=hairTexture;m.bumpScale=.012;}
             m.name='Tribal/'+kind+'/'+color; m.userData.characterKind=kind; materials.set(key,m);
         }
@@ -86,7 +93,7 @@ export function createCharacters(T) {
     function build(u,color) {
         const root=u.mesh, role=u.type, faction=mat('cloth',color), female=role==='shaman';
         root.userData.characterVersion=2;root.userData.characterRole=role;
-        if(role==='airship'){airship(root,faction);return;}
+        if(role==='airship'){airship(root,faction);blender.attach(root,'character/airship/root',color);return;}
         u.torso=new T.Group();u.torso.name='Torso';u.torso.position.y=.9;root.add(u.torso);
         const chest=role==='warrior'?.25:female?.185:.205;
         mesh(u.torso,loft([[-.27,.14,.095],[-.16,.145,.10],[-.02,chest*.85,.125],[.14,chest,.115],[.23,.13,.08],[.26,.07,.065]]),skin,[0,0,0],[1,1,1],'AnatomicalBody');
@@ -180,6 +187,9 @@ export function createCharacters(T) {
             for(const side of [-1,1])tube(u.torso,[[side*.12,.18,-.04],[side*.13,.02,.13],[side*.10,-.18,.12]],.016,leather,'SatchelStrap');
             band(u.head,.105,.13,.105,faction,.037).userData.characterFaction=true;
             tube(hand,[[0,-.28,.07],[0,.18,.08]],.025,leather,'StoneTool');oval(hand,[0,.19,.08],[.09,.065,.045],bone,'ToolHead');
+        }
+        for(const [part,pivot] of Object.entries({torso:u.torso,head:u.head,armL:u.armL,armR:u.armR,legL:u.legL,legR:u.legR})) {
+            blender.attach(pivot,'character/'+role+'/'+part,color);
         }
         return root;
     }

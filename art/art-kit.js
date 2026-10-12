@@ -1,5 +1,7 @@
 // Original mesh art, authored for this project. Uses the game's existing Three.js version.
+import {createBlenderPack} from './blender-pack.js';
 export function createArtKit(T) {
+    const blender=createBlenderPack(T);
     const mats = new Map(), geos = new Map();
     const palette = {wood:0x67503a, stone:0x99a69b, straw:0xc4a96b, gold:0xdcc27f, cloth:0xe1d8ba, dark:0x283b43};
     function texture(kind) {
@@ -27,14 +29,18 @@ export function createArtKit(T) {
         t.magFilter=T.LinearFilter;
         return t;
     }
-    const textures={wood:surface('wood'),stone:surface('stone'),thatch:surface('thatch'),grass:surface('grass'),cloth:texture('cloth')};
+    const textures={wood:surface('wood'),stone:surface('stone'),thatch:surface('thatch'),grass:surface('grass'),cloth:blender.texture('cloth','map')};
     function material(color,kind='wood',metal=0,emission=0) {
         const key=[color,kind,metal,emission].join('/');
         if(!mats.has(key)) {
-            const detailed=kind==='stone'||kind==='thatch'||kind==='wood';
+            const detailed=kind==='stone'||kind==='thatch'||kind==='wood'||kind==='cloth';
             const tint=new T.Color(color);
             if(detailed&&!metal)tint.lerp(new T.Color(0xffffff),kind==='wood'?0.75:0.45);
-            mats.set(key,new T.MeshStandardMaterial({color:tint,map:textures[kind],bumpMap:detailed?textures[kind]:null,bumpScale:kind==='stone'?0.09:0.045,roughness:metal?0.38:0.94,metalness:metal,emissive:emission}));
+            mats.set(key,new T.MeshStandardMaterial({color:tint,map:textures[kind],
+                normalMap:detailed?blender.texture(kind,'normal'):null,
+                roughnessMap:detailed?blender.texture(kind,'roughness'):null,
+                normalScale:new T.Vector2(kind==='stone'?.44:.28,kind==='stone'?.44:.28),
+                roughness:metal?0.55:1,metalness:metal,emissive:emission}));
         }
         return mats.get(key);
     }
@@ -113,16 +119,19 @@ export function createArtKit(T) {
         beam(p,[1.5,0.15,-1.35],[1.5,3.0,-1.35],0.04);
         const banner=box(p,[1.82,2.66,-1.35],[0.65,0.45,0.025],factionColor,'cloth');
         banner.userData.isFactionBanner=true;
+        blender.attach(p,'building/'+kind+'/root',factionColor);
         return p;
     }
-    const crownMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:0.94,side:T.DoubleSide});
+    const crownMaterial=new T.MeshStandardMaterial({vertexColors:true,map:textures.grass,
+        normalMap:blender.texture('grass','normal'),roughnessMap:blender.texture('grass','roughness'),
+        roughness:1,side:T.DoubleSide});
     function tree() {
         // First two children remain the trunk and a single crown mesh for burnTreesAt.
         const p=new T.Group();
         cyl(p,[0,1.35,0],0.16,0.29,2.7,palette.wood,'wood',12);
         const crownGeometry=cachedGeometry('tree-crown-v2',()=>{
             const crownGeometry = new T.BufferGeometry();
-            const vertices=[],normals=[],colors=[];
+            const vertices=[],normals=[],colors=[],uvs=[];
             const leafGeometry=geometry('IcosahedronGeometry',[0.5,1]);
             const leaves=[0x315d31,0x3d7237,0x4d8240,0x628e49,0x789d52];
             for(let i=0;i<24;i++) {
@@ -132,13 +141,14 @@ export function createArtKit(T) {
                 geometryCopy.scale(sx,sy,sx*0.85);
                 geometryCopy.rotateY(a);geometryCopy.rotateZ(Math.sin(i*1.7)*0.27);
                 geometryCopy.translate(Math.sin(a)*ring*1.15,2.75+Math.sin(i*2.1)*0.26-ring*0.15,Math.cos(a)*ring*1.05);
-                const flat=geometryCopy.toNonIndexed();vertices.push(...flat.attributes.position.array);normals.push(...flat.attributes.normal.array);
+                const flat=geometryCopy.toNonIndexed();vertices.push(...flat.attributes.position.array);normals.push(...flat.attributes.normal.array);uvs.push(...flat.attributes.uv.array);
                 const tone=new T.Color(leaves[i%leaves.length]);
                 for(let k=0;k<flat.attributes.position.count;k++)colors.push(tone.r,tone.g,tone.b);
                 geometryCopy.dispose();flat.dispose();
             }
             crownGeometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));crownGeometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));
             crownGeometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+            crownGeometry.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));
             return crownGeometry;
         });
         const crown=new T.Mesh(crownGeometry,crownMaterial);crown.castShadow=crown.receiveShadow=true;p.add(crown);
@@ -146,6 +156,8 @@ export function createArtKit(T) {
             const a=i*Math.PI/2+0.4;
             beam(p,[0,1.65,0],[Math.sin(a)*0.83,2.55,Math.cos(a)*0.83],0.065,0x5c4932);
         }
+        blender.attach(p.children[0],'tree/trunk');
+        blender.attach(crown,'tree/crown');
         return p;
     }
     function dress(unit) {
@@ -179,5 +191,5 @@ export function createArtKit(T) {
         };
         material.customProgramCacheKey=()=> 'island-terrain-detail-v2';
     }
-    return {building,tree,dress,terrainDetail,textures,palette};
+    return {building,tree,dress,terrainDetail,textures,palette,ready:blender.ready,blender};
 }
