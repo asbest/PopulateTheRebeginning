@@ -7,11 +7,11 @@ async function check(name,fn){try{results.push({name,pass:true,detail:await fn()
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});page.on('pageerror',e=>errors.push(String(e)));page.on('dialog',d=>d.accept());
  await page.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1');await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);await page.evaluate(()=>{state.isPaused=true;state.cameraLookAt.copy(state.shaman.mesh.position);gameTestAPI.updateChunks(true);});
- await check('Player and enemy reach real-world destinations and return uphill through the live frame loop',async()=>{
+ await check('Player and enemy follow real terrain routes in both directions through Rapier simulation',async()=>{
   try{
    const routes=await page.evaluate(()=>{
-    closeHelp();closeStoryOverlay();window.setGraphicsQuality('low');state.isPaused=false;
-    // Isolate route following from strategic orders, without bypassing the live physics/frame loop.
+    closeHelp();closeStoryOverlay();window.setGraphicsQuality('low');state.isPaused=true;
+    // Isolate route following from strategic orders while retaining production pathfinding, physics and unit updates.
     window.savedMovementAIs=window.enemyAIs;window.enemyAIs=[];
     window.movementProbes=[state.shaman,state.units.find(u=>u.faction===1&&u.isShaman)].map(u=>{
      if(!u)throw new Error('Missing faction');u.nextTargetCheck=Infinity;
@@ -23,11 +23,28 @@ try{
     });
     return movementProbes.map(({u,start,end})=>({faction:u.faction,start,end}));
    });
-   await page.waitForFunction(()=>movementProbes.every(({u,end})=>Math.hypot(u.mesh.position.x-end.x,u.mesh.position.z-end.z)<1.5),{},{timeout:30000});
-   const outward=await page.evaluate(()=>movementProbes.map(({u,start})=>({faction:u.faction,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)})));
+   const outward=await page.evaluate(()=>{
+    const advance=(targetKey)=>{
+     for(let frame=1;frame<=900;frame++){
+      gameTestAPI.SpatialHash.update();state.physicsWorld.timestep=1/60;state.physicsWorld.step();
+      movementProbes.forEach(({u})=>{u.nextTargetCheck=Infinity;u.update(1/60);});
+      if(movementProbes.every(probe=>Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)<1.5))return frame;
+     }
+     throw new Error('Route did not finish: '+JSON.stringify(movementProbes.map(probe=>({faction:probe.u.faction,state:probe.u.state,grounded:probe.u.isGrounded,path:probe.u.path?.length,distance:Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)}))));
+    };
+    const frames=advance('end');
+    return {frames,units:movementProbes.map(({u,start})=>({faction:u.faction,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)}))};
+   });
    await page.evaluate(()=>movementProbes.forEach(({u,start})=>u.goto(start.x,start.z)));
-   await page.waitForFunction(()=>movementProbes.every(({u,start})=>Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)<1.5),{},{timeout:35000});
-   return {routes,outward,returnedBoth:true};
+   const returnFrames=await page.evaluate(()=>{
+    for(let frame=1;frame<=900;frame++){
+     gameTestAPI.SpatialHash.update();state.physicsWorld.timestep=1/60;state.physicsWorld.step();
+     movementProbes.forEach(({u})=>{u.nextTargetCheck=Infinity;u.update(1/60);});
+     if(movementProbes.every(({u,start})=>Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)<1.5))return frame;
+    }
+    throw new Error('Return route did not finish: '+JSON.stringify(movementProbes.map(({u,start})=>({faction:u.faction,state:u.state,grounded:u.isGrounded,path:u.path?.length,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)}))));
+   });
+   return {routes,outward,returnFrames,returnedBoth:true};
   }finally{await page.evaluate(()=>{state.isPaused=true;if(window.savedMovementAIs)window.enemyAIs=window.savedMovementAIs;delete window.savedMovementAIs;});}
  });
  await check('Terrain collider matches render triangles across the whole chunk',()=>page.evaluate(()=>{
