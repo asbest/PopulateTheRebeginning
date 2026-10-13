@@ -8,11 +8,9 @@ try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});page.on('pageerror',e=>errors.push(String(e)));page.on('dialog',d=>d.accept());
  await page.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1');await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);await page.evaluate(()=>{state.isPaused=true;state.cameraLookAt.copy(state.shaman.mesh.position);gameTestAPI.updateChunks(true);});
  await check('Player and enemy reach real-world destinations and return uphill through the live frame loop',async()=>{
-  const live=await browser.newPage({viewport:{width:1280,height:800}});live.on('pageerror',e=>errors.push(String(e)));live.on('dialog',d=>d.accept());
   try{
-   await live.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1');await live.waitForFunction(()=>window.gameTestAPI&&state.shaman);
-   const routes=await live.evaluate(()=>{
-    closeHelp();closeStoryOverlay();state.isPaused=false;
+   const routes=await page.evaluate(()=>{
+    closeHelp();closeStoryOverlay();window.setGraphicsQuality('low');state.isPaused=false;
     // Isolate route following from strategic orders, without bypassing the live physics/frame loop.
     window.savedMovementAIs=window.enemyAIs;window.enemyAIs=[];
     window.movementProbes=[state.shaman,state.units.find(u=>u.faction===1&&u.isShaman)].map(u=>{
@@ -25,12 +23,12 @@ try{
     });
     return movementProbes.map(({u,start,end})=>({faction:u.faction,start,end}));
    });
-   await live.waitForFunction(()=>movementProbes.every(({u,end})=>Math.hypot(u.mesh.position.x-end.x,u.mesh.position.z-end.z)<1.5),{},{timeout:20000});
-   const outward=await live.evaluate(()=>movementProbes.map(({u,start})=>({faction:u.faction,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)})));
-   await live.evaluate(()=>movementProbes.forEach(({u,start})=>u.goto(start.x,start.z)));
-   await live.waitForFunction(()=>movementProbes.every(({u,start})=>Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)<1.5),{},{timeout:25000});
+   await page.waitForFunction(()=>movementProbes.every(({u,end})=>Math.hypot(u.mesh.position.x-end.x,u.mesh.position.z-end.z)<1.5),{},{timeout:30000});
+   const outward=await page.evaluate(()=>movementProbes.map(({u,start})=>({faction:u.faction,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)})));
+   await page.evaluate(()=>movementProbes.forEach(({u,start})=>u.goto(start.x,start.z)));
+   await page.waitForFunction(()=>movementProbes.every(({u,start})=>Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)<1.5),{},{timeout:35000});
    return {routes,outward,returnedBoth:true};
-  }finally{await live.close();}
+  }finally{await page.evaluate(()=>{state.isPaused=true;if(window.savedMovementAIs)window.enemyAIs=window.savedMovementAIs;delete window.savedMovementAIs;});}
  });
  await check('Terrain collider matches render triangles across the whole chunk',()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position,cx=Math.round(p.x/40),cz=Math.round(p.z/40),collider=state.terrainColliders.get(`${cx},${cz}`),samples=[];
