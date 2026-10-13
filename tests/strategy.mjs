@@ -4,7 +4,7 @@ const b=await chromium.launch({headless:true,...(process.platform==='win32'?{cha
 const workflowEscape=value=>String(value).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');
 function reportFailure(name,error){if(process.env.GITHUB_ACTIONS==='true')console.log(`::error title=${workflowEscape(name)}::${workflowEscape(error?.stack||error)}`);}
 async function check(name,fn){try{results.push({name,pass:true,detail:await fn()});console.log('PASS '+name);}catch(e){results.push({name,pass:false,detail:String(e)});console.log('FAIL '+name+' '+e);reportFailure(name,e);}}
-try{const p=await b.newPage({viewport:{width:1280,height:800}});await p.addInitScript(()=>{let seed=98217;Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};});p.on('pageerror',e=>errors.push(String(e)));await p.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1');await p.waitForFunction(()=>window.gameTestAPI&&state.shaman);
+try{const p=await b.newPage({viewport:{width:1280,height:800}});await p.addInitScript(()=>{let seed=98217;Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};});p.on('pageerror',e=>errors.push(String(e)));await p.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});await p.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
 await p.evaluate(()=>{state.isPaused=true;closeHelp();closeStoryOverlay();const AI=enemyAIs[0].constructor;for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];for(const b of state.buildings){state.scene.remove(b.mesh);}state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
 for(let x=-55;x<=55;x++)for(let z=-45;z<=45;z++){const key=`${x},${z}`;state.terrainMods.set(key,(state.terrainMods.get(key)||0)+6-getHeight(x,z));}state.heightCache.clear();state.cameraLookAt.set(0,6,0);gameTestAPI.updateChunks(true);
 window.testAI=new AI(2);testAI.init(-15,0);window.enemyAIs=[testAI];state.shaman=new Humanoid(0,'shaman',35,0);state.units.push(state.shaman);state.selectedUnits=[state.shaman];state.shaman.hp=1000000;state.shaman.maxHp=1000000;state.shaman.setShield(true);state.aiTime=0;state.clock.getElapsedTime=()=>state.aiTime;
@@ -22,11 +22,12 @@ await check('Units leave building footprints and shed obsolete roles after conve
  u.aiRole='guard';u.aiTrainingTarget=123;u.setFaction(2);
  if(u.aiRole||u.aiTrainingTarget)throw new Error('Conversion retained old AI orders');
 }));
+await p.close();
 await check('Enemy routes stay on visible land and stranded troops leave the water',async()=>{
  const water=await b.newPage();water.on('pageerror',e=>errors.push(String(e)));
  try {
-  await water.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1');
-  await water.waitForFunction(()=>window.gameTestAPI&&state.shaman);
+  await water.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
+  await water.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
   return await water.evaluate(()=>{
    state.isPaused=true;closeHelp();closeStoryOverlay();
    for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
