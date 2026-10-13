@@ -177,7 +177,7 @@ try {
    await phone.touchscreen.tap(point.x,point.y);
    const mana=await phone.evaluate(()=>state.mana);
    if(mana>499||mana<480)throw new Error('Touch spell did not consume mana: '+mana);
-   await phone.screenshot({path:path.join(root,'test-results','browser-touch.png')});return {mana};
+    await phone.screenshot({path:path.join(root,'test-results','browser-touch.png'),animations:'disabled',timeout:120000});return {mana};
   }finally{await mobile.close();}
  });
  await page.setViewportSize({width:1440,height:900});

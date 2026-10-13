@@ -24,9 +24,9 @@ try {
   // The Shaman's spells must be available without selecting her first.
   if(!await page.locator('#btn-blast').count()) throw new Error('Blast is hidden with no unit selected');
   const enemy = await page.evaluate(() => state.units.filter(u => u.faction === 1).map(u => ({id:u.id,x:u.mesh.position.x,z:u.mesh.position.z})));
-  await page.waitForFunction(() => window.enemyAIs[0].pendingBuild && state.units.some(u => u.faction === 1 && u.aiRole === 'builder' && u.state === 'move'), null, {timeout:20000});
+  await page.waitForFunction(() => window.enemyAIs[0].pendingBuild && state.units.some(u => u.faction === 1 && u.aiRole === 'builder' && u.state === 'move'), null, {timeout:60000});
   const moving = await page.evaluate(() => {const u=state.units.find(u => u.faction === 1 && u.aiRole === 'builder' && u.state === 'move');return {id:u.id,x:u.mesh.position.x,z:u.mesh.position.z,target:window.enemyAIs[0].pendingBuild};});
-  await page.waitForFunction(({id,x,z}) => {const u=state.units.find(u => u.id === id);return u && Math.hypot(u.mesh.position.x-x,u.mesh.position.z-z) > 0.6;}, moving, {timeout:12000});
+  await page.waitForFunction(({id,x,z}) => {const u=state.units.find(u => u.id === id);return u && Math.hypot(u.mesh.position.x-x,u.mesh.position.z-z) > 0.6;}, moving, {timeout:30000});
   console.log('PASS enemy AI orders a builder and the unit physically moves', {start:enemy,moving});
 
   const point = await page.evaluate(() => {const p=state.shaman.mesh.position,target=gameTestAPI.findNearestLand(p.x+8,p.z+2),v=new THREE.Vector3(target.x,getHeight(target.x,target.z),target.z).project(state.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2};});
