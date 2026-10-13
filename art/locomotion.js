@@ -32,6 +32,22 @@ export function createLocomotion(T) {
         pose(u.armR.userData.lower?.rotation,'x',airborne?-.55:landing?-.42:0);
         pose(u.head.rotation,'x',airborne?-.08:landing?-.12:0);
     }
+    function animateSwim(u,dt){
+        if(!u.legL)return;
+        u.poseTick=u.updateTicker;
+        const t=u.animTime*5,rate=8;
+        const pose=(part,axis,target)=>{if(part)part[axis]=smooth(part[axis],target,rate,dt);};
+        pose(u.torso.rotation,'x',.18);
+        pose(u.torso.position,'y',.9+Math.sin(t*2)*.015);
+        pose(u.armL.rotation,'x',-.45+Math.sin(t)*.32);
+        pose(u.armR.rotation,'x',-.45-Math.sin(t)*.32);
+        pose(u.armL.userData.lower?.rotation,'x',-.35);
+        pose(u.armR.userData.lower?.rotation,'x',-.35);
+        pose(u.legL.rotation,'x',Math.sin(t)*.13);
+        pose(u.legR.rotation,'x',-Math.sin(t)*.13);
+        pose(u.legL.userData.lower?.rotation,'x',.22);
+        pose(u.legR.userData.lower?.rotation,'x',.22);
+    }
     const soleSamples=[];
     for(let row=0;row<=6;row++)for(let col=0;col<12;col++){
         const a=row*Math.PI/6,b=col*Math.PI/6;
@@ -39,6 +55,7 @@ export function createLocomotion(T) {
     }
     function animate(u,dt,heightAt){
         if(!u.legL||['dead','stunned','getting_up','transported'].includes(u.state))return;
+        if(u.isSwimming){animateSwim(u,dt);return;}
         if(!u.isGrounded){animateFall(u,dt);return;}
         u.poseTick=u.updateTicker;dt=clamp(dt,.001,.1);
         const p=u.mesh.position,scale=u.mesh.scale.y;
@@ -174,7 +191,7 @@ export function createLocomotion(T) {
         }
     }
     function ground(u,heightAt,dt){
-        if(u.isVehicle||['dead','stunned','getting_up'].includes(u.state))return;
+        if(u.isVehicle||u.isSwimming||['dead','stunned','getting_up'].includes(u.state))return;
         const p=u.mesh.position;
         if(u.state!=='idle')u.idleAnchor=null;
         if(u.idleAnchor){p.x=u.idleAnchor.x;p.z=u.idleAnchor.z;}

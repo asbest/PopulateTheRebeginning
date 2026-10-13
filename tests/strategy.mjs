@@ -74,8 +74,21 @@ await check('Enemy routes stay on visible land and stranded troops leave the wat
     state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();stranded.update(.1);
    }
    if(getHeight(stranded.mesh.position.x,stranded.mesh.position.z)<gameTestAPI.aiDryHeight())
-     throw new Error('Stranded enemy did not leave the water: '+JSON.stringify({position:stranded.mesh.position,state:stranded.state,shore}));
-   return {waypoints:route.length,minHeight,lowestWalk,shore};
+     throw new Error('Stranded enemy did not leave the water: '+JSON.stringify({position:stranded.mesh.position,state:stranded.state,shore,target:stranded.target,path:stranded.path?.slice(0,4),swimming:stranded.isSwimming,grounded:stranded.isGrounded,velocity:stranded.velocity,waterExposure:stranded.waterExposure}));
+   const player=new Humanoid(0,'warrior',0,3);state.units.push(player);
+   for(let k=0;k<200&&getHeight(player.mesh.position.x,player.mesh.position.z)<gameTestAPI.aiDryHeight();k++){
+    state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();player.update(.1);
+   }
+   if(getHeight(player.mesh.position.x,player.mesh.position.z)<gameTestAPI.aiDryHeight()||player.isSwimming)
+    throw new Error('Player did not swim to shore: '+JSON.stringify({position:player.mesh.position,state:player.state,health:player.hp}));
+   const drowning=new Humanoid(0,'warrior',0,0);state.units.push(drowning);drowning.seekShore=()=>false;
+   for(let k=0;k<40;k++){state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();drowning.update(.1);}
+   if(!drowning.isSwimming||drowning.hp>=drowning.maxHp||drowning.hp<drowning.maxHp*.85)
+    throw new Error('Drowning should be gradual: '+JSON.stringify({health:drowning.hp,max:drowning.maxHp,exposure:drowning.waterExposure,position:drowning.mesh.position}));
+   state.waterState='frozen';drowning.update(.1);
+   if(drowning.isSwimming||drowning.aiWaterEscape)throw new Error('Swimming continued after water froze');
+   state.waterState='liquid';
+   return {waypoints:route.length,minHeight,lowestWalk,shore,playerShore:player.mesh.position,remainingAir:drowning.hp/drowning.maxHp};
   });
  } finally {await water.close();}
 });

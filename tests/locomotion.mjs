@@ -118,7 +118,7 @@ try{
  }));
  await check('Real Rapier movement follows terrain and brakes at idle',()=>page.evaluate(()=>{
   const origin=state.shaman.mesh.position;let start;
-  outer:for(let x=-12;x<=12;x+=2)for(let z=-12;z<=12;z+=2){const p={x:origin.x+x,z:origin.z+z};if(getSurfaceHeight(p.x,p.z)>1&&getSurfaceHeight(p.x,p.z+7)>1&&!isBlocked(p.x,p.z)&&!isBlocked(p.x,p.z+7)){start=p;break outer;}}
+  outer:for(let x=-12;x<=12;x+=2)for(let z=-12;z<=12;z+=2){const p={x:origin.x+x,z:origin.z+z};let dry=true;for(let i=0;i<=14;i++){const qz=p.z+i*.5;if(getSurfaceHeight(p.x,qz)<gameTestAPI.aiDryHeight()+.2||isBlocked(p.x,qz)){dry=false;break;}}if(dry){start=p;break outer;}}
   if(!start)throw new Error('No land fixture');const u=new Humanoid(0,'warrior',start.x,start.z);state.units=[u];state.selectedUnits=[u];u.nextTargetCheck=Infinity;
   let maxGap=0;for(let i=0;i<120;i++){u.manualMove(new THREE.Vector3(0,0,1),1/60);state.physicsWorld.timestep=1/60;state.physicsWorld.step();u.update(1/60);maxGap=Math.max(maxGap,Math.abs(u.mesh.position.y-getSurfaceHeight(u.mesh.position.x,u.mesh.position.z)));}
   const travelled=u.mesh.position.z-start.z;if(travelled<.8||maxGap>.3)throw new Error(JSON.stringify({travelled,maxGap}));

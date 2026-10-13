@@ -89,6 +89,26 @@ try {
  await check('Spell mana cost and visual effects',async()=>page.evaluate(()=>{
   const u=state.shaman,p=u.mesh.position;state.mana=500;const before=state.activeEffects.length+state.particles.length+state.projectiles.length;gameTestAPI.performAction(p.x+2,p.z,'blast');if(state.mana!==490)throw new Error('Wrong blast cost '+state.mana);const after=state.activeEffects.length+state.particles.length+state.projectiles.length;if(after<=before)throw new Error('Missing effects');return {mana:state.mana,effects:after-before};
  }));
+ await check('Fireballs reuse geometry and bound trail draw calls',async()=>page.evaluate(()=>{
+  const p=state.shaman.mesh.position,start=new THREE.Vector3(p.x,p.y+2,p.z),end=start.clone().add(new THREE.Vector3(30,0,0));
+  const a=new gameTestAPI.Fireball(start,end,0),b=new gameTestAPI.Fireball(start,end,0),before=state.particles.length;
+  if(a.mesh.geometry!==b.mesh.geometry||a.corona.geometry!==b.corona.geometry)throw new Error('Projectile geometry duplicated');
+  const cameraPos=state.camera.position.clone();state.camera.position.copy(start).add(new THREE.Vector3(0,10,10));
+  for(let i=0;i<28;i++){a.update(1/60);b.update(1/60);}
+  state.camera.position.copy(cameraPos);
+  const trails=state.particles.slice(before).filter(e=>e.mesh.userData.sharedGeometry);
+  if(trails.length>14||trails.length<2||new Set(trails.map(e=>e.mesh.geometry)).size!==1)throw new Error('Excessive or unshared trails: '+trails.length);
+  state.scene.remove(a.mesh);state.scene.remove(b.mesh);a.light?.dispose();b.light?.dispose();a.active=b.active=false;
+  return {trails:trails.length,shared:true};
+ }));
+ await check('Wheel zoom responds to gesture acceleration',async()=>page.evaluate(()=>{
+  const event={deltaY:120,deltaMode:0,preventDefault(){}};state.viewScale=35;state.wheelSpeed=0;state.lastWheelAt=0;
+  gameTestAPI.onWheel(event);const slow=state.viewScale-35;
+  state.viewScale=35;state.wheelSpeed=1.5;state.lastWheelAt=performance.now()-16;
+  gameTestAPI.onWheel(event);const fast=state.viewScale-35;
+  if(fast<=slow||slow<=0)throw new Error(JSON.stringify({slow,fast}));
+  return {slow,fast};
+ }));
  await check('Terrain deformation updates ground height',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position;const before=getHeight(p.x+3,p.z);state.mana=500;gameTestAPI.performAction(p.x+3,p.z,'raise');const after=getHeight(p.x+3,p.z);if(after<=before||state.mana!==495)throw new Error('Raise failed');return {before,after};
  }));
