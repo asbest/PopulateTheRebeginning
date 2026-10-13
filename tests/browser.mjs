@@ -15,7 +15,9 @@ page.on('pageerror',e=>{errors.push(e.stack||String(e));console.log('RUNTIME '+(
 page.on('console',m=>{if(m.type()==='error' && /THREE|Shader|WebGL|Init failed|RAPIER|Uncaught/i.test(m.text()))errors.push(m.text());});
 page.on('requestfailed',r=>requests.push({url:r.url(),reason:r.failure()?.errorText}));
 page.on('dialog',d=>d.accept());
-async function check(name,fn){try{const detail=await fn();results.push({name,pass:true,detail});console.log('PASS '+name);}catch(e){results.push({name,pass:false,detail:String(e)});console.log('FAIL '+name+' '+String(e));}}
+const workflowEscape=value=>String(value).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A');
+function reportFailure(name,error){if(process.env.GITHUB_ACTIONS==='true')console.log(`::error title=${workflowEscape(name)}::${workflowEscape(error?.stack||error)}`);}
+async function check(name,fn){try{const detail=await fn();results.push({name,pass:true,detail});console.log('PASS '+name);}catch(e){results.push({name,pass:false,detail:String(e)});console.log('FAIL '+name+' '+String(e));reportFailure(name,e);}}
 async function controlCenter(target,selector){
  return target.evaluate(selector=>{
   const element=document.querySelector(selector);
@@ -190,7 +192,7 @@ try {
   });
  }
  await check('No runtime errors or failed local asset requests',async()=>{const failed=requests.filter(r=>r.url.startsWith(url)&&!r.url.endsWith('.map')&&!(r.reason==='net::ERR_ABORTED'&&r.url.endsWith('.html')));if(errors.length||failed.length)throw new Error(JSON.stringify({errors,failed}));return {errors:0,failed:0};});
-} catch(e) {results.push({name:'Test harness',pass:false,detail:String(e)});console.error(e);}
+} catch(e) {results.push({name:'Test harness',pass:false,detail:String(e)});console.error(e);reportFailure('Browser test harness',e);}
 finally{await browser.close();await fs.writeFile(path.join(root,'test-results','browser-report.json'),JSON.stringify({date:new Date().toISOString(),results,errors,requests},null,2));}
 console.log(JSON.stringify({passed:results.filter(r=>r.pass).length,failed:results.filter(r=>!r.pass).length}));
 process.exitCode=results.some(r=>!r.pass)?1:0;
