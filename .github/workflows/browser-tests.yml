@@ -10,17 +10,39 @@ jobs:
           node-version: '22'
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
-      - name: Run game server and gameplay tests
+      - name: Start game server
         run: |
-          node tools/serve.mjs > /tmp/populate-server.log 2>&1 &
-          node tests/browser.mjs
-          node tests/blender-assets.mjs
-          node tests/locomotion.mjs
-          node tests/spells.mjs
-          node tests/strategy.mjs
-          node tests/materials.mjs
-          node tests/strategy-long.mjs
-          node tests/live-gameplay.mjs
+          nohup node tools/serve.mjs > /tmp/populate-server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8765/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/populate-server.log
+          exit 1
+      - name: Browser and campaign playability
+        if: always()
+        run: node tests/browser.mjs
+      - name: Blender assets and PBR materials
+        if: always()
+        run: node tests/blender-assets.mjs
+      - name: Locomotion and terrain physics
+        if: always()
+        run: node tests/locomotion.mjs
+      - name: Spells and mana rules
+        if: always()
+        run: node tests/spells.mjs
+      - name: Enemy strategy
+        if: always()
+        run: node tests/strategy.mjs
+      - name: Materials and terrain transitions
+        if: always()
+        run: node tests/materials.mjs
+      - name: Long-running enemy strategy
+        if: always()
+        run: node tests/strategy-long.mjs
+      - name: Live gameplay integration
+        if: always()
+        run: node tests/live-gameplay.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
