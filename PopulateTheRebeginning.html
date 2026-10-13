@@ -2154,8 +2154,8 @@ function isBraveNearby(faction, x, z, radius) {
     return false;
 }
 
-function findNearestLand(x, z, maxRadius = 20) {
-    if(getHeight(x, z) >= WATER_LEVEL) return {x, z};
+function findNearestLand(x, z, maxRadius = 20, minHeight = WATER_LEVEL) {
+    if(getHeight(x, z) >= minHeight) return {x, z};
 
     // Spiral search
     for(let r = 2; r <= maxRadius; r += 2) {
@@ -2164,7 +2164,7 @@ function findNearestLand(x, z, maxRadius = 20) {
             const angle = (i / steps) * Math.PI * 2;
             const nx = x + Math.cos(angle) * r;
             const nz = z + Math.sin(angle) * r;
-            if(getHeight(nx, nz) >= WATER_LEVEL) return {x: nx, z: nz};
+            if(getHeight(nx, nz) >= minHeight) return {x: nx, z: nz};
         }
     }
     return {x, z}; // Fallback
@@ -4014,16 +4014,36 @@ const PF_NEIGHBORS = [
     {x:0,y:1}, {x:1,y:0}, {x:0,y:-1}, {x:-1,y:0},
     {x:1,y:1}, {x:1,y:-1}, {x:-1,y:1}, {x:-1,y:-1}
 ];
+const AI_LAND_CLEARANCE = 0.45;
+function aiDryHeight() { return VISUAL_WATER_LEVEL + AI_LAND_CLEARANCE; }
 
 const Pathfinder = {
     GRID_SIZE: CONFIG.PATHFINDER.GRID_SIZE,
     openHeap: new BinaryHeap(node => node.f),
     openSet: new Map(),
     closedSet: new Set(),
-    findPath: function(startPos, endPos, isFlying = false, unitHeight = 1.5) {
-        const startNode = { x: Math.round(startPos.x / this.GRID_SIZE), y: Math.round(startPos.z / this.GRID_SIZE) };
+    findPath: function(startPos, endPos, isFlying = false, unitHeight = 1.5, avoidWater = false, waterExit = false) {
+        let startNode = { x: Math.round(startPos.x / this.GRID_SIZE), y: Math.round(startPos.z / this.GRID_SIZE) };
         const endNode = { x: Math.round(endPos.x / this.GRID_SIZE), y: Math.round(endPos.z / this.GRID_SIZE) };
         const startBlocked = !isFlying && isBlocked(startPos.x, startPos.z);
+        const dryRoute = avoidWater && state.waterState !== 'frozen';
+        const safeH = dryRoute ? aiDryHeight() : WATER_LEVEL - CONFIG.PATHFINDER.WATER_SAFE_DEPTH;
+        if(dryRoute && getHeight(endPos.x,endPos.z)<safeH) return null;
+        // A unit can stand on a dry sliver while its rounded grid cell is wet.
+        // Start from the nearest reachable dry cell instead of declaring it stuck.
+        if(dryRoute && getHeight(startPos.x,startPos.z)>=safeH &&
+            (getHeight(startNode.x*this.GRID_SIZE,startNode.y*this.GRID_SIZE)<safeH ||
+             !isWalkableLine(startPos,new THREE.Vector3(startNode.x*this.GRID_SIZE,startPos.y,startNode.y*this.GRID_SIZE),false,unitHeight,true))) {
+            let best=null,bestDistance=Infinity;
+            for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++) {
+                const gx=startNode.x+dx,gy=startNode.y+dy;
+                const point=new THREE.Vector3(gx*this.GRID_SIZE,startPos.y,gy*this.GRID_SIZE);
+                if(getHeight(point.x,point.z)<safeH || (!startBlocked && !isWalkableLine(startPos,point,false,unitHeight,true)))continue;
+                const distance=(point.x-startPos.x)**2+(point.z-startPos.z)**2;
+                if(distance<bestDistance){best={x:gx,y:gy};bestDistance=distance;}
+            }
+            if(best)startNode=best;
+        }
 
         if(startNode.x === endNode.x && startNode.y === endNode.y) return [];
 
@@ -4046,8 +4066,6 @@ const Pathfinder = {
 
         let iterations = 0;
         const MAX_ITER = CONFIG.PATHFINDER.MAX_ITERATIONS;
-        const safeH = WATER_LEVEL - CONFIG.PATHFINDER.WATER_SAFE_DEPTH; // All units use Shaman height for water
-
         while(openHeap.size() > 0) {
             iterations++;
             if(iterations > MAX_ITER) break;
@@ -4068,7 +4086,10 @@ const Pathfinder = {
                     path.push(new THREE.Vector3(curr.x * this.GRID_SIZE, 0, curr.y * this.GRID_SIZE));
                     curr = curr.parent;
                 }
-                return path.reverse();
+                path.reverse();
+                if(dryRoute && Math.hypot(startPos.x-startNode.x*this.GRID_SIZE,startPos.z-startNode.y*this.GRID_SIZE)>.5)
+                    path.unshift(new THREE.Vector3(startNode.x*this.GRID_SIZE,0,startNode.y*this.GRID_SIZE));
+                return path;
             }
 
             for(let offset of PF_NEIGHBORS) {
@@ -4089,7 +4110,7 @@ const Pathfinder = {
                     const wz = ny * this.GRID_SIZE;
                     h = getHeight(wx, wz);
 
-                    if(!isFlying && h < safeH) continue; // Too Deep
+                    if(!isFlying && h < safeH && !waterExit) continue;
 
                     // Allow entry if close to target (within 3 units / ~1.5 grid cells) to handle large buildings
                     const distToTarget = Math.sqrt((nx - endNode.x)**2 + (ny - endNode.y)**2);
@@ -4105,12 +4126,17 @@ const Pathfinder = {
                     }
                 }
 
+                // The same node may be reached from several directions; inspect this
+                // edge every time, including when its endpoint is already open.
+                if(dryRoute && !isFlying &&
+                    getHeight((currentNode.x+nx)*this.GRID_SIZE*.5,(currentNode.y+ny)*this.GRID_SIZE*.5)<safeH)continue;
+
                 // Diagonal corner cutting check
                 if (Math.abs(offset.x) === 1 && Math.abs(offset.y) === 1) {
                     if (!isFlying) {
                         const h1 = getHeight((currentNode.x + offset.x) * this.GRID_SIZE, currentNode.y * this.GRID_SIZE);
                         const h2 = getHeight(currentNode.x * this.GRID_SIZE, (currentNode.y + offset.y) * this.GRID_SIZE);
-                        if (h1 < safeH || h2 < safeH) continue;
+                        if ((h1 < safeH || h2 < safeH) && !waterExit) continue;
                     }
                 }
 
@@ -4137,17 +4163,17 @@ const Pathfinder = {
 };
 window.Pathfinder = Pathfinder;
 
-function isWalkableLine(start, end, isFlying, unitHeight = 1.5) {
+function isWalkableLine(start, end, isFlying, unitHeight = 1.5, avoidWater = false) {
     const dist = start.distanceTo(end);
-    const steps = Math.ceil(dist / 1.0);
+    const steps = Math.ceil(dist / (avoidWater ? 0.25 : 1.0));
     if (steps <= 1) return true;
 
     const dir = end.clone().sub(start).normalize();
     const checkPos = start.clone();
-    const safeH = WATER_LEVEL - CONFIG.PATHFINDER.WATER_SAFE_DEPTH; // All units use Shaman height for water
+    const safeH = avoidWater && state.waterState !== 'frozen' ? aiDryHeight() : WATER_LEVEL - CONFIG.PATHFINDER.WATER_SAFE_DEPTH;
 
     for(let i=1; i<steps; i++) {
-        checkPos.add(dir);
+        checkPos.addScaledVector(dir,dist/steps);
         const h = getHeight(checkPos.x, checkPos.z);
         if(!isFlying) {
             if(h < safeH) return false;
@@ -4157,14 +4183,14 @@ function isWalkableLine(start, end, isFlying, unitHeight = 1.5) {
     return true;
 }
 
-function smoothPath(path, isFlying, unitHeight) {
+function smoothPath(path, isFlying, unitHeight, avoidWater = false) {
     if(path.length < 3) return path;
     const newPath = [path[0]];
     let current = path[0];
 
     for(let i=1; i<path.length-1; i++) {
         // Check if we can go from current to path[i+1] directly
-        if(isWalkableLine(current, path[i+1], isFlying, unitHeight)) {
+        if(isWalkableLine(current, path[i+1], isFlying, unitHeight, avoidWater)) {
             // Can skip path[i]
             continue;
         } else {
@@ -5034,6 +5060,8 @@ window.Humanoid = class Humanoid {
 
         // Initialize at terrain height without arbitrary downward offset to prevent foot clipping
         this.mesh.position.set(x, getHeight(x,z), z);
+        this.lastDryPosition=faction!==0&&type!=='airship'&&getHeight(x,z)>=aiDryHeight()
+            ? this.mesh.position.clone() : null;
         state.scene.add(this.mesh);
         this.velocity = new THREE.Vector3(0,0,0);
         this.isGrounded = true; this.target = null; this.attackTarget = null; this.state = 'idle'; this.animTime = Math.random() * 100;
@@ -5303,10 +5331,11 @@ window.Humanoid = class Humanoid {
         const end = new THREE.Vector3(x, 0, z);
         this.finalDest = end.clone();
         const isFlying = (this.type === 'airship');
-        const rawPath = Pathfinder.findPath(this.mesh.position, end, isFlying, this.height);
+        const avoidWater = this.faction !== 0 && !isFlying && !this.aiWaterEscape;
+        const rawPath = Pathfinder.findPath(this.mesh.position, end, isFlying, this.height, avoidWater, !!this.aiWaterEscape);
 
         if (rawPath) {
-            this.path = smoothPath(rawPath, isFlying, this.height);
+            this.path = smoothPath(rawPath, isFlying, this.height, avoidWater);
             this.pathIndex = 0;
             if(this.path.length > 0) {
                 this.target = this.path[0];
@@ -5561,6 +5590,24 @@ window.Humanoid = class Humanoid {
                 this.velocity.z *= 0.8;
             }
             this.mesh.position.addScaledVector(this.velocity, dt);
+        }
+
+        // Physics separation and residual velocity can drift across a shoreline even
+        // when every planned waypoint is dry. Keep the last valid ground position.
+        if(this.faction!==0 && this.type!=='airship' && !this.aiWaterEscape &&
+            state.waterState!=='frozen' && !['dead','stunned','getting_up'].includes(this.state)) {
+            if(getHeight(this.mesh.position.x,this.mesh.position.z)<aiDryHeight() && this.lastDryPosition) {
+                this.mesh.position.x=this.lastDryPosition.x;this.mesh.position.z=this.lastDryPosition.z;
+                this.velocity.x=0;this.velocity.z=0;
+                if(this.rigidBody) {
+                    const p=this.rigidBody.translation();
+                    this.rigidBody.setTranslation({x:this.mesh.position.x,y:p.y,z:this.mesh.position.z},true);
+                    const v=this.rigidBody.linvel();this.rigidBody.setLinvel({x:0,y:v.y,z:0},true);
+                }
+            } else if(getHeight(this.mesh.position.x,this.mesh.position.z)>=aiDryHeight()) {
+                if(!this.lastDryPosition)this.lastDryPosition=this.mesh.position.clone();
+                else this.lastDryPosition.copy(this.mesh.position);
+            }
         }
 
         Locomotion.ground(this, getSurfaceHeight, dt);
@@ -5846,7 +5893,8 @@ window.Humanoid = class Humanoid {
                 if(this.pathTimer > 1.0) {
                      this.pathTimer = 0;
                      const isFlying = (this.type === 'airship');
-                     this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying, this.height);
+                     this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying, this.height,
+                         this.faction !== 0 && !isFlying && !this.aiWaterEscape, !!this.aiWaterEscape);
                      this.pathIndex = 0;
                      if (!this.path) {
                          this.state = 'idle';
@@ -5875,7 +5923,8 @@ window.Humanoid = class Humanoid {
                 const dh = nextH - currentH;
 
                 let canMove = true;
-                const safeH = WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
+                const safeH = this.faction !== 0 && !this.aiWaterEscape && state.waterState !== 'frozen'
+                    ? aiDryHeight() : WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
                 if (this.type !== 'airship' && nextH < safeH && currentH >= safeH) canMove = false;
 
                 if(canMove) {
@@ -5884,7 +5933,10 @@ window.Humanoid = class Humanoid {
                     if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                         speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
                     }
-                    const push = this.getSeparationVector(); const targetVelX = (dir.x + push.x) * speed;
+                    const push = this.getSeparationVector();
+                    if(this.faction!==0 && !this.aiWaterEscape && state.waterState!=='frozen' &&
+                        getHeight(this.mesh.position.x+(dir.x+push.x),this.mesh.position.z+(dir.z+push.z))<safeH)push.set(0,0,0);
+                    const targetVelX = (dir.x + push.x) * speed;
                     const targetVelZ = (dir.z + push.z) * speed;
 
                     if (this.rigidBody) {
@@ -5928,11 +5980,17 @@ window.Humanoid = class Humanoid {
                         this.stuckTimer = 0;
                         this.stuckThreshold = CONFIG.ANIMATION.STUCK_THRESHOLD_BASE + Math.random();
                         const isFlying = (this.type === 'airship');
-                        const newPath = Pathfinder.findPath(this.mesh.position, this.finalDest, isFlying, this.height);
+                        const newPath = Pathfinder.findPath(this.mesh.position, this.finalDest, isFlying, this.height,
+                            this.faction !== 0 && !isFlying && !this.aiWaterEscape, !!this.aiWaterEscape);
                         if (newPath) {
                             this.path = newPath;
                             this.pathIndex = 0;
                             if(this.path.length > 0) this.target = this.path[0];
+                        } else if(this.faction !== 0 && !isFlying && !this.aiWaterEscape) {
+                            // Shoreline corrections can make one replanning attempt fail
+                            // while the next physics frame offers a dry starting cell.
+                            // Keep the destination so this unit retries instead of idling.
+                            this.target=this.path?.[this.pathIndex]||this.finalDest;
                         } else {
                             this.state = 'idle';
                             this.target = null;
@@ -5952,7 +6010,8 @@ window.Humanoid = class Humanoid {
             let dist = Math.sqrt(dx*dx + dz*dz);
 
             // Update Path
-            if(dist < 1.0) {
+            if(dist < (this.aiWaterEscape ? .2 : 1.0) &&
+                (!this.aiWaterEscape || getHeight(this.mesh.position.x,this.mesh.position.z)>=aiDryHeight())) {
                  this.pathIndex++;
                  if(this.path && this.pathIndex < this.path.length) {
                      this.target = this.path[this.pathIndex];
@@ -5988,9 +6047,10 @@ window.Humanoid = class Humanoid {
                 const dh = nextH - groundH;
 
                 let canMove = true;
+                const safeH = this.faction !== 0 && !this.aiWaterEscape && state.waterState !== 'frozen'
+                    ? aiDryHeight() : WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
                 if(this.type !== 'airship') {
                     const currentH = groundH;
-                    const safeH = WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
                     if (nextH < safeH && currentH >= safeH) {
                          if(!this.targetBoat) canMove = false;
                     }
@@ -6002,7 +6062,10 @@ window.Humanoid = class Humanoid {
                     if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                         speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
                     }
-                    const push = this.getSeparationVector(); const targetVelX = (dir.x + push.x) * speed;
+                    const push = this.getSeparationVector();
+                    if(this.faction!==0 && !this.aiWaterEscape && state.waterState!=='frozen' &&
+                        getHeight(this.mesh.position.x+(dir.x+push.x),this.mesh.position.z+(dir.z+push.z))<safeH)push.set(0,0,0);
+                    const targetVelX = (dir.x + push.x) * speed;
                     const targetVelZ = (dir.z + push.z) * speed;
 
                     if (this.rigidBody) {
@@ -6041,7 +6104,7 @@ window.Humanoid = class Humanoid {
         } else {
             // Idle Check Aggro
             // All unselected units auto aggro
-            if (!state.selectedUnits.includes(this) && !['retreat','builder','shelter','train','guard','support'].includes(this.aiRole)) {
+            if (!state.selectedUnits.includes(this) && !['retreat','builder','shelter','train','guard','support','escape-water'].includes(this.aiRole)) {
                 if (state.clock.getElapsedTime() > this.nextTargetCheck) {
                     this.nextTargetCheck = state.clock.getElapsedTime() + 0.5 + Math.random() * 0.5;
                     const target = this.findTarget();
@@ -6477,9 +6540,25 @@ class EnemyAI {
         if(this.timer>=Math.min(2,CONFIG.AI.THINK_INTERVAL)){this.timer=0;this.think();}
     }
     distance(a,b){return Math.hypot(a.x-b.x,a.z-b.z);}
+    rescueFromWater(u) {
+        const x=u.mesh.position.x,z=u.mesh.position.z;
+        const candidates=[findNearestLand(x,z,60,aiDryHeight())];
+        for(const radius of [4,8,12,18,26,36])for(let i=0;i<4;i++){
+            const angle=i*Math.PI/2+this.faction*.37;
+            candidates.push({x:x+Math.cos(angle)*radius,z:z+Math.sin(angle)*radius});
+        }
+        for(const shore of candidates) {
+            if(getHeight(shore.x,shore.z)<aiDryHeight()||isBlocked(shore.x,shore.z))continue;
+            u.goto(shore.x,shore.z);
+            if(u.state==='move')return true;
+        }
+        return false;
+    }
     moveUnit(u,p,role) {
         if(['dead','stunned','getting_up','transported'].includes(u.state))return false;
         u.aiRole=role;u.attackTarget=null;
+        if(u.type!=='airship' && !u.aiWaterEscape && state.waterState!=='frozen' && getHeight(p.x,p.z)<aiDryHeight())
+            p=findNearestLand(p.x,p.z,24,aiDryHeight());
         if(this.distance(u.mesh.position,p)<1.5)return true;
         if(u.state==='move'&&u.finalDest&&this.distance(u.finalDest,p)<2)return true;
         u.goto(p.x,p.z);return u.state==='move';
@@ -6512,10 +6591,23 @@ class EnemyAI {
         const units=state.units.filter(u=>u.faction===this.faction&&u.state!=='dead'&&u.state!=='transported'&&!u.isPhantom);
         const buildings=state.buildings.filter(b=>b.faction===this.faction&&!b.dead);
         const foes=state.units.filter(u=>!window.isAllied(u.faction,this.faction)&&!['dead','transported'].includes(u.state)&&!u.invisible);
-        this.myShaman=units.find(u=>u.isShaman)||null;
+        for(const u of units) {
+            if(u.type==='airship'||state.waterState==='frozen') {u.aiWaterEscape=false;continue;}
+            if(['stunned','getting_up'].includes(u.state))continue;
+            if(getHeight(u.mesh.position.x,u.mesh.position.z)<aiDryHeight()) {
+                u.aiWaterEscape=true;
+                u.aiRole='escape-water';u.attackTarget=null;
+                if(u.state!=='move'||!u.finalDest||getHeight(u.finalDest.x,u.finalDest.z)<aiDryHeight())
+                    this.rescueFromWater(u);
+            } else if(u.aiWaterEscape) {
+                u.aiWaterEscape=false;u.finalDest=null;u.path=[];u.target=null;u.state='idle';
+            }
+        }
+        const dryUnits=units.filter(u=>!u.aiWaterEscape);
+        this.myShaman=dryUnits.find(u=>u.isShaman)||null;
         const home=buildings.find(b=>b.type==='hut')?.mesh.position||new THREE.Vector3(this.baseX,0,this.baseZ);
         this.baseX=home.x;this.baseZ=home.z;
-        const workers=units.filter(u=>u.type==='wild'),army=units.filter(u=>['warrior','firewarrior','spy'].includes(u.type));
+        const workers=dryUnits.filter(u=>u.type==='wild'),army=dryUnits.filter(u=>['warrior','firewarrior','spy'].includes(u.type));
         const threats=foes.filter(e=>this.distance(e.mesh.position,home)<25||buildings.some(b=>this.distance(e.mesh.position,b.mesh.position)<16));
         const nearest=(list,p)=>list.slice().sort((a,b)=>this.distance(a.mesh.position,p)-this.distance(b.mesh.position,p))[0];
         const refuge=u=>{
@@ -7535,7 +7627,7 @@ async function init() {
             localStorage.setItem(CONFIG.SAVED_KEYS.HELP_SHOWN, 'true');
         }
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
+            window.gameTestAPI = { CONFIG, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
         }
     } catch(e) {
         console.error("Init failed:", e);

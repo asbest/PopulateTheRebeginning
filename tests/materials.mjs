@@ -49,7 +49,7 @@ try {
   roughness:(await fs.stat(path.join(root,'art/blender',name+'-roughness.png'))).size})));
  const report={pass:errors.length===0&&detail.images.some(([w,h])=>w>=1000&&h>=1000)&&assets.every(a=>a.bytes>1000000)&&
   terrainLayers.every(a=>a.albedo>400000&&a.normal>200000&&a.roughness>100000)&&
-  detail.grass===0x65bd38&&detail.terrainSamples>10&&detail.grassVariation>.01&&detail.shaderVersion==='island-terrain-detail-v5',detail,assets,terrainLayers,errors};
+  detail.grass===0x65bd38&&detail.terrainSamples>10&&detail.grassVariation>.01&&detail.shaderVersion==='island-terrain-detail-v6',detail,assets,terrainLayers,errors};
  await fs.writeFile(path.join(root,'test-results/materials-report.json'),JSON.stringify(report,null,2));
  console.log(JSON.stringify(report));process.exitCode=report.pass?0:1;
 }finally{await browser.close();}

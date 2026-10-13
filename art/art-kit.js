@@ -227,9 +227,9 @@ export function createArtKit(T) {
                                mix(artTerrainHash(cell+vec2(0.0,1.0)),artTerrainHash(cell+vec2(1.0,1.0)),f.x),f.y);
                 }
                 vec3 artStochastic(sampler2D tex,vec2 uv) {
-                    vec2 cell=floor(uv*.28);
-                    float pick=artTerrainHash(cell);
-                    vec2 offset=vec2(pick,artTerrainHash(cell+13.7));
+                    // Smooth offsets avoid visible square boundaries between texture patches.
+                    float pick=artTerrainNoise(uv*.28);
+                    vec2 offset=vec2(pick,1.0-pick);
                     vec2 uvA=uv+offset;
                     vec2 uvB=mat2(.8,-.6,.6,.8)*uv*.47+offset.yx;
                     return mix(texture2D(tex,uvA).rgb,texture2D(tex,uvB).rgb,.24+pick*.18);
@@ -274,7 +274,7 @@ export function createArtKit(T) {
                     texture2D(artDirtNormal,vArtPosition.xz*.35).xyz,artDirtWeight)*2.0-1.0;
                 normal=normalize(normal+vec3(artN.x,artN.z,artN.y)*(.045+.075*grassWeight));`);
         };
-        material.customProgramCacheKey=()=> 'island-terrain-detail-v5';
+        material.customProgramCacheKey=()=> 'island-terrain-detail-v6';
     }
     return {building,tree,dress,terrainDetail,textures,palette,uniforms,ready:blender.ready,blender};
 }

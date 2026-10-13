@@ -22,8 +22,66 @@ await check('Units leave building footprints and shed obsolete roles after conve
  u.aiRole='guard';u.aiTrainingTarget=123;u.setFaction(2);
  if(u.aiRole||u.aiTrainingTarget)throw new Error('Conversion retained old AI orders');
 }));
+await check('Enemy routes stay on visible land and stranded troops leave the water',async()=>{
+ const water=await b.newPage();water.on('pageerror',e=>errors.push(String(e)));
+ try {
+  await water.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1');
+  await water.waitForFunction(()=>window.gameTestAPI&&state.shaman);
+  return await water.evaluate(()=>{
+   state.isPaused=true;closeHelp();closeStoryOverlay();
+   for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
+   for(const building of state.buildings)state.scene.remove(building.mesh);
+   state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
+   for(let x=-35;x<=35;x++)for(let z=-28;z<=28;z++){
+    const height=Math.min(6,Math.max(0,Math.abs(x)-1,Math.abs(z)-6));
+    state.terrainMods.set(`${x},${z}`,height-getHeight(x,z));
+   }
+   state.heightCache.clear();gameTestAPI.updateChunks(true);
+   const start=new THREE.Vector3(-12,0,0),end=new THREE.Vector3(12,0,0);
+   const route=Pathfinder.findPath(start,end,false,1.5,true);
+   if(!route?.length)throw new Error('No dry detour around the water channel');
+   let previous=start,minHeight=Infinity;
+   for(const waypoint of route){
+    const distance=Math.hypot(waypoint.x-previous.x,waypoint.z-previous.z);
+    for(let d=0;d<=distance;d+=.25){
+     const t=distance?d/distance:0;
+     const h=getHeight(previous.x+(waypoint.x-previous.x)*t,previous.z+(waypoint.z-previous.z)*t);
+     minHeight=Math.min(minHeight,h);
+     if(h<gameTestAPI.aiDryHeight()-.05)throw new Error('Dry route crosses water at '+JSON.stringify({h,previous,waypoint}));
+    }
+    previous=waypoint;
+   }
+   const walker=new Humanoid(1,'warrior',-12,0);state.units.push(walker);walker.goto(12,0);
+   if(walker.state!=='move')throw new Error('Enemy could not take the dry detour');
+   let lowestWalk=Infinity;
+   for(let k=0;k<320;k++){
+    state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();walker.update(.1);
+    lowestWalk=Math.min(lowestWalk,getHeight(walker.mesh.position.x,walker.mesh.position.z));
+    if(lowestWalk<gameTestAPI.aiDryHeight()-.12)throw new Error('Moving enemy entered the water: '+lowestWalk);
+    if(Math.hypot(walker.mesh.position.x-12,walker.mesh.position.z)<2)break;
+   }
+   if(Math.hypot(walker.mesh.position.x-12,walker.mesh.position.z)>2)throw new Error('Enemy stalled on the shore: '+JSON.stringify({position:walker.mesh.position,role:walker.aiRole,state:walker.state,
+    dry:getHeight(walker.mesh.position.x,walker.mesh.position.z),grid:getHeight(Math.round(walker.mesh.position.x/2)*2,Math.round(walker.mesh.position.z/2)*2),
+    reroute:Pathfinder.findPath(walker.mesh.position,end,false,walker.height,true)?.slice(0,3),
+    direct:gameTestAPI.findNearestLand(walker.mesh.position.x,walker.mesh.position.z,5,gameTestAPI.aiDryHeight())}));
+   const stranded=new Humanoid(1,'warrior',0,0);state.units.push(stranded);
+   const ai=new enemyAIs[0].constructor(1);ai.think();
+   if(!stranded.aiWaterEscape||stranded.aiRole!=='escape-water'||stranded.state!=='move'||
+      getHeight(stranded.finalDest.x,stranded.finalDest.z)<gameTestAPI.aiDryHeight())
+     throw new Error('No safe shore recovery: '+JSON.stringify({role:stranded.aiRole,state:stranded.state,dest:stranded.finalDest}));
+   const shore=stranded.finalDest.clone();
+   for(let k=0;k<200&&getHeight(stranded.mesh.position.x,stranded.mesh.position.z)<gameTestAPI.aiDryHeight();k++){
+    state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();stranded.update(.1);
+   }
+   if(getHeight(stranded.mesh.position.x,stranded.mesh.position.z)<gameTestAPI.aiDryHeight())
+     throw new Error('Stranded enemy did not leave the water: '+JSON.stringify({position:stranded.mesh.position,state:stranded.state,shore}));
+   return {waypoints:route.length,minHeight,lowestWalk,shore};
+  });
+ } finally {await water.close();}
+});
 await check('Natural starting landscape supports mixed troops and an offensive within eight minutes',async()=>{
  const natural=await b.newPage();natural.on('pageerror',e=>errors.push(String(e)));
+ await natural.addInitScript(()=>{let seed=98217;Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};});
  try{await natural.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});await natural.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
  return await natural.evaluate(()=>{state.isPaused=true;state.isGodMode=true;let time=0,sawAttack=false,firstAttackAt=null,sawSpy=false;state.clock.getElapsedTime=()=>time;
   for(let k=0;k<4800;k++){time+=.1;gameTestAPI.SpatialHash.update();gameTestAPI.BuildingSpatialHash.update();for(const ai of enemyAIs)ai.update(.1);sawAttack ||= state.units.some(u=>u.faction===1&&u.aiRole==='attack');if(sawAttack&&firstAttackAt===null)firstAttackAt=time;sawSpy ||= state.units.some(u=>u.faction===1&&u.type==='spy');state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();for(const u of [...state.units])u.update(.1);for(const b of [...state.buildings])if(!b.dead)b.update(.1);for(let i=state.projectiles.length-1;i>=0;i--)if(!state.projectiles[i].update(.1))state.projectiles.splice(i,1);for(let i=state.activeEffects.length-1;i>=0;i--)if(!state.activeEffects[i].update(.1))state.activeEffects.splice(i,1);for(const e of state.particles)state.scene.remove(e.mesh);state.particles=[];}
