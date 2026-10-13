@@ -44,6 +44,19 @@ try {
         const wildlife=gameTestAPI.CritterManager;
         const bunny=wildlife.bunnies[0],bird=wildlife.birds[0];
         if(!bunny?.rig||!bird?.head||!birdWing)throw new Error('Articulated wildlife rigs were not spawned');
+        const rabbitCoats=new Set(wildlife.bunnies.map(a=>a.mesh.userData.coatName));
+        const birdPlumages=new Set(wildlife.birds.map(a=>a.mesh.userData.coatName));
+        const rabbitBack=bunny.mesh.getObjectByName('Blender critter/bunny/body fur')?.material;
+        const rabbitBelly=bunny.mesh.getObjectByName('Blender critter/bunny/body ivory')?.material;
+        const birdBack=bird.mesh.getObjectByName('Blender critter/bird/body feather')?.material;
+        const birdBelly=bird.mesh.getObjectByName('Blender critter/bird/body ivory')?.material;
+        if(rabbitCoats.size<4||birdPlumages.size<4||!rabbitBack||!rabbitBelly||!birdBack||!birdBelly||
+            rabbitBack.color.getHex()===rabbitBelly.color.getHex()||birdBack.color.getHex()===birdBelly.color.getHex()||
+            rabbitBack.map!==Art.blender.texture('fur','map')||
+            birdBack.map!==Art.blender.texture('feather','map'))
+            throw new Error('Wildlife materials lack natural coat variation and detail: '+JSON.stringify({rabbitCoats:[...rabbitCoats],birdPlumages:[...birdPlumages],
+                rabbitBack:rabbitBack?.color.getHexString(),rabbitBelly:rabbitBelly?.color.getHexString(),
+                birdBack:birdBack?.color.getHexString(),birdBelly:birdBelly?.color.getHexString()}));
         if(CONFIG.CRITTERS.BUNNY_COUNT!==15||CONFIG.CRITTERS.BIRD_COUNT!==10)
             throw new Error('Wildlife population was not halved: '+JSON.stringify({bunnies:CONFIG.CRITTERS.BUNNY_COUNT,birds:CONFIG.CRITTERS.BIRD_COUNT}));
         const focus=wildlife.focus(),nearBunnies=wildlife.bunnies.filter(a=>Math.hypot(a.mesh.position.x-focus.x,a.mesh.position.z-focus.z)<CONFIG.CRITTERS.BUNNY_SPAWN_RANGE*.55).length,
@@ -84,7 +97,8 @@ try {
             const normal=Art.blender.texture(kind,'normal'),rough=Art.blender.texture(kind,'roughness'),albedo=Art.blender.texture(kind,'map');
             return {kind,albedo:[albedo.image?.width,albedo.image?.height],normal:[normal.image?.width,normal.image?.height],rough:[rough.image?.width,rough.image?.height]};
         });
-        return {keys:keys.length,buildings,roles,treeDetails:count(tree),wildlife:{maxHop,minClearance,earMotion,wingMotion,nearBunnies,nearBirds,bunnySize,birdSize},textures};
+        return {keys:keys.length,buildings,roles,treeDetails:count(tree),wildlife:{maxHop,minClearance,earMotion,wingMotion,
+            rabbitCoats:[...rabbitCoats],birdPlumages:[...birdPlumages],nearBunnies,nearBirds,bunnySize,birdSize},textures};
     });
     await page.waitForFunction(()=>['grass','stone','wood','thatch','skin','cloth','rope','leather','bronze','ivory','dark','ember','foliage','fur','feather','sand','cliff','dirt','mud','gravel','moss'].every(k=>
         ['map','normal','roughness'].every(type=>Art.blender.texture(k,type).image?.width>=1000)),null,{timeout:30000});

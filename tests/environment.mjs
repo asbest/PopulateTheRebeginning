@@ -57,6 +57,7 @@ try{
    sky:state.skyDome?.name,rim:state.rimLight?.intensity,quality:state.graphicsQuality,
    profiles:{low:{tier:low.tier,grass:lowGrass,pixel:low.maxPixelRatio},ultra:{tier:ultra.tier,pixel:ultra.maxPixelRatio}},graphicsUi,
    water:{depthWrite:water.depthWrite,hasFresnel:/fresnel/.test(water.fragmentShader),hasWaveNormal:/vWaveNormal/.test(water.vertexShader),
+    coastalDepth:!!chunks[0].children[1].geometry.attributes.depth&&/smoothstep\(0\.4,9\.0,vDepth\)/.test(water.fragmentShader),
     vertical:/pos\.y\+=height/.test(water.vertexShader),gerstner:/horizontal/.test(water.vertexShader),breakers:/shoreFoam/.test(water.fragmentShader)},
    cloudMotion,spray,skyShader:{scattering:/horizonHaze/.test(state.skyDome.material.fragmentShader),
     cirrus:/skyFbm/.test(state.skyDome.material.fragmentShader),night:/nightMix/.test(state.skyDome.material.fragmentShader)},
@@ -71,7 +72,7 @@ try{
     result.construction.name!=='Construction scaffolding'||result.construction.parts<10||!result.damaged||result.marksAdded!==1||
     result.profiles.low.tier!=='low'||result.profiles.low.grass>=result.grass||result.profiles.ultra.tier!=='ultra'||result.profiles.ultra.pixel<1.8||
     result.graphicsUi.menu!=='flex'||result.graphicsUi.tier!=='ultra'||result.graphicsUi.saved!=='ultra'||!result.graphicsUi.label?.includes('Ultra')||
-    result.sky!=='Procedural atmosphere'||!result.rim||result.water.depthWrite||!result.water.hasFresnel||!result.water.hasWaveNormal||
+    result.sky!=='Procedural atmosphere'||!result.rim||result.water.depthWrite||!result.water.hasFresnel||!result.water.hasWaveNormal||!result.water.coastalDepth||
     !result.water.vertical||!result.water.gerstner||!result.water.breakers||result.cloudMotion.distance<=0||result.cloudMotion.puff<=0||!result.cloudMotion.shadow||
     result.cloudMotion.drawLayers!==2||result.cloudMotion.puffs>12||result.cloudMotion.vertices>180||result.cloudMotion.undersideFill<.15||
     result.spray.name!=='Shore spray'||result.spray.alive<1||!result.skyShader.scattering||!result.skyShader.cirrus||!result.skyShader.night||

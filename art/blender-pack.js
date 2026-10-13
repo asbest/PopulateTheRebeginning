@@ -31,7 +31,9 @@ export function createBlenderPack(T) {
         const key=kind+'/'+type;
         if(!surfaces.has(key)) {
             const url=type==='map'
-                ? crafted.has(kind) ? `./blender/${kind}-albedo.png`
+                ? kind==='fur' ? './blender/fur-albedo-v2.png'
+                    : kind==='feather' ? './blender/feather-plumage-albedo.png'
+                    : crafted.has(kind) ? `./blender/${kind}-albedo.png`
                     : kind==='cloth' ? './character-cloth.png'
                     : kind==='skin' ? './character-skin-v2.png' : `./materials/${kind}.png`
                 : `./blender/${kind}-${type}.png`;

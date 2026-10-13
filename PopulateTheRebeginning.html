@@ -2192,10 +2192,76 @@ class Particle {
 }
 
 
+// Coastal daylight and warm earth tones from the title art, grouped as coherent
+// coats rather than unrelated random colors on each body part.
+const RABBIT_COATS=[
+    {name:'woodland',back:0x90765c,face:0xb69b76,legs:0x9e8267,ears:0xa38b70,belly:0xd9c9aa,tail:0xe8dfcd,inner:0xb98580},
+    {name:'sandy',back:0xc7ad7d,face:0xd8c49a,legs:0xbda377,ears:0xcbb58e,belly:0xf1e4c8,tail:0xf4ead8,inner:0xc9958c},
+    {name:'chestnut',back:0xa66c48,face:0xc18b61,legs:0x956044,ears:0xae7959,belly:0xdec6a9,tail:0xeee0ce,inner:0xb77b75},
+    {name:'slate',back:0x818885,face:0xa2a9a3,legs:0x737c79,ears:0x919995,belly:0xd7d8ce,tail:0xe8e7dd,inner:0xaa8e91},
+    {name:'cream',back:0xc9c5ad,face:0xe0d9bd,legs:0xb5af99,ears:0xd0c6ad,belly:0xf4eedc,tail:0xf6f0e3,inner:0xc99e99}
+];
+const BIRD_PLUMAGES=[
+    {name:'sea-gull',back:0x9aaeb4,head:0xe3e5de,wing:0x8399a4,tail:0x687d88,belly:0xf1eee1,beak:0xd6a45c},
+    {name:'island-tern',back:0x627d88,head:0x899aa0,wing:0x536d7a,tail:0x435963,belly:0xe0e6e1,beak:0xb89a70},
+    {name:'kestrel',back:0xae7952,head:0xc99a70,wing:0x8c654f,tail:0x775c4b,belly:0xe5d2b4,beak:0xc8a06a},
+    {name:'sandpiper',back:0xb2a07d,head:0xcbbaa0,wing:0x99896e,tail:0x786f62,belly:0xece2cb,beak:0xb69d74},
+    {name:'coastal-swallow',back:0x668c91,head:0x86a4a3,wing:0x597b83,tail:0x425e65,belly:0xd8e0d8,beak:0xbba17d}
+];
+function colorWildlifeParts(group,kind,palette,tone) {
+    const materials=new Map();
+    group.traverse(node=>{
+        if(!node.isMesh||!node.userData.blenderAsset)return;
+        const part=node.name.split(' ')[1]?.split('/').pop();
+        const surface=node.material.name.split('/')[1];
+        let color;
+        if(kind==='rabbit') {
+            if(surface==='fur')color=/^ear/.test(part)?palette.ears:/Leg/.test(part)?palette.legs:part==='head'?palette.face:palette.back;
+            else if(surface==='ivory')color=part==='tail'?palette.tail:palette.belly;
+            else if(surface==='leather')color=palette.inner;
+        } else {
+            if(surface==='feather')color=/^wing/.test(part)?palette.wing:part==='tail'?palette.tail:part==='head'?palette.head:palette.back;
+            else if(surface==='ivory')color=palette.belly;
+            else if(surface==='bronze')color=palette.beak;
+        }
+        if(color===undefined)return;
+        const key=surface+'/'+color;
+        if(!materials.has(key)) {
+            const material=node.material.clone();
+            material.color.setHex(color).offsetHSL(0,0,tone);
+            material.roughness=surface==='bronze'?.62:surface==='feather'?.88:.96;
+            material.metalness=0;
+            if(surface==='ivory') {
+                const fibers=kind==='rabbit'?'fur':'feather';
+                material.map=Art.blender.texture(fibers,'map');
+                material.normalMap=Art.blender.texture(fibers,'normal');
+                material.roughnessMap=Art.blender.texture(fibers,'roughness');
+            }
+            materials.set(key,material);
+        }
+        node.material=materials.get(key);
+    });
+    group.userData.wildlifeMaterials=[...(group.userData.wildlifeMaterials||[]),...materials.values()];
+    group.userData.coatName=palette.name;
+}
+
 const CritterManager = {
     bunnies: [],
     birds: [],
     refillTimer: 0,
+    rabbitPaletteBag: [],
+    birdPaletteBag: [],
+    nextPalette: function(kind) {
+        const bag=kind==='rabbit'?this.rabbitPaletteBag:this.birdPaletteBag;
+        if(!bag.length) {
+            bag.push(...(kind==='rabbit'?RABBIT_COATS:BIRD_PLUMAGES));
+            for(let i=bag.length-1;i>0;i--) {
+                const j=Math.floor(Math.random()*(i+1));
+                [bag[i],bag[j]]=[bag[j],bag[i]];
+            }
+        }
+        return bag.pop();
+    },
     focus: function() {
         return state.cameraLookAt || state.shaman?.mesh.position || {x:0,z:0};
     },
@@ -2208,7 +2274,8 @@ const CritterManager = {
     spawnBunny: function(randomPos=false) {
         const group = new THREE.Group();
         group.name='Wild rabbit';group.userData.wildlife='rabbit';
-        const color = [0xb1987c,0xd0bda0,0xa9a49a,0xd4cbc0][Math.floor(Math.random()*4)];
+        const coat=this.nextPalette('rabbit');
+        const tone=(Math.random()-.5)*.06,color=coat.back;
         const mat = new THREE.MeshStandardMaterial({color: color, roughness: 0.88,
             map:Art.blender.texture('fur','map'),normalMap:Art.blender.texture('fur','normal'),
             roughnessMap:Art.blender.texture('fur','roughness'),emissive:new THREE.Color(color).multiplyScalar(.08),emissiveIntensity:.18});
@@ -2288,15 +2355,10 @@ const CritterManager = {
             const tailJoint=new THREE.Group();tailJoint.position.set(0,.25,-.36);
             bunnyRig.add(tailJoint);Art.blender.attach(tailJoint,'critter/bunny/tail');
             bunnyRig.userData.joints={head:headJoint,ears,frontLegs,hindLegs,tail:tailJoint};
-            let coat=null;
-            group.traverse(node=>{
-                if(node.isMesh&&node.material?.name==='Blender/fur') {
-                    if(!coat){coat=node.material.clone();coat.color.setHex(color);coat.emissive.setHex(color).multiplyScalar(.08);coat.emissiveIntensity=.18;}
-                    node.material=coat;
-                }
-            });
-            bunnyRig.userData.coat=coat;
+            colorWildlifeParts(group,'rabbit',coat,tone);
         }
+        group.userData.coatName=coat.name;
+        group.userData.wildlifeMaterials=[...(group.userData.wildlifeMaterials||[]),mat];
 
 
         const focus=this.focus(),radius=CONFIG.CRITTERS.BUNNY_SPAWN_RANGE*.5;
@@ -2307,7 +2369,7 @@ const CritterManager = {
             const slope=Math.abs(getHeight(x+.5,z)-getHeight(x-.5,z))+Math.abs(getHeight(x,z+.5)-getHeight(x,z-.5));
             if(h>VISUAL_WATER_LEVEL+.35&&h<18&&slope<1.45){found=true;break;}
         }
-        if(!found){mat.dispose();return false;}
+        if(!found){this.disposeAnimal(group);return false;}
         group.position.set(x,h,z);
 
         state.scene.add(group);
@@ -2331,7 +2393,8 @@ const CritterManager = {
     spawnBird: function(randomPos=false) {
         const group = new THREE.Group();
         group.name='Wild bird';group.userData.wildlife='bird';
-        const color = [0xa69980,0xc2b28f,0x8ea5ad,0xb58f73][Math.floor(Math.random()*4)];
+        const plumage=this.nextPalette('bird');
+        const tone=(Math.random()-.5)*.06,color=plumage.back;
         const mat = new THREE.MeshStandardMaterial({color: color, side: THREE.DoubleSide, roughness: 0.84,
             map:Art.blender.texture('feather','map'),normalMap:Art.blender.texture('feather','normal'),
             roughnessMap:Art.blender.texture('feather','roughness'),emissive:new THREE.Color(color).multiplyScalar(.07),emissiveIntensity:.16});
@@ -2354,7 +2417,7 @@ const CritterManager = {
         // Beak
         const beakGeo = new THREE.ConeGeometry(size * 0.15, size * 0.4, 4);
         beakGeo.rotateX(Math.PI / 2);
-        const beakMat = new THREE.MeshStandardMaterial({color: COLORS.beak, roughness: 0.4});
+        const beakMat = new THREE.MeshStandardMaterial({color: plumage.beak, roughness: 0.68});
         const beak = new THREE.Mesh(beakGeo, beakMat);
         beak.position.set(0, size * 0.2, size * 1.1);
         group.add(beak);
@@ -2410,15 +2473,10 @@ const CritterManager = {
             const headDetail=new THREE.Group();headDetail.scale.setScalar(size/0.68);
             headJoint.add(headDetail);Art.blender.attach(headDetail,'critter/bird/head');
             tailJoint=tailDetail;
-            let plumage=null;
-            group.traverse(node=>{
-                if(node.isMesh&&node.material?.name==='Blender/feather') {
-                    if(!plumage){plumage=node.material.clone();plumage.color.setHex(color);plumage.emissive.setHex(color).multiplyScalar(.07);plumage.emissiveIntensity=.16;}
-                    node.material=plumage;
-                }
-            });
-            group.userData.plumage=plumage;
+            colorWildlifeParts(group,'bird',plumage,tone);
         }
+        group.userData.coatName=plumage.name;
+        group.userData.wildlifeMaterials=[...(group.userData.wildlifeMaterials||[]),mat,beakMat];
 
         const focus=this.focus(),radius=CONFIG.CRITTERS.BIRD_SPAWN_RANGE*.5;
         const spawnAngle=Math.random()*Math.PI*2;
@@ -2456,6 +2514,11 @@ const CritterManager = {
             flapMix:1
         });
         return true;
+    },
+    disposeAnimal: function(group) {
+        state.scene.remove(group);
+        group.traverse(node=>{if(node.isMesh&&!node.userData.blenderAsset)node.geometry.dispose();});
+        for(const material of group.userData.wildlifeMaterials||[])material.dispose();
     },
     update: function(dt) {
         // Update Bunnies
@@ -2510,8 +2573,7 @@ const CritterManager = {
 
                 // If bunny hops into deep water, respawn it
                 if(t === 1 && h < VISUAL_WATER_LEVEL - 1) {
-                     state.scene.remove(b.mesh);
-                     b.rig?.userData.coat?.dispose();
+                     this.disposeAnimal(b.mesh);
                      this.bunnies.splice(i, 1);
                      this.spawnBunny(true);
                      continue;
@@ -2542,8 +2604,7 @@ const CritterManager = {
             // Periodically check if far out of bounds and respawn
             const bunnyFocus=this.focus();
             if(Math.hypot(b.mesh.position.x-bunnyFocus.x,b.mesh.position.z-bunnyFocus.z) > CONFIG.CRITTERS.BUNNY_RESPAWN_DIST) {
-                 state.scene.remove(b.mesh);
-                 b.rig?.userData.coat?.dispose();
+                 this.disposeAnimal(b.mesh);
                  this.bunnies.splice(i, 1);
                  this.spawnBunny(true);
             }
@@ -2603,8 +2664,7 @@ const CritterManager = {
             // Respawn if far out of bounds
             const birdFocus=this.focus();
             if(Math.hypot(b.mesh.position.x-birdFocus.x,b.mesh.position.z-birdFocus.z) > CONFIG.CRITTERS.BIRD_RESPAWN_DIST) {
-                 state.scene.remove(b.mesh);
-                 b.mesh.userData.plumage?.dispose();
+                 this.disposeAnimal(b.mesh);
                  this.birds.splice(i, 1);
                  this.spawnBird();
             }
@@ -2936,8 +2996,10 @@ function initTerrainResources() {
         uniform float time;
         uniform float waveStrength;
         attribute float foam;
+        attribute float depth;
         varying vec2 vUv;
         varying float vFoam;
+        varying float vDepth;
         varying vec2 vWorldXZ;
         varying vec3 vWorldPosition;
         varying vec3 vWaveNormal;
@@ -2945,6 +3007,7 @@ function initTerrainResources() {
         void main() {
             vUv = uv;
             vFoam = foam;
+            vDepth = depth;
             vec4 worldPosition = modelMatrix * vec4(position, 1.0);
             vWorldXZ = worldPosition.xz;
             vec3 pos = position;
@@ -2973,6 +3036,7 @@ function initTerrainResources() {
         uniform float time;
         varying vec2 vUv;
         varying float vFoam;
+        varying float vDepth;
         varying vec2 vWorldXZ;
         varying vec3 vWorldPosition;
         varying vec3 vWaveNormal;
@@ -2988,17 +3052,18 @@ function initTerrainResources() {
             vec3 normal=normalize(vWaveNormal+vec3(detail*.035,0.0,swell*.025));
             float fresnel=pow(1.0-max(dot(viewDir,normal),0.0),3.2);
             vec3 reflected=mix(skyColor,vec3(0.82,0.91,1.0),pow(max(dot(reflect(-viewDir,normal),normalize(sunDirection)),0.0),64.0));
-            vec3 baseColor = mix(deep,lagoon,clamp(vFoam * 0.45 + swell * 0.08,0.0,0.7));
+            float shallows=1.0-smoothstep(0.4,9.0,vDepth);
+            vec3 baseColor = mix(deep,lagoon,clamp(shallows * 0.62 + vFoam * 0.12 + swell * 0.06,0.0,0.76));
             baseColor += vec3(0.016,0.047,0.056) * detail;
             baseColor=mix(baseColor,reflected,.12+fresnel*.58);
             float f = vFoam;
             float ripples = sin(vWorldXZ.x * 2.4 + time * 1.5) * cos(vWorldXZ.y * 2.1 - time * 1.2) * 0.5 + 0.5;
             float noise=waterNoise(vWorldXZ*.72+vec2(time*.16,-time*.11));
             float breakers=sin(vWorldXZ.x*.53+vWorldXZ.y*.29-time*2.3+noise*2.8)*.5+.5;
-            float shoreFoam=smoothstep(.16,.78,f*(.78+.34*breakers)+noise*.18*f);
+            float shoreFoam=smoothstep(.24,.86,f*(.74+.32*breakers)+noise*.15*f);
             float crestFoam=smoothstep(.9,.985,breakers)*smoothstep(.76,1.02,vCrest+noise*.08);
             float foamAmount=clamp(shoreFoam+crestFoam*.14,0.0,1.0);
-            vec3 finalColor = mix(baseColor, vec3(0.90, 0.98, 0.97), foamAmount * 0.9);
+            vec3 finalColor = mix(baseColor, vec3(0.90, 0.98, 0.97), foamAmount * 0.72);
             float glint = pow(max(dot(reflect(-normalize(sunDirection),normal),viewDir),0.0),72.0)*1.25+
                 pow(max(0.0, ripples * (0.55 + swell * 0.45)), 12.0) * 0.07;
             finalColor += vec3(glint);
@@ -3198,6 +3263,7 @@ function updateChunkWater(wMesh, cx, cz) {
     const geo = wMesh.geometry;
     const pos = geo.attributes.position;
     const foamAttr = geo.attributes.foam;
+    const depthAttr = geo.attributes.depth;
     const offX = cx * CHUNK_SIZE;
     const offZ = cz * CHUNK_SIZE;
 
@@ -3205,20 +3271,22 @@ function updateChunkWater(wMesh, cx, cz) {
         const wx = pos.getX(i) + offX;
         const wz = pos.getZ(i) + offZ;
         const h = getHeight(wx, wz);
+        depthAttr.setX(i,Math.max(0,VISUAL_WATER_LEVEL-h));
 
-        // We want foam at both logical (WATER_LEVEL) and visual (VISUAL_WATER_LEVEL) shorelines
+        // A narrow, broken surf line leaves the shallow turquoise water visible.
         const d1 = Math.abs(h - VISUAL_WATER_LEVEL);
         const d2 = Math.abs(h - WATER_LEVEL);
         const dist = Math.min(d1, d2);
 
         let val = 0;
-        if (dist < 2.0) {
-            val = 1.0 - dist / 2.0;
-            val = Math.pow(val, 0.5); // Boost intensity
+        if (dist < 1.2) {
+            val = 1.0 - dist / 1.2;
+            val = Math.pow(val, 0.9);
         }
         foamAttr.setX(i, val);
     }
     foamAttr.needsUpdate = true;
+    depthAttr.needsUpdate = true;
 }
 
 function updateChunkPhysics(cx, cz, geometry = null) {
@@ -3652,6 +3720,7 @@ function createChunk(cx, cz) {
     wGeo.rotateX(-Math.PI/2); // Rotate geometry once
     const foam = new Float32Array(wGeo.attributes.position.count);
     wGeo.setAttribute('foam', new THREE.BufferAttribute(foam, 1));
+    wGeo.setAttribute('depth',new THREE.BufferAttribute(new Float32Array(foam.length),1));
     const wMesh = new THREE.Mesh(wGeo, chunkWaterMat);
     wMesh.position.set(offX, VISUAL_WATER_LEVEL, offZ);
     updateChunkWater(wMesh, cx, cz);
