@@ -14,6 +14,7 @@ const errors=[], requests=[], results=[];
 page.on('pageerror',e=>{errors.push(e.stack||String(e));console.log('RUNTIME '+(e.stack||String(e)));});
 page.on('console',m=>{if(m.type()==='error' && /THREE|Shader|WebGL|Init failed|RAPIER|Uncaught/i.test(m.text()))errors.push(m.text());});
 page.on('requestfailed',r=>requests.push({url:r.url(),reason:r.failure()?.errorText}));
+page.on('response',r=>{if(r.status()>=400)requests.push({url:r.url(),reason:`HTTP ${r.status()}`});});
 page.on('dialog',d=>d.accept());
 const workflowEscape=value=>String(value).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A');
 function reportFailure(name,error){if(process.env.GITHUB_ACTIONS==='true')console.log(`::error title=${workflowEscape(name)}::${workflowEscape(error?.stack||error)}`);}
@@ -191,7 +192,7 @@ try {
    if(data.level!==level||!data.isCampaign||data.ai<1||data.units<2)throw new Error(JSON.stringify(data));return data;
   });
  }
- await check('No runtime errors or failed local asset requests',async()=>{const failed=requests.filter(r=>r.url.startsWith(url)&&!r.url.endsWith('.map')&&!(r.reason==='net::ERR_ABORTED'&&r.url.endsWith('.html')));if(errors.length||failed.length)throw new Error(JSON.stringify({errors,failed}));return {errors:0,failed:0};});
+  await check('No runtime errors or failed local asset requests',async()=>{const failed=requests.filter(r=>r.url.startsWith(url)&&!r.url.endsWith('.map')&&r.reason!=='net::ERR_ABORTED');if(errors.length||failed.length)throw new Error(JSON.stringify({errors,failed}));return {errors:0,failed:0};});
 } catch(e) {results.push({name:'Test harness',pass:false,detail:String(e)});console.error(e);reportFailure('Browser test harness',e);}
 finally{await browser.close();await fs.writeFile(path.join(root,'test-results','browser-report.json'),JSON.stringify({date:new Date().toISOString(),results,errors,requests},null,2));}
 console.log(JSON.stringify({passed:results.filter(r=>r.pass).length,failed:results.filter(r=>!r.pass).length}));
