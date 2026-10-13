@@ -12,6 +12,27 @@ window.aiStep=(duration)=>{for(let k=0;k<duration*10;k++){state.aiTime+=.1;gameT
 });
 await check('Four-minute economy expands its own faction and physically trains mixed classes',()=>p.evaluate(()=>{aiStep(240);const own=state.units.filter(u=>u.faction===2&&u.state!=='dead'),buildings=state.buildings.filter(b=>b.faction===2&&!b.dead),classes=Object.fromEntries(['wild','warrior','firewarrior','spy'].map(t=>[t,own.filter(u=>u.type===t).length]));const detail={classes,buildings:buildings.map(b=>b.type),plan:testAI.lastPlan};if(buildings.length<5||classes.wild<2||!classes.warrior||!classes.firewarrior||!classes.spy||state.buildings.some(b=>b.faction===1))throw new Error(JSON.stringify(detail));return detail;}));
 await check('Attack force leaves defenders and builders at home',()=>p.evaluate(()=>{if(state.shaman.state!=='dead')state.shaman.die();state.shaman=new Humanoid(0,'shaman',35,0);state.shaman.hp=1000000;state.shaman.maxHp=1000000;state.units.push(state.shaman);for(const type of ['warrior','warrior','warrior','firewarrior','spy','warrior','firewarrior'])state.units.push(new Humanoid(2,type,-10,0));state.units.filter(u=>u.faction===2&&['warrior','firewarrior','spy'].includes(u.type)&&u.state!=='dead').forEach((u,i)=>u.placeOnGround(24+(i%5)*1.5,-16+Math.floor(i/5)*1.5));testAI.think();const own=state.units.filter(u=>u.faction===2&&u.state!=='dead'),attack=own.filter(u=>u.aiRole==='attack'),guard=own.filter(u=>u.aiRole==='guard');if(!attack.length||guard.length<2||own.filter(u=>u.aiRole==='builder').length<2)throw new Error(JSON.stringify({attack:attack.length,guard:guard.length,plan:testAI.lastPlan}));const probe=attack.find(u=>u.type==='warrior');const before=probe.mesh.position.clone();aiStep(4);if(probe.mesh.position.distanceTo(before)<.5)throw new Error('Attack order did not move '+JSON.stringify({p:probe.mesh.position,before,state:probe.state,path:probe.path,target:probe.target,attack:probe.attackTarget?.mesh.position,v:probe.velocity,ground:probe.isGrounded,role:probe.aiRole}));return {attack:attack.length,guard:guard.length};}));
+await check('Combat troops pass a stationary ally in a narrow formation',()=>p.evaluate(()=>{
+ const mover=new Humanoid(2,'warrior',45,-30),blocker=new Humanoid(2,'warrior',45,-28.8),target=new Humanoid(0,'warrior',45,-19);
+ const probes=[mover,blocker,target];
+ try{
+  for(const u of probes)state.units.push(u);
+  blocker.rigidBody.setBodyType(RAPIER.RigidBodyType.Fixed,true);
+  target.rigidBody.setBodyType(RAPIER.RigidBodyType.Fixed,true);
+  mover.attackTarget=target;mover.state='combat';mover.aiRole='attack';
+  const start=mover.mesh.position.clone();let maxSideStep=0;
+  for(let frame=0;frame<240;frame++){
+   gameTestAPI.SpatialHash.update();state.physicsWorld.timestep=1/60;state.physicsWorld.step();
+   mover.nextTargetCheck=Infinity;mover.update(1/60);
+   maxSideStep=Math.max(maxSideStep,Math.abs(mover.mesh.position.x-start.x));
+  }
+  const progress=mover.mesh.position.z-start.z;
+  if(progress<2||maxSideStep<.4)throw new Error(JSON.stringify({progress,maxSideStep,position:mover.mesh.position,state:mover.state,pathIndex:mover.pathIndex,path:mover.path?.slice(0,3),target:mover.attackTarget?.mesh.position,velocity:mover.rigidBody.linvel(),grounded:mover.isGrounded}));
+  return {progress,maxSideStep};
+ }finally{
+  for(const u of probes){if(u.rigidBody)state.physicsWorld.removeRigidBody(u.rigidBody);state.rigidBodies.delete(u.id);state.scene.remove(u.mesh);const i=state.units.indexOf(u);if(i>=0)state.units.splice(i,1);}
+ }
+}));
 await check('Raid recalls troops and shelters workers',()=>p.evaluate(()=>{const intruder=new Humanoid(0,'warrior',testAI.baseX+5,testAI.baseZ+3);state.units.push(intruder);testAI.think();const own=state.units.filter(u=>u.faction===2&&u.state!=='dead');if(testAI.state!=='defend'||!own.some(u=>u.aiRole==='defend'&&u.attackTarget)||!own.some(u=>u.aiRole==='shelter'))throw new Error('No defense response');intruder.die();return testAI.lastPlan;}));
 await check('Wounded shaman and troops retreat instead of charging',()=>p.evaluate(()=>{const u=state.units.find(u=>u.faction===2&&u.type==='warrior'&&u.state!=='dead');u.hp=u.maxHp*.2;const sh=testAI.myShaman;sh.hp=sh.maxHp*.2;testAI.think();if(u.aiRole!=='retreat'||sh.aiRole!=='retreat'||u.attackTarget||sh.attackTarget)throw new Error('Retreat missing');return {soldier:u.aiRole,shaman:sh.aiRole};}));
 await check('Lost economy recovers followers',()=>p.evaluate(()=>{for(const u of state.units)if(u.faction===2&&u.type==='wild')u.die();testAI.spellCooldown=0;testAI.myShaman.hp=testAI.myShaman.maxHp;testAI.myShaman.placeOnGround(testAI.baseX,testAI.baseZ);testAI.think();if(!state.units.some(u=>u.faction===2&&u.type==='wild'&&u.state!=='dead'))throw new Error('No economic recovery');}));

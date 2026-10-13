@@ -5913,9 +5913,9 @@ window.Humanoid = class Humanoid {
 
                 if(this.path && this.path.length > 0 && this.pathIndex < this.path.length) {
                     targetPos = this.path[this.pathIndex];
-                    if(this.mesh.position.distanceTo(targetPos) < 1.0) {
+                    if(Math.hypot(this.mesh.position.x-targetPos.x,this.mesh.position.z-targetPos.z)<1.0) {
                         this.pathIndex++;
-                        if(this.pathIndex < this.path.length) targetPos = this.path[this.pathIndex];
+                        targetPos=this.pathIndex<this.path.length?this.path[this.pathIndex]:this.attackTarget.mesh.position;
                     }
                 }
 
