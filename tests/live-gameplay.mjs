@@ -8,6 +8,10 @@ const browser = await chromium.launch({headless:true,...(process.platform === 'w
 const context = await browser.newContext({viewport:{width:1440,height:900}});
 const page = await context.newPage();
 const errors = [], missing = [];
+const workflowEscape = value => String(value).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');
+const reportFailure = error => {
+  if(process.env.GITHUB_ACTIONS === 'true') console.log(`::error title=Live gameplay integration::${workflowEscape(error?.stack || error)}`);
+};
 page.on('pageerror', e => errors.push(e.stack || String(e)));
 page.on('response', r => {if(r.status() === 404) missing.push(r.url());});
 page.on('dialog', d => d.accept());
@@ -39,4 +43,7 @@ try {
   if(errors.length) throw new Error('Browser runtime errors: '+errors.join('\n'));
   console.log('PASS no browser runtime errors');
   if(missing.length) console.log('MISSING RESOURCES',missing);
+} catch(error) {
+  reportFailure(error);
+  throw error;
 } finally {await browser.close();}

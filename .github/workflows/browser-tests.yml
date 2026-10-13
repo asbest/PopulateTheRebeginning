@@ -19,6 +19,12 @@ jobs:
           done
           cat /tmp/populate-server.log
           exit 1
+      - name: Enemy strategy
+        if: always()
+        run: node tests/strategy.mjs
+      - name: Live gameplay integration
+        if: always()
+        run: node tests/live-gameplay.mjs
       - name: Browser and campaign playability
         if: always()
         run: node tests/browser.mjs
@@ -31,18 +37,12 @@ jobs:
       - name: Spells and mana rules
         if: always()
         run: node tests/spells.mjs
-      - name: Enemy strategy
-        if: always()
-        run: node tests/strategy.mjs
       - name: Materials and terrain transitions
         if: always()
         run: node tests/materials.mjs
       - name: Long-running enemy strategy
         if: always()
         run: node tests/strategy-long.mjs
-      - name: Live gameplay integration
-        if: always()
-        run: node tests/live-gameplay.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
