@@ -1,5 +1,5 @@
-// Distance-driven gait and two-bone foot placement. Heading belongs to locomotion,
-// while Rapier owns rotation only during knockback/recovery.
+// Distance-driven gait and two-bone foot placement. The collision capsule stays
+// upright during impacts; the character rig absorbs the motion visually.
 export function createLocomotion(T) {
     const wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
     const smooth=(a,b,rate,dt)=>a+(b-a)*(1-Math.exp(-rate*Math.min(dt,.1)));
@@ -9,13 +9,37 @@ export function createLocomotion(T) {
     }
     const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
     const ease=x=>{x=clamp(x,0,1);return x*x*(3-2*x);};
+    function animateFall(u,dt,phase='airborne'){
+        if(!u.legL)return;
+        u.poseTick=u.updateTicker;
+        const airborne=phase==='airborne',landing=phase==='landing';
+        const rate=airborne?10:landing?14:9;
+        const pose=(part,axis,target)=>{if(part)part[axis]=smooth(part[axis],target,rate,dt);};
+        // Knees tuck in flight, then bend under the body to absorb the landing.
+        // Arms guard the head instead of cycling through the walking animation.
+        pose(u.torso.rotation,'x',airborne?.12+(u.impactLean||0):landing?.23:0);
+        pose(u.torso.rotation,'z',airborne?.07:0);
+        pose(u.torso.position,'y',airborne?.91:landing?.83:.9);
+        pose(u.legL.rotation,'x',airborne?-.25:landing?.20:0);
+        pose(u.legR.rotation,'x',airborne?-.14:landing?.12:0);
+        pose(u.legL.userData.lower?.rotation,'x',airborne?.55:landing?.42:0);
+        pose(u.legR.userData.lower?.rotation,'x',airborne?.48:landing?.38:0);
+        pose(u.armL.rotation,'x',airborne?-.42:landing?-.32:0);
+        pose(u.armR.rotation,'x',airborne?-.36:landing?-.28:0);
+        pose(u.armL.rotation,'z',airborne?.22:landing?.13:0);
+        pose(u.armR.rotation,'z',airborne?-.22:landing?-.13:0);
+        pose(u.armL.userData.lower?.rotation,'x',airborne?-.55:landing?-.42:0);
+        pose(u.armR.userData.lower?.rotation,'x',airborne?-.55:landing?-.42:0);
+        pose(u.head.rotation,'x',airborne?-.08:landing?-.12:0);
+    }
     const soleSamples=[];
     for(let row=0;row<=6;row++)for(let col=0;col<12;col++){
         const a=row*Math.PI/6,b=col*Math.PI/6;
         soleSamples.push({x:.055*Math.sin(a)*Math.cos(b),y:.01+.032*Math.cos(a),z:.034+.108*Math.sin(a)*Math.sin(b)});
     }
     function animate(u,dt,heightAt){
-        if(!u.legL||['dead','stunned','getting_up','transported'].includes(u.state)||!u.isGrounded)return;
+        if(!u.legL||['dead','stunned','getting_up','transported'].includes(u.state))return;
+        if(!u.isGrounded){animateFall(u,dt);return;}
         u.poseTick=u.updateTicker;dt=clamp(dt,.001,.1);
         const p=u.mesh.position,scale=u.mesh.scale.y;
         const g=u.gait||(u.gait={last:p.clone(),phase:0,speed:0,vx:0,vz:0,feet:[{},{}],pelvis:.615});
@@ -177,5 +201,5 @@ export function createLocomotion(T) {
             }
         }else u.isGrounded=false;
     }
-    return {turn,animate,ground};
+    return {turn,animate,animateFall,ground};
 }

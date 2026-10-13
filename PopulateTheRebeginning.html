@@ -4293,7 +4293,7 @@ class Fireball {
             if(d < 8) {
                 if (u.faction !== this.faction) {
                     const forceDir = u.mesh.position.clone().sub(impactPos).normalize(); const force = (8 - d) * 3;
-                    forceDir.multiplyScalar(force); forceDir.y += force * 0.5;
+                    forceDir.multiplyScalar(Math.min(force, 5)); forceDir.y = Math.min(2.8, force * 0.16);
                     u.applyForce(forceDir); u.takeDamage(this.unitDamage);
                     u.burnTimer = 3.0;
                 }
@@ -4388,7 +4388,7 @@ class Volcano extends ActiveEffect {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(this.x, u.mesh.position.y, this.z));
                 if(dist < CONFIG.COMBAT.VOLCANO_TICK_RADIUS && u.faction !== this.faction) {
                     const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
-                    u.applyForce(dir.multiplyScalar(20).add(new THREE.Vector3(0, 10, 0)));
+                    u.applyForce(dir.multiplyScalar(3.5).add(new THREE.Vector3(0, 2.2, 0)));
                     if (!u.isShaman) u.takeDamage(CONFIG.COMBAT.VOLCANO_TICK_DAMAGE);
                 }
             });
@@ -4515,7 +4515,7 @@ class Tornado extends ActiveEffect {
         SpatialHash.query(this.pos.x, this.pos.z, CONFIG.COMBAT.TORNADO_RADIUS).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < CONFIG.COMBAT.TORNADO_RADIUS && u.faction !== this.faction) {
-                 u.applyForce(new THREE.Vector3((Math.random()-0.5)*10, 12.5, (Math.random()-0.5)*10));
+                 u.applyForce(new THREE.Vector3((Math.random()-0.5)*3, 1.2, (Math.random()-0.5)*3));
                  u.takeDamage(damagePerSecond * dt);
             }
         });
@@ -4938,8 +4938,8 @@ function executeSpell(type, x, z, caster) {
              if(dist < 4 && u.faction !== caster.faction) {
                  u.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE);
                  const forceDir = u.mesh.position.clone().sub(new THREE.Vector3(x, h, z)).normalize();
-                 forceDir.y += 1.0;
-                 u.applyForce(forceDir.multiplyScalar(20));
+                 forceDir.y = 0.8;
+                 u.applyForce(forceDir.multiplyScalar(2.5));
                  hit = true;
                  hitUnits.push(u);
              }
@@ -5243,27 +5243,23 @@ window.Humanoid = class Humanoid {
 
     applyForce(vec) {
         if(this.state === 'dead') return;
+        if((this.hitImpulseCooldown||0)>0) return;
+        this.hitImpulseCooldown = 0.28;
         this.heading=this.mesh.rotation.y;
         this.idleAnchor=null;
+        this.gait=null;
+        const impulse = vec.clone();
+        const horizontal = Math.hypot(impulse.x,impulse.z);
+        if(horizontal>5) { impulse.x*=5/horizontal; impulse.z*=5/horizontal; }
+        impulse.y=Math.max(0,Math.min(6,impulse.y));
         if (this.rigidBody && typeof this.rigidBody.applyImpulse === 'function') {
-            this.rigidBody.setEnabledRotations(true, true, true, true);
-            this.rigidBody.applyImpulse({ x: vec.x, y: vec.y, z: vec.z }, true);
-            this.rigidBody.applyTorqueImpulse({
-                x: vec.z * CONFIG.ANIMATION.FORCE_ROTATION_FACTOR + (Math.random() - 0.5),
-                y: (Math.random() - 0.5) * CONFIG.ANIMATION.FORCE_Y_RANDOM,
-                z: -vec.x * CONFIG.ANIMATION.FORCE_ROTATION_FACTOR + (Math.random() - 0.5)
-            }, true);
+            this.rigidBody.setEnabledRotations(false, false, false, true);
+            this.rigidBody.applyImpulse({ x: impulse.x, y: impulse.y, z: impulse.z }, true);
         } else {
-            this.velocity.add(vec);
+            this.velocity.add(impulse);
         }
-        this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 5.0; this.target = null;
-
-        // Setup initial rotational physics based on the force vector
-        if(!this.angularVelocity) this.angularVelocity = new THREE.Vector3();
-        // Force on Z pitches around X, Force on X rolls around Z
-        this.angularVelocity.x = vec.z * CONFIG.ANIMATION.FORCE_ROTATION_FACTOR + (Math.random() - 0.5);
-        this.angularVelocity.y = (Math.random() - 0.5) * CONFIG.ANIMATION.FORCE_Y_RANDOM;
-        this.angularVelocity.z = -vec.x * CONFIG.ANIMATION.FORCE_ROTATION_FACTOR + (Math.random() - 0.5);
+        this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 0.32; this.target = null;
+        this.impactLean=Math.max(-0.18,Math.min(0.18,Math.atan2(impulse.z,Math.abs(impulse.x)+1)*0.12));
     }
 
     manualMove(vec, dt = 0.016) {
@@ -5570,6 +5566,7 @@ window.Humanoid = class Humanoid {
         this.hpGroup.visible = isSelected || isDamaged;
         if (this.hpGroup.visible && this.updateTicker % 2 === 0) this.hpGroup.lookAt(state.camera.position);
         this.animTime += dt;
+        this.hitImpulseCooldown=Math.max(0,(this.hitImpulseCooldown||0)-dt);
 
         if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
             const rbPos = this.rigidBody.translation();
@@ -5665,15 +5662,6 @@ window.Humanoid = class Humanoid {
             }
         } else {
             let targetY = groundH;
-            if (this.state === 'stunned' || this.state === 'getting_up') {
-                const tilt = Math.max(
-                    Math.abs(Math.sin(this.mesh.rotation.x)),
-                    Math.abs(Math.sin(this.mesh.rotation.z)),
-                    1.0 - Math.cos(this.mesh.rotation.x),
-                    1.0 - Math.cos(this.mesh.rotation.z)
-                );
-                targetY += tilt * (this.isShaman ? 1.2 : 0.8);
-            }
             if (this.mesh.position.y < targetY) {
                 this.mesh.position.y = targetY;
                 if(this.velocity.y < CONFIG.COMBAT.FALL_DAMAGE_THRESHOLD && this.state !== 'dead' && !this.isShaman) this.takeDamage(CONFIG.COMBAT.FALL_DAMAGE, true);
@@ -5767,98 +5755,28 @@ window.Humanoid = class Humanoid {
         }
 
         if(this.state === 'stunned') {
-            if(this.velocity.length() > 2 || !this.isGrounded) {
-                 if (!this.rigidBody) {
-                     if(this.angularVelocity) {
-                         this.mesh.rotation.x += this.angularVelocity.x * dt;
-                         this.mesh.rotation.y += this.angularVelocity.y * dt;
-                         this.mesh.rotation.z += this.angularVelocity.z * dt;
-
-                         // Apply angular damping
-                         const damping = this.isGrounded ? 0.90 : 0.99;
-                         this.angularVelocity.multiplyScalar(damping);
-                     } else {
-                         this.mesh.rotation.x += dt * 5; this.mesh.rotation.z += dt * 3;
-                     }
-                 }
-
-                 if(this.legL) {
-                    this.updateWalkAnim(15, 1.0, dt);
-                 }
-            } else {
+            Locomotion.animateFall(this,dt,this.isGrounded?'landing':'airborne');
+            if(this.isGrounded) {
                 this.recoverTimer -= dt;
-
-                if (!this.rigidBody) {
-                    // Normalize rotations to [-PI, PI] for smooth shortest-path interpolation
-                    let rotX = this.mesh.rotation.x % (2 * Math.PI);
-                    if (rotX < -Math.PI) rotX += 2 * Math.PI;
-                    if (rotX > Math.PI) rotX -= 2 * Math.PI;
-                    this.mesh.rotation.x = rotX;
-
-                    let rotY = this.mesh.rotation.y % (2 * Math.PI);
-                    if (rotY < -Math.PI) rotY += 2 * Math.PI;
-                    if (rotY > Math.PI) rotY -= 2 * Math.PI;
-                    this.mesh.rotation.y = rotY;
-
-                    let rotZ = this.mesh.rotation.z % (2 * Math.PI);
-                    if (rotZ < -Math.PI) rotZ += 2 * Math.PI;
-                    if (rotZ > Math.PI) rotZ -= 2 * Math.PI;
-                    this.mesh.rotation.z = rotZ;
-
-                    const targetRotX = -Math.PI/2;
-
-                    // Calculate shortest angular distance for X
-                    let diffX = targetRotX - this.mesh.rotation.x;
-                    if (diffX > Math.PI) diffX -= 2 * Math.PI;
-                    if (diffX < -Math.PI) diffX += 2 * Math.PI;
-
-                    this.mesh.rotation.x += diffX * 2.5 * dt;
-
-                    // Calculate shortest angular distance for Y
-                    let diffY = 0 - this.mesh.rotation.y;
-                    if (diffY > Math.PI) diffY -= 2 * Math.PI;
-                    if (diffY < -Math.PI) diffY += 2 * Math.PI;
-                    this.mesh.rotation.y += diffY * 2.5 * dt; // Gradually stop spinning
-
-                    // Calculate shortest angular distance for Z
-                    let diffZ = 0 - this.mesh.rotation.z;
-                    if (diffZ > Math.PI) diffZ -= 2 * Math.PI;
-                    if (diffZ < -Math.PI) diffZ += 2 * Math.PI;
-                    this.mesh.rotation.z += diffZ * 2.5 * dt;
-                }
-
-                this.resetAnim();
                 if(this.recoverTimer <= 0) {
                     this.state = 'getting_up';
-                    this.getUpDuration = 1.2;
+                    this.getUpDuration = 0.38;
                     this.getUpTimer = this.getUpDuration;
-                    this.getUpStartQuat = this.mesh.quaternion.clone();
                 }
             }
         }
         else if(this.state === 'getting_up') {
             this.getUpTimer -= dt;
-            const progress = Math.max(0, Math.min(1.0, 1.0 - (this.getUpTimer / this.getUpDuration)));
-            const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-            const targetQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.heading??this.mesh.rotation.y);
-            this.mesh.quaternion.copy(this.getUpStartQuat).slerp(targetQuat, ease);
-            this.mesh.rotation.setFromQuaternion(this.mesh.quaternion);
-
+            Locomotion.animateFall(this,dt,'recovering');
             if (this.rigidBody) {
-                const q = this.mesh.quaternion;
-                this.rigidBody.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
-                this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-                this.rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+                const v=this.rigidBody.linvel();
+                this.rigidBody.setLinvel({ x: v.x*0.8, y: v.y, z: v.z*0.8 }, true);
             }
 
             if (this.getUpTimer <= 0) {
                  this.state = 'idle';
-                 this.mesh.rotation.x = 0;
-                 this.mesh.rotation.z = 0;
                  this.mesh.rotation.y = this.heading??this.mesh.rotation.y;
                  if (this.rigidBody) {
-                     this.rigidBody.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
                      this.rigidBody.setEnabledRotations(false, false, false, true);
                  }
             }

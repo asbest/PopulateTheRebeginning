@@ -130,6 +130,19 @@ try{
   for(let i=0;i<8;i++){state.physicsWorld.step();u.update(1/60);}
   if(u.state!=='stunned'||u.mesh.position.y<=before+.1)throw new Error('Knockback suppressed '+JSON.stringify({rise:u.mesh.position.y-before,state:u.state,velocity:u.rigidBody?.linvel(),mass:u.rigidBody?.mass()}));return {rise:u.mesh.position.y-before,state:u.state};
  }));
+ await check('Spell impact braces in flight, lands upright and recovers promptly',()=>page.evaluate(()=>{
+  const u=state.units[0];let peak=u.mesh.position.y,airKnee=u.legL.userData.lower.rotation.x,maxTilt=0,groundedAt=-1;
+  for(let i=0;i<300;i++){
+   state.physicsWorld.timestep=1/60;state.physicsWorld.step();u.update(1/60);
+   peak=Math.max(peak,u.mesh.position.y);maxTilt=Math.max(maxTilt,Math.abs(u.mesh.rotation.x),Math.abs(u.mesh.rotation.z));
+   if(!u.isGrounded)airKnee=Math.max(airKnee,u.legL.userData.lower.rotation.x);
+   if(groundedAt<0&&u.isGrounded)groundedAt=i;
+   if(groundedAt>=0&&i-groundedAt>75)break;
+  }
+  const report={peak,airKnee,maxTilt,groundedAt,state:u.state,groundGap:u.mesh.position.y-getSurfaceHeight(u.mesh.position.x,u.mesh.position.z)};
+  if(airKnee<.2||maxTilt>.2||groundedAt<0||u.state==='stunned'||u.state==='getting_up'||Math.abs(report.groundGap)>.3)throw new Error(JSON.stringify(report));
+  return report;
+ }));
  await check('Saving and rebuilding terrain keeps the physics solver usable',()=>page.evaluate(()=>{
   const retired=[...state.units];gameTestAPI.SpatialHash.update();
   window.saveGame();window.loadGame();state.isPaused=true;
