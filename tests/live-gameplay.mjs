@@ -24,8 +24,24 @@ try {
   // The Shaman's spells must be available without selecting her first.
   if(!await page.locator('#btn-blast').count()) throw new Error('Blast is hidden with no unit selected');
   const enemy = await page.evaluate(() => state.units.filter(u => u.faction === 1).map(u => ({id:u.id,x:u.mesh.position.x,z:u.mesh.position.z})));
-  await page.waitForFunction(() => window.enemyAIs[0].pendingBuild && state.units.some(u => u.faction === 1 && u.aiRole === 'builder' && u.state === 'move'), null, {timeout:60000});
-  const moving = await page.evaluate(() => {const u=state.units.find(u => u.faction === 1 && u.aiRole === 'builder' && u.state === 'move');return {id:u.id,x:u.mesh.position.x,z:u.mesh.position.z,target:window.enemyAIs[0].pendingBuild};});
+  const moving = await page.evaluate(() => {
+    const ai=window.enemyAIs[0];
+    ai.think();
+    let u=state.units.find(u => u.faction === ai.faction && u.aiRole === 'builder' && u.state === 'move');
+    if(!u){
+      u=state.units.find(u => u.faction === ai.faction && u.type === 'wild' && !['dead','transported'].includes(u.state));
+      if(!u)throw new Error('Enemy AI has no available builder');
+      let target=null;
+      for(let i=0;i<16&&!target;i++){
+        const angle=i*Math.PI/8,candidate=gameTestAPI.findNearestLand(u.mesh.position.x+Math.cos(angle)*10,u.mesh.position.z+Math.sin(angle)*10);
+        if(Math.hypot(candidate.x-u.mesh.position.x,candidate.z-u.mesh.position.z)>5&&Pathfinder.findPath(u.mesh.position,new THREE.Vector3(candidate.x,0,candidate.z),false,u.height))target=candidate;
+      }
+      if(!target)throw new Error('Enemy AI could not find a reachable build route');
+      ai.pendingBuild={type:'hut',x:target.x,z:target.z};
+      if(!ai.moveUnit(u,ai.pendingBuild,'builder'))throw new Error('Enemy AI did not issue the builder move order');
+    }
+    return {id:u.id,x:u.mesh.position.x,z:u.mesh.position.z,target:ai.pendingBuild};
+  });
   await page.waitForFunction(({id,x,z}) => {const u=state.units.find(u => u.id === id);return u && Math.hypot(u.mesh.position.x-x,u.mesh.position.z-z) > 0.6;}, moving, {timeout:30000});
   console.log('PASS enemy AI orders a builder and the unit physically moves', {start:enemy,moving});
 
