@@ -21,7 +21,8 @@ try{
   const vertexColors=grassGeo.attributes.color.array;
   const grassVolume={triangles:grassGeo.index.count/3,normals:grassGeo.attributes.normal.count,
    vertices:grassGeo.attributes.position.count,minColor:Math.min(...vertexColors),instanceColors:grassMesh.instanceColor?.count||0,
-   photoMap:!!grassMesh.material.map,emissive:grassMesh.material.emissiveIntensity,stableCulling:!grassMesh.frustumCulled};
+   photoMap:!!grassMesh.material.map,emissive:grassMesh.material.emissiveIntensity,
+   stableCulling:grassMesh.frustumCulled&&!!grassGeo.boundingSphere&&grassGeo.boundingSphere.radius>10};
   const stoneStyle={normalMap:!!stoneMesh.material.normalMap,receiveShadow:stoneMesh.receiveShadow,
    emissive:stoneMesh.material.emissiveIntensity,instanceColors:stoneMesh.instanceColor?.count||0,
    vertexColors:stoneMesh.geometry.attributes.color?.count||0,bushVertexColors:bushMesh.geometry.attributes.color?.count||0,ratio:stones/grass};

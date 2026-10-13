@@ -3121,6 +3121,15 @@ let lastChunkX = null;
 let lastChunkZ = null;
 let chunksLoadingPending = false;
 
+function disposeChunkGeometry(chunk) {
+    const owned=[chunk.children[0],chunk.children[1]];
+    const cover=chunk.userData?.groundCover;
+    if(cover)for(const layer of Object.values(cover))if(layer?.mesh)owned.push(layer.mesh);
+    const flowers=chunk.userData?.flowers;
+    if(flowers&&!Array.isArray(flowers))for(const mesh of [flowers.stems,flowers.centers,flowers.petals,flowers.tulips])if(mesh)owned.push(mesh);
+    for(const mesh of owned)mesh?.geometry?.dispose();
+}
+
 function updateChunks(force = false, specificChunks = null) {
     if(force)state.heightCache.clear();
     if (!chunkTerrainMat) initTerrainResources();
@@ -3161,8 +3170,7 @@ function updateChunks(force = false, specificChunks = null) {
 
                     if(state.chunks[key]) {
                         state.scene.remove(state.chunks[key]);
-                        if(state.chunks[key].children[0] && state.chunks[key].children[0].geometry) state.chunks[key].children[0].geometry.dispose();
-                        if(state.chunks[key].children[1] && state.chunks[key].children[1].geometry) state.chunks[key].children[1].geometry.dispose();
+                        disposeChunkGeometry(state.chunks[key]);
                     }
                     state.chunks[key] = createChunk(cx+x, cz+z);
                     state.scene.add(state.chunks[key]);
@@ -3175,8 +3183,7 @@ function updateChunks(force = false, specificChunks = null) {
         for(let key in state.chunks) {
             if(!activeKeys.has(key)) {
                 state.scene.remove(state.chunks[key]);
-                if(state.chunks[key].children[0] && state.chunks[key].children[0].geometry) state.chunks[key].children[0].geometry.dispose();
-                if(state.chunks[key].children[1] && state.chunks[key].children[1].geometry) state.chunks[key].children[1].geometry.dispose();
+                disposeChunkGeometry(state.chunks[key]);
                 if (state.physicsWorld && state.terrainColliders.has(key)) {
                     state.physicsWorld.removeCollider(state.terrainColliders.get(key));
                     state.terrainColliders.delete(key);
@@ -3508,9 +3515,27 @@ function updateChunkDecorations(chunk, cx, cz) {
                 if(base){base.setXYZ(i,d.x,h,d.z);base.needsUpdate=true;}
             }
             layer.mesh.instanceMatrix.needsUpdate=true;
+            setGroundCoverBounds(layer.mesh,layer.data);
         }
     }
 
+}
+
+// The instance transforms use world coordinates while their source geometry is
+// local. Give Three.js a world-space bound so it can omit only offscreen cover.
+function setGroundCoverBounds(mesh,data) {
+    let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+    for(const d of data) {
+        const y=getHeight(d.x,d.z);
+        minX=Math.min(minX,d.x);maxX=Math.max(maxX,d.x);
+        minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+        minZ=Math.min(minZ,d.z);maxZ=Math.max(maxZ,d.z);
+    }
+    if(!data.length)return;
+    const bounds=new THREE.Box3(new THREE.Vector3(minX-2,minY-2,minZ-2),
+        new THREE.Vector3(maxX+2,maxY+4,maxZ+2));
+    bounds.getBoundingSphere(mesh.geometry.boundingSphere || (mesh.geometry.boundingSphere=new THREE.Sphere()));
+    mesh.frustumCulled=true;
 }
 
 function createGroundCover(grp,cx,cz) {
@@ -3596,8 +3621,8 @@ function createGroundCover(grp,cx,cz) {
         geo.setAttribute('aBasePos',new THREE.InstancedBufferAttribute(bases,3));
         mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
         mesh.castShadow=isBush;mesh.receiveShadow=isBush;
-        // Three r128 does not calculate per-instance bounds; culling against the tiny source mesh made distant clusters vanish or flash black.
-        mesh.frustumCulled=false;mesh.userData.groundCover=isBush?'bush':isGrass?'grass':'stone';grp.add(mesh);
+        setGroundCoverBounds(mesh,data);
+        mesh.userData.groundCover=isBush?'bush':isGrass?'grass':'stone';grp.add(mesh);
         return {mesh,data};
     };
     grp.userData.groundCover={grass:makeLayer(grassData,groundCoverGrassGeo,groundCoverGrassMat,true),
@@ -6525,23 +6550,33 @@ class EnemyAI {
 function updateUI() {
     const manaText = document.getElementById('mana-text');
     const manaFill = document.getElementById('mana-fill');
-    if(manaText) manaText.innerText = Math.floor(state.mana);
-    if(manaFill) manaFill.style.width = state.mana + '%';
+    if(manaText) {
+        const value=String(Math.floor(state.mana));
+        if(manaText._shownValue!==value){manaText.innerText=value;manaText._shownValue=value;}
+    }
+    if(manaFill) {
+        const width=(Math.round(state.mana*10)/10)+'%';
+        if(manaFill._shownWidth!==width){manaFill.style.width=width;manaFill._shownWidth=width;}
+    }
 
     const visitDisplay = document.getElementById('visit-count-display');
     if (visitDisplay) {
         if (state.visitCount !== undefined && state.visitCount !== null) {
-            visitDisplay.innerText = state.visitCount;
+            const value=String(state.visitCount);
+            if(visitDisplay._shownValue!==value){visitDisplay.innerText=value;visitDisplay._shownValue=value;}
         } else if (!visitDisplay.innerText || visitDisplay.innerText === '...') {
             visitDisplay.innerText = 'Loading...';
         }
     }
     const yearDisplay = document.getElementById('visit-year-display');
-    if (yearDisplay) yearDisplay.innerText = (state.visitStats.year !== null) ? state.visitStats.year : '...';
+    if (yearDisplay) {const value=String((state.visitStats.year !== null) ? state.visitStats.year : '...');
+        if(yearDisplay._shownValue!==value){yearDisplay.innerText=value;yearDisplay._shownValue=value;}}
     const monthDisplay = document.getElementById('visit-month-display');
-    if (monthDisplay) monthDisplay.innerText = (state.visitStats.month !== null) ? state.visitStats.month : '...';
+    if (monthDisplay) {const value=String((state.visitStats.month !== null) ? state.visitStats.month : '...');
+        if(monthDisplay._shownValue!==value){monthDisplay.innerText=value;monthDisplay._shownValue=value;}}
     const weekDisplay = document.getElementById('visit-week-display');
-    if (weekDisplay) weekDisplay.innerText = (state.visitStats.week !== null) ? state.visitStats.week : '...';
+    if (weekDisplay) {const value=String((state.visitStats.week !== null) ? state.visitStats.week : '...');
+        if(weekDisplay._shownValue!==value){weekDisplay.innerText=value;weekDisplay._shownValue=value;}}
 }
 
 function showEnemySpellIcon(spellType) {
@@ -6651,9 +6686,11 @@ function updateUnitList() {
         item._unitRef = u;
         item.classList.toggle('enemy',u.faction === 1);
         item.classList.toggle('selected',state.selectedUnits.includes(u));
+        u._listSelected=state.selectedUnits.includes(u);
         item.setAttribute('aria-label', `${u.type}, tribe ${u.faction}, ${Math.round(u.hp)} health`);
         const hpVal = item._hpVal;
         hpVal.style.width = (u.hp / u.maxHp * 100) + '%';
+        u._lastHpWidth=hpVal.style.width;
         u.listItem = item;
         u.hpValItem = hpVal;
         if(list.children[index]!==item)list.insertBefore(item,list.children[index]||null);
@@ -6698,10 +6735,11 @@ function performBoxSelection(x1, y1, x2, y2, isShift) {
 function updateUnitListSelection() {
     state.units.forEach(u => {
         if(u.listItem) {
-            if(state.selectedUnits.includes(u)) u.listItem.classList.add('selected');
-            else u.listItem.classList.remove('selected');
+            const selected=state.selectedUnits.includes(u);
+            if(selected!==u._listSelected){u.listItem.classList.toggle('selected',selected);u._listSelected=selected;}
 
-            if(u.hpValItem) u.hpValItem.style.width = Math.max(0, (u.hp / u.maxHp * 100)) + '%';
+            if(u.hpValItem) {const width=Math.max(0,(u.hp/u.maxHp*100))+'%';
+                if(width!==u._lastHpWidth){u.hpValItem.style.width=width;u._lastHpWidth=width;}}
         }
     });
 }
@@ -7495,6 +7533,7 @@ window.applyLandGen = function() {
         // Remove existing chunk meshes
         for(let key in state.chunks) {
             state.scene.remove(state.chunks[key]);
+            disposeChunkGeometry(state.chunks[key]);
             if (state.physicsWorld && state.terrainColliders.has(key)) {
                 state.physicsWorld.removeCollider(state.terrainColliders.get(key));
                 state.terrainColliders.delete(key);
@@ -7852,8 +7891,7 @@ window.loadGame = function() {
         // Remove existing chunk meshes and dispose of geometries
         for (let key in state.chunks) {
             state.scene.remove(state.chunks[key]);
-            if (state.chunks[key].children[0] && state.chunks[key].children[0].geometry) state.chunks[key].children[0].geometry.dispose();
-            if (state.chunks[key].children[1] && state.chunks[key].children[1].geometry) state.chunks[key].children[1].geometry.dispose();
+            disposeChunkGeometry(state.chunks[key]);
         }
         state.chunks = {};
         lastChunkX = null;
