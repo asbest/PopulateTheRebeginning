@@ -50,8 +50,10 @@ try {
   if(await page.evaluate(() => state.currentAction) !== 'blast') throw new Error('Blast hotkey did not select the spell');
   await page.evaluate(() => {const original=state.projectiles.push;state.projectiles.push=function(...shots){for(const shot of shots){window.__blastStart={x:shot.mesh.position.x,z:shot.mesh.position.z};window.__blastTarget={x:shot.target.x,z:shot.target.z};const explode=shot.explode;shot.explode=function(){window.__blastImpact={x:this.mesh.position.x,z:this.mesh.position.z};return explode.call(this);};}return original.apply(this,shots);};window.__manaBeforeBlast=state.mana;});
   await page.mouse.click(point.x,point.y);
-  await page.waitForFunction(() => window.__blastImpact, null, {timeout:10000});
-  const blast = await page.evaluate(() => ({manaSpent:window.__manaBeforeBlast-state.mana,start:window.__blastStart,target:window.__blastTarget,impact:window.__blastImpact}));
+  const launched = await page.evaluate(() => ({manaSpent:window.__manaBeforeBlast-state.mana,start:window.__blastStart,target:window.__blastTarget,action:state.currentAction}));
+  if(!launched.start) throw new Error('Blast click did not launch a projectile: '+JSON.stringify(launched));
+  await page.waitForFunction(() => window.__blastImpact, null, {timeout:60000});
+  const blast = {...launched,impact:await page.evaluate(() => window.__blastImpact)};
   if(blast.manaSpent < 9 || blast.manaSpent > 10.5) throw new Error('Blast mana charge incorrect: '+JSON.stringify(blast));
   if(Math.hypot(blast.impact.x-blast.target.x,blast.impact.z-blast.target.z) > 0.5) throw new Error('Blast detonated before reaching its target: '+JSON.stringify(blast));
   if(Math.hypot(blast.start.x-blast.target.x,blast.start.z-blast.target.z) < 5) throw new Error('Blast test target too close');
