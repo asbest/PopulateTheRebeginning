@@ -10,25 +10,29 @@ try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
         {waitUntil:'load',timeout:90000});
-    await page.waitForFunction(()=>window.state?.shaman&&Object.keys(state.chunks).length>=100,null,{timeout:90000});
+    await page.waitForFunction(()=>window.state?.shaman&&
+        Object.keys(state.chunks).length>=(2*CONFIG.TERRAIN.RENDER_DISTANCE+1)**2,null,{timeout:90000});
     await page.evaluate(()=>{closeHelp();closeStoryOverlay();setGraphicsQuality('high');
         state.graphicsQuality.dynamicScale=1;state.renderer.setPixelRatio(1);if(!state.isPaused)togglePause();});
     await page.waitForTimeout(1000);
     const result=await page.evaluate(async()=>{
         const cover=Object.values(state.chunks).flatMap(chunk=>Object.values(chunk.userData?.groundCover||{}))
             .map(layer=>layer?.mesh).filter(Boolean);
+        const flowers=Object.values(state.chunks).flatMap(chunk=>
+            ['stems','centers','petals','tulips'].map(key=>chunk.userData?.flowers?.[key])).filter(Boolean);
+        const culledObjects=[...cover,...flowers];
         const canvas=document.createElement('canvas');canvas.width=state.renderer.domElement.width;canvas.height=state.renderer.domElement.height;
         const context=canvas.getContext('2d',{willReadFrequently:true});
         state.renderer.render(state.scene,state.camera);
         context.drawImage(state.renderer.domElement,0,0);
         const culledImage=context.getImageData(0,0,canvas.width,canvas.height).data.slice();
         const culledCalls=state.renderer.info.render.calls;
-        cover.forEach(mesh=>mesh.frustumCulled=false);
+        culledObjects.forEach(mesh=>mesh.frustumCulled=false);
         state.renderer.render(state.scene,state.camera);
         context.drawImage(state.renderer.domElement,0,0);
         const unculledImage=context.getImageData(0,0,canvas.width,canvas.height).data;
         const unculledCalls=state.renderer.info.render.calls;
-        cover.forEach(mesh=>mesh.frustumCulled=true);
+        culledObjects.forEach(mesh=>mesh.frustumCulled=true);
         let changedPixels=0,maxChannelDelta=0;
         for(let i=0;i<culledImage.length;i+=4){let delta=0;
             for(let k=0;k<3;k++)delta=Math.max(delta,Math.abs(culledImage[i+k]-unculledImage[i+k]));
@@ -54,13 +58,15 @@ try {
             ...Object.values(departing.userData.groundCover).map(layer=>layer?.mesh),
             ...['stems','centers','petals','tulips'].map(key=>departing.userData.flowers?.[key])];
         departingMeshes.filter(Boolean).forEach(mesh=>mesh.geometry.addEventListener('dispose',()=>releasedGeometries++));
+        const existingKeys=new Set(Object.keys(state.chunks));
         state.cameraLookAt.x+=chunkSize;
         gameTestAPI.updateChunks();
-        return {chunks:chunkCount,units:state.units.length,
+        const createdOnPan=Object.keys(state.chunks).filter(key=>!existingKeys.has(key)).length;
+        return {chunks:chunkCount,units:state.units.length,flowerMeshes:flowers.length,
             visualParity:changedPixels===0,changedPixels,maxChannelDelta,releasedGeometries,
-            culledCalls,unculledCalls,samples};
+            createdOnPan,culledCalls,unculledCalls,samples};
     });
-    if(!result.visualParity||result.unculledCalls<=result.culledCalls||result.releasedGeometries<5)
+    if(!result.visualParity||result.unculledCalls<=result.culledCalls||result.releasedGeometries<5||result.createdOnPan>2)
         throw new Error('Culling benchmark failed: '+JSON.stringify(result));
     console.log(JSON.stringify(result));
 } finally {await browser.close();}

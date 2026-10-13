@@ -25,26 +25,42 @@ try{
    });
    const outward=await page.evaluate(()=>{
     const advance=(targetKey)=>{
+     const samples=movementProbes.map(()=>({last:null,pause:0,maxPause:0}));
      for(let frame=1;frame<=900;frame++){
       gameTestAPI.SpatialHash.update();state.physicsWorld.timestep=1/60;state.physicsWorld.step();
       movementProbes.forEach(({u})=>{u.nextTargetCheck=Infinity;u.update(1/60);});
-      if(movementProbes.every(probe=>Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)<1.5))return frame;
+      movementProbes.forEach(({u,...probe},i)=>{
+       const s=samples[i],p=u.mesh.position,distance=Math.hypot(p.x-probe[targetKey].x,p.z-probe[targetKey].z);
+       if(frame>15&&distance>2&&s.last&&Math.hypot(p.x-s.last.x,p.z-s.last.z)<.003)s.pause++;
+       else s.pause=0;
+       s.maxPause=Math.max(s.maxPause,s.pause);s.last={x:p.x,z:p.z};
+      });
+      if(movementProbes.every(probe=>Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)<1.5))return {frame,pauses:samples.map(s=>s.maxPause)};
      }
      throw new Error('Route did not finish: '+JSON.stringify(movementProbes.map(probe=>({faction:probe.u.faction,state:probe.u.state,grounded:probe.u.isGrounded,path:probe.u.path?.length,distance:Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)}))));
     };
-    const frames=advance('end');
-    return {frames,units:movementProbes.map(({u,start})=>({faction:u.faction,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)}))};
+    const movement=advance('end');
+    return {frames:movement.frame,maxPauses:movement.pauses,units:movementProbes.map(({u,start})=>({faction:u.faction,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)}))};
    });
+   if(outward.maxPauses.some(frames=>frames>3))throw new Error('Unit repeatedly stops en route: '+JSON.stringify(outward));
    await page.evaluate(()=>movementProbes.forEach(({u,start})=>u.goto(start.x,start.z)));
-   const returnFrames=await page.evaluate(()=>{
+   const returnMove=await page.evaluate(()=>{
+    const samples=movementProbes.map(()=>({last:null,pause:0,maxPause:0}));
     for(let frame=1;frame<=900;frame++){
      gameTestAPI.SpatialHash.update();state.physicsWorld.timestep=1/60;state.physicsWorld.step();
      movementProbes.forEach(({u})=>{u.nextTargetCheck=Infinity;u.update(1/60);});
-     if(movementProbes.every(({u,start})=>Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)<1.5))return frame;
+     movementProbes.forEach(({u,start},i)=>{
+      const s=samples[i],p=u.mesh.position,distance=Math.hypot(p.x-start.x,p.z-start.z);
+      if(frame>15&&distance>2&&s.last&&Math.hypot(p.x-s.last.x,p.z-s.last.z)<.003)s.pause++;
+      else s.pause=0;
+      s.maxPause=Math.max(s.maxPause,s.pause);s.last={x:p.x,z:p.z};
+     });
+     if(movementProbes.every(({u,start})=>Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)<1.5))return {frames:frame,maxPauses:samples.map(s=>s.maxPause)};
     }
     throw new Error('Return route did not finish: '+JSON.stringify(movementProbes.map(({u,start})=>({faction:u.faction,state:u.state,grounded:u.isGrounded,path:u.path?.length,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)}))));
    });
-   return {routes,outward,returnFrames,returnedBoth:true};
+   if(returnMove.maxPauses.some(frames=>frames>3))throw new Error('Unit repeatedly stops on return: '+JSON.stringify(returnMove));
+   return {routes,outward,returnMove,returnedBoth:true};
   }finally{await page.evaluate(()=>{state.isPaused=true;if(window.savedMovementAIs)window.enemyAIs=window.savedMovementAIs;delete window.savedMovementAIs;});}
  });
  await check('Terrain collider matches render triangles across the whole chunk',()=>page.evaluate(()=>{

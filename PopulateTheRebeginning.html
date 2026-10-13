@@ -585,7 +585,7 @@ const CONFIG = {
         BRIDGE_WIDTH: 2.5,
         WATER_LEVEL: 1.805,
         VISUAL_WATER_LEVEL: 0.45125,
-        MAX_CHUNKS_PER_FRAME: 10,
+        MAX_CHUNKS_PER_FRAME: 2,
         NOISE_OCTAVES: [
             { amp: 12, factor: 1 },
             { amp: 4, factor: 2 },
@@ -3190,6 +3190,9 @@ function modifyTerrain(centerX, centerZ, radius, amount) {
 let lastChunkX = null;
 let lastChunkZ = null;
 let chunksLoadingPending = false;
+const CHUNK_OFFSETS=[];
+for(let x=-RENDER_DISTANCE;x<=RENDER_DISTANCE;x++)for(let z=-RENDER_DISTANCE;z<=RENDER_DISTANCE;z++)CHUNK_OFFSETS.push({x,z});
+CHUNK_OFFSETS.sort((a,b)=>(a.x*a.x+a.z*a.z)-(b.x*b.x+b.z*b.z));
 
 function disposeChunkGeometry(chunk) {
     const owned=[chunk.children[0],chunk.children[1]];
@@ -3215,9 +3218,9 @@ function updateChunks(force = false, specificChunks = null) {
     const activeKeys = new Set();
     let createdCount = 0;
     const MAX_CHUNKS_PER_FRAME = CONFIG.TERRAIN.MAX_CHUNKS_PER_FRAME;
+    const streamStart=performance.now();
 
-    for(let x = -RENDER_DISTANCE; x <= RENDER_DISTANCE; x++) {
-        for(let z = -RENDER_DISTANCE; z <= RENDER_DISTANCE; z++) {
+    for(const {x,z} of CHUNK_OFFSETS) {
             const key = (cx+x) + "," + (cz+z);
             activeKeys.add(key);
             if(!state.chunks[key] || (force && (!specificChunks || specificChunks.has(key)))) {
@@ -3233,7 +3236,8 @@ function updateChunks(force = false, specificChunks = null) {
                     updateChunkDecorations(state.chunks[key], cx+x, cz+z);
                     updateChunkPhysics(cx+x, cz+z);
                 } else {
-                    if (!state.chunks[key] && createdCount >= MAX_CHUNKS_PER_FRAME) {
+                    if (!state.chunks[key] && (createdCount >= MAX_CHUNKS_PER_FRAME ||
+                        createdCount > 0 && performance.now()-streamStart > 8)) {
                         chunksLoadingPending = true;
                         continue;
                     }
@@ -3245,9 +3249,9 @@ function updateChunks(force = false, specificChunks = null) {
                     state.chunks[key] = createChunk(cx+x, cz+z);
                     state.scene.add(state.chunks[key]);
                     createdCount++;
+                    state.lastTerrainBuildAt=performance.now();
                 }
             }
-        }
     }
     if(!force) {
         for(let key in state.chunks) {
@@ -3468,6 +3472,7 @@ function updateChunkDecorations(chunk, cx, cz) {
             for (let i = 0; i < dataList.length; i++) {
                 const data = dataList[i];
                 const h = getHeight(data.x, data.z);
+                data.h=h;
 
                 const visible = (h > WATER_LEVEL + 0.5 && h < 7.0);
                 const globalScale = visible ? 1 : 0;
@@ -3557,6 +3562,7 @@ function updateChunkDecorations(chunk, cx, cz) {
                 tulips.instanceMatrix.needsUpdate = true;
                 if (tulips.geometry.attributes.aBasePos) tulips.geometry.attributes.aBasePos.needsUpdate = true;
             }
+            for(const mesh of [stems,centers,petals,tulips])if(mesh)setFlowerBounds(mesh,dataList);
         } else if (Array.isArray(flowers)) {
             // Fallback for old save games / structure (if any remain)
             for (let i = flowers.length - 1; i >= 0; i--) {
@@ -3608,6 +3614,20 @@ function setGroundCoverBounds(mesh,data) {
     const bounds=new THREE.Box3(new THREE.Vector3(minX-2,minY-2,minZ-2),
         new THREE.Vector3(maxX+2,maxY+4,maxZ+2));
     bounds.getBoundingSphere(mesh.geometry.boundingSphere || (mesh.geometry.boundingSphere=new THREE.Sphere()));
+    mesh.frustumCulled=true;
+}
+
+function setFlowerBounds(mesh,data) {
+    if(!data.length)return;
+    let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+    for(const flower of data) {
+        minX=Math.min(minX,flower.x);maxX=Math.max(maxX,flower.x);
+        minY=Math.min(minY,flower.h);maxY=Math.max(maxY,flower.h);
+        minZ=Math.min(minZ,flower.z);maxZ=Math.max(maxZ,flower.z);
+    }
+    new THREE.Box3(new THREE.Vector3(minX-1,minY-1,minZ-1),
+        new THREE.Vector3(maxX+1,maxY+2,maxZ+1))
+        .getBoundingSphere(mesh.geometry.boundingSphere||(mesh.geometry.boundingSphere=new THREE.Sphere()));
     mesh.frustumCulled=true;
 }
 
@@ -3939,6 +3959,8 @@ function createChunk(cx, cz) {
         centerInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(centerBasePosArray, 3));
         daisyPetalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(daisyBasePosArray, 3));
         tulipPetalInstancedMesh.geometry.setAttribute('aBasePos', new THREE.InstancedBufferAttribute(tulipBasePosArray, 3));
+        for(const mesh of [stemInstancedMesh,centerInstancedMesh,daisyPetalInstancedMesh,tulipPetalInstancedMesh])
+            setFlowerBounds(mesh,flowerDataList);
 
         if (numDaisies === 0) {
             centerInstancedMesh.count = 0;
@@ -5869,12 +5891,18 @@ window.Humanoid = class Humanoid {
                 this.pathTimer += dt;
                 let targetPos = this.attackTarget.mesh.position;
 
-                if(this.pathTimer > 1.0) {
+                const changedTarget=this.lastCombatTargetId!==this.attackTarget.id;
+                const movedTarget=!this.lastCombatPathTarget||
+                    this.lastCombatPathTarget.distanceToSquared(targetPos)>6.25;
+                if(changedTarget || (!this.path?.length && !this.lastCombatPathTarget) ||
+                    (this.pathTimer > .5 && movedTarget)) {
                      this.pathTimer = 0;
                      const isFlying = (this.type === 'airship');
                      this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying, this.height,
                          this.faction !== 0 && !isFlying && !this.aiWaterEscape, !!this.aiWaterEscape);
                      this.pathIndex = 0;
+                     this.lastCombatPathTarget=targetPos.clone();
+                     this.lastCombatTargetId=this.attackTarget.id;
                      if (!this.path) {
                          this.state = 'idle';
                          this.attackTarget = null;
@@ -5949,7 +5977,8 @@ window.Humanoid = class Humanoid {
                 }
             }
         }
-        else if(this.state === 'move' && this.target && (this.isGrounded || this.type === 'airship')) {
+        else if(this.state === 'move' && this.target && (this.isGrounded || this.type === 'airship' ||
+            this.mesh.position.y-groundH<.6 && this.velocity.y<2)) {
             // Stuck Detection
             const movedDist = this.mesh.position.distanceTo(this.lastPos);
             if(dt > 0.001) {
@@ -8648,8 +8677,10 @@ function animate() {
         }
     }
 
-    _qualityFrames++;
-    if(state.graphicsQuality&&frameTime-_qualityWindowStart>5000) {
+    if(chunksLoadingPending || frameTime-(state.lastTerrainBuildAt||0)<1500) {
+        _qualityFrames=0;_qualityWindowStart=frameTime;
+    } else _qualityFrames++;
+    if(state.graphicsQuality&&_qualityFrames>0&&frameTime-_qualityWindowStart>5000) {
         const fps=_qualityFrames*1000/(frameTime-_qualityWindowStart);state.graphicsQuality.averageFps=fps;
         let scale=state.graphicsQuality.dynamicScale;
         if(fps<36)scale=Math.max(.67,scale-.1);else if(fps>56)scale=Math.min(1,scale+.05);

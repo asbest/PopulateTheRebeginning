@@ -196,7 +196,7 @@ export function createLocomotion(T) {
         if(u.state!=='idle')u.idleAnchor=null;
         if(u.idleAnchor){p.x=u.idleAnchor.x;p.z=u.idleAnchor.z;}
         const h=heightAt(p.x,p.z),gap=p.y-h;
-        if(gap<.22&&u.velocity.y<Math.max(2,u.moveSpeed)||u.isGrounded&&Math.abs(gap)<.45){
+        if(gap<.35&&u.velocity.y<Math.max(2,u.moveSpeed)||u.isGrounded&&Math.abs(gap)<.45){
             u.isGrounded=true;p.y=h;
             if(u.rigidBody){
                 const v=u.rigidBody.linvel();
