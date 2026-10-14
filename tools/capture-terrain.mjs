@@ -8,7 +8,7 @@ const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createR
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});
-    await page.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
+    await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:60000});
     await page.waitForFunction(()=>['grass','sand','cliff'].every(kind=>Art.textures[kind].image?.width>=1000),null,{timeout:30000});
     const targets=[['shore',3.2],['grass-rock',22]];

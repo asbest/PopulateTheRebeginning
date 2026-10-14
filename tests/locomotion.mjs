@@ -6,7 +6,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
 async function check(name,fn){try{results.push({name,pass:true,detail:await fn()});console.log('PASS '+name);}catch(e){results.push({name,pass:false,detail:String(e)});console.log('FAIL '+name+' '+e);}}
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});page.on('pageerror',e=>errors.push(String(e)));page.on('dialog',d=>d.accept());
- await page.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1');await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);await page.evaluate(()=>{state.isPaused=true;state.cameraLookAt.copy(state.shaman.mesh.position);gameTestAPI.updateChunks(true);});
+ await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);await page.evaluate(()=>{state.isPaused=true;state.cameraLookAt.copy(state.shaman.mesh.position);gameTestAPI.updateChunks(true);});
  await check('Player and enemy follow real terrain routes in both directions through Rapier simulation',async()=>{
   try{
    const routes=await page.evaluate(()=>{

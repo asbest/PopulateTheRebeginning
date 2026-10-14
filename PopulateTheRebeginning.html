@@ -3116,7 +3116,7 @@ const _col = new THREE.Color();
 
 function initTerrainResources() {
     chunkTerrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: false, roughness: 0.94, metalness: 0.0 });
-    Art.terrainDetail(chunkTerrainMat);
+    Art.terrainDetail(chunkTerrainMat, VISUAL_WATER_LEVEL);
     // Increase water resolution for better foam
     chunkWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES, CHUNK_RES);
 
@@ -3449,6 +3449,7 @@ function updateChunkGeometry(mesh, cx, cz) {
     const geo = mesh.geometry;
     const pos = geo.attributes.position;
     const colAttr = geo.attributes.color;
+    const patternAttr = geo.attributes.artTerrainPattern;
 
     const offX = cx * CHUNK_SIZE;
     const offZ = cz * CHUNK_SIZE;
@@ -3484,6 +3485,9 @@ function updateChunkGeometry(mesh, cx, cz) {
          const broadNoise=state.simplex.noise2D(wx*.065+37,wz*.065-19);
          const detailNoise=state.simplex.noise2D(wx*.23-73,wz*.23+11);
          const materialH=h+broadNoise*.72+detailNoise*.24;
+         const macro=Math.max(0,Math.min(1,.5+broadNoise*.43+detailNoise*.08));
+         const fine=Math.max(0,Math.min(1,.5+detailNoise*.5));
+         patternAttr.setXYZW(i,Math.round(macro*255),Math.round(fine*255),128,organicBiome?255:0);
 
          if (biome === 'winter' || (state.matchSettings && state.matchSettings.winter)) {
              // Ice/Snow World colors
@@ -3544,7 +3548,22 @@ function updateChunkGeometry(mesh, cx, cz) {
 
     pos.needsUpdate = true;
     colAttr.needsUpdate = true;
-    geo.computeVertexNormals();
+    // Derive normals from the continuous heightfield, including samples just
+    // outside chunk borders. Adjacent chunks now share the same edge lighting.
+    const normal=geo.attributes.normal,step=CHUNK_SIZE/CHUNK_RES,stride=CHUNK_RES+1;
+    for(let z=0;z<=CHUNK_RES;z++)for(let x=0;x<=CHUNK_RES;x++){
+        const i=z*stride+x,wx=pos.getX(i)+offX,wz=pos.getZ(i)+offZ,h=pos.getY(i);
+        const left=x?pos.getY(i-1):getHeight(wx-step,wz);
+        const right=x<CHUNK_RES?pos.getY(i+1):getHeight(wx+step,wz);
+        const near=z?pos.getY(i-stride):getHeight(wx,wz-step);
+        const far=z<CHUNK_RES?pos.getY(i+stride):getHeight(wx,wz+step);
+        const nx=left-right,ny=2*step,nz=near-far,len=Math.hypot(nx,ny,nz)||1;
+        normal.setXYZ(i,nx/len,ny/len,nz/len);
+        const cavity=Math.max(0,Math.min(1,.5+((left+right+near+far)*.25-h)*.42));
+        patternAttr.setW(i,Math.round(cavity*255));
+    }
+    normal.needsUpdate = true;
+    patternAttr.needsUpdate = true;
 }
 
 function updateChunkDecorations(chunk, cx, cz) {
@@ -3962,6 +3981,9 @@ function createChunk(cx, cz) {
     const count = geo.attributes.position.count;
     const colors = new Float32Array(count * 3);
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    // Static per-vertex terrain data moves macro variation and cavity work out
+    // of the fragment shader; deformation refreshes it with the mesh normals.
+    geo.setAttribute('artTerrainPattern',new THREE.Uint8BufferAttribute(new Uint8Array(count*4),4,true));
 
     const offX = cx * CHUNK_SIZE; const offZ = cz * CHUNK_SIZE;
     const mesh = new THREE.Mesh(geo, chunkTerrainMat);
@@ -7981,6 +8003,7 @@ window.applyLandGen = function() {
         if(!isNaN(waterVal)) {
             WATER_LEVEL = waterVal;
             VISUAL_WATER_LEVEL = waterVal / 4;
+            if(chunkTerrainMat?.userData?.shoreUniform)chunkTerrainMat.userData.shoreUniform.value=VISUAL_WATER_LEVEL;
             // Find existing visual water mesh and update its Y pos
             if (state.scene) {
                 state.scene.traverse(c => {
