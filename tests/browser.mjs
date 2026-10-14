@@ -124,6 +124,27 @@ try {
   const after=await page.evaluate(()=>({units:state.units.length,buildings:state.buildings.length,mana:state.mana}));
   if(before.units!==after.units||before.buildings!==after.buildings||before.mana!==after.mana)throw new Error(JSON.stringify({before,after}));return after;
  });
+ await check('Finished houses load without scaffolding while unfinished houses retain progress',async()=>{
+  const before=await page.evaluate(()=>{
+   state.isPaused=true;
+   const p=state.shaman.mesh.position;
+   const finished=gameTestAPI.createBuilding('tower',p.x+7,p.z+7,0,false,true);
+   const unfinished=gameTestAPI.createBuilding('spy',p.x+12,p.z+7,0,false,true);
+   finished.update(finished.totalBuildTime+1);
+   unfinished.update(unfinished.totalBuildTime*.4);
+   const positions=[finished,unfinished].map(b=>({type:b.type,x:b.mesh.position.x,z:b.mesh.position.z}));
+   window.saveGame();return positions;
+  });
+  await page.evaluate(()=>{window.loadGame();state.isPaused=true;});
+  const after=await page.evaluate(positions=>positions.map(({type,x,z})=>{
+   const b=state.buildings.find(b=>b.type===type&&Math.abs(b.mesh.position.x-x)<.01&&Math.abs(b.mesh.position.z-z)<.01);
+   return b&&{type,underConstruction:b.underConstruction,meshScale:b.visualMesh.scale.y,scaffolding:b.constructionRig.visible,scaffoldScale:b.constructionRig.scale.y};
+  }),before);
+  if(!after[0]||after[0].underConstruction||after[0].scaffolding||after[0].meshScale!==1||
+     !after[1]||!after[1].underConstruction||!after[1].scaffolding||after[1].meshScale<.35||after[1].meshScale>.45||after[1].scaffoldScale<.45||after[1].scaffoldScale>.55)
+   throw new Error(JSON.stringify(after));
+  return after;
+ });
  await check('SVG unit portraits and spell symbols render as graphics',async()=>{
   await page.evaluate(()=>{state.selectedUnits=[state.shaman];gameTestAPI.updateUnitList();gameTestAPI.updateContextMenus();});
   if(await page.locator('#unit-list .unit-item svg').count()<2||await page.locator('#right-menu svg').count()<10)throw new Error('SVG icons missing');

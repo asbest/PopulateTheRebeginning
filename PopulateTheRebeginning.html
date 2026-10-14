@@ -1581,12 +1581,7 @@ const NetworkManager = {
                 b.constructionTimer = bData.constructionTimer;
                 if(b.hpBar) b.hpBar.scale.x = Math.max(0, b.hp / b.maxHp);
                 if(b.damageVisual)b.damageVisual.visible=b.hp/b.maxHp<.7;
-                if(b.underConstruction) {
-                     const progress = 1.0 - (b.constructionTimer / 5.0);
-                     b.visualMesh.scale.y = Math.max(0.01, progress);
-                } else {
-                     b.visualMesh.scale.y = 1.0;
-                }
+                applyBuildingConstructionVisual(b);
             }
         });
 
@@ -6296,6 +6291,15 @@ function createConstructionRig(radius,height) {
     return group;
 }
 
+function applyBuildingConstructionVisual(building) {
+    const progress = building.underConstruction && Number.isFinite(building.constructionTimer)
+        ? THREE.MathUtils.clamp(1 - building.constructionTimer / building.totalBuildTime, 0, 1)
+        : 1;
+    building.visualMesh.scale.y = building.underConstruction ? Math.max(0.01, progress) : 1;
+    building.constructionRig.visible = !!building.underConstruction;
+    building.constructionRig.scale.y = .18 + .82 * progress;
+}
+
 function createBuildingDamageVisual(radius,height){
     const group=new THREE.Group();group.name='Structural damage';group.visible=false;
     const charred=new THREE.MeshStandardMaterial({color:0x241b16,roughness:1,map:Art.blender.texture('dark','map'),
@@ -6354,7 +6358,6 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
         group.add(mesh);
         const constructionRig=createConstructionRig(footprint*.63,structureHeight);group.add(constructionRig);
         const damageVisual=createBuildingDamageVisual(footprint,structureHeight);group.add(damageVisual);
-        constructionRig.onBeforeRender=()=>{constructionRig.visible=mesh.scale.y<.985;};
 
         // HP Bar for Building
         const hpGroup = new THREE.Group();
@@ -6445,16 +6448,11 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
                 if(this.underConstruction) {
                     this.constructionTimer -= dt;
-                    const progress = 1.0 - (this.constructionTimer / this.totalBuildTime);
-                    this.visualMesh.scale.y = Math.max(0.01, progress);
-                    this.constructionRig.scale.y=.18+.82*Math.max(0,progress);
                     this.constructionRig.rotation.y+=dt*.025;
 
                     if(this.constructionTimer <= 0) {
                         this.underConstruction = false;
                         BuildingSpatialHash.markDirty();
-                        this.visualMesh.scale.y = 1.0;
-                        this.constructionRig.visible=false;
                         spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFFFFFF, 10);
 
                         // On Complete Logic
@@ -6466,6 +6464,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                             if (this.rallyPoint) u.goto(this.rallyPoint.x, this.rallyPoint.z);
                         }
                     }
+                    applyBuildingConstructionVisual(this);
                     return; // Skip other updates while building
                 }
 
@@ -6487,6 +6486,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             }
         };
 
+        applyBuildingConstructionVisual(building);
         state.buildings.push(building);
         if(!isLoading) spawnExplosion(x, baseH, z, 0xFFD700, 15);
         return building;
@@ -8113,12 +8113,7 @@ window.loadGame = function() {
                  b.constructionTimer = bData.constructionTimer;
                  b.underConstruction = bData.underConstruction;
                  b.hpBar.scale.x = Math.max(0, b.hp / b.maxHp);
-                 if(b.underConstruction) {
-                     const progress = 1.0 - (b.constructionTimer / b.totalBuildTime);
-                     b.visualMesh.scale.y = Math.max(0.01, progress);
-                 } else {
-                     b.visualMesh.scale.y = 1.0;
-                 }
+                 applyBuildingConstructionVisual(b);
                  if (bData.rallyPoint) b.setRallyPoint(bData.rallyPoint.x, bData.rallyPoint.z);
                  b.trainingQueue = bData.trainingQueue || [];
              }
