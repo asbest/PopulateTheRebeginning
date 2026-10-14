@@ -1782,6 +1782,10 @@ const SoundManager = {
     ctx: null,
     effectsBus: null,
     noiseBuffers: new Map(),
+    mediaEffects: new Map(),
+    mediaEffectIndex: new Map(),
+    useMediaEffects: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches),
     hasUserGesture: false,
     pendingSounds: [],
     musicRestoreTimer: null,
@@ -1798,6 +1802,20 @@ const SoundManager = {
             this.combatMusic = new Audio(CONFIG.AUDIO.COMBAT_MUSIC);
             this.combatMusic.loop = true;
             this.combatMusic.volume = CONFIG.AUDIO.COMBAT_VOLUME;
+        }
+        this.prepareMediaEffects();
+    },
+    prepareMediaEffects: function() {
+        if (!this.useMediaEffects || this.mediaEffects.size) return;
+        for (const name of ['attack','fireball','explosion','magic','construct','rumble']) {
+            const voices=[];
+            for (let i=0;i<2;i++) {
+                const audio=new Audio(`sfx/${name}.wav`);
+                audio.preload='auto';
+                audio.volume=.9;
+                voices.push(audio);
+            }
+            this.mediaEffects.set(name,voices);
         }
     },
     ensureContext: function() {
@@ -1853,18 +1871,20 @@ const SoundManager = {
     },
     playTone: function(freq, type, duration, vol=0.1) {
         if(!this.ctx) return;
+        const start=this.ctx.currentTime,attack=Math.min(.02,duration*.18);
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = type;
-        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        osc.frequency.setValueAtTime(freq,start);
+        gain.gain.setValueAtTime(.0001,start);
+        gain.gain.linearRampToValueAtTime(vol,start+attack);
+        gain.gain.exponentialRampToValueAtTime(.0001,start+duration);
         osc.connect(gain);
         gain.connect(this.effectsBus);
-        osc.start();
-        osc.stop(this.ctx.currentTime + duration);
+        osc.start(start);
+        osc.stop(start+duration);
     },
-    playNoise: function(duration, vol=0.1) {
+    playNoise: function(duration, vol=0.1, cutoff=0) {
         if(!this.ctx) return;
         let buffer = this.noiseBuffers.get(duration);
         if (!buffer) {
@@ -1877,25 +1897,56 @@ const SoundManager = {
         const noise = this.ctx.createBufferSource();
         noise.buffer = buffer;
         const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-        noise.connect(gain);
+        const start=this.ctx.currentTime,attack=Math.min(.025,duration*.12);
+        gain.gain.setValueAtTime(.0001,start);
+        gain.gain.linearRampToValueAtTime(vol,start+attack);
+        gain.gain.exponentialRampToValueAtTime(.0001,start+duration);
+        if(cutoff) {
+            const filter=this.ctx.createBiquadFilter();
+            filter.type='lowpass';filter.frequency.setValueAtTime(cutoff,start);
+            filter.frequency.exponentialRampToValueAtTime(Math.max(200,cutoff*.25),start+duration);
+            noise.connect(filter);filter.connect(gain);
+        } else noise.connect(gain);
         gain.connect(this.effectsBus);
-        noise.start();
+        noise.start(start);
+    },
+    playMediaEffect: function(name) {
+        this.prepareMediaEffects();
+        const voices=this.mediaEffects.get(name);
+        if (!voices) return null;
+        const index=this.mediaEffectIndex.get(name)||0;
+        this.mediaEffectIndex.set(name,(index+1)%voices.length);
+        const audio=voices[index];
+        try {
+            if (!audio.paused) audio.pause();
+            if (audio.readyState >= 1) audio.currentTime=0;
+            this.duckMusic();
+            const playback=audio.play();
+            return Promise.resolve(playback).then(()=>true,()=>this.playWebSound(name));
+        } catch(e) {
+            return this.playWebSound(name);
+        }
+    },
+    playWebSound: function(name) {
+        const ctx=this.ensureContext();
+        if (!ctx) return Promise.resolve(false);
+        if (ctx.state !== 'running') {
+            this.pendingSounds.push({name, queuedAt: performance.now()});
+            if (this.pendingSounds.length > 8) this.pendingSounds.shift();
+            return this.unlock();
+        }
+        this.emitSound(name);
+        return Promise.resolve(true);
     },
     playSound: function(name) {
         // Create Web Audio only after an actual gesture; early AI effects otherwise
         // leave some browsers with a context that cannot start playback yet.
-        if (!this.hasUserGesture) return;
-        const ctx = this.ensureContext();
-        if (!ctx) return;
-        if (ctx.state !== 'running') {
-            this.pendingSounds.push({name, queuedAt: performance.now()});
-            if (this.pendingSounds.length > 8) this.pendingSounds.shift();
-            this.unlock();
-            return;
+        if (!this.hasUserGesture) return Promise.resolve(false);
+        if (this.useMediaEffects) {
+            this.prepareMediaEffects();
+            if (this.mediaEffects.has(name)) return this.playMediaEffect(name);
         }
-        this.emitSound(name);
+        return this.playWebSound(name);
     },
     emitSound: function(name) {
         if (name === 'fireball' || name === 'magic' || name === 'rumble' || name === 'explosion') this.duckMusic();
@@ -1905,18 +1956,21 @@ const SoundManager = {
                 this.playTone(150, 'square', 0.1, 0.1);
                 break;
             case 'fireball':
-                this.playNoise(0.18, 0.16);
-                this.playTone(400, 'sine', 0.36, 0.22);
+                this.playNoise(.55,.2,2300);
+                this.playTone(360,'triangle',.55,.15);
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
-                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.36);
-                gain.gain.setValueAtTime(0.22, this.ctx.currentTime);
-                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.36);
+                const start=this.ctx.currentTime;
+                osc.type='sawtooth';
+                osc.frequency.setValueAtTime(780,start);
+                osc.frequency.exponentialRampToValueAtTime(160,start+.55);
+                gain.gain.setValueAtTime(.0001,start);
+                gain.gain.linearRampToValueAtTime(.17,start+.025);
+                gain.gain.exponentialRampToValueAtTime(.0001,start+.55);
                 osc.connect(gain);
                 gain.connect(this.effectsBus);
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.36);
+                osc.start(start);
+                osc.stop(start+.55);
                 break;
             case 'explosion':
                 this.playNoise(0.5, 0.5);
@@ -8083,13 +8137,14 @@ window.testSpellSound = async function() {
     const button = document.getElementById('btn-test-sound');
     if (button) button.innerText = 'Checking sound…';
     SoundManager.hasUserGesture = true;
+    // Start the media element inside the tap handler on mobile browsers.
+    const playback = SoundManager.playSound('fireball');
     const ready = await Promise.race([
-        SoundManager.unlock(),
+        playback,
         new Promise(resolve => setTimeout(() => resolve(false), 1500))
     ]);
-    if (ready) SoundManager.playSound('fireball');
     if (button) {
-        button.innerText = ready ? 'Sound sent — check volume' : 'Audio blocked — retry';
+        button.innerText = ready ? 'Sound playing — check volume' : 'Audio blocked — retry';
         setTimeout(() => { button.innerText = 'Test spell sound'; }, 2500);
     }
 };

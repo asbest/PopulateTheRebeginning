@@ -113,7 +113,8 @@ try {
     if(testPeak<0.03)throw new Error(`Pause-menu sound test was silent (peak ${testPeak})`);
     console.log(`PASS Pause-menu sound test (peak ${testPeak.toFixed(3)})`);
 
-    const mobile=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+    const mobile=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,
+        userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'});
     try {
         const phone=await mobile.newPage();
         phone.on('pageerror',error=>errors.push(String(error)));
@@ -126,28 +127,57 @@ try {
             state.isPaused=true;state.mana=1000;
             gameTestAPI.SoundManager.setMusicEnabled(false);
             await gameTestAPI.SoundManager.ensureContext().suspend();
+            gameTestAPI.SoundManager.prepareMediaEffects();
+            window.testMediaPlayback={played:false,maxTime:0,playCount:0};
+            for(const voice of gameTestAPI.SoundManager.mediaEffects.get('fireball')){
+                voice.addEventListener('play',()=>{testMediaPlayback.played=true;testMediaPlayback.playCount++;});
+                voice.addEventListener('timeupdate',()=>{testMediaPlayback.maxTime=Math.max(testMediaPlayback.maxTime,voice.currentTime);});
+                voice.addEventListener('ended',()=>{testMediaPlayback.maxTime=Math.max(testMediaPlayback.maxTime,voice.duration);});
+            }
             gameTestAPI.updateUnitList();
         });
         const mobileUnit=await clickControl(phone,'#unit-list .unit-item');
         await phone.touchscreen.tap(mobileUnit.x,mobileUnit.y);
         const mobileBlast=await clickControl(phone,'#btn-blast');
         await phone.touchscreen.tap(mobileBlast.x,mobileBlast.y);
-        await phone.evaluate(()=>{
-            const sound=gameTestAPI.SoundManager;
-            const destination=sound.ctx.createMediaStreamDestination();
-            sound.effectsBus.connect(destination);
-            window.testSpellAudioDestination=destination;
-        });
-        await startRecording(phone);
         const mobileTarget=await phone.evaluate(()=>{
             const point=state.shaman.mesh.position.clone();point.x+=1;point.project(state.camera);
             return {x:(point.x+1)*innerWidth/2,y:(1-point.y)*innerHeight/2};
         });
         await phone.touchscreen.tap(mobileTarget.x,mobileTarget.y);
         if(await phone.evaluate(()=>state.mana)!==990)throw new Error('Touch fireball did not cast');
-        const mobilePeak=await stopRecording(phone);
-        if(mobilePeak<0.03)throw new Error(`Touch fireball produced no audio (peak ${mobilePeak})`);
-        console.log(`PASS Touch fireball unlocks audio (peak ${mobilePeak.toFixed(3)})`);
+        await phone.waitForFunction(()=>testMediaPlayback.maxTime>.25,null,{timeout:30000});
+        const mobileAudio=await phone.evaluate(async()=>{
+            const response=await fetch('sfx/fireball.wav');
+            if(!response.ok||response.headers.get('content-type')!=='audio/wav')throw new Error('Fireball WAV is not served as audio');
+            const bytes=await response.arrayBuffer(),view=new DataView(bytes);
+            const samples=(start,end)=>{
+                let sum=0,count=0;
+                for(let i=Math.round(start*32000);i<Math.round(end*32000);i++){
+                    const sample=view.getInt16(44+i*2,true)/32768;sum+=sample*sample;count++;
+                }
+                return Math.sqrt(sum/count);
+            };
+            return {played:testMediaPlayback.played,maxTime:testMediaPlayback.maxTime,
+                duration:(bytes.byteLength-44)/(32000*2),onset:samples(0,.005),body:samples(.15,.35),
+                webAudioState:gameTestAPI.SoundManager.ctx.state};
+        });
+        if(!mobileAudio.played||mobileAudio.duration<.65||mobileAudio.body<.02||
+            mobileAudio.onset>=mobileAudio.body*.7)
+            throw new Error(`Android-style fireball was not a sustained media effect: ${JSON.stringify(mobileAudio)}`);
+        console.log(`PASS Android touch fireball plays a sustained WAV effect: ${JSON.stringify(mobileAudio)}`);
+        const assets=await phone.evaluate(async()=>Promise.all(
+            ['attack','fireball','explosion','magic','construct','rumble'].map(async name=>{
+                const response=await fetch(`sfx/${name}.wav`);
+                return {name,ok:response.ok,type:response.headers.get('content-type'),bytes:(await response.arrayBuffer()).byteLength};
+            })));
+        if(assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
+            throw new Error(`Missing Android effect assets: ${JSON.stringify(assets)}`);
+        await phone.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
+        const phoneSoundPoint=await clickControl(phone,'#btn-test-sound');
+        await phone.touchscreen.tap(phoneSoundPoint.x,phoneSoundPoint.y);
+        await phone.waitForFunction(()=>testMediaPlayback.playCount>1,null,{timeout:30000});
+        console.log('PASS Android pause-menu sound test starts another media effect');
     } finally {
         await mobile.close();
     }
