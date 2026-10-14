@@ -139,13 +139,6 @@
         }
         .action-btn.active { border-color: #FFD700; transform: scale(1.1); box-shadow: 0 0 10px #FFD700; background: #444; z-index: 5; }
         .action-btn:active { transform: scale(0.95); }
-        .label {
-            font-size: 9px; position: absolute; bottom: -12px; width: 160%; left: -30%;
-            text-align: center; text-shadow: 1px 1px 1px black; color: #ddd;
-            background: rgba(0,0,0,0.5); border-radius: 4px; padding: 0;
-            pointer-events: none;
-        }
-
         /* JOYSTICK */
         #joystick-area {
             position: absolute;
@@ -7270,8 +7263,8 @@ function updateContextMenus() {
          btn.setAttribute('tabindex', '0');
          btn.setAttribute('aria-label', `${data.label}, ${data.cost} mana`);
          const hotkey = index < 9 ? (index + 1) : (index === 9 ? 0 : '');
-         const hotkeyLabel = hotkey !== '' ? `[${hotkey}] ` : '';
-         btn.innerHTML = `${data.icon}<span class="label">${hotkeyLabel}${data.label} (${data.cost})</span>`;
+         btn.title = `${data.label} (${data.cost} mana)${hotkey !== '' ? ` · ${hotkey}` : ''}`;
+         btn.innerHTML = data.icon;
          btn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); } };
          if(state.currentAction === act) btn.classList.add('active');
 

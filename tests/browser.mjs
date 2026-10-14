@@ -218,6 +218,10 @@ try {
   await page.evaluate(()=>{state.selectedUnits=[state.shaman];gameTestAPI.updateUnitList();gameTestAPI.updateContextMenus();});
   if(await page.locator('#unit-list .unit-item svg').count()<2||await page.locator('#right-menu svg').count()<10)throw new Error('SVG icons missing');
   if((await page.locator('#unit-list').innerText()).includes('<svg'))throw new Error('SVG markup is visible as text');
+  const actions=await page.evaluate(()=>Array.from(document.querySelectorAll('#right-menu .action-btn'),button=>({
+   label:button.getAttribute('aria-label'),title:button.title,text:button.textContent.trim(),icon:!!button.querySelector('svg')
+  })));
+  if(actions.length<19||actions.some(action=>!action.icon||!action.label||!action.title||action.text))throw new Error('Spell icons are obscured or missing accessible labels: '+JSON.stringify(actions));
  });
  await check('Airship cargo, upgrades, rally points and campaign survive save/load',async()=>{
   const before=await page.evaluate(()=>{
@@ -267,8 +271,9 @@ try {
  });
  await check('Mobile viewport keeps touch controls and actions visible',async()=>{
   await page.setViewportSize({width:390,height:844});await page.waitForTimeout(600);
-  const data=await page.evaluate(()=>{const r=document.getElementById('right-menu').getBoundingClientRect();const j=document.getElementById('joystick-area').getBoundingClientRect();return {right:{x:r.x,width:r.width},joystick:{x:j.x,y:j.y},canvas:!!document.querySelector('canvas')};});
+  const data=await page.evaluate(()=>{const r=document.getElementById('right-menu').getBoundingClientRect();const j=document.getElementById('joystick-area').getBoundingClientRect();const icons=Array.from(document.querySelectorAll('#right-menu .action-btn'),button=>{const b=button.getBoundingClientRect(),s=button.querySelector('svg')?.getBoundingClientRect();return {button:{x:b.x,y:b.y,right:b.right,bottom:b.bottom},icon:s&&{x:s.x,y:s.y,right:s.right,bottom:s.bottom}};});return {right:{x:r.x,width:r.width},joystick:{x:j.x,y:j.y},canvas:!!document.querySelector('canvas'),icons};});
   if(data.right.x<0||data.right.x+data.right.width>390||!data.canvas)throw new Error(JSON.stringify(data));
+  if(data.icons.some(({button,icon})=>!icon||icon.x<button.x||icon.y<button.y||icon.right>button.right||icon.bottom>button.bottom))throw new Error('Mobile spell icon escapes its button: '+JSON.stringify(data.icons));
   await page.screenshot({path:path.join(root,'test-results','browser-mobile.png')});return data;
  });
  await check('Touch selection and spell targeting on a phone viewport',async()=>{

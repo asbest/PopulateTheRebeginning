@@ -14,9 +14,9 @@ body {font-family:'Segoe UI',system-ui,sans-serif;background:#183d49;color:#e3e6
 .action-btn {width:43px!important;height:43px!important;border-radius:10px!important;border:1px solid #79948d!important;background:linear-gradient(145deg,#28434a,#122a33)!important;box-shadow:0 3px 8px #0003!important;}
 .action-btn.active {border-color:#ead28b!important;box-shadow:0 0 12px #dcc58055!important;}
 .tribal-icon {width:27px;height:27px;color:var(--gold);display:block;pointer-events:none;}
+.action-btn .tribal-icon {width:32px;height:32px;}
 .unit-item .tribal-icon {width:23px;height:23px;color:var(--aqua);}
 .unit-item.enemy .tribal-icon {color:#e89770;}
-.action-btn .label {width:150%;left:-25%;font-size:10px;background:#102a33d9;color:#e8dfc2;text-shadow:none;}
 .action-btn:focus-visible,.unit-item:focus-visible {outline:2px solid var(--gold);outline-offset:3px;}
 .btn-label {font-size:10px!important;color:#e1dcc6!important;text-shadow:none!important;}
 #joystick-bg {background:#16374266!important;border:1px solid #9ac3b377!important;box-shadow:inset 0 0 25px #15323b55;}
@@ -27,4 +27,4 @@ body {font-family:'Segoe UI',system-ui,sans-serif;background:#183d49;color:#e3e6
 #story-overlay {background:linear-gradient(#061a2499,#061a24ed),url('key-art.png') center/cover!important;}
 #story-title {color:var(--gold)!important;font-weight:650;letter-spacing:.025em;}
 #story-text {color:#e8e5d6;text-shadow:0 2px 8px #0009!important;}
-@media(max-width:700px){#right-menu{width:88px!important;right:4px!important;padding:6px!important;gap:4px!important;}.action-btn{width:34px!important;height:34px!important;}#unit-list{left:4px!important;}}
+@media(max-width:700px){#right-menu{width:88px!important;right:4px!important;padding:6px!important;gap:4px!important;}.action-btn{width:34px!important;height:34px!important;}.action-btn .tribal-icon{width:27px;height:27px;}#unit-list{left:4px!important;}}
