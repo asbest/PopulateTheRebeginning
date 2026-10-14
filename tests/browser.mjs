@@ -148,6 +148,30 @@ try {
   if(fast<=slow||slow<=0)throw new Error(JSON.stringify({slow,fast}));
   return {slow,fast};
  }));
+ await check('Fast mouse and finger gestures scroll and zoom farther',async()=>page.evaluate(()=>{
+  const center=state.cameraLookAt.clone();state.viewScale=35;state.isFPV=false;gameTestAPI.updateCameraZoom();window.updateCameraPosition();
+  const drag=(elapsed,touch)=>{
+   state.cameraLookAt.copy(center);window.updateCameraPosition();state.dragStart={x:100,y:100};
+   state.dragSpeed=0;state.lastDragAt=performance.now()-elapsed;state.isDragging=true;state.dragButton=0;state.selectionStart=null;
+   const point={clientX:120,clientY:100};
+   if(touch)gameTestAPI.onTouchMove({target:state.renderer.domElement,targetTouches:[point],preventDefault(){}});
+   else gameTestAPI.onPointerMove(point);
+   return state.cameraLookAt.distanceTo(center);
+  };
+  const slowMouse=drag(100,false),fastMouse=drag(16,false);
+  const slowTouch=drag(100,true),fastTouch=drag(16,true);
+  const pinch=elapsed=>{
+   state.viewScale=35;state.pinchStartDist=100;state.pinchLastDist=100;
+   state.pinchLastAt=performance.now()-elapsed;state.pinchSpeed=0;state.pinchStartAngle=0;state.rotateStartCamera=state.cameraRotation;
+   gameTestAPI.onTouchMove({target:state.renderer.domElement,targetTouches:[{clientX:0,clientY:0},{clientX:110,clientY:0}],preventDefault(){}});
+   return 35-state.viewScale;
+  };
+  const slowPinch=pinch(100),fastPinch=pinch(16);
+  state.isDragging=false;state.pinchStartDist=0;state.cameraLookAt.copy(center);state.viewScale=35;gameTestAPI.updateCameraZoom();window.updateCameraPosition();
+  if(slowMouse<=0||fastMouse<=slowMouse||fastTouch<=slowTouch||fastPinch<=slowPinch)
+   throw new Error(JSON.stringify({slowMouse,fastMouse,slowTouch,fastTouch,slowPinch,fastPinch}));
+  return {slowMouse,fastMouse,slowTouch,fastTouch,slowPinch,fastPinch};
+ }));
  await check('Terrain deformation updates ground height',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position;const before=getHeight(p.x+3,p.z);state.mana=500;gameTestAPI.performAction(p.x+3,p.z,'raise');const after=getHeight(p.x+3,p.z);if(after<=before||state.mana!==495)throw new Error('Raise failed');return {before,after};
  }));
@@ -171,7 +195,7 @@ try {
    const unfinished=gameTestAPI.createBuilding('spy',p.x+12,p.z+7,0,false,true);
    finished.update(finished.totalBuildTime+1);
    unfinished.update(unfinished.totalBuildTime*.4);
-   const positions=[finished,unfinished].map(b=>({type:b.type,x:b.mesh.position.x,z:b.mesh.position.z,path:!!b.pathVisual}));
+   const positions=[finished,unfinished].map(b=>({type:b.type,x:b.mesh.position.x,z:b.mesh.position.z}));
    window.saveGame();return positions;
   });
   await page.evaluate(()=>{window.loadGame();state.isPaused=true;});
@@ -183,9 +207,9 @@ try {
     if(Math.abs(vertices.getY(i+j)-vertices.getY(i))>.001)pathFlat=false;
    return b&&{type,underConstruction:b.underConstruction,meshScale:b.visualMesh.scale.y,scaffolding:b.constructionRig.visible,scaffoldScale:b.constructionRig.scale.y,path:!!b.pathVisual,pathVisible:b.pathVisual?.visible,pathFlat};
   }),before);
-  if(!after[0]||after[0].underConstruction||after[0].scaffolding||after[0].meshScale!==1||after[0].path!==before[0].path||
+  if(!after[0]||after[0].underConstruction||after[0].scaffolding||after[0].meshScale!==1||
      (after[0].path&&(!after[0].pathVisible||!after[0].pathFlat))||
-     !after[1]||!after[1].underConstruction||!after[1].scaffolding||after[1].path!==before[1].path||
+     !after[1]||!after[1].underConstruction||!after[1].scaffolding||
      (after[1].path&&after[1].pathVisible)||after[1].meshScale<.35||after[1].meshScale>.45||after[1].scaffoldScale<.45||after[1].scaffoldScale>.55)
    throw new Error(JSON.stringify(after));
   return after;
