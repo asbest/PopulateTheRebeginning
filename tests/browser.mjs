@@ -45,6 +45,45 @@ try {
   for(const kind of ['hut','tower','warrior','fire','spy','shipyard']){const model=Art.building(kind,0xff4500);let meshes=0,banner=false;model.traverse(n=>{if(n.isMesh)meshes++;if(n.userData.isFactionBanner)banner=true;});if(meshes<10||!banner)throw new Error(kind+' incomplete');report.push({kind,meshes});}
   return report;
  }));
+ await check('Cinematic camera and instanced coastal scenery remain interactive',async()=>{
+  const report=await page.evaluate(()=>{
+   const palms=Object.values(state.chunks).flatMap(chunk=>chunk.userData?.palms?.data||[]).length;
+   const shoreRocks=Object.values(state.chunks).flatMap(chunk=>chunk.userData?.groundCover?.stones?.data||[]).filter(d=>d.shore).length;
+   state.cameraLookAt.copy(state.shaman.mesh.position);
+   window.setCameraView('cinematic');
+   state.camera.updateMatrixWorld();
+   const target=state.shaman.mesh.position.clone().add(new THREE.Vector3(0,1.3,0)).project(state.camera);
+   state.currentAction='select';
+   return {view:state.cameraView,perspective:state.camera===state.cinematicCamera,
+    palms,shoreRocks,stored:localStorage.getItem('camera-view'),
+    target:{x:(target.x+1)*window.innerWidth/2,y:(1-target.y)*window.innerHeight/2}};
+  });
+  if(report.target.x>80&&report.target.x<1280&&report.target.y>35&&report.target.y<850)
+   await page.mouse.click(report.target.x,report.target.y);
+  report.selected=await page.evaluate(()=>state.selectedUnits.includes(state.shaman));
+  const movePoint=await page.evaluate(()=>{
+   const meshes=Object.values(state.chunks).map(chunk=>chunk.children[0]).filter(Boolean);
+   const p=state.shaman.mesh.position;
+   for(let dy=-100;dy<=140;dy+=40)for(let dx=-160;dx<=160;dx+=40){
+    const x=window.innerWidth/2+dx,y=window.innerHeight/2+dy;
+    state.raycaster.setFromCamera(new THREE.Vector2(x/window.innerWidth*2-1,1-y/window.innerHeight*2),state.camera);
+    const hit=state.raycaster.intersectObjects(meshes)[0];
+    if(hit&&hit.point.y>CONFIG.TERRAIN.WATER_LEVEL+.5&&Math.hypot(hit.point.x-p.x,hit.point.z-p.z)>3&&Math.hypot(hit.point.x-p.x,hit.point.z-p.z)<25)
+     return {x,y};
+   }
+   return null;
+  });
+  if(movePoint)await page.mouse.click(movePoint.x,movePoint.y,{button:'right'});
+  report.ordered=!!movePoint&&await page.evaluate(()=>!!(state.shaman.finalDest||state.shaman.target));
+  await page.screenshot({path:path.join(root,'test-results','browser-cinematic.png')});
+  await page.keyboard.press('c');
+  report.shortcut=await page.evaluate(()=>state.cameraView==='strategy'&&state.camera===state.orthoCamera&&
+   document.getElementById('btn-camera-view').textContent.includes('Strategy'));
+  if(report.view!=='cinematic'||!report.perspective||!report.selected||!report.ordered||report.palms<1||report.shoreRocks<1||report.stored!=='cinematic')
+   throw new Error(JSON.stringify(report));
+  if(!report.shortcut)throw new Error('Camera shortcut did not restore strategy view: '+JSON.stringify(report));
+  return report;
+ });
  await check('All six unit types retain animation rig and statistics',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position;const report=[];
   for(const kind of ['wild','warrior','firewarrior','spy','shaman','airship']){const u=new Humanoid(0,kind,p.x+3,p.z+3);state.units.push(u);if(!u.mesh||u.hp<=0||(!u.isVehicle&&!u.legL))throw new Error(kind);report.push({kind,hp:u.hp});}
@@ -116,7 +155,7 @@ try {
   const p=state.shaman.mesh.position;const point=gameTestAPI.findNearestLand(p.x+5,p.z+5);const worker=new Humanoid(0,'wild',point.x,point.z);state.units.push(worker);const before=state.buildings.length;state.mana=500;gameTestAPI.performAction(point.x,point.z,'build_hut');if(state.mana!==485||state.buildings.length!==before+1)throw new Error('Build failed');const b=state.buildings.at(-1);if(!b.underConstruction||b.totalBuildTime!==15)throw new Error('Construction changed');return {mana:state.mana,time:b.totalBuildTime};
  }));
  await check('Building rally point and training queue',async()=>page.evaluate(()=>{
-  const p=state.shaman.mesh.position;const b=gameTestAPI.createBuilding('warrior',p.x+9,p.z,0,false,true);b.underConstruction=false;b.setRallyPoint(p.x+3,p.z+2);b.trainingQueue.push({timer:0.01,type:'warrior',faction:0});const before=state.units.length;b.update(0.1);if(state.units.length!==before+1||!b.rallyPoint)throw new Error('Training or rally failed');return {rally:b.rallyPoint};
+  const p=state.shaman.mesh.position;const b=gameTestAPI.createBuilding('warrior',p.x+9,p.z,0,false,true);b.update(b.totalBuildTime+1);b.setRallyPoint(p.x+3,p.z+2);b.trainingQueue.push({timer:0.01,type:'warrior',faction:0});const before=state.units.length;b.update(0.1);if(state.units.length!==before+1||!b.rallyPoint)throw new Error('Training or rally failed');return {rally:b.rallyPoint};
  }));
  await check('Save and reload keeps tribe, world and buildings',async()=>{
   const before=await page.evaluate(()=>{state.isPaused=true;const r={units:state.units.filter(u=>u.state!=='dead').length,buildings:state.buildings.length,mana:state.mana};window.saveGame();return r;});
@@ -138,10 +177,14 @@ try {
   await page.evaluate(()=>{window.loadGame();state.isPaused=true;});
   const after=await page.evaluate(positions=>positions.map(({type,x,z})=>{
    const b=state.buildings.find(b=>b.type===type&&Math.abs(b.mesh.position.x-x)<.01&&Math.abs(b.mesh.position.z-z)<.01);
-   return b&&{type,underConstruction:b.underConstruction,meshScale:b.visualMesh.scale.y,scaffolding:b.constructionRig.visible,scaffoldScale:b.constructionRig.scale.y};
+   const vertices=b?.pathVisual?.geometry.attributes.position;
+   let pathFlat=true;
+   if(vertices)for(let i=0;i<vertices.count;i+=8)for(let j=1;j<8;j++)
+    if(Math.abs(vertices.getY(i+j)-vertices.getY(i))>.001)pathFlat=false;
+   return b&&{type,underConstruction:b.underConstruction,meshScale:b.visualMesh.scale.y,scaffolding:b.constructionRig.visible,scaffoldScale:b.constructionRig.scale.y,path:b.pathVisual?.visible,pathFlat};
   }),before);
-  if(!after[0]||after[0].underConstruction||after[0].scaffolding||after[0].meshScale!==1||
-     !after[1]||!after[1].underConstruction||!after[1].scaffolding||after[1].meshScale<.35||after[1].meshScale>.45||after[1].scaffoldScale<.45||after[1].scaffoldScale>.55)
+  if(!after[0]||after[0].underConstruction||after[0].scaffolding||after[0].meshScale!==1||!after[0].path||!after[0].pathFlat||
+     !after[1]||!after[1].underConstruction||!after[1].scaffolding||after[1].path||after[1].meshScale<.35||after[1].meshScale>.45||after[1].scaffoldScale<.45||after[1].scaffoldScale>.55)
    throw new Error(JSON.stringify(after));
   return after;
  });

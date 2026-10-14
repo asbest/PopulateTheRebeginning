@@ -17,7 +17,7 @@ try {
   closeHelp();closeStoryOverlay();state.isPaused=true;
   const p=state.shaman.mesh.position;
   const hut=gameTestAPI.createBuilding('hut',p.x+5,p.z+2,0);
-  hut.underConstruction=false;hut.visualMesh.scale.y=1;
+  hut.update(hut.totalBuildTime+1);
   state.cameraLookAt.copy(hut.mesh.position);
   state.viewScale=8;
   const aspect=innerWidth/innerHeight;

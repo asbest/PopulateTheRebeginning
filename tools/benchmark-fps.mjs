@@ -20,7 +20,8 @@ try {
             .map(layer=>layer?.mesh).filter(Boolean);
         const flowers=Object.values(state.chunks).flatMap(chunk=>
             ['stems','centers','petals','tulips'].map(key=>chunk.userData?.flowers?.[key])).filter(Boolean);
-        const culledObjects=[...cover,...flowers];
+        const palms=Object.values(state.chunks).map(chunk=>chunk.userData?.palms?.mesh).filter(Boolean);
+        const culledObjects=[...cover,...flowers,...palms];
         const canvas=document.createElement('canvas');canvas.width=state.renderer.domElement.width;canvas.height=state.renderer.domElement.height;
         const context=canvas.getContext('2d',{willReadFrequently:true});
         state.renderer.render(state.scene,state.camera);
@@ -56,7 +57,8 @@ try {
         let releasedGeometries=0;
         const departingMeshes=[departing.children[0],departing.children[1],
             ...Object.values(departing.userData.groundCover).map(layer=>layer?.mesh),
-            ...['stems','centers','petals','tulips'].map(key=>departing.userData.flowers?.[key])];
+            ...['stems','centers','petals','tulips'].map(key=>departing.userData.flowers?.[key]),
+            departing.userData.palms?.mesh];
         departingMeshes.filter(Boolean).forEach(mesh=>mesh.geometry.addEventListener('dispose',()=>releasedGeometries++));
         const existingKeys=new Set(Object.keys(state.chunks));
         state.cameraLookAt.x+=chunkSize;

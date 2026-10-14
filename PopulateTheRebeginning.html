@@ -327,6 +327,7 @@
                 <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
                     <li><strong>Double-Click to Zoom & Center:</strong> Simply <strong>double-click</strong> any unit's entry in the sidebar unit list. The camera will immediately center and focus directly on that unit!</li>
                     <li><strong>Manual Zoom:</strong> Use your mouse <strong>Scroll Wheel</strong> or a touch <strong>Pinch</strong> gesture to adjust camera zoom.</li>
+                    <li><strong>Cinematic Camera:</strong> Press <strong>C</strong> or use <strong>Camera</strong> in the pause menu for a lower perspective. Selection, movement and spells work in both views.</li>
                 </ul>
             </div>
 
@@ -405,6 +406,7 @@
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-toggle-music" onclick="toggleMusic()">Music: On</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFullscreen()">Toggle Fullscreen</button>
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-graphics-quality" onclick="cycleGraphicsQuality()">Graphics: High</button>
+            <button class="menu-btn" style="margin:0; width:100%;" id="btn-camera-view" onclick="toggleCameraView()">Camera: Strategy</button>
 
             <button class="menu-btn" style="margin:0; width:100%;" onclick="openTribeMenu()">Tribes</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleMatchSettings()">Match Settings</button>
@@ -621,6 +623,8 @@ const CONFIG = {
         ORTHO_Y_BASE: 25,
         ORTHO_Y_SCALE: 35,
         ORTHO_MIN_GROUND_OFFSET: 5,
+        CINEMATIC_FOV: 52,
+        CINEMATIC_MIN_GROUND_OFFSET: 6,
         DRAG_SPEED: 0.002,
         ROTATE_SPEED: 0.005,
         FPV_SPEED: 0.005,
@@ -903,8 +907,8 @@ const CONFIG = {
     },
     BIOMES: {
         normal: {
-            bg: 0x73bdf0, fog: 0x8cccf3, fogNear: 130, fogFar: 340,
-            sunIntensity: 1.7, sunColor: 0xffedc9, waterColor: 0x087bd8,
+            bg: 0x65b4e8, fog: 0x91c7e9, fogNear: 130, fogFar: 340,
+            sunIntensity: 2.05, sunColor: 0xffe2b4, waterColor: 0x087bd8,
         },
         winter: {
             bg: 0x7EC8E3, fog: 0x7EC8E3, fogNear: 30, fogFar: 180,
@@ -1179,6 +1183,8 @@ const state = {
     raycaster: null,
     orthoCamera: null,
     perspectiveCamera: null,
+    cinematicCamera: null,
+    cameraView: 'strategy',
     isFPV: false,
     fpvYaw: 0,
     fpvPitch: 0,
@@ -1355,6 +1361,8 @@ window.setGraphicsQuality=function(tier='high'){
     for(const chunk of Object.values(state.chunks||{})){
         const cover=chunk.userData?.groundCover;if(!cover)continue;
         for(const layer of [cover.grass,cover.stones,cover.bushes])if(layer?.mesh)layer.mesh.count=Math.floor(layer.data.length*profile.cover);
+        const palms=chunk.userData?.palms;
+        if(palms?.mesh)palms.mesh.count=Math.floor(palms.data.length*profile.cover);
     }
     try{localStorage.setItem('graphics-quality',tier);}catch(e){}
     const graphicsBtn=document.getElementById('btn-graphics-quality');
@@ -1588,6 +1596,7 @@ const NetworkManager = {
         for(let i = state.buildings.length-1; i>=0; i--) {
             if(!buildIds.has(state.buildings[i].id)) {
                  state.scene.remove(state.buildings[i].mesh);
+                 state.buildings[i].pathVisual?.geometry.dispose();
                  state.buildings.splice(i, 1);
             }
         }
@@ -3174,6 +3183,7 @@ function modifyTerrain(centerX, centerZ, radius, amount) {
 
     // Check if buildings collapse
     state.buildings.forEach(b => {
+        if(Math.hypot(b.mesh.position.x-centerX,b.mesh.position.z-centerZ)<radius+6)updateSettlementPath(b);
         const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
         if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
             b.takeDamage(100, true); // Collapse damage
@@ -3193,6 +3203,7 @@ function disposeChunkGeometry(chunk) {
     const owned=[chunk.children[0],chunk.children[1]];
     const cover=chunk.userData?.groundCover;
     if(cover)for(const layer of Object.values(cover))if(layer?.mesh)owned.push(layer.mesh);
+    if(chunk.userData?.palms?.mesh)owned.push(chunk.userData.palms.mesh);
     const flowers=chunk.userData?.flowers;
     if(flowers&&!Array.isArray(flowers))for(const mesh of [flowers.stems,flowers.centers,flowers.petals,flowers.tulips])if(mesh)owned.push(mesh);
     for(const mesh of owned)mesh?.geometry?.dispose();
@@ -3593,6 +3604,21 @@ function updateChunkDecorations(chunk, cx, cz) {
         }
     }
 
+    const palms=chunk.userData.palms;
+    if(palms?.mesh) {
+        palms.mesh.visible=!state.matchSettings.winter&&['normal','jungle'].includes(state.matchSettings.biome||'normal');
+        const dummy=new THREE.Object3D();
+        for(let i=0;i<palms.data.length;i++) {
+            const d=palms.data[i],h=getHeight(d.x,d.z);
+            dummy.position.set(d.x,h,d.z);
+            dummy.rotation.set(0,d.rotation,0);
+            dummy.scale.setScalar(h>WATER_LEVEL+.45&&h<7 ? d.scale : 0);
+            dummy.updateMatrix();palms.mesh.setMatrixAt(i,dummy.matrix);
+        }
+        palms.mesh.instanceMatrix.needsUpdate=true;
+        setPalmBounds(palms.mesh,palms.data);
+    }
+
 }
 
 // The instance transforms use world coordinates while their source geometry is
@@ -3624,6 +3650,86 @@ function setFlowerBounds(mesh,data) {
         new THREE.Vector3(maxX+1,maxY+2,maxZ+1))
         .getBoundingSphere(mesh.geometry.boundingSphere||(mesh.geometry.boundingSphere=new THREE.Sphere()));
     mesh.frustumCulled=true;
+}
+
+let coastalPalmGeometry,coastalPalmMaterial;
+function initCoastalPalm() {
+    if(coastalPalmGeometry)return;
+    const positions=[],colors=[],indices=[];
+    const vertex=(x,y,z,r,g,b)=>{positions.push(x,y,z);colors.push(r,g,b);return positions.length/3-1;};
+    for(let ring=0;ring<5;ring++){
+        const t=ring/4,y=t*3.9,radius=.16-t*.075;
+        for(let side=0;side<7;side++){
+            const a=side*Math.PI*2/7,b=.42+t*.08;
+            vertex(Math.cos(a)*radius+.09*t*t,y,Math.sin(a)*radius,b,.24+t*.035,.11);
+            if(ring) {
+                const prev=(ring-1)*7+side,next=(ring-1)*7+(side+1)%7;
+                const now=ring*7+side,following=ring*7+(side+1)%7;
+                indices.push(prev,next,now,next,following,now);
+            }
+        }
+    }
+    for(let frond=0;frond<11;frond++){
+        const a=frond*Math.PI*2/11,dirX=Math.cos(a),dirZ=Math.sin(a),sideX=-dirZ,sideZ=dirX;
+        const start=positions.length/3;
+        for(let segment=0;segment<7;segment++){
+            const t=segment/6,radius=.12+t*2.1;
+            const y=3.86+.42*Math.sin(t*Math.PI)-.84*t*t;
+            const width=.3*Math.sin(t*Math.PI)*(.83+(frond%3)*.08);
+            const green=.27+.055*(frond%3)+.09*t;
+            for(const sign of [-1,1])vertex(.09+dirX*radius+sideX*width*sign,y,
+                dirZ*radius+sideZ*width*sign,.12+.045*t,green,.055+.02*(frond%3));
+            if(segment<6){const v=start+segment*2;indices.push(v,v+1,v+2,v+1,v+3,v+2);}
+        }
+    }
+    coastalPalmGeometry=new THREE.BufferGeometry();
+    coastalPalmGeometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    coastalPalmGeometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+    coastalPalmGeometry.setIndex(indices);coastalPalmGeometry.computeVertexNormals();
+    coastalPalmMaterial=new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,
+        side:THREE.DoubleSide,roughness:.86,metalness:0,emissive:0x102008,emissiveIntensity:.08});
+    addWindShader(coastalPalmMaterial);
+}
+
+function setPalmBounds(mesh,data) {
+    if(!data.length)return;
+    let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+    for(const d of data){const y=getHeight(d.x,d.z);
+        minX=Math.min(minX,d.x);maxX=Math.max(maxX,d.x);
+        minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+        minZ=Math.min(minZ,d.z);maxZ=Math.max(maxZ,d.z);}
+    new THREE.Box3(new THREE.Vector3(minX-4,minY-1,minZ-4),new THREE.Vector3(maxX+4,maxY+7,maxZ+4))
+        .getBoundingSphere(mesh.geometry.boundingSphere||(mesh.geometry.boundingSphere=new THREE.Sphere()));
+    mesh.frustumCulled=true;
+}
+
+function createCoastalPalms(grp,cx,cz) {
+    if(state.matchSettings.winter||!['normal','jungle'].includes(state.matchSettings.biome||'normal'))return;
+    initCoastalPalm();
+    const rand=mulberry32(((cx*62617)^(cz*17389)^0x93bfc435)>>>0),data=[];
+    for(let attempt=0;attempt<65&&data.length<4;attempt++){
+        const x=cx*CHUNK_SIZE+(rand()-.5)*CHUNK_SIZE;
+        const z=cz*CHUNK_SIZE+(rand()-.5)*CHUNK_SIZE;
+        const h=getHeight(x,z);
+        if(h<WATER_LEVEL+.85||h>WATER_LEVEL+4.8)continue;
+        const slope=Math.hypot(getHeight(x+.6,z)-getHeight(x-.6,z),getHeight(x,z+.6)-getHeight(x,z-.6));
+        if(slope>1.3||data.some(d=>Math.hypot(d.x-x,d.z-z)<4))continue;
+        data.push({x,z,rotation:rand()*Math.PI*2,scale:.75+rand()*.55});
+    }
+    if(!data.length)return;
+    const geometry=coastalPalmGeometry.clone(),mesh=new THREE.InstancedMesh(geometry,coastalPalmMaterial,data.length);
+    const bases=new Float32Array(data.length*3),dummy=new THREE.Object3D();
+    for(let i=0;i<data.length;i++){
+        const d=data[i],h=getHeight(d.x,d.z);
+        dummy.position.set(d.x,h,d.z);dummy.rotation.set(0,d.rotation,0);dummy.scale.setScalar(d.scale);
+        dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);bases.set([d.x,h,d.z],i*3);
+        mesh.setColorAt(i,new THREE.Color().setHSL(.11+(rand()-.5)*.04,.2,.9));
+    }
+    geometry.setAttribute('aBasePos',new THREE.InstancedBufferAttribute(bases,3));
+    mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
+    mesh.count=Math.floor(data.length*(state.graphicsQuality?.coverDensity||1));
+    mesh.castShadow=true;mesh.receiveShadow=true;mesh.name='Coastal palms';
+    setPalmBounds(mesh,data);grp.add(mesh);grp.userData.palms={mesh,data};
 }
 
 function createGroundCover(grp,cx,cz) {
@@ -3690,6 +3796,15 @@ function createGroundCover(grp,cx,cz) {
     };
     populate(grassData,Math.floor(220*density),true);populate(stoneData,Math.floor(9*density),false);
     populate(bushData,Math.floor((state.matchSettings.biome==='jungle'?32:12)*density),true);
+    let shoreRocks=0;
+    for(let attempt=0;attempt<45&&shoreRocks<2;attempt++){
+        const x=offX+(rand()-.5)*CHUNK_SIZE,z=offZ+(rand()-.5)*CHUNK_SIZE;
+        const h=getHeight(x,z);
+        if(h<WATER_LEVEL+.2||h>WATER_LEVEL+1.8)continue;
+        stoneData.push({x,z,rx:(rand()-.5)*.35,ry:rand()*Math.PI*2,rz:(rand()-.5)*.35,
+            scale:1.2+rand()*2.8,height:1,tone:rand(),shore:true});
+        shoreRocks++;
+    }
     const makeLayer=(data,geometry,material,isGrass,isBush=false)=>{
         if(!data.length)return null;
         const geo=geometry.clone(),mesh=new THREE.InstancedMesh(geo,material,data.length),dummy=new THREE.Object3D();
@@ -3702,6 +3817,7 @@ function createGroundCover(grp,cx,cz) {
             const tint=new THREE.Color();
             if(isBush)tint.setHSL(.285+d.tone*.035,.48,.56+d.tone*.07);
             else if(isGrass)tint.setHSL(.255+d.tone*.035,.62+d.tone*.08,.47+d.tone*.08);
+            else if(d.shore)tint.setHSL(.1+d.tone*.03,.13,.73+d.tone*.1);
             else tint.setHSL(.085+d.tone*.035,.1+d.tone*.08,.66+d.tone*.1);
             mesh.setColorAt(i,tint);
             bases.set([d.x,h,d.z],i*3);
@@ -3748,8 +3864,9 @@ function createChunk(cx, cz) {
 
     updateChunkPhysics(cx, cz, geo);
 
-    grp.userData = { trees: [], flowers: [], groundCover: null };
+    grp.userData = { trees: [], flowers: [], groundCover: null, palms: null };
     createGroundCover(grp,cx,cz);
+    createCoastalPalms(grp,cx,cz);
     const chunkRandom=mulberry32(((cx*92837111)^(cz*689287499)^0x7f4a7c15)>>>0);
     for(let k=0; k<6; k++) {
         if(chunkRandom() > 0.42) {
@@ -6298,6 +6415,7 @@ function applyBuildingConstructionVisual(building) {
     building.visualMesh.scale.y = building.underConstruction ? Math.max(0.01, progress) : 1;
     building.constructionRig.visible = !!building.underConstruction;
     building.constructionRig.scale.y = .18 + .82 * progress;
+    if(building.pathVisual)building.pathVisual.visible=!building.underConstruction;
 }
 
 function createBuildingDamageVisual(radius,height){
@@ -6311,6 +6429,64 @@ function createBuildingDamageVisual(radius,height){
     }
     const crack=new THREE.Mesh(new THREE.RingGeometry(radius*.35,radius*.39,9),new THREE.MeshBasicMaterial({color:0x160f0c,transparent:true,opacity:.7,side:THREE.DoubleSide,depthWrite:false}));
     crack.rotation.x=-Math.PI/2;crack.position.y=.06;group.add(crack);return group;
+}
+
+let settlementPathMaterial;
+function createSettlementPath(x,z,baseH,footprint,type) {
+    if(type==='shipyard')return null;
+    if(!settlementPathMaterial)settlementPathMaterial=new THREE.MeshStandardMaterial({vertexColors:true,
+        roughness:1,metalness:0,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1});
+    const rand=mulberry32(((Math.round(x*13)*73856093)^(Math.round(z*13)*19349663))>>>0);
+    const vertices=[],colors=[],indices=[];
+    const startZ=footprint*.54;
+    for(let stone=0;stone<9;stone++){
+        const cx=(rand()-.5)*.72,cz=startZ+stone*.37;
+        const rx=.38+rand()*.19,rz=.21+rand()*.08;
+        const centerH=getHeight(x+cx,z+cz);
+        if(centerH<WATER_LEVEL+.25||Math.abs(centerH-baseH)>.8)continue;
+        const edgeHeights=[getHeight(x+cx+rx,z+cz),getHeight(x+cx-rx,z+cz),
+            getHeight(x+cx,z+cz+rz),getHeight(x+cx,z+cz-rz)];
+        if(edgeHeights.some(h=>Math.abs(h-centerH)>.28))continue;
+        const tint=new THREE.Color().setHSL(.095+rand()*.025,.12,.57+rand()*.17);
+        const center=vertices.length/3;
+        const localY=centerH-baseH+.055;
+        vertices.push(cx,localY,cz);colors.push(tint.r,tint.g,tint.b);
+        for(let side=0;side<7;side++){
+            const angle=side*Math.PI*2/7,variation=.88+rand()*.24;
+            vertices.push(cx+Math.cos(angle)*rx*variation,localY,cz+Math.sin(angle)*rz*variation);
+            colors.push(tint.r,tint.g,tint.b);
+        }
+        for(let side=0;side<7;side++)indices.push(center,center+1+(side+1)%7,center+1+side);
+    }
+    if(!vertices.length)return null;
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+    geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+    geometry.setIndex(indices);
+    const path=new THREE.Mesh(geometry,settlementPathMaterial);
+    path.name='Settlement stone path';path.receiveShadow=true;
+    path.userData.flatCoords=new Float32Array(vertices);
+    geometry.computeVertexNormals();geometry.computeBoundingSphere();
+    return path;
+}
+
+function updateSettlementPath(building) {
+    if(!building.pathVisual)return;
+    const geometry=building.pathVisual.geometry,position=geometry.attributes.position;
+    const original=building.pathVisual.userData.flatCoords;
+    for(let i=0;i<position.count;i+=8){
+        const cx=original[i*3],cz=original[i*3+2];
+        const centerH=getHeight(building.mesh.position.x+cx,building.mesh.position.z+cz);
+        let safe=centerH>WATER_LEVEL+.25&&Math.abs(centerH-building.mesh.position.y)<1.2;
+        for(let j=1;j<8&&safe;j++){
+            const edgeH=getHeight(building.mesh.position.x+original[(i+j)*3],
+                building.mesh.position.z+original[(i+j)*3+2]);
+            if(Math.abs(edgeH-centerH)>.35)safe=false;
+        }
+        for(let j=0;j<8;j++)position.setXYZ(i+j,safe?original[(i+j)*3]:cx,
+            centerH-building.mesh.position.y+.055,safe?original[(i+j)*3+2]:cz);
+    }
+    position.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingSphere();
 }
 
 function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = false, id = null) {
@@ -6355,6 +6531,8 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
         const footprint={hut:2.9,tower:2.1,warrior:3.4,fire:3.0,spy:2.9,shipyard:3.8}[type]||2.5;
         const structureHeight={hut:3.1,tower:5.7,warrior:3.2,fire:4.1,spy:3.2,shipyard:4.4}[type]||3.5;
         group.add(createContactShadow(footprint));
+        const pathVisual=createSettlementPath(x,z,baseH,footprint,type);
+        if(pathVisual)group.add(pathVisual);
         group.add(mesh);
         const constructionRig=createConstructionRig(footprint*.63,structureHeight);group.add(constructionRig);
         const damageVisual=createBuildingDamageVisual(footprint,structureHeight);group.add(damageVisual);
@@ -6381,6 +6559,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             id: id || generateUUID(),
             mesh: group,
             visualMesh: mesh,
+            pathVisual: pathVisual,
             hpBar: hpBar,
             hpGroup: hpGroup,
             type: type,
@@ -6425,6 +6604,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             destroy: function() {
                 this.dead = true;
                 state.scene.remove(this.mesh);
+                this.pathVisual?.geometry.dispose();
                 spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, COLORS.wood, 20);
                 SoundManager.playSound('explosion');
                 BuildingSpatialHash.markDirty();
@@ -7164,6 +7344,8 @@ function setupKeyboard() {
     window.addEventListener('keydown', (e) => {
         const k = e.key.toLowerCase();
         if(keys.hasOwnProperty(k)) { keys[k] = true; update(); }
+        if(k === 'c' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey &&
+           !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) window.toggleCameraView();
 
         // Hotkeys 1-9, 0
         if (state.visibleActions && !isNaN(k) && k !== ' ') {
@@ -7394,16 +7576,19 @@ function createSkyDome() {
             void main(){vec3 dir=normalize(vSkyDirection);float up=clamp(dir.y,0.0,1.0);
             float horizonHaze=exp(-abs(dir.y)*7.5);vec3 daylight=mix(horizonColor,topColor,pow(up,.42));
             float sunDot=max(dot(dir,normalize(sunDirection)),0.0);float disk=pow(sunDot,900.0),mie=pow(sunDot,9.0);
-            daylight+=sunColor*(disk*3.2+mie*.18)+horizonColor*horizonHaze*.20;
+            daylight+=sunColor*(disk*3.2+mie*.18)+horizonColor*horizonHaze*.08;
             vec2 cirrusUv=dir.xz/max(.16,dir.y+.28)*.72+vec2(time*.0021,time*-.0013);
-            float cirrus=smoothstep(.59,.79,skyFbm(cirrusUv))*smoothstep(.02,.35,up)*(1.0-up)*cloudiness;
-            daylight=mix(daylight,vec3(.78,.86,.91),cirrus*.27);
+            float cloudField=skyFbm(cirrusUv);
+            float cirrus=smoothstep(.59,.79,cloudField)*smoothstep(.02,.35,up)*(1.0-up)*cloudiness;
+            float cumulus=smoothstep(.47,.68,cloudField)*smoothstep(.02,.13,up)*(1.0-smoothstep(.32,.8,up))*cloudiness;
+            daylight=mix(daylight,vec3(.91,.94,.96),cumulus*.65);
+            daylight=mix(daylight,vec3(.78,.86,.91),cirrus*.16);
             vec3 night=mix(vec3(.012,.018,.055),vec3(.035,.075,.15),up);
             vec2 starCell=floor((dir.xz/max(.12,up+.18))*170.0);float star=step(.9948,skyHash(starCell))*pow(up,.8);
             star*=.55+.45*sin(time*(1.3+skyHash(starCell+4.2))*2.0+skyHash(starCell)*30.0);
             float moon=pow(max(dot(dir,-normalize(sunDirection)),0.0),720.0);night+=vec3(.72,.80,1.0)*(star*1.7+moon*1.6);
             vec3 c=mix(daylight,night,nightMix);
-            gl_FragColor=vec4(c,1.0);\n#include <tonemapping_fragment>\n#include <encodings_fragment>}`,
+            gl_FragColor=vec4(c,1.0);\n#include <encodings_fragment>}`,
         side:THREE.BackSide,depthWrite:false,depthTest:false,fog:false
     });
     const sky=new THREE.Mesh(new THREE.SphereGeometry(430,32,18),material);sky.frustumCulled=false;sky.renderOrder=-1000;
@@ -7498,7 +7683,11 @@ async function init() {
         const aspect = window.innerWidth / window.innerHeight;
         state.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
         state.perspectiveCamera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
-        state.camera = state.orthoCamera;
+        state.cinematicCamera = new THREE.PerspectiveCamera(CONFIG.CAMERA.CINEMATIC_FOV, aspect, 0.5, 1000);
+        try { state.cameraView = localStorage.getItem('camera-view') === 'cinematic' ? 'cinematic' : 'strategy'; } catch(e) {}
+        state.camera = strategyCamera();
+        const cameraButton = document.getElementById('btn-camera-view');
+        if(cameraButton) cameraButton.textContent = `Camera: ${state.cameraView === 'cinematic' ? 'Cinematic' : 'Strategy'}`;
         updateCameraZoom();
 
         const memory=navigator.deviceMemory||8,cores=navigator.hardwareConcurrency||8;
@@ -7517,7 +7706,7 @@ async function init() {
         state.renderer.outputEncoding = THREE.sRGBEncoding;
         document.body.appendChild(state.renderer.domElement);
 
-        const amb = new THREE.HemisphereLight(0xd6e9ec, 0x56604a, 0.65);
+        const amb = new THREE.HemisphereLight(0xdcecf4, 0x596650, 0.72);
         state.ambLight = amb;
         state.scene.add(amb);
         state.skyDome=createSkyDome();state.scene.add(state.skyDome);
@@ -7791,6 +7980,7 @@ window.removeTribe = function(faction) {
     state.buildings = state.buildings.filter(b => {
         if (b.faction === faction) {
             state.scene.remove(b.mesh);
+            b.pathVisual?.geometry.dispose();
             return false;
         }
         return true;
@@ -8043,7 +8233,7 @@ window.loadGame = function() {
         });
         state.units.length = 0;
         SpatialHash.update();
-        state.buildings.forEach(b => state.scene.remove(b.mesh));
+        state.buildings.forEach(b => { state.scene.remove(b.mesh); b.pathVisual?.geometry.dispose(); });
         state.buildings.length = 0;
 
         // Remove existing chunk meshes and dispose of geometries
@@ -8265,7 +8455,7 @@ function onTouchMove(e) {
             const newScale = state.pinchStartScale * (state.pinchStartDist / dist);
             if(state.isFPV) {
                  if(newScale > MIN_ZOOM + 2) {
-                     state.isFPV = false; state.camera = state.orthoCamera;
+                     state.isFPV = false; state.camera = strategyCamera();
                      state.viewScale = MIN_ZOOM + 1;
                  }
             } else {
@@ -8457,7 +8647,7 @@ function onWheel(e) {
     if(state.isFPV) {
         if(delta > 0) {
             state.isFPV = false;
-            state.camera = state.orthoCamera;
+            state.camera = strategyCamera();
             state.viewScale = MIN_ZOOM + 1;
             updateCameraZoom();
             updateCameraPosition();
@@ -8488,13 +8678,33 @@ function updateCameraZoom() {
 
     state.perspectiveCamera.aspect = aspect;
     state.perspectiveCamera.updateProjectionMatrix();
+    state.cinematicCamera.aspect = aspect;
+    state.cinematicCamera.updateProjectionMatrix();
 }
+
+function strategyCamera() {
+    return state.cameraView === 'cinematic' ? state.cinematicCamera : state.orthoCamera;
+}
+
+window.setCameraView = function(view) {
+    state.cameraView = view === 'cinematic' ? 'cinematic' : 'strategy';
+    state.isFPV = false;
+    state.camera = strategyCamera();
+    updateCameraPosition();
+    const button = document.getElementById('btn-camera-view');
+    if(button) button.textContent = `Camera: ${state.cameraView === 'cinematic' ? 'Cinematic' : 'Strategy'}`;
+    try { localStorage.setItem('camera-view', state.cameraView); } catch(e) {}
+    return state.cameraView;
+};
+window.toggleCameraView = function() {
+    return window.setCameraView(state.cameraView === 'cinematic' ? 'strategy' : 'cinematic');
+};
 
 window.updateCameraPosition = updateCameraPosition;
 function updateCameraPosition() {
     if(state.isFPV) {
          if(state.selectedUnits.length === 0 || state.selectedUnits[0].state === 'dead') {
-             state.isFPV = false; state.camera = state.orthoCamera;
+             state.isFPV = false; state.camera = strategyCamera();
          } else {
              const u = state.selectedUnits[0];
              const headH = (u.isShaman ? 2.1 : 1.4);
@@ -8520,6 +8730,18 @@ function updateCameraPosition() {
         if(targetY < groundUnderCamera + CONFIG.CAMERA.ORTHO_MIN_GROUND_OFFSET) { targetY = groundUnderCamera + CONFIG.CAMERA.ORTHO_MIN_GROUND_OFFSET; }
         state.orthoCamera.position.set(targetX, targetY, targetZ);
         state.orthoCamera.lookAt(state.cameraLookAt);
+
+        if(state.cameraView==='cinematic') {
+            const cinematicDistance = 14 + state.viewScale * 1.2;
+            const cinematicX = state.cameraLookAt.x + Math.sin(state.cameraRotation) * cinematicDistance;
+            const cinematicZ = state.cameraLookAt.z + Math.cos(state.cameraRotation) * cinematicDistance;
+            const cinematicGround = getHeight(cinematicX, cinematicZ);
+            const cinematicY = Math.max(state.cameraLookAt.y + 9 + state.viewScale * .68,
+                cinematicGround + CONFIG.CAMERA.CINEMATIC_MIN_GROUND_OFFSET);
+            const focusY = Math.max(state.cameraLookAt.y, getHeight(state.cameraLookAt.x, state.cameraLookAt.z) + 1.5);
+            state.cinematicCamera.position.set(cinematicX, cinematicY, cinematicZ);
+            state.cinematicCamera.lookAt(state.cameraLookAt.x, focusY, state.cameraLookAt.z);
+        }
     }
     if(state.sunLight) {
         const focus=state.isFPV&&state.selectedUnits[0]
@@ -8656,17 +8878,17 @@ function animate() {
         state.sunLight.color.lerp(new THREE.Color(sunCol), dt);
         if(cloudTopMaterial){const stormy=biome==='storm';cloudTopMaterial.color.lerp(new THREE.Color(stormy?0x9ba5ab:0xf4f8fa),dt*.35);
             cloudBaseMaterial.color.lerp(new THREE.Color(stormy?0x5e6871:0x9caeb8),dt*.35);}
-        const exposureTarget=((biome==='night'||biome==='cosmic') ? .62 : biome==='storm' ? .69 : .76)*(.96+daylight*.04);
+        const exposureTarget=((biome==='night'||biome==='cosmic') ? .62 : biome==='storm' ? .69 : biome==='normal' ? .82 : .76)*(.96+daylight*.04);
         state.renderer.toneMappingExposure+=(exposureTarget-state.renderer.toneMappingExposure)*Math.min(1,dt*.45);
         if(state.skyDome) {
             state.skyDome.position.copy(state.camera.position);
-            state.skyDome.material.uniforms.topColor.value.lerp(new THREE.Color(targetBg).multiplyScalar(.78),dt*.7);
-            state.skyDome.material.uniforms.horizonColor.value.lerp(new THREE.Color(targetFog).lerp(new THREE.Color(0xffffff),.2),dt*.7);
+            state.skyDome.material.uniforms.topColor.value.lerp(new THREE.Color(biome==='normal'?0x247fca:targetBg).multiplyScalar(biome==='normal'?1:.78),dt*.7);
+            state.skyDome.material.uniforms.horizonColor.value.lerp(new THREE.Color(biome==='normal'?0x6caad8:targetFog).lerp(new THREE.Color(0xffffff),biome==='normal'?0:.2),dt*.7);
             state.skyDome.material.uniforms.sunDirection.value.copy(_movingSunDirection);
             state.skyDome.material.uniforms.sunColor.value.copy(state.sunLight.color);
             const nightTarget=(biome==='night'||biome==='cosmic') ? .92 : biome==='void' ? .72 : 0;
             state.skyDome.material.uniforms.nightMix.value+=(nightTarget-state.skyDome.material.uniforms.nightMix.value)*Math.min(1,dt*.55);
-            const cloudTarget=biome==='storm' ? .9 : biome==='jungle' ? .48 : .28;
+            const cloudTarget=biome==='storm' ? .9 : biome==='jungle' ? .48 : biome==='normal' ? .58 : .28;
             state.skyDome.material.uniforms.cloudiness.value+=(cloudTarget-state.skyDome.material.uniforms.cloudiness.value)*Math.min(1,dt*.2);
             state.skyDome.material.uniforms.time.value=atmosphereTime;
         }
