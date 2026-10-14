@@ -37,6 +37,9 @@ jobs:
       - name: Spells and mana rules
         if: always()
         run: node tests/spells.mjs
+      - name: Spell audio
+        if: always()
+        run: node tests/audio.mjs
       - name: Materials and terrain transitions
         if: always()
         run: node tests/materials.mjs

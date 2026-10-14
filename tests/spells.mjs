@@ -18,7 +18,13 @@ try{
   const cost={blast:10,lightning:50,raise:5,lower:5,flatten:10,landbridge:20,swamp:80,invisibility:20,shield:20,hypnotise:50,swarm:40,tornado:60,firestorm:80,volcano:90,heal:10,teleport:90,create:50,phantom:30,blink:20}[spell];
   ally.hp=500;const before={h:getHeight(x,z),hp:enemy.hp,units:state.units.length,mods:state.terrainMods.size};
   const sample=()=>{const a=[];for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)a.push(getHeight(x+dx,z+dz));return Math.max(...a)-Math.min(...a);};const spread=sample();
-  gameTestAPI.performAction(x,z,spell);expect(state.mana===1000-cost,'Mana '+state.mana);
+  const sound=gameTestAPI.SoundManager,playSound=sound.playSound;
+  let castingSounds=0;
+  sound.playSound=function(name){castingSounds++;return playSound.call(this,name);};
+  gameTestAPI.performAction(x,z,spell);
+  sound.playSound=playSound;
+  expect(state.mana===1000-cost,'Mana '+state.mana);
+  if(spell!=='lightning')expect(castingSounds>0,'No casting sound for '+spell);
   if(['teleport','blink'].includes(spell)){for(let i=0;i<30;i++){state.physicsWorld.timestep=1/60;state.physicsWorld.step();caster.update(1/60);}expect(Math.hypot(caster.mesh.position.x-x,caster.mesh.position.z-z)<.2,'Teleport snapped back');}
   if(spell==='heal')expect(ally.hp===1000&&enemy.hp===1000,'Heal faction/health');
   if(spell==='shield'){expect(ally.shielded&&!enemy.shielded,'Shield faction');ally.takeDamage(100,true);expect(ally.hp===500,'Shield did not block damage');}

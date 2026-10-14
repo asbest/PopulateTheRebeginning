@@ -1775,20 +1775,11 @@ window.closeMultiplayer = () => {
 // --- js/audio.js ---
 const SoundManager = {
     ctx: null,
+    effectsBus: null,
     explorationMusic: null,
     combatMusic: null,
     musicEnabled: localStorage.getItem(CONFIG.SAVED_KEYS.MUSIC_ENABLED) !== 'false',
     init: function() {
-        if (this.ctx && this.explorationMusic) return;
-        try {
-            window.AudioContext = window.AudioContext || window.webkitAudioContext;
-            if(window.AudioContext && !this.ctx) {
-                this.ctx = new AudioContext();
-            }
-        } catch(e) {
-            console.warn("AudioContext creation failed:", e);
-        }
-
         if (!this.explorationMusic) {
             this.explorationMusic = new Audio(CONFIG.AUDIO.EXPLORATION_MUSIC);
             this.explorationMusic.loop = true;
@@ -1800,8 +1791,35 @@ const SoundManager = {
             this.combatMusic.volume = CONFIG.AUDIO.COMBAT_VOLUME;
         }
     },
+    ensureContext: function() {
+        if (this.ctx && this.ctx.state !== 'closed') return this.ctx;
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return null;
+            this.ctx = new AudioContextClass();
+            this.effectsBus = this.ctx.createGain();
+            this.effectsBus.connect(this.ctx.destination);
+            return this.ctx;
+        } catch (e) {
+            console.warn('Sound effects unavailable:', e);
+            this.ctx = null;
+            this.effectsBus = null;
+            return null;
+        }
+    },
+    unlock: function() {
+        const ctx = this.ensureContext();
+        if (!ctx) return Promise.resolve(false);
+        if (ctx.state === 'running') return Promise.resolve(true);
+        return ctx.resume().then(() => ctx.state === 'running', () => false);
+    },
+    installUnlockHandlers: function() {
+        const unlock = () => { this.unlock(); };
+        window.addEventListener('pointerdown', unlock, {passive: true});
+        window.addEventListener('keydown', unlock, {passive: true});
+        window.addEventListener('touchstart', unlock, {passive: true});
+    },
     playTone: function(freq, type, duration, vol=0.1) {
-        if(!this.ctx) this.init();
         if(!this.ctx) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -1810,12 +1828,11 @@ const SoundManager = {
         gain.gain.setValueAtTime(vol, this.ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        gain.connect(this.effectsBus);
         osc.start();
         osc.stop(this.ctx.currentTime + duration);
     },
     playNoise: function(duration, vol=0.1) {
-        if(!this.ctx) this.init();
         if(!this.ctx) return;
         const bufferSize = this.ctx.sampleRate * duration;
         const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -1829,14 +1846,21 @@ const SoundManager = {
         gain.gain.setValueAtTime(vol, this.ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
         noise.connect(gain);
-        gain.connect(this.ctx.destination);
+        gain.connect(this.effectsBus);
         noise.start();
     },
     playSound: function(name) {
-        if(!this.ctx) this.init();
-        if(!this.ctx) return;
-        if(this.ctx.state === 'suspended') this.ctx.resume();
-
+        const ctx = this.ensureContext();
+        if (!ctx) return;
+        if (ctx.state !== 'running') {
+            // An AI spell before the first input cannot unlock browser audio.
+            if (navigator.userActivation && !navigator.userActivation.isActive) return;
+            this.unlock().then(ready => { if (ready && this.ctx === ctx) this.emitSound(name); });
+            return;
+        }
+        this.emitSound(name);
+    },
+    emitSound: function(name) {
         switch(name) {
             case 'attack':
                 this.playNoise(0.1, 0.2);
@@ -1851,7 +1875,7 @@ const SoundManager = {
                 gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
                 gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.3);
                 osc.connect(gain);
-                gain.connect(this.ctx.destination);
+                gain.connect(this.effectsBus);
                 osc.start();
                 osc.stop(this.ctx.currentTime + 0.3);
                 break;
@@ -1902,6 +1926,7 @@ const SoundManager = {
         }
     }
 };
+SoundManager.installUnlockHandlers();
 
 
 // --- js/assets.js ---
@@ -4902,6 +4927,7 @@ function executeSpell(type, x, z, caster) {
     }
     else if (type === 'firestorm') {
         state.activeEffects.push(new Firestorm(x, z, caster.faction));
+        SoundManager.playSound('fireball');
     }
     else if (type === 'phantom') {
         SoundManager.playSound('magic');
@@ -5022,7 +5048,6 @@ function executeSpell(type, x, z, caster) {
          SoundManager.playSound('magic');
     }
     else if (type === 'lightning') {
-        SoundManager.playSound('explosion');
         const h = getHeight(x,z);
         SurfaceMarks.add(x,z,{radius:1.5,color:0x29221c,life:38,opacity:.52});
 
@@ -5103,6 +5128,7 @@ function executeSpell(type, x, z, caster) {
                   hit = true;
              }
         });
+        requestAnimationFrame(() => SoundManager.playSound('explosion'));
     }
 }
 
@@ -7813,7 +7839,7 @@ async function init() {
             localStorage.setItem(CONFIG.SAVED_KEYS.HELP_SHOWN, 'true');
         }
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, Fireball, onWheel, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, Fireball, onWheel, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -8359,8 +8385,7 @@ window.loadGame = function() {
 }
 
 function onPointerDown(e) {
-    SoundManager.init();
-    if(SoundManager.ctx.state === 'suspended') SoundManager.ctx.resume();
+    SoundManager.unlock();
     state.isDragging = true;
     state.dragStart = {x: e.clientX, y: e.clientY};
     state.tapStart = {x: e.clientX, y: e.clientY};
@@ -8373,8 +8398,7 @@ function onTouchStart(e) {
     if(e.cancelable) e.preventDefault();
     if(e.targetTouches.length === 1) onPointerDown(e.targetTouches[0]);
     else if(e.targetTouches.length === 2) {
-        SoundManager.init();
-        if(SoundManager.ctx.state === 'suspended') SoundManager.ctx.resume();
+        SoundManager.unlock();
         state.isDragging = false;
         const dx = e.targetTouches[0].clientX - e.targetTouches[1].clientX;
         const dy = e.targetTouches[0].clientY - e.targetTouches[1].clientY;
