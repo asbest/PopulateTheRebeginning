@@ -171,7 +171,7 @@ try {
    const unfinished=gameTestAPI.createBuilding('spy',p.x+12,p.z+7,0,false,true);
    finished.update(finished.totalBuildTime+1);
    unfinished.update(unfinished.totalBuildTime*.4);
-   const positions=[finished,unfinished].map(b=>({type:b.type,x:b.mesh.position.x,z:b.mesh.position.z}));
+   const positions=[finished,unfinished].map(b=>({type:b.type,x:b.mesh.position.x,z:b.mesh.position.z,path:!!b.pathVisual}));
    window.saveGame();return positions;
   });
   await page.evaluate(()=>{window.loadGame();state.isPaused=true;});
@@ -181,10 +181,12 @@ try {
    let pathFlat=true;
    if(vertices)for(let i=0;i<vertices.count;i+=8)for(let j=1;j<8;j++)
     if(Math.abs(vertices.getY(i+j)-vertices.getY(i))>.001)pathFlat=false;
-   return b&&{type,underConstruction:b.underConstruction,meshScale:b.visualMesh.scale.y,scaffolding:b.constructionRig.visible,scaffoldScale:b.constructionRig.scale.y,path:b.pathVisual?.visible,pathFlat};
+   return b&&{type,underConstruction:b.underConstruction,meshScale:b.visualMesh.scale.y,scaffolding:b.constructionRig.visible,scaffoldScale:b.constructionRig.scale.y,path:!!b.pathVisual,pathVisible:b.pathVisual?.visible,pathFlat};
   }),before);
-  if(!after[0]||after[0].underConstruction||after[0].scaffolding||after[0].meshScale!==1||!after[0].path||!after[0].pathFlat||
-     !after[1]||!after[1].underConstruction||!after[1].scaffolding||after[1].path||after[1].meshScale<.35||after[1].meshScale>.45||after[1].scaffoldScale<.45||after[1].scaffoldScale>.55)
+  if(!after[0]||after[0].underConstruction||after[0].scaffolding||after[0].meshScale!==1||after[0].path!==before[0].path||
+     (after[0].path&&(!after[0].pathVisible||!after[0].pathFlat))||
+     !after[1]||!after[1].underConstruction||!after[1].scaffolding||after[1].path!==before[1].path||
+     (after[1].path&&after[1].pathVisible)||after[1].meshScale<.35||after[1].meshScale>.45||after[1].scaffoldScale<.45||after[1].scaffoldScale>.55)
    throw new Error(JSON.stringify(after));
   return after;
  });

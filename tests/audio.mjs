@@ -9,9 +9,14 @@ const errors=[];
 page.on('pageerror',error=>errors.push(String(error)));
 page.on('dialog',dialog=>dialog.accept());
 const clickControl=async (target,selector)=>{
-    const bounds=await target.locator(selector).first().boundingBox();
-    if(!bounds)throw new Error(`Missing control: ${selector}`);
-    return {x:bounds.x+bounds.width/2,y:bounds.y+bounds.height/2};
+    const point=await target.evaluate(selector=>{
+        const control=document.querySelector(selector);
+        if(!control)return null;
+        const bounds=control.getBoundingClientRect();
+        return {x:bounds.x+bounds.width/2,y:bounds.y+bounds.height/2};
+    },selector);
+    if(!point)throw new Error(`Missing control: ${selector}`);
+    return point;
 };
 const startRecording=target=>target.evaluate(()=>{
     const chunks=[];
