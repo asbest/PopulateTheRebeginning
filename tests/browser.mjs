@@ -237,6 +237,18 @@ try {
   })));
   if(actions.length<19||actions.some(action=>!action.icon||!action.label||!action.title||action.text))throw new Error('Spell icons are obscured or missing accessible labels: '+JSON.stringify(actions));
  });
+ await check('Holding a spell reveals its full name',async()=>{
+  const point=await controlCenter(page,'#btn-blast');
+  await page.mouse.move(point.x,point.y);
+  await page.mouse.down();
+  try{
+   await page.waitForFunction(()=>document.getElementById('spell-name-tooltip')?.getAttribute('aria-hidden')==='false',null,{timeout:3000});
+   const shown=await page.evaluate(()=>({name:document.getElementById('spell-name-tooltip').textContent,
+    icon:!!document.querySelector('#btn-blast svg'),action:state.currentAction}));
+   if(shown.name!=='Blast (Fireball)'||!shown.icon)throw new Error(JSON.stringify(shown));
+  }finally{await page.mouse.up();}
+  if(await page.locator('#spell-name-tooltip').isVisible())throw new Error('Spell name remained visible after release');
+ });
  await check('Airship cargo, upgrades, rally points and campaign survive save/load',async()=>{
   const before=await page.evaluate(()=>{
    state.isPaused=true;const p=state.shaman.mesh.position;
@@ -301,6 +313,11 @@ try {
    await phone.touchscreen.tap(unitPoint.x,unitPoint.y);
    if(await phone.evaluate(()=>state.selectedUnits.length)!==1)throw new Error('Touch unit selection failed');
    const blastPoint=await controlCenter(phone,'#btn-blast');
+   await phone.locator('#btn-blast').dispatchEvent('pointerdown',{pointerType:'touch',button:0});
+   await phone.waitForFunction(()=>document.getElementById('spell-name-tooltip')?.getAttribute('aria-hidden')==='false',null,{timeout:3000});
+   if((await phone.locator('#spell-name-tooltip').textContent())!=='Blast (Fireball)')throw new Error('Touch hold did not show the spell name');
+   await phone.locator('#btn-blast').dispatchEvent('pointerup',{pointerType:'touch',button:0});
+   if(await phone.locator('#spell-name-tooltip').isVisible())throw new Error('Touch release did not hide the spell name');
    await phone.touchscreen.tap(blastPoint.x,blastPoint.y);
    if(await phone.evaluate(()=>state.currentAction)!=='blast')throw new Error('Touch action selection failed');
    const point=await phone.evaluate(()=>{const p=state.shaman.mesh.position.clone();p.x+=1;const v=p.project(state.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2};});

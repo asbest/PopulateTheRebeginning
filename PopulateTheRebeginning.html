@@ -538,6 +538,7 @@
     <div id="right-menu">
         <!-- Filled dynamically by JS -->
     </div>
+    <div id="spell-name-tooltip" role="tooltip" aria-hidden="true"></div>
 
     <!-- Joystick Left -->
     <div id="joystick-area">
@@ -7379,8 +7380,43 @@ function updateUnitListSelection() {
     });
 }
 
+const SPELL_NAMES = Object.freeze({
+    blast:'Blast (Fireball)', lightning:'Lightning', raise:'Raise Land',
+    lower:'Lower Land', flatten:'Flatten Land', landbridge:'Land Bridge',
+    swamp:'Swamp', invisibility:'Invisibility', shield:'Shield',
+    hypnotise:'Hypnotise', swarm:'Insect Swarm', tornado:'Tornado',
+    firestorm:'Firestorm', volcano:'Volcano', heal:'Heal',
+    teleport:'Teleport', create:'Create Brave', phantom:'Phantom', blink:'Blink'
+});
+let spellNameTimer = null;
+function hideSpellNameTooltip() {
+    clearTimeout(spellNameTimer);
+    spellNameTimer = null;
+    const tooltip = document.getElementById('spell-name-tooltip');
+    if(tooltip) {
+        tooltip.style.display = 'none';
+        tooltip.setAttribute('aria-hidden','true');
+    }
+}
+function armSpellNameTooltip(button,name,event) {
+    if(event.pointerType === 'mouse' && event.button !== 0)return;
+    hideSpellNameTooltip();
+    spellNameTimer = setTimeout(() => {
+        if(!button.isConnected)return;
+        const tooltip = document.getElementById('spell-name-tooltip');
+        const rect = button.getBoundingClientRect();
+        tooltip.textContent = name;
+        tooltip.style.display = 'block';
+        tooltip.style.left = `${Math.max(8,rect.left-tooltip.offsetWidth-10)}px`;
+        tooltip.style.top = `${Math.max(8,Math.min(innerHeight-tooltip.offsetHeight-8,
+            rect.top+(rect.height-tooltip.offsetHeight)/2))}px`;
+        tooltip.setAttribute('aria-hidden','false');
+    },450);
+}
+
 function updateContextMenus() {
     const menu = document.getElementById('right-menu');
+    hideSpellNameTooltip();
     menu.innerHTML = '';
 
     const hasShaman = state.selectedUnits.some(u => u.isShaman && u.state !== 'dead');
@@ -7423,11 +7459,19 @@ function updateContextMenus() {
          btn.id = `btn-${act}`;
          btn.setAttribute('role', 'button');
          btn.setAttribute('tabindex', '0');
-         btn.setAttribute('aria-label', `${data.label}, ${data.cost} mana`);
+         const spellName = SPELL_NAMES[act];
+         btn.setAttribute('aria-label', `${spellName || data.label}, ${data.cost} mana`);
          const hotkey = index < 9 ? (index + 1) : (index === 9 ? 0 : '');
-         btn.title = `${data.label} (${data.cost} mana)${hotkey !== '' ? ` · ${hotkey}` : ''}`;
+         btn.title = `${spellName || data.label} (${data.cost} mana)${hotkey !== '' ? ` · ${hotkey}` : ''}`;
          btn.innerHTML = data.icon;
          btn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); } };
+         if(spellName) {
+             btn.addEventListener('pointerdown',e=>armSpellNameTooltip(btn,spellName,e));
+             btn.addEventListener('pointerup',hideSpellNameTooltip);
+             btn.addEventListener('pointercancel',hideSpellNameTooltip);
+             btn.addEventListener('pointerleave',hideSpellNameTooltip);
+             btn.addEventListener('contextmenu',e=>e.preventDefault());
+         }
          if(state.currentAction === act) btn.classList.add('active');
 
          if (act === 'airship_rocket' && hasAirship) {
