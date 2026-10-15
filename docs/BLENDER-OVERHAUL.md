@@ -16,6 +16,6 @@ Regenerate the editable project and exported runtime assets on Windows:
 
 The browser loads [`art/blender-pack.js`](../art/blender-pack.js), which reads the mesh pack and PBR textures from the repository. If the pack is unavailable, the existing meshes remain usable. The complete game needs no Blender installation at play time and runs from static HTTP hosting without a build step. The Blender source uses relative image paths, so keep the `art/blender/` directory and original albedo files together when editing it.
 
-[Rendered wildlife preview](wildlife-preview.png) · [rendered character preview](blender-overhaul-preview.png) · [in-game building close-up](blender-building-preview.png) · [interactive 3D gallery](../art/characters.html)
+[Rendered wildlife preview](wildlife-preview.png) · [rendered character preview](blender-overhaul-preview.png) · [in-game building close-up](blender-building-preview.png)
 
 The forms and color language take inspiration from the tribal fantasy style of *Populous: The Beginning*. All mesh geometry and maps in this overhaul were created for this project; no assets from that game were imported. The result is an optimized browser RTS art pass, not a claim of literal AAA production fidelity at every zoom level. Reaching that standard would still require individually sculpted high-poly characters and buildings, retopology, baked maps, authored skeletal animation and comprehensive biome art.

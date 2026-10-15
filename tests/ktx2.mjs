@@ -128,23 +128,6 @@ try{
         }finally{await page.close();}
     });
 
-    await check('Character gallery renders with the shared texture pipeline',async()=>{
-        const page=await browser.newPage();
-        const errors=[];
-        page.on('pageerror',error=>errors.push(String(error)));
-        try{
-            await page.goto('http://127.0.0.1:8765/art/characters.html?static',{timeout:90000});
-            await page.waitForFunction(()=>window.characterGallery?.ready,null,{timeout:90000});
-            const result=await page.evaluate(()=>({
-                units:characterGallery.units.length,
-                skin:characterGallery.characters.tiles.skin?.isCompressedTexture,
-                loading:!!document.querySelector('#loading')
-            }));
-            assert(result.units===5&&result.skin&&!result.loading,`Gallery did not finish loading: ${JSON.stringify(result)}`);
-            assert(errors.length===0,`Gallery errors: ${errors.join('; ')}`);
-            return result;
-        }finally{await page.close();}
-    });
 }finally{await browser.close();}
 
 await fs.mkdir(path.join(root,'test-results'),{recursive:true});
