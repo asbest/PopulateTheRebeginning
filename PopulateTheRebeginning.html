@@ -286,6 +286,43 @@
             color: #ccc;
         }
 
+        #game-toast {
+            position: fixed; top: max(62px, env(safe-area-inset-top)); left: 50%;
+            transform: translateX(-50%); z-index: 1005;
+            max-width: min(440px, calc(100vw - 110px)); box-sizing: border-box;
+            padding: 11px 17px; border: 1px solid #bca878; border-radius: 9px;
+            background: rgba(20, 26, 24, 0.94); color: #f8efd8;
+            box-shadow: 0 8px 24px rgba(0,0,0,.45);
+            text-align: center; font-size: 14px; line-height: 1.35;
+            pointer-events: none;
+        }
+        #game-toast[data-kind="error"] { border-color: #e38270; color: #ffe7df; }
+        #game-toast[hidden], #game-dialog[hidden] { display: none; }
+        #game-dialog {
+            position: fixed; inset: 0; z-index: 1010;
+            display: flex; align-items: center; justify-content: center;
+            padding: 16px; box-sizing: border-box;
+            background: rgba(5, 10, 12, .72); pointer-events: auto;
+        }
+        .game-dialog-card {
+            width: min(420px, 100%); box-sizing: border-box;
+            padding: 24px; border: 1px solid #c5a563; border-radius: 12px;
+            background: linear-gradient(150deg, #26312f, #151b1b);
+            color: #f8efd8; box-shadow: 0 18px 55px rgba(0,0,0,.65);
+            text-align: center;
+        }
+        .game-dialog-card h2 { margin: 0 0 12px; color: #f3d78b; font-size: 22px; }
+        .game-dialog-card p { margin: 0 0 22px; color: #f8efd8; font-size: 15px; line-height: 1.5; }
+        .game-dialog-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+        .game-dialog-actions button {
+            min-width: 112px; min-height: 44px; padding: 9px 15px;
+            border: 1px solid #bca878; border-radius: 7px; background: #374440;
+            color: #fff7dc; font: inherit; font-size: 15px; cursor: pointer;
+            touch-action: manipulation;
+        }
+        .game-dialog-actions button:focus-visible { outline: 3px solid #f3d78b; outline-offset: 2px; }
+        #game-dialog-confirm { background: #805b2d; }
+
     </style>
     <link rel="stylesheet" href="art/presentation.css">
 </head>
@@ -296,6 +333,18 @@
     <div class="donation-container-large">
         <a href="https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link" target="_blank" class="donation-btn-large">Support on Patreon</a>
         <div class="copyright-text">Copyright 2026 AS Consulting</div>
+    </div>
+</div>
+
+<div id="game-toast" role="status" aria-live="polite" hidden></div>
+<div id="game-dialog" role="dialog" aria-modal="true" aria-labelledby="game-dialog-title" aria-describedby="game-dialog-message" hidden>
+    <div class="game-dialog-card">
+        <h2 id="game-dialog-title"></h2>
+        <p id="game-dialog-message"></p>
+        <div class="game-dialog-actions">
+            <button id="game-dialog-cancel" type="button">Cancel</button>
+            <button id="game-dialog-confirm" type="button">Continue</button>
+        </div>
     </div>
 </div>
 
@@ -572,6 +621,58 @@ window.THREE = THREE; window.Characters = Characters;
 window.Art = Art;
 
 let RAPIER = null;
+let gameToastTimer = null;
+
+function showGameMessage(message, kind = 'info') {
+    const toast = document.getElementById('game-toast');
+    clearTimeout(gameToastTimer);
+    toast.textContent = message;
+    toast.dataset.kind = kind;
+    toast.hidden = false;
+    gameToastTimer = setTimeout(() => { toast.hidden = true; }, kind === 'error' ? 6500 : 4000);
+}
+
+function showGameDialog(title, message, onConfirm = null, cancelLabel = null, confirmLabel = 'OK') {
+    const dialog = document.getElementById('game-dialog');
+    if (!dialog.hidden) return;
+    const cancel = document.getElementById('game-dialog-cancel');
+    const confirm = document.getElementById('game-dialog-confirm');
+    const previousFocus = document.activeElement;
+    document.getElementById('game-dialog-title').textContent = title;
+    document.getElementById('game-dialog-message').textContent = message;
+    cancel.hidden = !cancelLabel;
+    if (cancelLabel) cancel.textContent = cancelLabel;
+    confirm.textContent = confirmLabel;
+    dialog.hidden = false;
+    function close(accepted) {
+        dialog.hidden = true;
+        document.removeEventListener('keydown', onDialogKey, true);
+        cancel.onclick = confirm.onclick = null;
+        if (previousFocus?.isConnected) previousFocus.focus();
+        if (accepted && onConfirm) onConfirm();
+    }
+    function onDialogKey(event) {
+        if (event.key === 'Escape') {
+            event.preventDefault(); event.stopImmediatePropagation();
+            close(!cancelLabel);
+        } else if (event.key === 'Tab') {
+            const first = cancelLabel ? cancel : confirm;
+            const last = confirm;
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault(); last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault(); first.focus();
+            }
+            event.stopImmediatePropagation();
+        } else {
+            event.stopImmediatePropagation();
+        }
+    }
+    cancel.onclick = () => close(false);
+    confirm.onclick = () => close(true);
+    document.addEventListener('keydown', onDialogKey, true);
+    (cancelLabel ? cancel : confirm).focus();
+}
 
 const CONFIG = {
     TERRAIN: {
@@ -1682,10 +1783,10 @@ window.closeCampaignMenu = function() {
 }
 
 window.startCampaignLevel = function(level) {
-    if(confirm("Start Level " + level + "? Unsaved progress will be lost.")) {
+    showGameDialog('Start Level ' + level + '?', 'Unsaved progress will be lost.', () => {
         localStorage.setItem(CONFIG.SAVED_KEYS.START_CAMPAIGN, level);
         location.reload();
-    }
+    }, 'Cancel', 'Start Level');
 }
 
 window.loadCampaignLevelIfRequested = function() {
@@ -7846,7 +7947,7 @@ function setupCheats() {
                 document.getElementById('cheat-menu').style.display = 'flex';
                 clicks = 0;
                 SoundManager.playSound('magic');
-                alert("Cheats Unlocked! Check Pause Menu.");
+                showGameMessage('Cheats unlocked! Check the Pause Menu.');
             }
         });
     }
@@ -7981,20 +8082,20 @@ window.toggleMultiSelect = toggleMultiSelect;
 window.cheatMana = function() {
     state.mana = CONFIG.CAMPAGIN.INFINITE_MANA_VALUE;
     updateUI();
-    alert("Mana set to 10000");
+    showGameMessage('Mana set to 10000');
 }
 window.cheatRange = function() {
     state.cheatUnlimitedRange = true;
-    alert("Unlimited Spell Range Enabled");
+    showGameMessage('Unlimited spell range enabled');
 }
 window.cheatImmortal = function() {
     state.isGodMode = true;
-    alert("God Mode Enabled");
+    showGameMessage('God Mode enabled');
 }
 window.cheatDisable = function() {
     state.cheatUnlimitedRange = false;
     state.isGodMode = false;
-    alert("Cheats Disabled");
+    showGameMessage('Cheats disabled');
 }
 
 function getVisitKeys() {
@@ -8337,7 +8438,7 @@ async function init() {
         }
     } catch(e) {
         console.error("Init failed:", e);
-        alert("Game failed to start: " + e.message);
+        showGameDialog('Game failed to start', e.message);
     }
 }
 
@@ -8673,14 +8774,14 @@ window.cheatUnlockLevels = function() {
     if (document.getElementById('campaign-menu').style.display !== 'none') {
         window.openCampaignMenu();
     }
-    alert("All campaign levels unlocked! Check the Level selection menu.");
+    showGameMessage('All campaign levels unlocked! Check the Level selection menu.');
 };
 
 window.newGame = function() {
-    if(confirm("Are you sure? Unsaved progress will be lost.")) {
+    showGameDialog('Start a new game?', 'Unsaved progress will be lost.', () => {
         localStorage.setItem(CONFIG.SAVED_KEYS.SANDBOX_START, 'true');
         location.reload();
-    }
+    }, 'Cancel', 'New Game');
 }
 
 function saveSpellStatus(u) {
@@ -8750,12 +8851,12 @@ window.saveGame = function() {
         }))
     };
     localStorage.setItem(CONFIG.SAVED_KEYS.SAVE_DATA, JSON.stringify(data));
-    alert('Game Saved!');
+    showGameMessage('Game saved!');
 }
 
 window.loadGame = function() {
     const json = localStorage.getItem(CONFIG.SAVED_KEYS.SAVE_DATA);
-    if(!json) { alert("No save found!"); return; }
+    if(!json) { showGameMessage('No save found!', 'error'); return; }
 
     try {
         const data = JSON.parse(json);
@@ -8892,10 +8993,10 @@ window.loadGame = function() {
         updateUnitList();
         updateContextMenus();
         togglePause();
-        alert("Game Loaded!");
+        showGameMessage('Game loaded!');
     } catch(e) {
         console.error(e);
-        alert("Failed to load save: " + e.message);
+        showGameMessage('Failed to load save: ' + e.message, 'error');
     }
 }
 
@@ -9675,9 +9776,9 @@ function animate() {
                 if (u.faction === 0 && state.matchSettings && state.matchSettings.suddenDeath) {
                     if(!window.gameOverAlertShown) {
                         if(state.isCampaign) {
-                            alert("CAMPAIGN DEFEAT: Your Shaman was killed!");
+                            showGameDialog('Campaign Defeat', 'Your Shaman was killed!');
                         } else {
-                            alert("SUDDEN DEATH: Your Shaman was killed!");
+                            showGameDialog('Sudden Death', 'Your Shaman was killed!');
                         }
                         window.gameOverAlertShown = true;
                     }
@@ -9725,15 +9826,15 @@ function animate() {
                             if(!window.gameOverAlertShown) {
                                 if (state.matchSettings && state.matchSettings.suddenDeath) {
                                     if(state.isCampaign) {
-                                        alert("CAMPAIGN DEFEAT: Your Shaman was killed!");
+                                        showGameDialog('Campaign Defeat', 'Your Shaman was killed!');
                                     } else {
-                                        alert("SUDDEN DEATH: Your Shaman was killed!");
+                                        showGameDialog('Sudden Death', 'Your Shaman was killed!');
                                     }
                                 } else {
                                     if(state.isCampaign) {
-                                        alert("CAMPAIGN DEFEAT - Shaman dead and no followers left.");
+                                        showGameDialog('Campaign Defeat', 'Shaman dead and no followers left.');
                                     } else {
-                                        alert("GAME OVER - Shaman dead and no followers left.");
+                                        showGameDialog('Game Over', 'Shaman dead and no followers left.');
                                     }
                                 }
                                 window.gameOverAlertShown = true;
@@ -9757,7 +9858,7 @@ function animate() {
         // Win Condition
     const hasEnemy = state.units.some(u => !window.isAllied(u.faction, 0) && u.state !== 'dead');
     if (state.matchSettings && state.matchSettings.suddenDeath && state.shaman && state.shaman.state === 'dead' && !window.gameOverAlertShown) {
-        alert("CAMPAIGN DEFEAT: Your Shaman was killed!");
+        showGameDialog('Campaign Defeat', 'Your Shaman was killed!');
         window.gameOverAlertShown = true;
         if (!state.isPaused) window.togglePause();
     }
@@ -9771,17 +9872,17 @@ function animate() {
                     if(state.campaignLevel >= maxLevel && state.campaignLevel < 12) {
                         maxLevel = state.campaignLevel + 1;
                         localStorage.setItem(CONFIG.SAVED_KEYS.MAX_CAMPAIGN_LEVEL, maxLevel.toString());
-                        alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete. Level " + maxLevel + " unlocked!");
+                        showGameDialog('Campaign Victory', 'Level ' + state.campaignLevel + ' complete. Level ' + maxLevel + ' unlocked!');
                     } else if (state.campaignLevel === 12) {
-                        alert("THE CAMPAIGN IS COMPLETE! You have ascended to godhood. Thank you for playing.");
+                        showGameDialog('Campaign Complete', 'You have ascended to godhood. Thank you for playing.');
                     } else {
-                        alert("CAMPAIGN VICTORY! Level " + state.campaignLevel + " Complete.");
+                        showGameDialog('Campaign Victory', 'Level ' + state.campaignLevel + ' complete.');
                     }
                     document.getElementById('campaign-menu').style.display = 'flex';
                     window.openCampaignMenu(); // update buttons
                     if (!state.isPaused) window.togglePause();
                 } else {
-                    alert("VICTORY! All enemy units defeated!");
+                    showGameDialog('Victory', 'All enemy units defeated!');
                 }
                 window.gameWonAlertShown = true;
              }

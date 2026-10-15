@@ -11,11 +11,12 @@ const browser = await chromium.launch({headless:true,...(process.platform==='win
 const context = await browser.newContext({viewport:{width:1440,height:900}});
 const page = await context.newPage();
 const errors=[], requests=[], results=[];
+let nativeDialogs=0;
 page.on('pageerror',e=>{errors.push(e.stack||String(e));console.log('RUNTIME '+(e.stack||String(e)));});
 page.on('console',m=>{if(m.type()==='error' && /THREE|Shader|WebGL|Init failed|RAPIER|Uncaught/i.test(m.text()))errors.push(m.text());});
 page.on('requestfailed',r=>requests.push({url:r.url(),reason:r.failure()?.errorText}));
 page.on('response',r=>{if(r.status()>=400)requests.push({url:r.url(),reason:`HTTP ${r.status()}`});});
-page.on('dialog',d=>d.accept());
+page.on('dialog',d=>{nativeDialogs++;d.accept();});
 const workflowEscape=value=>String(value).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A');
 function reportFailure(name,error){if(process.env.GITHUB_ACTIONS==='true')console.log(`::error title=${workflowEscape(name)}::${workflowEscape(error?.stack||error)}`);}
 async function check(name,fn){try{const detail=await fn();results.push({name,pass:true,detail});console.log('PASS '+name);}catch(e){results.push({name,pass:false,detail:String(e)});console.log('FAIL '+name+' '+String(e));reportFailure(name,e);}}
@@ -242,6 +243,38 @@ try {
   const after=await page.evaluate(()=>({units:state.units.length,buildings:state.buildings.length,mana:state.mana}));
   if(before.units!==after.units||before.buildings!==after.buildings||before.mana!==after.mana)throw new Error(JSON.stringify({before,after}));return after;
  });
+ await check('Save messages and unsaved progress prompts appear inside the game',async()=>{
+  const beforeDialogs=nativeDialogs;
+  const messages=await page.evaluate(()=>{
+   state.isPaused=true;
+   window.saveGame();
+   const saved=document.getElementById('game-toast').textContent;
+   window.loadGame();
+   const loaded=document.getElementById('game-toast').textContent;
+   window.newGame();
+   return {saved,loaded,title:document.getElementById('game-dialog-title').textContent,
+    warning:document.getElementById('game-dialog-message').textContent,
+    visible:!document.getElementById('game-dialog').hidden,
+    focused:document.activeElement?.id,
+    queued:localStorage.getItem(gameTestAPI.CONFIG.SAVED_KEYS.SANDBOX_START)};
+  });
+  if(messages.saved!=='Game saved!'||messages.loaded!=='Game loaded!'||!messages.visible||
+   !messages.warning.includes('Unsaved progress will be lost')||messages.focused!=='game-dialog-cancel'||messages.queued)
+   throw new Error(JSON.stringify(messages));
+  await page.locator('#game-dialog-cancel').click();
+  const campaign=await page.evaluate(()=>{
+   window.startCampaignLevel(2);
+   return {title:document.getElementById('game-dialog-title').textContent,
+    warning:document.getElementById('game-dialog-message').textContent,
+    queued:localStorage.getItem(gameTestAPI.CONFIG.SAVED_KEYS.START_CAMPAIGN)};
+  });
+  if(campaign.title!=='Start Level 2?'||!campaign.warning.includes('Unsaved progress will be lost')||campaign.queued)
+   throw new Error(JSON.stringify(campaign));
+  await page.keyboard.press('Escape');
+  if(await page.locator('#game-dialog').isVisible()||nativeDialogs!==beforeDialogs)
+   throw new Error('The in-game confirmation did not cancel cleanly or opened a browser dialog');
+  return {saved:messages.saved,loaded:messages.loaded,campaign:campaign.title};
+ });
  await check('Finished houses load without scaffolding while unfinished houses retain progress',async()=>{
   const before=await page.evaluate(()=>{
    state.isPaused=true;
@@ -406,10 +439,28 @@ try {
    await phone.touchscreen.tap(point.x,point.y);
    const mana=await phone.evaluate(()=>state.mana);
    if(mana>499||mana<480)throw new Error('Touch spell did not consume mana: '+mana);
+   await phone.evaluate(()=>window.newGame());
+   const card=await phone.locator('.game-dialog-card').boundingBox();
+   if(!card||card.x<0||card.y<0||card.x+card.width>390||card.y+card.height>844)
+    throw new Error('In-game confirmation is clipped on a phone');
+   await phone.screenshot({path:path.join(root,'test-results','game-dialog-mobile.png'),animations:'disabled',timeout:120000});
+   await phone.locator('#game-dialog-cancel').tap();
+   if(await phone.locator('#game-dialog').isVisible())throw new Error('Touch cancel did not close the confirmation');
     await phone.screenshot({path:path.join(root,'test-results','browser-touch.png'),animations:'disabled',timeout:120000});return {mana};
   }finally{await mobile.close();}
  });
  await page.setViewportSize({width:1440,height:900});
+ await check('Confirming in-game prompts starts sandbox and campaign modes',async()=>{
+  await page.evaluate(()=>window.newGame());
+  await Promise.all([page.waitForEvent('load',{timeout:60000}),page.locator('#game-dialog-confirm').click()]);
+  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&!state.isCampaign,null,{timeout:90000});
+  const sandbox=await page.evaluate(()=>({campaign:state.isCampaign,queued:localStorage.getItem(gameTestAPI.CONFIG.SAVED_KEYS.SANDBOX_START)}));
+  if(sandbox.campaign||sandbox.queued)throw new Error('New Game did not start sandbox mode: '+JSON.stringify(sandbox));
+  await page.evaluate(()=>window.startCampaignLevel(2));
+  await Promise.all([page.waitForEvent('load',{timeout:60000}),page.locator('#game-dialog-confirm').click()]);
+  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.campaignLevel===2,null,{timeout:90000});
+  return {sandbox:true,campaignLevel:await page.evaluate(()=>state.campaignLevel)};
+ });
  // Each campaign startup is checked independently, including its biome and AI roster.
  for(let level=1;level<=12;level++){
   await check('Campaign '+level+' startup',async()=>{
