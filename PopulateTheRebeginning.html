@@ -109,19 +109,20 @@
             position: absolute;
             top: 60px;
             right: 10px;
-            width: 80px;
+            width: 46px;
             bottom: 20px;
             overflow-y: auto;
             overflow-x: hidden;
             pointer-events: auto;
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 4px;
             padding: 5px;
             justify-items: center;
             /* background: linear-gradient(to left, rgba(0,0,0,0.5), transparent); */
         }
-        #right-menu::-webkit-scrollbar { width: 0; } /* Hide scrollbar */
+        #right-menu::-webkit-scrollbar { width: 3px; }
+        #right-menu::-webkit-scrollbar-thumb { background: rgba(210,190,135,0.55); border-radius: 3px; }
 
         .action-btn {
             width: 30px; height: 30px;
