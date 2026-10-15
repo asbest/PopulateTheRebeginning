@@ -126,6 +126,20 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
    }
    if(getHeight(waterClimber.mesh.position.x,waterClimber.mesh.position.z)<gameTestAPI.aiDryHeight())
     throw new Error('Steep water exit stalled: '+JSON.stringify({position:waterClimber.mesh.position,target:waterClimber.target,state:waterClimber.state,velocity:waterClimber.velocity}));
+   const manualClimber=new Humanoid(0,'warrior',-3,-3);state.units.push(manualClimber);
+   manualClimber.update(1/60);
+   if(!manualClimber.aiWaterEscape)throw new Error('The swimmer did not start automatic rescue');
+   manualClimber.seekShore=()=>{throw new Error('Automatic rescue replaced manual swimming');};
+   let manualFrames=0;
+   for(;manualFrames<480&&manualClimber.mesh.position.x<3;manualFrames++){
+    manualClimber.manualMove(new THREE.Vector3(1,0,0),1/60);
+    state.physicsWorld.timestep=1/60;state.physicsWorld.step();manualClimber.update(1/60);
+    if(manualClimber.state!=='manual'||manualClimber.target)
+     throw new Error('Manual swim direction was overridden');
+   }
+   if(manualClimber.mesh.position.x<3||manualClimber.isSwimming||
+      Math.abs(manualClimber.mesh.position.y-getSurfaceHeight(manualClimber.mesh.position.x,manualClimber.mesh.position.z))>.35)
+    throw new Error('Manual water exit stalled: '+JSON.stringify({position:manualClimber.mesh.position,state:manualClimber.state,swimming:manualClimber.isSwimming,velocity:manualClimber.velocity,grounded:manualClimber.isGrounded,manualFrames}));
    const hillClimber=new Humanoid(0,'warrior',.25,3);state.units.push(hillClimber);hillClimber.goto(4,3);
    if(hillClimber.state!=='move')throw new Error('Steep uphill route was rejected');
    let hillFrames=0,maxGroundGap=0;
@@ -135,7 +149,7 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
    }
    if(hillClimber.mesh.position.x<3||maxGroundGap>.35)
     throw new Error('Steep uphill walk failed: '+JSON.stringify({position:hillClimber.mesh.position,target:hillClimber.target,state:hillClimber.state,velocity:hillClimber.velocity,maxGroundGap}));
-   return {waypoints:route.length,minHeight,lowestWalk,shore,playerShore:player.mesh.position,remainingAir:drowning.hp/drowning.maxHp,waterFrames,hillFrames,maxGroundGap};
+   return {waypoints:route.length,minHeight,lowestWalk,shore,playerShore:player.mesh.position,remainingAir:drowning.hp/drowning.maxHp,waterFrames,manualFrames,hillFrames,maxGroundGap};
   });
  } finally {await water.close();}
 });

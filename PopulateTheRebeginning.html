@@ -5697,14 +5697,17 @@ window.Humanoid = class Humanoid {
 
     surviveWater(dt,groundH) {
         if(this.type==='airship'||this.state==='dead')return;
+        const manualSwim=(this.manualSwimTimer||0)>0;
+        this.manualSwimTimer=Math.max(0,(this.manualSwimTimer||0)-dt);
         if(state.waterState==='frozen') {
             this.isSwimming=false;this.aiWaterEscape=false;this.waterExposure=0;this.waterOriginalDest=null;
             return;
         }
         if(groundH>=aiDryHeight()) {
+            this.isSwimming=false;this.waterExposure=0;
             if(this.aiWaterEscape) {
                 const resume=this.waterOriginalDest;
-                this.aiWaterEscape=false;this.isSwimming=false;this.waterExposure=0;
+                this.aiWaterEscape=false;
                 this.waterOriginalDest=null;
                 this.finalDest=null;this.target=null;this.path=[];this.state='idle';this.gait=null;
                 if(resume&&getHeight(resume.x,resume.z)>=aiDryHeight() &&
@@ -5713,14 +5716,16 @@ window.Humanoid = class Humanoid {
             }
             return;
         }
-        if(!this.aiWaterEscape)this.waterOriginalDest=this.finalDest?.clone()||null;
-        this.aiWaterEscape=true;
-        this.aiRole='escape-water';this.attackTarget=null;
+        if(!manualSwim) {
+            if(!this.aiWaterEscape)this.waterOriginalDest=this.finalDest?.clone()||null;
+            this.aiWaterEscape=true;
+            this.aiRole='escape-water';this.attackTarget=null;
+        }
         const depth=VISUAL_WATER_LEVEL-groundH;
         this.isSwimming=depth>.2;
         if(this.isSwimming) {
-            const dx=(this.target?.x??this.mesh.position.x)-this.mesh.position.x;
-            const dz=(this.target?.z??this.mesh.position.z)-this.mesh.position.z;
+            const dx=manualSwim ? this.manualSwimDirection.x : (this.target?.x??this.mesh.position.x)-this.mesh.position.x;
+            const dz=manualSwim ? this.manualSwimDirection.z : (this.target?.z??this.mesh.position.z)-this.mesh.position.z;
             const length=Math.hypot(dx,dz)||1;
             // Keep the swimmer visually on the water while the collision capsule
             // clears the bank ahead. Otherwise a tall bank pins the capsule below
@@ -5741,6 +5746,7 @@ window.Humanoid = class Humanoid {
             if(this.waterExposure>2) this.takeDamage(this.maxHp*.055*Math.min(1,depth/1.5)*dt,true);
         }
         if(['stunned','getting_up'].includes(this.state))return;
+        if(manualSwim)return;
         this.waterRescueTimer=(this.waterRescueTimer||0)-dt;
         if(this.waterRescueTimer<=0 && (this.state!=='move'||!this.finalDest||getHeight(this.finalDest.x,this.finalDest.z)<aiDryHeight())) {
             this.waterRescueTimer=this.seekShore() ? 0.8 : 2.5;
@@ -5749,6 +5755,14 @@ window.Humanoid = class Humanoid {
 
     manualMove(vec, dt = 0.016) {
         if(this.state === 'dead' || this.state === 'stunned') return;
+        if(vec.lengthSq()>0.001) {
+            if(!this.manualSwimDirection)this.manualSwimDirection=new THREE.Vector3();
+            this.manualSwimDirection.copy(vec);
+            this.manualSwimTimer=.2;
+        }
+        this.aiWaterEscape=false;
+        this.waterOriginalDest=null;
+        this.finalDest=null;
         const speed = this.moveSpeed;
 
         // Check collision and water
