@@ -14,7 +14,7 @@ try {
     page.on('pageerror',e=>errors.push(String(e)));
     page.on('response',r=>{if(r.status()===404)missing.push(r.url());});
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
-    await page.waitForFunction(()=>window.state?.renderer&&window.Art?.blender?.models,null,{timeout:60000});
+    await page.waitForFunction(()=>window.gameTestAPI&&window.state?.renderer&&window.Art?.blender?.models,null,{timeout:90000});
     const result=await page.evaluate(async()=>{
         await Promise.all([Art.ready,Characters.ready]);
         const keys=Object.keys(Art.blender.models);

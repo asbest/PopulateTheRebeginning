@@ -1,7 +1,7 @@
 // Original tribal character meshes. Shared geometry and atlas materials keep large armies affordable.
 import {createBlenderPack} from './blender-pack.js';
 // The public pivots match the gameplay rig; collision shapes and unit statistics are untouched.
-export function createCharacters(T) {
+export function createCharacters(T,art) {
     const blender=createBlenderPack(T);
     const cache = new Map(), materials = new Map();
     const hairCanvas=document.createElement('canvas');hairCanvas.width=hairCanvas.height=512;
@@ -18,14 +18,22 @@ export function createCharacters(T) {
     hairTexture.encoding=T.sRGBEncoding;
     hairTexture.anisotropy=4;
     const tiles = {};
-    const detailReady=['skin','cloth'].map(kind=>new Promise((resolve,reject)=>{
-        const map=new T.Texture();map.encoding=T.sRGBEncoding;map.anisotropy=8;
-        tiles[kind]=map;
-        new T.ImageLoader().load(new URL(kind==='skin'?'./character-skin-v2.png':'./character-cloth.png',import.meta.url).href,image=>{
-            map.userData={dedicated:true};map.image=image;map.needsUpdate=true;resolve(image);
-        },undefined,reject);
-    }));
-    const ready=Promise.all([...detailReady,blender.ready]);
+    let ready=blender.ready;
+    function configureTextures(){
+        for(const kind of ['skin','cloth']){
+            const url=new URL(kind==='skin'?'./character-skin-v2.png':'./character-cloth.png',import.meta.url).href;
+            tiles[kind]=art.loadTexture(url,{srgb:true,anisotropy:8});
+            tiles[kind].userData={dedicated:true};
+        }
+        for(const material of materials.values()){
+            const kind=material.userData.characterKind;
+            if(tiles[kind]){
+                material.map=tiles[kind];
+                material.needsUpdate=true;
+            }
+        }
+        ready=Promise.all([blender.ready,...Object.values(tiles).map(art.textureReady)]);
+    }
     function mat(kind,color=0xffffff) {
         if(color===0xffffff&&kind==='leather')color=0x8d6443;
         if(color===0xffffff&&kind==='gold')color=0xc5a45f;
@@ -198,5 +206,5 @@ export function createCharacters(T) {
         for(const z of [-1.65,0,1.65])mesh(root,geo('hoop',()=>new T.TorusGeometry(1,.025,6,32)),gold,[0,4.5,z],[1.83,1.46,1],'BalloonHoop');
     }
     function setFaction(u,color){u.mesh.traverse(n=>{if(n.userData.characterFaction)n.material=mat('cloth',color);});}
-    return {build,setFaction,ready,atlas:null,tiles};
+    return {build,setFaction,get ready(){return ready;},configureTextures,atlas:null,tiles};
 }

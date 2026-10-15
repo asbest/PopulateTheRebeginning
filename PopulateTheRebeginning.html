@@ -563,7 +563,7 @@ import { createCharacters } from './art/characters.js';
 import { createLocomotion } from './art/locomotion.js';
 import { icon } from './art/icons.js';
 const Art = createArtKit(THREE);
-const Characters = createCharacters(THREE);
+const Characters = createCharacters(THREE,Art);
 const Locomotion = createLocomotion(THREE);
 window.THREE = THREE; window.Characters = Characters;
 window.Art = Art;
@@ -7964,15 +7964,13 @@ async function init() {
 
     const checkCampaign = window.loadCampaignLevelIfRequested();
     try {
-        await Promise.all([Art.ready, Characters.ready]);
+        await Art.ready;
 
         state.clock = new THREE.Clock();
         state.cameraLookAt = new THREE.Vector3(0, 0, 0);
 
         state.rangeRing = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 64, 1, true), new THREE.MeshBasicMaterial({color: COLORS.snow, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false}));
         state.rangeRing.visible = false;
-
-        initTerrainResources();
 
         state.scene = new THREE.Scene();
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
@@ -8003,6 +8001,10 @@ async function init() {
         state.renderer.physicallyCorrectLights = true;
         state.renderer.outputEncoding = THREE.sRGBEncoding;
         document.body.appendChild(state.renderer.domElement);
+        Art.configureTextures(state.renderer);
+        Characters.configureTextures();
+        await Characters.ready;
+        initTerrainResources();
 
         const amb = new THREE.HemisphereLight(0xdcecf4, 0x596650, 0.72);
         state.ambLight = amb;
@@ -8099,6 +8101,7 @@ async function init() {
         CloudManager.init();
         WaterSprayManager.init();
         CritterManager.init();
+        await Art.texturesReady();
 
         window.addEventListener('contextmenu', e => e.preventDefault());
 

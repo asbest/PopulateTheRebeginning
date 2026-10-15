@@ -31,6 +31,12 @@ jobs:
       - name: Blender assets and PBR materials
         if: always()
         run: node tests/blender-assets.mjs
+      - name: GPU texture compression and PNG fallback
+        if: always()
+        run: node tests/ktx2.mjs
+      - name: Environment rendering
+        if: always()
+        run: node tests/environment.mjs
       - name: Locomotion and terrain physics
         if: always()
         run: node tests/locomotion.mjs

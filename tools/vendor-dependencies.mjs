@@ -4,6 +4,13 @@ await fs.mkdir(base,{recursive:true});
 const files = [
  ['three.module.js','https://unpkg.com/three@0.128.0/build/three.module.js'],
  ['THREE-LICENSE.txt','https://unpkg.com/three@0.128.0/LICENSE'],
+ ['KTX2Loader.js','https://unpkg.com/three@0.128.0/examples/jsm/loaders/KTX2Loader.js'],
+ ['BasisTextureLoader.js','https://unpkg.com/three@0.128.0/examples/jsm/loaders/BasisTextureLoader.js'],
+ ['libs/ktx-parse.module.js','https://unpkg.com/three@0.128.0/examples/jsm/libs/ktx-parse.module.js'],
+ ['libs/zstddec.module.js','https://unpkg.com/three@0.128.0/examples/jsm/libs/zstddec.module.js'],
+ ['basis/basis_transcoder.js','https://unpkg.com/three@0.128.0/examples/js/libs/basis/basis_transcoder.js'],
+ ['basis/basis_transcoder.wasm','https://unpkg.com/three@0.128.0/examples/js/libs/basis/basis_transcoder.wasm'],
+ ['BASIS-LICENSE.txt','https://raw.githubusercontent.com/BinomialLLC/basis_universal/master/LICENSE'],
  ['simplex-noise.min.js','https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js'],
  ['SIMPLEX-LICENSE.txt','https://unpkg.com/simplex-noise@2.4.0/LICENSE'],
  ['peerjs.min.js','https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js'],
@@ -14,6 +21,15 @@ const files = [
 for(const [name,url] of files){
  const response = await fetch(url);
  if(!response.ok)throw new Error(`${name}: HTTP ${response.status}`);
- await fs.writeFile(new URL(name,base),new Uint8Array(await response.arrayBuffer()));
+ const target=new URL(name,base);
+ await fs.mkdir(new URL('./',target),{recursive:true});
+ let contents=new Uint8Array(await response.arrayBuffer());
+ if(name==='KTX2Loader.js')contents=new TextEncoder().encode(new TextDecoder().decode(contents)
+     .replace("from 'three'","from './three.module.js'")
+     .replace("from '../libs/ktx-parse.module.js'","from './libs/ktx-parse.module.js'")
+     .replace("from '../libs/zstddec.module.js'","from './libs/zstddec.module.js'"));
+ if(name==='BasisTextureLoader.js')contents=new TextEncoder().encode(new TextDecoder().decode(contents)
+     .replace("from 'three'","from './three.module.js'"));
+ await fs.writeFile(target,contents);
  console.log(name);
 }

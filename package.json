@@ -4,10 +4,15 @@
   "type": "module",
   "scripts": {
     "start": "node tools/serve.mjs",
+    "build:ktx2": "node tools/build-ktx2.mjs",
     "benchmark:fps": "node tools/benchmark-fps.mjs",
     "benchmark:first-fireball": "node tools/benchmark-first-fireball.mjs",
     "benchmark:firestorm": "node tools/benchmark-firestorm.mjs",
-    "test": "node tests/browser.mjs && node tests/blender-assets.mjs && node tests/environment.mjs && node tests/locomotion.mjs && node tests/spells.mjs && node tests/audio.mjs && node tests/strategy.mjs && node tests/materials.mjs && node tests/strategy-long.mjs && node tests/live-gameplay.mjs"
+    "test": "node tests/browser.mjs && node tests/blender-assets.mjs && node tests/ktx2.mjs && node tests/environment.mjs && node tests/locomotion.mjs && node tests/spells.mjs && node tests/audio.mjs && node tests/strategy.mjs && node tests/materials.mjs && node tests/strategy-long.mjs && node tests/live-gameplay.mjs"
   },
-  "devDependencies": { "playwright": "1.62.1" }
+  "devDependencies": {
+    "ktx2-encoder": "0.5.4",
+    "playwright": "1.62.1",
+    "sharp": "0.34.4"
+  }
 }

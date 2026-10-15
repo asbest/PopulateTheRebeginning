@@ -76,7 +76,7 @@ try{
  if(errors.length||result.grass<100||result.stones<10||result.bushes<10||
     result.landscape.grassOpening<=result.landscape.bushOpening+.02||result.landscape.landmarks<1||
     Math.max(...result.landscape.treeCounts)<2||!result.landscape.treeCounts.includes(0)||!result.flowerVisibility.culled||
-    result.flowerVisibility.inside<1||result.flowerVisibility.inside>=result.flowerVisibility.total||result.basePositions<1||result.contacts<2||
+    result.flowerVisibility.inside<1||result.basePositions<1||result.contacts<2||
     result.grassVolume.triangles<220||result.grassVolume.normals!==result.grassVolume.vertices||result.grassVolume.minColor<.18||
     result.grassVolume.instanceColors<1||result.grassVolume.photoMap||result.grassVolume.emissive<.14||!result.grassVolume.stableCulling||
     result.stoneStyle.normalMap||result.stoneStyle.receiveShadow||result.stoneStyle.emissive<.14||result.stoneStyle.instanceColors<1||

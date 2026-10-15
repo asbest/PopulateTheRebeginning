@@ -1,7 +1,9 @@
 // Original mesh art, authored for this project. Uses the game's existing Three.js version.
 import {createBlenderPack} from './blender-pack.js';
+import {createTexturePipeline} from './texture-pipeline.js';
 export function createArtKit(T) {
-    const blender=createBlenderPack(T);
+    const pipeline=createTexturePipeline(T);
+    const blender=createBlenderPack(T,pipeline.load);
     const mats = new Map(), geos = new Map();
     const palette = {wood:0x67503a, stone:0x99a69b, straw:0xc4a96b, gold:0xdcc27f, cloth:0xe1d8ba, dark:0x283b43};
     function texture(kind) {
@@ -19,32 +21,27 @@ export function createArtKit(T) {
         const t = new T.CanvasTexture(canvas); t.wrapS=t.wrapT=T.RepeatWrapping; t.encoding=T.sRGBEncoding;
         return t;
     }
-    const loader=new T.TextureLoader();
     function surface(name) {
-        const t=loader.load(new URL(`./materials/${name}.png`,import.meta.url).href);
-        t.wrapS=t.wrapT=T.RepeatWrapping;
-        t.encoding=T.sRGBEncoding;
-        t.anisotropy=8;
-        t.minFilter=T.LinearMipmapLinearFilter;
-        t.magFilter=T.LinearFilter;
-        return t;
+        return pipeline.load(new URL(`./materials/${name}.png`,import.meta.url).href,{srgb:true,anisotropy:8});
     }
     // Neutral photographic albedos give cliffs and beaches fine surface detail.
     // Mirror wrapping hides edge seams without adding another texture sample.
     function terrainPhoto(file) {
-        const t=loader.load(new URL(`./materials/${file}`,import.meta.url).href);
-        t.wrapS=t.wrapT=T.MirroredRepeatWrapping;
-        t.encoding=T.sRGBEncoding;
-        t.anisotropy=4;
-        t.minFilter=T.LinearMipmapLinearFilter;
-        return t;
+        return pipeline.load(new URL(`./materials/${file}`,import.meta.url).href,
+            {srgb:true,wrap:T.MirroredRepeatWrapping,anisotropy:4});
     }
-    const cliffTerrain=terrainPhoto('cliff-photo.webp');
-    const sandTerrain=terrainPhoto('sand-photo.webp');
-    const textures={wood:surface('wood'),stone:surface('stone'),thatch:surface('thatch'),grass:surface('grass'),
-        sand:sandTerrain,cliff:cliffTerrain,
-        dirt:blender.texture('dirt','map'),mud:blender.texture('mud','map'),
-        bronze:blender.texture('bronze','map'),cloth:blender.texture('cloth','map')};
+    const textures={};
+    function configureTextures(renderer){
+        pipeline.configure(renderer);
+        Object.assign(textures,{wood:surface('wood'),stone:surface('stone'),thatch:surface('thatch'),grass:surface('grass'),
+            sand:terrainPhoto('sand-photo.webp'),cliff:terrainPhoto('cliff-photo.webp'),
+            dirt:blender.texture('dirt','map'),mud:blender.texture('mud','map'),
+            bronze:blender.texture('bronze','map'),cloth:blender.texture('cloth','map')});
+        crownMaterial.map=textures.grass;
+        crownMaterial.normalMap=blender.texture('grass','normal');
+        crownMaterial.roughnessMap=blender.texture('grass','roughness');
+        crownMaterial.needsUpdate=true;
+    }
     function material(color,kind='wood',metal=0,emission=0) {
         const key=[color,kind,metal,emission].join('/');
         if(!mats.has(key)) {
@@ -139,9 +136,7 @@ export function createArtKit(T) {
         return p;
     }
     const uniforms={windTime:{value:0}};
-    const crownMaterial=new T.MeshStandardMaterial({vertexColors:true,map:textures.grass,
-        normalMap:blender.texture('grass','normal'),roughnessMap:blender.texture('grass','roughness'),
-        roughness:1,side:T.DoubleSide});
+    const crownMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:1,side:T.DoubleSide});
     crownMaterial.onBeforeCompile=shader=>{
         shader.uniforms.artWindTime=uniforms.windTime;
         shader.vertexShader='uniform float artWindTime;\nvarying float vArtLeafHeight;\n'+shader.vertexShader;
@@ -208,7 +203,7 @@ export function createArtKit(T) {
         material.userData.shoreUniform=shoreUniform;
         material.onBeforeCompile = shader => {
             shader.uniforms.artGrass={value:textures.grass};
-            shader.uniforms.artRock={value:cliffTerrain};
+            shader.uniforms.artRock={value:textures.cliff};
             shader.uniforms.artSand={value:textures.sand};
             shader.uniforms.artDirt={value:textures.dirt};
             shader.uniforms.artMud={value:textures.mud};
@@ -271,5 +266,7 @@ export function createArtKit(T) {
         };
         material.customProgramCacheKey=()=> 'island-terrain-detail-v7';
     }
-    return {building,tree,dress,terrainDetail,textures,palette,uniforms,ready:blender.ready,blender};
+    return {building,tree,dress,terrainDetail,textures,palette,uniforms,ready:blender.ready,blender,
+        configureTextures,textureStatus:pipeline.status,loadTexture:pipeline.load,
+        textureReady:pipeline.whenReady,texturesReady:pipeline.waitForPending};
 }

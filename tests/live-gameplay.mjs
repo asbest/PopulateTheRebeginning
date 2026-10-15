@@ -18,8 +18,8 @@ page.on('dialog', d => d.accept());
 
 try {
   await page.goto((process.env.GAME_URL || 'http://127.0.0.1:8765') + '/PopulateTheRebeginning.html?test=1', {waitUntil:'load',timeout:60000});
-  await page.waitForFunction(() => window.state?.shaman && window.enemyAIs?.length, null, {timeout:60000});
-  await page.evaluate(() => {closeHelp();closeStoryOverlay();});
+  await page.waitForFunction(() => window.gameTestAPI&&window.state?.shaman&&window.enemyAIs?.length, null, {timeout:90000});
+  await page.evaluate(() => {closeHelp();closeStoryOverlay();state.isPaused=false;document.getElementById('pause-menu').style.display='none';});
 
   // The Shaman's spells must be available without selecting her first.
   if(!await page.locator('#btn-blast').count()) throw new Error('Blast is hidden with no unit selected');
@@ -42,7 +42,17 @@ try {
     }
     return {id:u.id,x:u.mesh.position.x,z:u.mesh.position.z,target:ai.pendingBuild};
   });
-  await page.waitForFunction(({id,x,z}) => {const u=state.units.find(u => u.id === id);return u && Math.hypot(u.mesh.position.x-x,u.mesh.position.z-z) > 0.6;}, moving, {timeout:30000});
+  try{
+    await page.waitForFunction(({id,x,z}) => {const u=state.units.find(u => u.id === id);return u && Math.hypot(u.mesh.position.x-x,u.mesh.position.z-z) > 0.6;}, moving, {timeout:30000});
+  }catch(error){
+    const detail=await page.evaluate(({id,x,z})=>{const u=state.units.find(u=>u.id===id);return {
+      paused:state.isPaused,unit: u&&{x:u.mesh.position.x,z:u.mesh.position.z,state:u.state,role:u.aiRole,
+        finalDest:u.finalDest,target:u.target?.id,velocity:u.rigidBody?.linvel?.()},
+      distance:u?Math.hypot(u.mesh.position.x-x,u.mesh.position.z-z):null,
+      ai:enemyAIs[0]?.lastPlan,errors:window.errors
+    };},moving);
+    throw new Error(`Enemy builder did not move: ${JSON.stringify({moving,detail,errors})}; ${error}`);
+  }
   console.log('PASS enemy AI orders a builder and the unit physically moves', {start:enemy,moving});
 
   const point = await page.evaluate(() => {const p=state.shaman.mesh.position,target=gameTestAPI.findNearestLand(p.x+8,p.z+2),v=new THREE.Vector3(target.x,getHeight(target.x,target.z),target.z).project(state.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2};});

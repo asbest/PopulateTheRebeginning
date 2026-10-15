@@ -2,11 +2,10 @@
 // Static meshes share BufferGeometry and PBR textures across every instance.
 let sharedPack;
 
-export function createBlenderPack(T) {
+export function createBlenderPack(T,loadTexture) {
     if (sharedPack) return sharedPack;
     const geometries=new Map(), materials=new Map();
     let models=null;
-    const textureLoader=new T.TextureLoader();
     const surfaces=new Map();
     const definitions={
         stone:{color:0xe7d6b5,map:'stone',metalness:0,normalScale:.48},
@@ -37,11 +36,7 @@ export function createBlenderPack(T) {
                     : kind==='cloth' ? './character-cloth.png'
                     : kind==='skin' ? './character-skin-v2.png' : `./materials/${kind}.png`
                 : `./blender/${kind}-${type}.png`;
-            const t=textureLoader.load(new URL(url,import.meta.url).href);
-            t.wrapS=t.wrapT=T.RepeatWrapping;
-            t.anisotropy=8;
-            t.minFilter=T.LinearMipmapLinearFilter;
-            if(type==='map')t.encoding=T.sRGBEncoding;
+            const t=loadTexture(new URL(url,import.meta.url).href,{srgb:type==='map',anisotropy:8});
             surfaces.set(key,t);
         }
         return surfaces.get(key);
