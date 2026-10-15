@@ -20,6 +20,11 @@ try{
    culled:flowerMeshes.every(mesh=>mesh.frustumCulled&&mesh.geometry.boundingSphere?.radius>0)};
   const grass=covers.reduce((n,c)=>n+(c.grass?.mesh?.count||0),0),stones=covers.reduce((n,c)=>n+(c.stones?.mesh?.count||0),0),
    bushes=covers.reduce((n,c)=>n+(c.bushes?.mesh?.count||0),0);
+  const coverData=kind=>covers.flatMap(c=>c[kind]?.data||[]);
+  const grassData=coverData('grass'),bushData=coverData('bushes'),stoneData=coverData('stones');
+  const meanOpening=data=>data.reduce((sum,d)=>sum+(d.opening||0),0)/Math.max(1,data.length);
+  const landscape={grassOpening:meanOpening(grassData),bushOpening:meanOpening(bushData),
+   landmarks:stoneData.filter(d=>d.landmark).length,treeCounts:chunks.map(c=>c.userData.trees?.length||0)};
   const grassMesh=covers.find(c=>c.grass?.mesh)?.grass.mesh,grassGeo=grassMesh.geometry,bases=grassGeo.attributes.aBasePos;
   const stoneMesh=covers.find(c=>c.stones?.mesh)?.stones.mesh;
   const bushMesh=covers.find(c=>c.bushes?.mesh)?.bushes.mesh;
@@ -57,7 +62,7 @@ try{
   const graphicsUi={menu:document.getElementById('pause-menu').style.display,label:document.getElementById('btn-graphics-quality')?.innerText,
    tier:state.graphicsQuality.tier,saved:localStorage.getItem('graphics-quality')};
   window.setGraphicsQuality('high');togglePause();
-  return {chunks:chunks.length,grass,stones,bushes,flowerVisibility,basePositions:bases?.count||0,grassVolume,stoneStyle,contacts:contacts.length,construction,damaged,
+  return {chunks:chunks.length,grass,stones,bushes,landscape,flowerVisibility,basePositions:bases?.count||0,grassVolume,stoneStyle,contacts:contacts.length,construction,damaged,
    marksAdded:gameTestAPI.SurfaceMarks.marks.length-marksBefore,
    sky:state.skyDome?.name,rim:state.rimLight?.intensity,quality:state.graphicsQuality,
    profiles:{low:{tier:low.tier,grass:lowGrass,pixel:low.maxPixelRatio},ultra:{tier:ultra.tier,pixel:ultra.maxPixelRatio}},graphicsUi,
@@ -68,7 +73,9 @@ try{
     cirrus:/skyFbm/.test(state.skyDome.material.fragmentShader),night:/nightMix/.test(state.skyDome.material.fragmentShader)},
    wind:{cache:treeMaterial.customProgramCacheKey?.(),advanced:Art.uniforms.windTime.value>firstWind},treeShadows};
  });
- if(errors.length||result.grass<100||result.stones<10||result.bushes<10||!result.flowerVisibility.culled||
+ if(errors.length||result.grass<100||result.stones<10||result.bushes<10||
+    result.landscape.grassOpening<=result.landscape.bushOpening+.02||result.landscape.landmarks<1||
+    Math.max(...result.landscape.treeCounts)<2||!result.landscape.treeCounts.includes(0)||!result.flowerVisibility.culled||
     result.flowerVisibility.inside<1||result.flowerVisibility.inside>=result.flowerVisibility.total||result.basePositions<1||result.contacts<2||
     result.grassVolume.triangles<220||result.grassVolume.normals!==result.grassVolume.vertices||result.grassVolume.minColor<.18||
     result.grassVolume.instanceColors<1||result.grassVolume.photoMap||result.grassVolume.emissive<.14||!result.grassVolume.stableCulling||

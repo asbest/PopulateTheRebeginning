@@ -2173,6 +2173,15 @@ function mulberry32(a) {
     }
 }
 
+// Continuous world-space fields keep groves, open meadows and dry slopes
+// coherent across chunk borders without adding per-frame shader work.
+function landscapeMoisture(x,z) {
+    return .5+.5*state.simplex.noise2D(x*.014+71,z*.014-103);
+}
+function landscapeOpening(x,z) {
+    return .5+.5*state.simplex.noise2D(x*.023-139,z*.023+57);
+}
+
 function getBaseHeight(x, z) {
     if (!state.simplex) return 0;
     let y = 0;
@@ -2190,6 +2199,14 @@ function getBaseHeight(x, z) {
     }
 
     y *= hm;
+
+    if (biome!=='void'&&biome!=='celestial'&&biome!=='cosmic') {
+        // Broad, restrained ridges and shallow hollows add recognizable landforms.
+        // Fade them near sea level so the shoreline remains traversable.
+        const relief=state.simplex.noise2D(x*.011+47,z*.011-29);
+        const land=Math.max(0,Math.min(1,(y-WATER_LEVEL+1.5)/4));
+        y+=(Math.abs(relief)-.38)*(biome==='mountain'?2.0:1.25)*land;
+    }
 
     if (biome === 'celestial') {
         if (y < TC.CELESTIAL_PEAK_THRESHOLD) y -= TC.CELESTIAL_VOID_DROP;
@@ -3118,6 +3135,12 @@ const _cGold = new THREE.Color(0xFFD700);
 const _cCyan = new THREE.Color(0x00FFFF);
 const _cDeepGreen = new THREE.Color(0x004400);
 const _col = new THREE.Color();
+const _cDryGrass = new THREE.Color(0xa8b76b);
+const _cLushGrass = new THREE.Color(0x55ae48);
+const _cWetSand = new THREE.Color(0xb6a88a);
+const _grassTone = new THREE.Color();
+const _shoreTone = new THREE.Color();
+const _cRockLinear = _cRock.clone().convertSRGBToLinear();
 
 function initTerrainResources() {
     chunkTerrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: false, roughness: 0.94, metalness: 0.0 });
@@ -3489,8 +3512,12 @@ function updateChunkGeometry(mesh, cx, cz) {
          // The same coordinates on neighboring chunks produce identical colors.
          const broadNoise=state.simplex.noise2D(wx*.065+37,wz*.065-19);
          const detailNoise=state.simplex.noise2D(wx*.23-73,wz*.23+11);
+         const moisture=organicBiome?landscapeMoisture(wx,wz):.5;
+         const grassTone=_grassTone.copy(_cDryGrass).lerp(cGrass,smoothBand(moisture,.18,.65))
+             .lerp(_cLushGrass,smoothBand(moisture,.58,.95)*.68);
+         const shoreTone=_shoreTone.copy(cSand).lerp(_cWetSand,smoothBand(moisture,.55,.95)*.45);
          const materialH=h+broadNoise*.72+detailNoise*.24;
-         const macro=Math.max(0,Math.min(1,.5+broadNoise*.43+detailNoise*.08));
+         const macro=Math.max(0,Math.min(1,.5+broadNoise*.32+detailNoise*.08-(moisture-.5)*.22));
          const fine=Math.max(0,Math.min(1,.5+detailNoise*.5));
          patternAttr.setXYZW(i,Math.round(macro*255),Math.round(fine*255),128,organicBiome?255:0);
 
@@ -3506,9 +3533,9 @@ function updateChunkGeometry(mesh, cx, cz) {
              else col.copy(cRock); // No lava in winter
          } else if (biome === 'night') {
              if (h < WATER_LEVEL) col.copy(cSand).multiplyScalar(0.4);
-             else if (materialH < WATER_LEVEL + 1.0) col.copy(cSand).lerp(cGrass, smoothBand(materialH,WATER_LEVEL,WATER_LEVEL+1.0)).multiplyScalar(0.4);
-             else if (materialH < 8.0) col.copy(cGrass).multiplyScalar(0.4);
-             else if (materialH < 9.0) col.copy(cGrass).lerp(cRock, smoothBand(materialH,8.0,9.0)).multiplyScalar(0.5);
+             else if (materialH < WATER_LEVEL + 1.0) col.copy(shoreTone).lerp(grassTone, smoothBand(materialH,WATER_LEVEL,WATER_LEVEL+1.0)).multiplyScalar(0.4);
+             else if (materialH < 8.0) col.copy(grassTone).multiplyScalar(0.4);
+             else if (materialH < 9.0) col.copy(grassTone).lerp(cRock, smoothBand(materialH,8.0,9.0)).multiplyScalar(0.5);
              else col.copy(cRock).multiplyScalar(0.5);
          } else if (biome === 'mountain') {
              if (h < WATER_LEVEL) col.copy(cSand);
@@ -3522,7 +3549,7 @@ function updateChunkGeometry(mesh, cx, cz) {
              else col.copy(cDeepGreen).lerp(cRock, smoothBand(materialH,WATER_LEVEL+2,WATER_LEVEL+12));
          } else if (biome === 'storm') {
              if (h < WATER_LEVEL) col.copy(cSand).lerp(cRock, 0.4);
-             else col.copy(cGrass).lerp(cRock, 0.6);
+             else col.copy(grassTone).lerp(cRock, 0.6);
          } else if (biome === 'void') {
              if (h < WATER_LEVEL) col.copy(cBlack);
              else col.copy(cPurple).lerp(cBlack, Math.min(1, (h - WATER_LEVEL) / 12));
@@ -3533,10 +3560,10 @@ function updateChunkGeometry(mesh, cx, cz) {
              if (h < WATER_LEVEL) col.copy(cBlack);
              else col.copy(cBlack).lerp(cCyan, Math.min(1, (h - WATER_LEVEL) / 20));
          } else {
-             if (h < WATER_LEVEL) col.copy(cSand);
-             else if (materialH < WATER_LEVEL + 1.3) col.copy(cSand).lerp(cGrass, smoothBand(materialH,WATER_LEVEL,WATER_LEVEL+1.3));
-             else if (materialH < 18) col.copy(cGrass);
-             else if (materialH < 28) col.copy(cGrass).lerp(cRock, smoothBand(materialH,18,28));
+             if (h < WATER_LEVEL) col.copy(shoreTone);
+             else if (materialH < WATER_LEVEL + 1.3) col.copy(shoreTone).lerp(grassTone, smoothBand(materialH,WATER_LEVEL,WATER_LEVEL+1.3));
+             else if (materialH < 18) col.copy(grassTone);
+             else if (materialH < 28) col.copy(grassTone).lerp(cRock, smoothBand(materialH,18,28));
              else if (materialH < 36) col.copy(cRock);
              else if (materialH < 42) col.copy(cRock).lerp(cSnow, smoothBand(materialH,36,42));
              else col.copy(cSnow);
@@ -3563,7 +3590,15 @@ function updateChunkGeometry(mesh, cx, cz) {
         const near=z?pos.getY(i-stride):getHeight(wx,wz-step);
         const far=z<CHUNK_RES?pos.getY(i+stride):getHeight(wx,wz+step);
         const nx=left-right,ny=2*step,nz=near-far,len=Math.hypot(nx,ny,nz)||1;
-        normal.setXYZ(i,nx/len,ny/len,nz/len);
+        const normalY=ny/len;
+        normal.setXYZ(i,nx/len,normalY,nz/len);
+        if(organicBiome&&h>WATER_LEVEL+.7){
+            const exposed=smoothBand(1-normalY,.1,.38)*smoothBand(h,WATER_LEVEL+.7,WATER_LEVEL+3)*.48;
+            if(exposed>.001)colAttr.setXYZ(i,
+                colAttr.getX(i)*(1-exposed)+_cRockLinear.r*exposed,
+                colAttr.getY(i)*(1-exposed)+_cRockLinear.g*exposed,
+                colAttr.getZ(i)*(1-exposed)+_cRockLinear.b*exposed);
+        }
         const cavity=Math.max(0,Math.min(1,.5+((left+right+near+far)*.25-h)*.42));
         patternAttr.setW(i,Math.round(cavity*255));
     }
@@ -3855,6 +3890,7 @@ function createCoastalPalms(grp,cx,cz) {
         const z=cz*CHUNK_SIZE+(rand()-.5)*CHUNK_SIZE;
         const h=getHeight(x,z);
         if(h<WATER_LEVEL+.85||h>WATER_LEVEL+4.8)continue;
+        if(rand()>.35+.55*landscapeOpening(x,z))continue;
         const slope=Math.hypot(getHeight(x+.6,z)-getHeight(x-.6,z),getHeight(x,z+.6)-getHeight(x,z-.6));
         if(slope>1.3||data.some(d=>Math.hypot(d.x-x,d.z-z)<4))continue;
         data.push({x,z,rotation:rand()*Math.PI*2,scale:.75+rand()*.55});
@@ -3927,26 +3963,44 @@ function createGroundCover(grp,cx,cz) {
     const seed=((cx*73856093)^(cz*19349663)^0x4a39b70d)>>>0,rand=mulberry32(seed);
     const density=state.graphicsQuality?.coverDensity||1;
     const grassData=[],stoneData=[],bushData=[],offX=cx*CHUNK_SIZE,offZ=cz*CHUNK_SIZE;
-    const populate=(target,total,isGrass)=>{
+    const populate=(target,total,isGrass,isBush=false)=>{
         for(let i=0;target.length<total&&i<total*4;i++) {
             const x=offX+(rand()-.5)*CHUNK_SIZE,z=offZ+(rand()-.5)*CHUNK_SIZE,h=getHeight(x,z);
             const hx=getHeight(x+.45,z)-getHeight(x-.45,z),hz=getHeight(x,z+.45)-getHeight(x,z-.45);
             const slope=Math.sqrt(hx*hx+hz*hz);
             if(h<=WATER_LEVEL+(isGrass?.4:.12)||(isGrass&&h>17)||(!isGrass&&h>36)||(isGrass&&slope>.8))continue;
+            const moisture=landscapeMoisture(x,z),opening=landscapeOpening(x,z);
+            const suitability=isBush ? .12+.68*moisture*(1-opening*.65)
+                : isGrass ? .28+.65*opening*(.65+.35*moisture)
+                : .18+.55*Math.min(1,slope)+.22*(1-moisture);
+            if(rand()>suitability)continue;
             target.push({x,z,rx:isGrass ? 0 : (rand()-.5)*.8,ry:rand()*Math.PI*2,rz:isGrass ? 0 : (rand()-.5)*.8,
-                scale:(isGrass ? .42 : .45)+rand()*(isGrass ? .75 : .95),height:isGrass ? .7+rand()*.9 : 1,tone:rand()});
+                scale:(isGrass ? .42 : .45)+rand()*(isGrass ? .75 : .95),height:isGrass ? .58+rand()*.68+opening*.35 : 1,
+                tone:rand(),moisture,opening});
         }
     };
-    populate(grassData,Math.floor(220*density),true);populate(stoneData,Math.floor(9*density),false);
-    populate(bushData,Math.floor((state.matchSettings.biome==='jungle'?32:12)*density),true);
+    populate(grassData,Math.floor(220*density),true);populate(stoneData,Math.floor(4*density),false);
+    populate(bushData,Math.floor((state.matchSettings.biome==='jungle'?32:12)*density),true,true);
     let shoreRocks=0;
-    for(let attempt=0;attempt<45&&shoreRocks<2;attempt++){
+    for(let attempt=0;attempt<45&&shoreRocks<1;attempt++){
         const x=offX+(rand()-.5)*CHUNK_SIZE,z=offZ+(rand()-.5)*CHUNK_SIZE;
         const h=getHeight(x,z);
         if(h<WATER_LEVEL+.2||h>WATER_LEVEL+1.8)continue;
         stoneData.push({x,z,rx:(rand()-.5)*.35,ry:rand()*Math.PI*2,rz:(rand()-.5)*.35,
             scale:1.2+rand()*2.8,height:1,tone:rand(),shore:true});
         shoreRocks++;
+    }
+    // Sparse groups of larger stones give exposed slopes recognizable landmarks
+    // while remaining part of the same instanced draw call.
+    const landmarkChunk=rand()<.22;
+    for(let attempt=0,landmarks=0;landmarkChunk&&attempt<24&&landmarks<1;attempt++){
+        const x=offX+(rand()-.5)*CHUNK_SIZE,z=offZ+(rand()-.5)*CHUNK_SIZE,h=getHeight(x,z);
+        if(h<WATER_LEVEL+3||h>24||landscapeOpening(x,z)>.56)continue;
+        const slope=Math.hypot(getHeight(x+.6,z)-getHeight(x-.6,z),getHeight(x,z+.6)-getHeight(x,z-.6));
+        if(slope<.45||stoneData.some(d=>Math.hypot(d.x-x,d.z-z)<3))continue;
+        stoneData.push({x,z,rx:(rand()-.5)*.35,ry:rand()*Math.PI*2,rz:(rand()-.5)*.35,
+            scale:3.2+rand()*2.2,height:1,tone:rand(),landmark:true});
+        landmarks++;
     }
     const makeLayer=(data,geometry,material,isGrass,isBush=false)=>{
         if(!data.length)return null;
@@ -3958,9 +4012,10 @@ function createGroundCover(grp,cx,cz) {
             else dummy.scale.multiply(new THREE.Vector3(.82+d.tone*.34,.72+d.tone*.28,.84+(1-d.tone)*.3));
             dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
             const tint=new THREE.Color();
-            if(isBush)tint.setHSL(.285+d.tone*.035,.48,.56+d.tone*.07);
-            else if(isGrass)tint.setHSL(.255+d.tone*.035,.62+d.tone*.08,.47+d.tone*.08);
+            if(isBush)tint.setHSL(.255+(d.moisture??.5)*.065,.43+(d.moisture??.5)*.12,.47+d.tone*.08);
+            else if(isGrass)tint.setHSL(.18+(d.moisture??.5)*.105,.43+(d.moisture??.5)*.26,.46+d.tone*.06+(d.opening??.5)*.06);
             else if(d.shore)tint.setHSL(.1+d.tone*.03,.13,.73+d.tone*.1);
+            else if(d.landmark)tint.setHSL(.08+d.tone*.015,.09,.54+d.tone*.09);
             else tint.setHSL(.085+d.tone*.035,.1+d.tone*.08,.66+d.tone*.1);
             mesh.setColorAt(i,tint);
             bases.set([d.x,h,d.z],i*3);
@@ -4014,13 +4069,19 @@ function createChunk(cx, cz) {
     createGroundCover(grp,cx,cz);
     createCoastalPalms(grp,cx,cz);
     const chunkRandom=mulberry32(((cx*92837111)^(cz*689287499)^0x7f4a7c15)>>>0);
-    for(let k=0; k<6; k++) {
-        if(chunkRandom() > 0.42) {
-             const lx = (chunkRandom()-0.5)*CHUNK_SIZE; const lz = (chunkRandom()-0.5)*CHUNK_SIZE;
-             const h = getHeight(lx+offX, lz+offZ);
-             if(h > 3 && h < 8) {
+    const grove=landscapeMoisture(offX,offZ)>.65&&landscapeOpening(offX,offZ)<.48;
+    for(let k=0; k<(grove?13:8); k++) {
+        const lx = (chunkRandom()-0.5)*CHUNK_SIZE; const lz = (chunkRandom()-0.5)*CHUNK_SIZE;
+        const worldX=lx+offX,worldZ=lz+offZ;
+        const moisture=landscapeMoisture(worldX,worldZ),opening=landscapeOpening(worldX,worldZ);
+        if(chunkRandom() < .13+.67*moisture*(1-opening*.65)) {
+             const h = getHeight(worldX,worldZ);
+             if(h > 3 && h < 10) {
+                const slope=Math.hypot(getHeight(worldX+.7,worldZ)-getHeight(worldX-.7,worldZ),
+                    getHeight(worldX,worldZ+.7)-getHeight(worldX,worldZ-.7));
+                if(slope>1.7)continue;
                 const treeGroup = Art.tree();
-                treeGroup.position.set(lx+offX, h, lz+offZ);
+                treeGroup.position.set(worldX,h,worldZ);
                 treeGroup.rotation.y=chunkRandom()*Math.PI*2;
                 const treeScale=.78+chunkRandom()*.48;treeGroup.scale.set(treeScale,.9+chunkRandom()*.35,treeScale);
                 const treeShadow=createContactShadow(1.45);treeShadow.name='Tree canopy contact shadow';treeGroup.add(treeShadow);
@@ -4037,6 +4098,7 @@ function createChunk(cx, cz) {
     // Generate large coherent flower fields
     const spacing = 0.6;
     const flowerDataList = [];
+    const flowerRandom=mulberry32(((cx*374761393)^(cz*668265263)^0x6d2b79f5)>>>0);
     for(let x = -CHUNK_SIZE/2; x < CHUNK_SIZE/2; x += spacing) {
         for(let z = -CHUNK_SIZE/2; z < CHUNK_SIZE/2; z += spacing) {
             // Use simplex noise to determine if this spot is part of a flower field
@@ -4049,12 +4111,13 @@ function createChunk(cx, cz) {
             // ~20% coverage -> threshold around 0.3 for noise ranging [-1, 1] roughly
             // Noise > 0.4 produces ~20% coverage area in typical simplex implementations
             if(fieldNoise > 0.4) {
-                // Skip occasionally for less uniform density
-                if(Math.random() > 0.8) continue;
+                // Flower meadows need an open canopy and enough moisture.
+                const opening=landscapeOpening(worldX,worldZ),moisture=landscapeMoisture(worldX,worldZ);
+                if(opening<.38||moisture<.2||flowerRandom()>.35+.5*opening)continue;
 
                 // Add some jitter to grid so they don't look perfectly aligned
-                const jx = worldX + (Math.random()-0.5) * spacing * 0.8;
-                const jz = worldZ + (Math.random()-0.5) * spacing * 0.8;
+                const jx = worldX + (flowerRandom()-0.5) * spacing * 0.8;
+                const jz = worldZ + (flowerRandom()-0.5) * spacing * 0.8;
 
                 const h = getHeight(jx, jz);
 
@@ -4067,18 +4130,18 @@ function createChunk(cx, cz) {
                     let cIndex = Math.floor(normalizedColor * FlowerMaterials.length);
                     cIndex = Math.max(0, Math.min(FlowerMaterials.length - 1, cIndex));
 
-                    const scaleFactor = 0.6 + Math.random() * 0.8; // 0.6x to 1.4x scale
-                    const squashY = 0.6 + Math.random() * 0.6;
+                    const scaleFactor = 0.6 + flowerRandom() * 0.8; // 0.6x to 1.4x scale
+                    const squashY = 0.6 + flowerRandom() * 0.6;
 
                     flowerDataList.push({
                         x: jx, z: jz, h: h,
                         scaleFactor: scaleFactor,
                         squashY: squashY,
                         cIndex: cIndex,
-                        isTulip: Math.random() > 0.5,
-                        rotY: Math.random() * Math.PI * 2,
-                        rotZ: (Math.random() - 0.5) * 0.4,
-                        rotX: (Math.random() - 0.5) * 0.4
+                        isTulip: flowerRandom() > 0.5,
+                        rotY: flowerRandom() * Math.PI * 2,
+                        rotZ: (flowerRandom() - 0.5) * 0.4,
+                        rotX: (flowerRandom() - 0.5) * 0.4
                     });
                 }
             }
