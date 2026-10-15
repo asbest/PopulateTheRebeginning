@@ -825,7 +825,6 @@ const CONFIG = {
         WATER_COST_PENALTY: 10.0,
         DIAGONAL_CHECK: true,
         TARGET_PROXIMITY: 1.5,
-        HEIGHT_DIFF_LIMIT: 2.0,
         SLOPE_COST_FACTOR: 0.5,
     },
     AI: {
@@ -4420,8 +4419,6 @@ const Pathfinder = {
                 const dist = Math.sqrt(offset.x*offset.x + offset.y*offset.y);
                 const currentH = currentNode.h; // Optimization: Use cached height
                 const dh = Math.abs(h - currentH);
-                if(!isFlying && dh > CONFIG.PATHFINDER.HEIGHT_DIFF_LIMIT) continue;
-
                 let cost = dist + dh * CONFIG.PATHFINDER.SLOPE_COST_FACTOR;
                 if (h < WATER_LEVEL && state.waterState !== 'frozen') cost += CONFIG.PATHFINDER.WATER_COST_PENALTY; // Penalty for water
                 const gScore = currentNode.g + cost;
@@ -5647,15 +5644,19 @@ window.Humanoid = class Humanoid {
             const dx=(this.target?.x??this.mesh.position.x)-this.mesh.position.x;
             const dz=(this.target?.z??this.mesh.position.z)-this.mesh.position.z;
             const length=Math.hypot(dx,dz)||1;
-            // Lift the capsule onto the approaching bank before it collides
-            // with the steep shoreline; the swimmer remains buoyant offshore.
-            const bankH=getHeight(this.mesh.position.x+dx/length*.8,this.mesh.position.z+dz/length*.8);
-            const surfaceY=Math.max(groundH,VISUAL_WATER_LEVEL-.65,bankH+.16);
+            // Keep the swimmer visually on the water while the collision capsule
+            // clears the bank ahead. Otherwise a tall bank pins the capsule below
+            // its rim before ordinary ground following can take over.
+            const step=Math.max(.8,this.moveSpeed*Math.min(dt,.1)+.35);
+            const bankH=getSurfaceHeight(this.mesh.position.x+dx/length*step,this.mesh.position.z+dz/length*step);
+            const surfaceY=Math.max(groundH,VISUAL_WATER_LEVEL-.65);
+            const bodyY=Math.max(surfaceY,bankH)+.18;
             this.mesh.position.y=surfaceY;
             this.isGrounded=true;
             if(this.rigidBody) {
                 const v=this.rigidBody.linvel();
-                this.rigidBody.setTranslation({x:this.mesh.position.x,y:surfaceY+this.height/2,z:this.mesh.position.z},true);
+                this.groundBodyOffset=bodyY-surfaceY;
+                this.rigidBody.setTranslation({x:this.mesh.position.x,y:bodyY+this.height/2,z:this.mesh.position.z},true);
                 this.rigidBody.setLinvel({x:v.x*.94,y:0,z:v.z*.94},true);
             } else this.velocity.y=0;
             this.waterExposure=(this.waterExposure||0)+dt;
@@ -6251,7 +6252,7 @@ window.Humanoid = class Humanoid {
                 if (this.type !== 'airship' && nextH < safeH && currentH >= safeH) canMove = false;
 
                 if(canMove) {
-                    const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
+                    const slopeFactor = dh > 0 ? Math.max(.65,1.0 / (1.0 + dh * .35)) : 1.0;
                     let speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
                     if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                         speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
@@ -6335,7 +6336,8 @@ window.Humanoid = class Humanoid {
 
             // Update Path
             if(dist < (this.aiWaterEscape ? .2 : 1.0) &&
-                (!this.aiWaterEscape || getHeight(this.mesh.position.x,this.mesh.position.z)>=aiDryHeight())) {
+                (!this.aiWaterEscape || this.pathIndex+1<this.path.length ||
+                 getHeight(this.mesh.position.x,this.mesh.position.z)>=aiDryHeight())) {
                  this.pathIndex++;
                  if(this.path && this.pathIndex < this.path.length) {
                      this.target = this.path[this.pathIndex];
@@ -6381,7 +6383,7 @@ window.Humanoid = class Humanoid {
                 }
 
                 if(canMove) {
-                    const slopeFactor = dh > 0 ? (1.0 / (1.0 + dh * 3.0)) : 1.0;
+                    const slopeFactor = dh > 0 ? Math.max(.65,1.0 / (1.0 + dh * .35)) : 1.0;
                     let speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
                     if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                         speed *= 3.0; // Make airship 200% faster (+200% = 3x total)

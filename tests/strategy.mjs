@@ -44,7 +44,7 @@ await check('Units leave building footprints and shed obsolete roles after conve
  if(u.aiRole||u.aiTrainingTarget)throw new Error('Conversion retained old AI orders');
 }));
 await p.close();
-await check('Enemy routes stay on visible land and stranded troops leave the water',async()=>{
+await check('Enemy routes stay dry and troops climb steep banks from water and land',async()=>{
  const water=await b.newPage();water.on('pageerror',e=>errors.push(String(e)));
  try {
   await water.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
@@ -110,7 +110,32 @@ await check('Enemy routes stay on visible land and stranded troops leave the wat
    state.waterState='frozen';drowning.update(.1);
    if(drowning.isSwimming||drowning.aiWaterEscape)throw new Error('Swimming continued after water froze');
    state.waterState='liquid';
-   return {waypoints:route.length,minHeight,lowestWalk,shore,playerShore:player.mesh.position,remainingAir:drowning.hp/drowning.maxHp};
+   // A near-vertical bank must remain reachable both from open water and on foot.
+   for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
+   for(let x=-12;x<=12;x++)for(let z=-8;z<=8;z++){
+    const height=x<0?-1:x<1?-1+9*x:8;
+    state.terrainMods.set(`${x},${z}`,height-getHeight(x,z));
+   }
+   state.heightCache.clear();gameTestAPI.updateChunks(true);
+   const waterClimber=new Humanoid(1,'warrior',-3,0);state.units.push(waterClimber);
+   waterClimber.aiWaterEscape=true;waterClimber.goto(4,0);
+   if(waterClimber.state!=='move')throw new Error('Steep water exit has no route');
+   let waterFrames=0;
+   for(;waterFrames<480&&getHeight(waterClimber.mesh.position.x,waterClimber.mesh.position.z)<gameTestAPI.aiDryHeight();waterFrames++){
+    state.physicsWorld.timestep=1/60;state.physicsWorld.step();waterClimber.nextTargetCheck=Infinity;waterClimber.update(1/60);
+   }
+   if(getHeight(waterClimber.mesh.position.x,waterClimber.mesh.position.z)<gameTestAPI.aiDryHeight())
+    throw new Error('Steep water exit stalled: '+JSON.stringify({position:waterClimber.mesh.position,target:waterClimber.target,state:waterClimber.state,velocity:waterClimber.velocity}));
+   const hillClimber=new Humanoid(0,'warrior',.25,3);state.units.push(hillClimber);hillClimber.goto(4,3);
+   if(hillClimber.state!=='move')throw new Error('Steep uphill route was rejected');
+   let hillFrames=0,maxGroundGap=0;
+   for(;hillFrames<480&&hillClimber.mesh.position.x<3;hillFrames++){
+    state.physicsWorld.timestep=1/60;state.physicsWorld.step();hillClimber.nextTargetCheck=Infinity;hillClimber.update(1/60);
+    maxGroundGap=Math.max(maxGroundGap,Math.abs(hillClimber.mesh.position.y-getSurfaceHeight(hillClimber.mesh.position.x,hillClimber.mesh.position.z)));
+   }
+   if(hillClimber.mesh.position.x<3||maxGroundGap>.35)
+    throw new Error('Steep uphill walk failed: '+JSON.stringify({position:hillClimber.mesh.position,target:hillClimber.target,state:hillClimber.state,velocity:hillClimber.velocity,maxGroundGap}));
+   return {waypoints:route.length,minHeight,lowestWalk,shore,playerShore:player.mesh.position,remainingAir:drowning.hp/drowning.maxHp,waterFrames,hillFrames,maxGroundGap};
   });
  } finally {await water.close();}
 });

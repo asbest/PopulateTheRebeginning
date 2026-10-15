@@ -196,21 +196,27 @@ export function createLocomotion(T) {
         if(u.state!=='idle')u.idleAnchor=null;
         if(u.idleAnchor){p.x=u.idleAnchor.x;p.z=u.idleAnchor.z;}
         const h=heightAt(p.x,p.z),gap=p.y-h;
-        if(gap<.35&&u.velocity.y<Math.max(2,u.moveSpeed)||u.isGrounded&&Math.abs(gap)<.45){
+        // Rapier can push the capsule above a sharp rise before the visual feet
+        // reach it. Keep a walking unit attached to the surface during that lift.
+        const walkingGap=Math.max(.45,(u.groundBodyOffset||0)+u.height);
+        const climbing=(u.state==='move'||u.state==='manual'||u.state==='combat')&&gap<u.height*4;
+        if((climbing||gap<.35)&&u.velocity.y<Math.max(2,u.moveSpeed)||u.isGrounded&&gap<walkingGap){
             u.isGrounded=true;p.y=h;
             if(u.rigidBody){
                 const v=u.rigidBody.linvel();
                 if(u.state==='idle'||u.state==='combat'&&u.attackTarget&&p.distanceTo(u.attackTarget.mesh.position)<=u.range){v.x*=Math.exp(-12*dt);v.z*=Math.exp(-12*dt);}
                 if(u.state==='idle'&&(u.idleAnchor||Math.hypot(v.x,v.z)<.4)){u.idleAnchor={x:p.x,z:p.z};v.x=v.z=0;}
-                const next=heightAt(p.x+v.x*dt,p.z+v.z*dt);
+                const lead=Math.min(dt,.1);
+                const next=heightAt(p.x+v.x*lead,p.z+v.z*lead);
                 // Follow the surface tangent, including downhill travel; gravity still handles genuine falls.
                 const vy=Math.max(-u.moveSpeed,Math.min(u.moveSpeed,(next-h)/Math.max(dt,.001)));
-                // Lift the collision capsule, not the visual feet, clear of the uphill surface.
-                // At a slope the capsule radius extends below the center-point ground height.
+                // Lift the collision capsule over the terrain swept during the next
+                // physics frame. The visible feet stay on the actual surface.
                 let clearance=.02;
-                for(let i=0;i<8;i++){
-                    const a=i*Math.PI/4,r=.3;
-                    clearance=Math.max(clearance,heightAt(p.x+Math.cos(a)*r,p.z+Math.sin(a)*r)-h+.02);
+                for(let t=0;t<=1;t++)for(let i=0;i<8;i++){
+                    if(t&&Math.abs(v.x)+Math.abs(v.z)<.01)break;
+                    const a=i*Math.PI/4,r=.35;
+                    clearance=Math.max(clearance,heightAt(p.x+v.x*lead*t+Math.cos(a)*r,p.z+v.z*lead*t+Math.sin(a)*r)-h+.04);
                 }
                 u.groundBodyOffset=clearance;
                 u.rigidBody.setTranslation({x:p.x,y:h+u.height/2+clearance,z:p.z},true);
