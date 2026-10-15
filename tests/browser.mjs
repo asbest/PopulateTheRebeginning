@@ -264,11 +264,12 @@ try {
    const centers=buttons.map(button=>{const rect=button.getBoundingClientRect();return rect.left+rect.width/2;});
    buttons.at(-1)?.scrollIntoView({block:'end'});
    const last=buttons.at(-1)?.getBoundingClientRect();
-   return {width:bounds.width,count:buttons.length,spread:Math.max(...centers)-Math.min(...centers),
+   return {width:bounds.width,unitWidth:document.getElementById('unit-list').getBoundingClientRect().width,
+    count:buttons.length,spread:Math.max(...centers)-Math.min(...centers),
     scrollHeight:menu.scrollHeight,clientHeight:menu.clientHeight,scrollTop:menu.scrollTop,
     lastBottom:last?.bottom,menuBottom:bounds.bottom};
   });
-  if(layout.width>65||layout.count<19||layout.spread>2||layout.scrollHeight<=layout.clientHeight||
+  if(layout.width>50||layout.unitWidth>50||layout.count<19||layout.spread>2||layout.scrollHeight<=layout.clientHeight||
      layout.scrollTop<=0||layout.lastBottom>layout.menuBottom+1)
    throw new Error('Spell bar layout or scrolling failed: '+JSON.stringify(layout));
  });
@@ -350,7 +351,9 @@ try {
  await check('Mobile viewport keeps touch controls and actions visible',async()=>{
   await page.setViewportSize({width:390,height:844});await page.waitForTimeout(600);
   const data=await page.evaluate(()=>{const menu=document.getElementById('right-menu'),r=menu.getBoundingClientRect();const j=document.getElementById('joystick-area').getBoundingClientRect();const buttons=Array.from(menu.querySelectorAll('.action-btn'));const icons=buttons.map(button=>{const b=button.getBoundingClientRect(),s=button.querySelector('svg')?.getBoundingClientRect();return {button:{x:b.x,y:b.y,right:b.right,bottom:b.bottom},icon:s&&{x:s.x,y:s.y,right:s.right,bottom:s.bottom}};});const centers=icons.map(({button})=>(button.x+button.right)/2);buttons.at(-1)?.scrollIntoView({block:'end'});return {right:{x:r.x,width:r.width},joystick:{x:j.x,y:j.y},canvas:!!document.querySelector('canvas'),icons,spread:Math.max(...centers)-Math.min(...centers),scrollTop:menu.scrollTop};});
-  if(data.right.x<0||data.right.x+data.right.width>390||data.right.width>60||data.spread>2||data.scrollTop<=0||!data.canvas)throw new Error(JSON.stringify(data));
+  const unitWidth=await page.locator('#unit-list').evaluate(element=>element.getBoundingClientRect().width);
+  if(unitWidth>50)throw new Error('Mobile unit panel is too wide: '+unitWidth);
+  if(data.right.x<0||data.right.x+data.right.width>390||data.right.width>50||data.spread>2||data.scrollTop<=0||!data.canvas)throw new Error(JSON.stringify(data));
   if(data.icons.some(({button,icon})=>!icon||icon.x<button.x||icon.y<button.y||icon.right>button.right||icon.bottom>button.bottom))throw new Error('Mobile spell icon escapes its button: '+JSON.stringify(data.icons));
   await page.screenshot({path:path.join(root,'test-results','browser-mobile.png')});return data;
  });

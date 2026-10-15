@@ -7,15 +7,16 @@ body {font-family:'Segoe UI',system-ui,sans-serif;background:#183d49;color:#e3e6
 #top-bar {background:linear-gradient(#0b2029df,#0b202900)!important;padding:16px!important;}
 #mana-bar {height:8px!important;border:1px solid #d0bc81!important;background:#132c35!important;border-radius:5px!important;box-shadow:0 0 14px #6bcace33;}
 #mana-fill {background:linear-gradient(90deg,#368baf,#94ded5)!important;}
-#unit-list {left:12px!important;top:90px!important;border:1px solid #78938555;border-radius:12px;background:#0d2732b8!important;padding:6px!important;gap:6px!important;scrollbar-color:#86c4bd55 transparent;}
+#unit-list {left:12px!important;top:90px!important;width:38px!important;border:1px solid #78938555;border-radius:12px;background:#0d2732b8!important;padding:3px!important;gap:6px!important;scrollbar-color:#86c4bd55 transparent;}
+#enemy-spell-queue {left:64px!important;}
 .unit-item {background:#203a42!important;border-color:#788e86!important;box-shadow:0 3px 8px #0003!important;}
 .unit-item.selected {border-color:#e1ca87!important;box-shadow:0 0 12px #dfc17b55!important;}
-#right-menu {width:46px!important;right:12px!important;top:86px!important;gap:6px!important;padding:6px!important;grid-template-columns:minmax(0,1fr)!important;touch-action:pan-y;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#d2be8788 transparent;background:#0c2530c9;border:1px solid #78938555;border-radius:12px;align-content:start;}
-.action-btn {width:42px!important;height:42px!important;border-radius:10px!important;border:1px solid #79948d!important;background:linear-gradient(145deg,#28434a,#122a33)!important;box-shadow:0 3px 8px #0003!important;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
+#right-menu {width:38px!important;right:12px!important;top:86px!important;gap:5px!important;padding:3px!important;grid-template-columns:minmax(0,1fr)!important;touch-action:pan-y;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#d2be8788 transparent;background:#0c2530c9;border:1px solid #78938555;border-radius:12px;align-content:start;}
+.action-btn {width:36px!important;height:36px!important;border-radius:9px!important;border:1px solid #79948d!important;background:linear-gradient(145deg,#28434a,#122a33)!important;box-shadow:0 3px 8px #0003!important;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
 .action-btn.active {border-color:#ead28b!important;box-shadow:0 0 12px #dcc58055!important;}
 #spell-name-tooltip {display:none;position:fixed;z-index:1000;max-width:min(55vw,220px);padding:8px 12px;border:1px solid #ead28b;border-radius:8px;background:#0b2530f2;color:#f5e8c3;font:600 14px/1.2 'Segoe UI',system-ui,sans-serif;text-align:center;white-space:nowrap;box-shadow:0 5px 18px #0009;pointer-events:none;}
 .tribal-icon {width:27px;height:27px;color:var(--gold);display:block;pointer-events:none;}
-.action-btn .tribal-icon {width:32px;height:32px;}
+.action-btn .tribal-icon {width:28px;height:28px;}
 .unit-item .tribal-icon {width:23px;height:23px;color:var(--aqua);}
 .unit-item.enemy .tribal-icon {color:#e89770;}
 .action-btn:focus-visible,.unit-item:focus-visible {outline:2px solid var(--gold);outline-offset:3px;}
@@ -28,4 +29,4 @@ body {font-family:'Segoe UI',system-ui,sans-serif;background:#183d49;color:#e3e6
 #story-overlay {background:linear-gradient(#061a2499,#061a24ed),url('key-art.png') center/cover!important;}
 #story-title {color:var(--gold)!important;font-weight:650;letter-spacing:.025em;}
 #story-text {color:#e8e5d6;text-shadow:0 2px 8px #0009!important;}
-@media(max-width:700px){#right-menu{width:44px!important;right:4px!important;padding:5px!important;gap:5px!important;}.action-btn{width:40px!important;height:40px!important;}.action-btn .tribal-icon{width:28px;height:28px;}#unit-list{left:4px!important;}}
+@media(max-width:700px){#right-menu{right:4px!important;}#unit-list{left:4px!important;}#enemy-spell-queue{left:52px!important;}}
