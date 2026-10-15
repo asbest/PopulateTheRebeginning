@@ -239,15 +239,31 @@ try {
  });
  await check('Holding a spell reveals its full name',async()=>{
   const point=await controlCenter(page,'#btn-blast');
+  const before=await page.evaluate(()=>state.currentAction);
   await page.mouse.move(point.x,point.y);
   await page.mouse.down();
   try{
    await page.waitForFunction(()=>document.getElementById('spell-name-tooltip')?.getAttribute('aria-hidden')==='false',null,{timeout:3000});
    const shown=await page.evaluate(()=>({name:document.getElementById('spell-name-tooltip').textContent,
-    icon:!!document.querySelector('#btn-blast svg'),action:state.currentAction}));
-   if(shown.name!=='Blast (Fireball)'||!shown.icon)throw new Error(JSON.stringify(shown));
+    icon:!!document.querySelector('#btn-blast svg'),action:state.currentAction,
+    tip:document.getElementById('spell-name-tooltip').getBoundingClientRect().toJSON(),
+    button:document.getElementById('btn-blast').getBoundingClientRect().toJSON()}));
+   if(shown.name!=='Blast (Fireball)'||!shown.icon||shown.action!==before||
+      shown.tip.right>shown.button.left||shown.tip.left<0||shown.tip.bottom>900)
+    throw new Error(JSON.stringify(shown));
   }finally{await page.mouse.up();}
   if(await page.locator('#spell-name-tooltip').isVisible())throw new Error('Spell name remained visible after release');
+  await page.evaluate(()=>window.selectAction('move'));
+  await page.mouse.click(point.x,point.y);
+  if(await page.evaluate(()=>state.currentAction)!=='blast'||await page.locator('#spell-name-tooltip').isVisible())
+   throw new Error('A short click did not select Blast cleanly');
+  await page.evaluate(()=>window.selectAction('move'));
+  await page.mouse.move(point.x,point.y);
+  await page.mouse.down();
+  await page.mouse.move(point.x-100,point.y);
+  await page.waitForTimeout(550);
+  if(await page.locator('#spell-name-tooltip').isVisible())throw new Error('Moving away did not cancel the spell name');
+  await page.mouse.up();
  });
  await check('Airship cargo, upgrades, rally points and campaign survive save/load',async()=>{
   const before=await page.evaluate(()=>{
@@ -313,13 +329,25 @@ try {
    await phone.touchscreen.tap(unitPoint.x,unitPoint.y);
    if(await phone.evaluate(()=>state.selectedUnits.length)!==1)throw new Error('Touch unit selection failed');
    const blastPoint=await controlCenter(phone,'#btn-blast');
-   await phone.locator('#btn-blast').dispatchEvent('pointerdown',{pointerType:'touch',button:0});
-   await phone.waitForFunction(()=>document.getElementById('spell-name-tooltip')?.getAttribute('aria-hidden')==='false',null,{timeout:3000});
-   if((await phone.locator('#spell-name-tooltip').textContent())!=='Blast (Fireball)')throw new Error('Touch hold did not show the spell name');
-   await phone.locator('#btn-blast').dispatchEvent('pointerup',{pointerType:'touch',button:0});
+   const touch=await mobile.newCDPSession(phone);
+   await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:blastPoint.x,y:blastPoint.y}]});
+   try{
+    await phone.waitForFunction(()=>document.getElementById('spell-name-tooltip')?.getAttribute('aria-hidden')==='false',null,{timeout:3000});
+    const shown=await phone.evaluate(()=>({name:document.getElementById('spell-name-tooltip').textContent,
+     tip:document.getElementById('spell-name-tooltip').getBoundingClientRect().toJSON(),
+     button:document.getElementById('btn-blast').getBoundingClientRect().toJSON()}));
+    if(shown.name!=='Blast (Fireball)'||shown.tip.left<0||shown.tip.right>390||
+       shown.tip.right>shown.button.left||shown.tip.top<0||shown.tip.bottom>844)
+     throw new Error('Touch spell name is clipped or misplaced: '+JSON.stringify(shown));
+   }finally{
+    await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await touch.detach();
+   }
    if(await phone.locator('#spell-name-tooltip').isVisible())throw new Error('Touch release did not hide the spell name');
+   await phone.evaluate(()=>window.selectAction('move'));
    await phone.touchscreen.tap(blastPoint.x,blastPoint.y);
-   if(await phone.evaluate(()=>state.currentAction)!=='blast')throw new Error('Touch action selection failed');
+   if(await phone.evaluate(()=>state.currentAction)!=='blast'||await phone.locator('#spell-name-tooltip').isVisible())
+    throw new Error('Short touch did not select Blast cleanly');
    const point=await phone.evaluate(()=>{const p=state.shaman.mesh.position.clone();p.x+=1;const v=p.project(state.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2};});
    await phone.touchscreen.tap(point.x,point.y);
    const mana=await phone.evaluate(()=>state.mana);
