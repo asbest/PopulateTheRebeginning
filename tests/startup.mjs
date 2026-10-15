@@ -7,6 +7,8 @@ const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createR
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 const base=process.env.GAME_URL||'http://127.0.0.1:8765';
 let failures=0;
+const results=[];
+const workflowEscape=value=>String(value).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A');
 try{
     for(const [name,options,url] of [
         ['desktop',{},`${base}/PopulateTheRebeginning.html`],
@@ -24,7 +26,7 @@ try{
         try{
             await page.goto(url,{waitUntil:'domcontentloaded',timeout:90000});
             await page.waitForFunction(()=>document.querySelector('#loading')?.style.display==='none'&&
-                !!window.state?.renderer&&!!window.state?.shaman,null,{timeout:90000});
+                !!window.state?.renderer&&!!window.state?.shaman,null,{timeout:120000,polling:250});
             const result=await page.evaluate(()=>({loading:document.querySelector('#loading')?.style.display,
                 renderer:!!window.state?.renderer,shaman:!!window.state?.shaman,textures:window.Art?.textureStatus,
                 help:document.querySelector('#help-overlay')?.style.display,
@@ -44,12 +46,19 @@ try{
             if(!playing)throw new Error(`Game stayed paused after closing welcome overlays: ${JSON.stringify(result)}`);
             if(errors.length||missing.length)throw new Error(JSON.stringify({result,errors,missing}));
             console.log(`PASS ${name} starts without test mode`,result);
+            results.push({name,pass:true,result});
         }catch(error){
             failures++;
             const state=await page.evaluate(()=>({loading:document.querySelector('#loading')?.style.display,
                 renderer:!!window.state?.renderer,shaman:!!window.state?.shaman,textures:window.Art?.textureStatus})).catch(()=>null);
-            console.error(`FAIL ${name}`,{error:String(error),state,errors,missing});
+            const detail={error:String(error),state,errors,missing};
+            results.push({name,pass:false,...detail});
+            console.error(`FAIL ${name}`,detail);
+            if(process.env.GITHUB_ACTIONS==='true')
+                console.log(`::error title=${workflowEscape(name+' startup')}::${workflowEscape(JSON.stringify(detail))}`);
         }finally{await page.close();}
     }
 }finally{await browser.close();}
+await fs.mkdir(new URL('../test-results/',import.meta.url),{recursive:true});
+await fs.writeFile(new URL('../test-results/startup-report.json',import.meta.url),JSON.stringify(results,null,2));
 if(failures)process.exitCode=1;

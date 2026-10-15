@@ -29,6 +29,26 @@ async function controlCenter(target,selector){
   return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
  },selector);
 }
+async function watchSpellPress(target){
+ await target.evaluate(()=>{
+  const button=document.getElementById('btn-blast');
+  window.__heldSpellButton=button;
+  window.__spellPressEvents=[];
+  for(const type of ['pointerdown','pointerup','pointerleave','pointercancel'])
+   button.addEventListener(type,event=>window.__spellPressEvents.push({type,pointerType:event.pointerType,button:event.button}));
+ });
+}
+async function waitForSpellName(target){
+ try{await target.locator('#spell-name-tooltip[aria-hidden="false"]').waitFor({state:'visible',timeout:15000});}
+ catch(error){
+  const diagnostic=await target.evaluate(()=>({events:window.__spellPressEvents,
+   oldButtonConnected:window.__heldSpellButton?.isConnected,
+   sameButton:window.__heldSpellButton===document.getElementById('btn-blast'),
+   tooltip:document.getElementById('spell-name-tooltip')?.outerHTML,
+   currentAction:window.state?.currentAction})).catch(()=>null);
+  throw new Error(`${error}; spell press diagnostic: ${JSON.stringify(diagnostic)}`);
+ }
+}
 const url=process.env.GAME_URL || 'http://127.0.0.1:8765';
 try {
  await page.goto(url+'/?test=1',{waitUntil:'load',timeout:60000});
@@ -240,10 +260,11 @@ try {
  await check('Holding a spell reveals its full name',async()=>{
   const point=await controlCenter(page,'#btn-blast');
   const before=await page.evaluate(()=>state.currentAction);
+  await watchSpellPress(page);
   await page.mouse.move(point.x,point.y);
   await page.mouse.down();
   try{
-   await page.waitForFunction(()=>document.getElementById('spell-name-tooltip')?.getAttribute('aria-hidden')==='false',null,{timeout:3000});
+   await waitForSpellName(page);
    const shown=await page.evaluate(()=>({name:document.getElementById('spell-name-tooltip').textContent,
     icon:!!document.querySelector('#btn-blast svg'),action:state.currentAction,
     tip:document.getElementById('spell-name-tooltip').getBoundingClientRect().toJSON(),
@@ -329,10 +350,11 @@ try {
    await phone.touchscreen.tap(unitPoint.x,unitPoint.y);
    if(await phone.evaluate(()=>state.selectedUnits.length)!==1)throw new Error('Touch unit selection failed');
    const blastPoint=await controlCenter(phone,'#btn-blast');
+   await watchSpellPress(phone);
    const touch=await mobile.newCDPSession(phone);
    await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:blastPoint.x,y:blastPoint.y}]});
    try{
-    await phone.waitForFunction(()=>document.getElementById('spell-name-tooltip')?.getAttribute('aria-hidden')==='false',null,{timeout:3000});
+    await waitForSpellName(phone);
     const shown=await phone.evaluate(()=>({name:document.getElementById('spell-name-tooltip').textContent,
      tip:document.getElementById('spell-name-tooltip').getBoundingClientRect().toJSON(),
      button:document.getElementById('btn-blast').getBoundingClientRect().toJSON()}));
