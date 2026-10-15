@@ -60,6 +60,52 @@ try{
   }
   return {cost,enemyHealth:enemy.hp,unitCount:state.units.length};
  },spell);});
+ await check('Swamp and tornado visuals stay bounded and release resources',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const caster=fixture.caster;
+   state.units=[caster];gameTestAPI.SpatialHash.update();
+   const x=caster.mesh.position.x,z=caster.mesh.position.z;
+   gameTestAPI.performAction(x+2,z,'swamp');
+   gameTestAPI.performAction(x+5,z,'tornado');
+   const [swamp,tornado]=state.activeEffects.slice(-2);
+   if(swamp?.constructor.name!=='Swamp'||tornado?.constructor.name!=='Tornado')throw new Error('Missing hazard visuals');
+   if(!swamp.surface?.geometry?.index?.count||!swamp.ripples?.isInstancedMesh||!swamp.bubbles?.isInstancedMesh||
+      !tornado.ribbons?.geometry?.index?.count||!tornado.debris?.isInstancedMesh||
+      swamp.mesh.children.length>3||tornado.mesh.children.length>5)throw new Error('Unbounded hazard draw calls');
+   const positions=swamp.surface.geometry.attributes.position,index=swamp.surface.geometry.index;
+   for(let i=0;i<index.count;i+=3){
+    const ys=[positions.getY(index.getX(i)),positions.getY(index.getX(i+1)),positions.getY(index.getX(i+2))];
+    if(Math.max(...ys)-Math.min(...ys)>=0.81)throw new Error('Swamp spans a cliff face');
+   }
+   const particleCount=state.particles.length;
+   const firstMatrix=tornado.debris.instanceMatrix.array.slice(0,16);
+   for(let i=0;i<90;i++){swamp.update(1/60);tornado.update(1/60);}
+   if(state.particles.length!==particleCount)throw new Error('Hazard animation allocates particles every frame');
+   if(firstMatrix.every((value,i)=>value===tornado.debris.instanceMatrix.array[i]))throw new Error('Tornado debris is static');
+   let disposals=0;
+   for(const resource of [swamp.surface.geometry,swamp.surface.material,tornado.funnel.geometry,tornado.ribbons.geometry])
+    resource.addEventListener('dispose',()=>disposals++);
+   swamp.timer=0;tornado.timer=0;
+   if(swamp.update(.01)!==false||tornado.update(.01)!==false||swamp.mesh.parent||tornado.mesh.parent||disposals!==4)
+    throw new Error('Hazard GPU resources survived expiration: '+disposals);
+   return {swampDraws:swamp.mesh.children.length,tornadoDraws:tornado.mesh.children.length,disposals};
+  });
+ });
+ await check('Loading a save disposes active swamp and tornado meshes',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {x,z}=fixture;
+   gameTestAPI.performAction(x,z,'swamp');
+   gameTestAPI.performAction(x,z,'tornado');
+   const [swamp,tornado]=state.activeEffects.slice(-2);
+   let disposals=0;
+   swamp.surface.geometry.addEventListener('dispose',()=>disposals++);
+   tornado.ribbons.geometry.addEventListener('dispose',()=>disposals++);
+   saveGame();loadGame();
+   if(swamp.mesh.parent||tornado.mesh.parent||disposals!==2||state.activeEffects.includes(swamp)||state.activeEffects.includes(tornado))
+    throw new Error('Hazard meshes survived load: '+disposals);
+   return {disposals};
+  });
+ });
  await check('Loading a save removes active firestorm illumination',async()=>{
   await fresh();return p.evaluate(()=>{
    const {x,z}=fixture;

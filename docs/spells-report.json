@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-15T18:37:28.426Z",
+  "date": "2026-10-15T19:25:09.414Z",
   "results": [
     {
       "name": "All referenced configuration fields exist",
@@ -166,6 +166,22 @@
         "cost": 30,
         "enemyHealth": 1000,
         "unitCount": 8
+      }
+    },
+    {
+      "name": "Swamp and tornado visuals stay bounded and release resources",
+      "pass": true,
+      "detail": {
+        "swampDraws": 3,
+        "tornadoDraws": 5,
+        "disposals": 4
+      }
+    },
+    {
+      "name": "Loading a save disposes active swamp and tornado meshes",
+      "pass": true,
+      "detail": {
+        "disposals": 2
       }
     },
     {

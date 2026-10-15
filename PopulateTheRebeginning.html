@@ -4823,34 +4823,100 @@ class Swamp extends ActiveEffect {
         this.faction = faction;
         this.timer = CONFIG.EFFECTS.SWAMP_DURATION;
         this.radius = CONFIG.EFFECTS.SWAMP_RADIUS;
+        this.age = 0;
+        this.mesh = new THREE.Group();
+        this.mesh.position.set(x, 0, z);
 
-        const geo = new THREE.CylinderGeometry(this.radius, this.radius, 0.2, 16);
-        const mat = new THREE.MeshBasicMaterial({color: 0x113311, transparent: true, opacity: 0.6});
-        this.mesh = new THREE.Mesh(geo, mat);
-        this.mesh.position.copy(this.pos);
+        // The mud follows the actual terrain triangles instead of cutting a flat disc through hills.
+        const segments = 40, rings = 5, positions = [], colors = [], indices = [], heights = [];
+        const center = new THREE.Color(0x183d3b), bank = new THREE.Color(0x61583d);
+        const color = new THREE.Color();
+        for(let ring=0;ring<=rings;ring++) {
+            const fraction=ring/rings;
+            for(let step=0;step<=segments;step++) {
+                const angle=step/segments*Math.PI*2;
+                const edge=1+0.055*Math.sin(angle*5+1.3)+0.035*Math.sin(angle*11-0.7);
+                const distance=this.radius*fraction*edge;
+                const px=Math.cos(angle)*distance, pz=Math.sin(angle)*distance;
+                const height=Math.max(getHeight(x+px,z+pz),WATER_LEVEL)+0.07;
+                positions.push(px,height,pz);heights.push(height);
+                color.copy(center).lerp(bank,Math.pow(fraction,2.1));
+                color.multiplyScalar(0.88+0.1*Math.sin(angle*9+fraction*17));
+                colors.push(color.r,color.g,color.b);
+            }
+        }
+        for(let ring=0;ring<rings;ring++)for(let step=0;step<segments;step++) {
+            const a=ring*(segments+1)+step,b=a+segments+1;
+            for(const [u,v,w] of [[a,b,a+1],[b,b+1,a+1]]) {
+                const low=Math.min(heights[u],heights[v],heights[w]);
+                const high=Math.max(heights[u],heights[v],heights[w]);
+                if(high-low<0.8)indices.push(u,v,w);
+            }
+        }
+        const surfaceGeo=new THREE.BufferGeometry();
+        surfaceGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+        surfaceGeo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+        surfaceGeo.setIndex(indices);
+        surfaceGeo.computeVertexNormals();
+        this.surface=new THREE.Mesh(surfaceGeo,new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.34,metalness:0.04,transparent:true,opacity:0.87,depthWrite:false,side:THREE.DoubleSide}));
+        this.mesh.add(this.surface);
+
+        this.ripples=new THREE.InstancedMesh(new THREE.RingGeometry(0.72,0.8,24),
+            new THREE.MeshBasicMaterial({color:0xa9c7ad,transparent:true,opacity:0.34,depthWrite:false,side:THREE.DoubleSide}),4);
+        this.ripples.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.mesh.add(this.ripples);
+        this.bubbles=new THREE.InstancedMesh(AssetCache.geos.cloud,
+            new THREE.MeshStandardMaterial({color:0x93b5a0,roughness:0.2,metalness:0.08,transparent:true,opacity:0.58,depthWrite:false}),8);
+        this.bubbles.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.mesh.add(this.bubbles);
+        this.rippleAnchors=Array.from({length:4},(_,i)=>{
+            const angle=i*2.4+0.3,distance=this.radius*(0.18+0.17*(i%3));
+            const px=Math.cos(angle)*distance,pz=Math.sin(angle)*distance;
+            return {angle,px,pz,y:Math.max(getHeight(x+px,z+pz),WATER_LEVEL)+0.11};
+        });
+        this.bubbleAnchors=Array.from({length:8},(_,i)=>{
+            const angle=i*2.399963,distance=this.radius*(0.18+0.075*(i%6));
+            const px=Math.cos(angle)*distance,pz=Math.sin(angle)*distance;
+            return {angle,px,pz,y:Math.max(getHeight(x+px,z+pz),WATER_LEVEL)+0.13};
+        });
+        this.instanceDummy=new THREE.Object3D();
+        this.animateVisuals();
         state.scene.add(this.mesh);
         SoundManager.playSound('magic');
     }
+    animateVisuals() {
+        const dummy=this.instanceDummy;
+        for(let i=0;i<4;i++) {
+            const anchor=this.rippleAnchors[i];
+            const size=0.25+((this.age*0.28+i*0.23)%1)*0.85;
+            dummy.position.set(anchor.px,anchor.y,anchor.pz);
+            dummy.rotation.set(-Math.PI/2,anchor.angle,0);
+            dummy.scale.setScalar(size);
+            dummy.updateMatrix();this.ripples.setMatrixAt(i,dummy.matrix);
+        }
+        this.ripples.instanceMatrix.needsUpdate=true;
+        for(let i=0;i<8;i++) {
+            const anchor=this.bubbleAnchors[i];
+            const phase=(this.age*(0.3+0.04*(i%3))+i/8)%1;
+            dummy.position.set(anchor.px,anchor.y+phase*0.62,anchor.pz);
+            dummy.rotation.set(0,anchor.angle,0);
+            dummy.scale.setScalar((0.09+0.1*(i%3)/2)*(1-phase*0.6));
+            dummy.updateMatrix();this.bubbles.setMatrixAt(i,dummy.matrix);
+        }
+        this.bubbles.instanceMatrix.needsUpdate=true;
+    }
+    dispose() {
+        state.scene.remove(this.mesh);
+        this.surface.geometry.dispose();this.surface.material.dispose();
+        this.ripples.geometry.dispose();this.ripples.material.dispose();
+        this.bubbles.material.dispose();
+        this.ripples.dispose();this.bubbles.dispose();
+    }
     update(dt) {
         this.timer -= dt;
-
-        // Visual pulse
-        this.mesh.scale.setScalar(1.0 + Math.sin(this.timer * 2) * 0.05);
-        this.mesh.material.opacity = 0.6 + Math.sin(this.timer * 3) * 0.2;
-
-        // Bubbles
-        if(Math.random() < 0.1) {
-            const angle = Math.random() * Math.PI * 2;
-            const r = Math.random() * this.radius * 0.8;
-            const bubbleMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), new THREE.MeshBasicMaterial({color: 0x224422, transparent: true, opacity: 0.8}));
-            bubbleMesh.position.set(this.pos.x + Math.cos(angle)*r, this.pos.y, this.pos.z + Math.sin(angle)*r);
-
-            state.particles.push(new VisualEffect(bubbleMesh, 0.5 + Math.random()*0.5, (eff, dt) => {
-                eff.mesh.position.y += dt;
-                eff.mesh.scale.setScalar(1.0 + (1.0 - (eff.life/eff.maxLife)) * 1.5);
-                eff.mesh.material.opacity = eff.life / eff.maxLife;
-            }));
-        }
+        this.age+=dt;
+        this.surface.material.opacity=0.84+0.035*Math.sin(this.age*2.1);
+        this.animateVisuals();
 
         // Kill units
         SpatialHash.query(this.pos.x, this.pos.z, this.radius * 0.8).forEach(u => {
@@ -4864,9 +4930,7 @@ class Swamp extends ActiveEffect {
         });
 
         if(this.timer <= 0) {
-            state.scene.remove(this.mesh);
-            this.mesh.geometry.dispose();
-            this.mesh.material.dispose();
+            this.dispose();
             return false;
         }
         return true;
@@ -4881,24 +4945,91 @@ class Tornado extends ActiveEffect {
         this.timer = CONFIG.EFFECTS.TORNADO_DURATION;
         this.moveDelay = 5.0;
         this.angle = Math.random() * Math.PI * 2;
+        this.age = 0;
         this.mesh = new THREE.Group();
+        this.funnel=new THREE.Mesh(new THREE.LatheGeometry([
+            new THREE.Vector2(0.25,0),new THREE.Vector2(0.38,1.4),
+            new THREE.Vector2(0.58,3.2),new THREE.Vector2(0.9,5.4),
+            new THREE.Vector2(1.5,7.8),new THREE.Vector2(2.45,10.5)
+        ],24),new THREE.MeshStandardMaterial({color:0x445960,roughness:1,transparent:true,opacity:0.43,depthWrite:false,side:THREE.DoubleSide}));
+        this.mesh.add(this.funnel);
 
-        // Use overlapping clouds for funnel
-        const cloudMat = new THREE.MeshBasicMaterial({color: 0x999999, transparent: true, opacity: 0.6});
-        for(let i=0; i<7; i++) {
-            const p = new THREE.Mesh(AssetCache.geos.cloud, cloudMat);
-            const scale = 1.0 + (i * 0.4);
-            p.scale.set(scale, scale*0.5, scale);
-            p.position.set(0, i * 1.5, 0);
-            p.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
-            p.userData = { rotSpeed: (15 - i)*0.5 + 2.0 };
-            this.mesh.add(p);
+        // Three tapered wind ribbons share one geometry and one draw call.
+        const positions=[],colors=[],indices=[];
+        const earth=new THREE.Color(0x76614d),cloud=new THREE.Color(0x637376),color=new THREE.Color();
+        const steps=64,strands=3;
+        for(let strand=0;strand<strands;strand++) {
+            const offset=positions.length/3;
+            for(let i=0;i<=steps;i++) {
+                const t=i/steps,angle=t*Math.PI*9+strand*Math.PI*2/3;
+                const radius=0.36+2.0*Math.pow(t,1.55)+0.07*Math.sin(t*22+strand);
+                const width=0.12+0.34*t;
+                for(const side of [-1,1]) {
+                    const r=radius+side*width;
+                    positions.push(Math.cos(angle)*r,0.2+t*10.3,Math.sin(angle)*r);
+                    color.copy(earth).lerp(cloud,t);
+                    color.multiplyScalar(0.83+0.16*Math.sin(t*27+strand*2));
+                    colors.push(color.r,color.g,color.b);
+                }
+                if(i<steps) {
+                    const a=offset+i*2;
+                    indices.push(a,a+1,a+2,a+1,a+3,a+2);
+                }
+            }
         }
+        const ribbonGeo=new THREE.BufferGeometry();
+        ribbonGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+        ribbonGeo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+        ribbonGeo.setIndex(indices);ribbonGeo.computeVertexNormals();
+        this.ribbons=new THREE.Mesh(ribbonGeo,new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,transparent:true,opacity:0.62,depthWrite:false,side:THREE.DoubleSide}));
+        this.mesh.add(this.ribbons);
+        this.dust=new THREE.Mesh(AssetCache.geos.cloud,new THREE.MeshBasicMaterial({color:0x907961,transparent:true,opacity:0.46,depthWrite:false}));
+        this.dust.position.y=0.25;this.dust.scale.set(2.3,0.3,2.3);this.mesh.add(this.dust);
+        this.cap=new THREE.Mesh(AssetCache.geos.cloud,new THREE.MeshBasicMaterial({color:0x758486,transparent:true,opacity:0.34,depthWrite:false}));
+        this.cap.position.y=10.6;this.cap.scale.set(3.4,0.7,3.4);this.mesh.add(this.cap);
+        this.debris=new THREE.InstancedMesh(AssetCache.geos.cloud,
+            new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,transparent:true,opacity:0.73,depthWrite:false}),12);
+        this.debris.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        for(let i=0;i<12;i++)this.debris.setColorAt(i,new THREE.Color(i%3===0?0xa59071:0xb9b8a9));
+        this.mesh.add(this.debris);
+        this.instanceDummy=new THREE.Object3D();
+        this.animateVisuals();
         state.scene.add(this.mesh);
         SoundManager.playSound('rumble');
     }
+    animateVisuals() {
+        this.mesh.position.copy(this.pos);
+        this.funnel.rotation.y=this.age*1.5;
+        this.funnel.rotation.z=0.035*Math.sin(this.age*0.9);
+        this.ribbons.rotation.y=-this.age*2.9;
+        this.ribbons.rotation.z=this.funnel.rotation.z;
+        this.dust.rotation.y=this.age*1.8;
+        this.dust.scale.set(2.3+0.15*Math.sin(this.age*4),0.3,2.3+0.15*Math.sin(this.age*4));
+        this.cap.rotation.y=-this.age*0.6;
+        const dummy=this.instanceDummy;
+        for(let i=0;i<12;i++) {
+            const phase=(this.age*0.13+i/12)%1;
+            const angle=this.age*(2.3+0.08*(i%3))+i*2.399963;
+            const radius=0.85+1.8*phase;
+            const px=Math.cos(angle)*radius,pz=Math.sin(angle)*radius;
+            const ground=getHeight(this.pos.x+px,this.pos.z+pz)-this.pos.y;
+            dummy.position.set(px,Math.max(ground+0.3,0.2)+phase*6.5,pz);
+            dummy.rotation.set(this.age*2+i,angle,0);
+            dummy.scale.setScalar((0.11+0.07*(i%4))*(1-0.45*phase));
+            dummy.updateMatrix();this.debris.setMatrixAt(i,dummy.matrix);
+        }
+        this.debris.instanceMatrix.needsUpdate=true;
+    }
+    dispose() {
+        state.scene.remove(this.mesh);
+        this.funnel.geometry.dispose();this.funnel.material.dispose();
+        this.ribbons.geometry.dispose();this.ribbons.material.dispose();
+        this.dust.material.dispose();this.cap.material.dispose();
+        this.debris.material.dispose();this.debris.dispose();
+    }
     update(dt) {
         this.timer -= dt;
+        this.age += dt;
 
         if (this.moveDelay > 0) {
             this.moveDelay -= dt;
@@ -4910,15 +5041,7 @@ class Tornado extends ActiveEffect {
             this.pos.z += Math.sin(this.angle) * speed * dt;
         }
         this.pos.y = getHeight(this.pos.x, this.pos.z);
-
-        this.mesh.position.copy(this.pos);
-
-        // Animate Visuals
-        this.mesh.rotation.y += dt * 5.0; // Rotate whole group
-        this.mesh.children.forEach(c => {
-             c.rotation.y += c.userData.rotSpeed * dt;
-             c.rotation.z += dt;
-        });
+        this.animateVisuals();
 
         // Physics
         const damagePerSecond = CONFIG.COMBAT.TORNADO_DPS;
@@ -4935,8 +5058,7 @@ class Tornado extends ActiveEffect {
         });
 
         if(this.timer <= 0) {
-            state.scene.remove(this.mesh);
-            this.mesh.children.forEach(c => c.material.dispose()); // Clean up shared material
+            this.dispose();
             return false;
         }
         return true;
@@ -5292,7 +5414,6 @@ function executeSpell(type, x, z, caster) {
     }
     else if (type === 'swamp') {
          state.activeEffects.push(new Swamp(x, z, caster.faction));
-         SoundManager.playSound('magic');
     }
     else if (type === 'lightning') {
         const h = getHeight(x,z);
@@ -8608,7 +8729,8 @@ window.loadGame = function() {
             state.rigidBodies.clear();
         }
         state.activeEffects.forEach(e => {
-            if(e.mesh) state.scene.remove(e.mesh);
+            if(e.dispose) e.dispose();
+            else if(e.mesh) state.scene.remove(e.mesh);
             if(e.light) {state.scene.remove(e.light);e.light.dispose();e.light=null;}
         });
         state.activeEffects.length = 0;
