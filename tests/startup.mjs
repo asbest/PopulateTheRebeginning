@@ -9,10 +9,10 @@ const base=process.env.GAME_URL||'http://127.0.0.1:8765';
 let failures=0;
 try{
     for(const [name,options,url] of [
-        ['desktop',{},`${base}/`],
+        ['desktop',{},`${base}/PopulateTheRebeginning.html`],
         ['mobile',{viewport:{width:390,height:844},isMobile:true,hasTouch:true,
             userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'},
-            `${base}/`],
+            `${base}/PopulateTheRebeginning.html`],
         ['mobile PNG fallback',{viewport:{width:390,height:844},isMobile:true,hasTouch:true},
             `${base}/PopulateTheRebeginning.html?textures=png`]
     ]){
@@ -22,7 +22,7 @@ try{
         page.on('response',response=>{if(response.status()>=400&&response.url().startsWith(base))missing.push(`${response.status()} ${response.url()}`);});
         page.on('dialog',dialog=>dialog.accept());
         try{
-            await page.goto(url,{waitUntil:'load',timeout:90000});
+            await page.goto(url,{waitUntil:'domcontentloaded',timeout:90000});
             await page.waitForFunction(()=>document.querySelector('#loading')?.style.display==='none'&&
                 !!window.state?.renderer&&!!window.state?.shaman,null,{timeout:90000});
             const result=await page.evaluate(()=>({loading:document.querySelector('#loading')?.style.display,
