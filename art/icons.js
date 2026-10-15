@@ -18,7 +18,6 @@ const paths = {
  teleport:'<ellipse cx="16" cy="16" rx="10" ry="13"/><ellipse cx="16" cy="16" rx="5" ry="9"/><path d="M2 16h11m-4-4 4 4-4 4"/>',
  create:'<circle cx="12" cy="9" r="5"/><path d="M3 28v-6c0-9 18-9 18 0v6M25 12v10m-5-5h10"/>',
  phantom:'<circle cx="11" cy="9" r="4"/><circle cx="23" cy="11" r="3"/><path d="M3 28V21c0-8 16-8 16 0v7m2-10c8-4 9 4 8 10"/>',
- blink:'<path d="m16 3 3 9 10 4-10 3-3 10-4-10-9-3 9-4Z"/>',
  build_hut:'<path d="m3 15 13-12 13 12ZM6 15v13h20V15M13 28v-9h6v9M16 3v12"/>',
  build_tower:'<path d="M6 3h20v7H6ZM10 10v18m12-18v18M6 28h20M12 14h8m-8 5h8m-8 5h8"/>',
  build_warrior:'<path d="m2 13 14-10 14 10H2Zm4 0v15h20V13m-13 4v11m6-11v11M8 15v10m16-10v10"/>',
@@ -37,6 +36,6 @@ const paths = {
  airship:'<ellipse cx="16" cy="10" rx="10" ry="7"/><path d="M9 15 12 25m11-10-3 10M10 25h12v5H10ZM16 3v14"/>'
 };
 export function icon(key) {
-    const body=paths[key] || paths.blink;
+    const body=paths[key] || paths.blast;
     return `<svg class="tribal-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 }

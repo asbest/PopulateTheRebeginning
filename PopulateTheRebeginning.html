@@ -108,25 +108,25 @@
         /* RIGHT ACTION MENU */
         #right-menu {
             position: absolute;
-            top: 60px;
+            top: 48px;
             right: 10px;
             width: 38px;
-            bottom: 20px;
-            overflow-y: auto;
+            bottom: 42px;
+            overflow-y: hidden;
             overflow-x: hidden;
             pointer-events: auto;
             display: grid;
             grid-template-columns: 1fr;
-            gap: 4px;
-            padding: 5px;
+            grid-auto-rows: minmax(0, 1fr);
+            gap: 0;
+            padding: 2px;
             justify-items: center;
+            align-items: center;
             /* background: linear-gradient(to left, rgba(0,0,0,0.5), transparent); */
         }
-        #right-menu::-webkit-scrollbar { width: 3px; }
-        #right-menu::-webkit-scrollbar-thumb { background: rgba(210,190,135,0.55); border-radius: 3px; }
-
         .action-btn {
-            width: 30px; height: 30px;
+            width: 30px; height: min(30px, 100%);
+            box-sizing: border-box;
             border-radius: 50%;
             border: 2px solid #555;
             background: #222;
@@ -699,7 +699,7 @@ const CONFIG = {
             blast: 10, lightning: 50, raise: 5, lower: 5, flatten: 10, landbridge: 20,
             swamp: 80, invisibility: 20, shield: 20, hypnotise: 50, swarm: 40, tornado: 60,
             firestorm: 80, volcano: 90, heal: 10, teleport: 90, create: 50,
-            phantom: 30, blink: 20,
+            phantom: 30,
         },
     },
     ACTIONS: {
@@ -731,7 +731,6 @@ const CONFIG = {
         'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 80 },
         'airship_rocket': { icon: '🚀', label: 'Rckt', cost: 10 },
         'phantom': { icon: '👥', label: 'Phnt', cost: 30 },
-        'blink': { icon: '✨', label: 'Blnk', cost: 20 },
     },
     UNIT_ICONS: {
         'wild': '👷',
@@ -5199,13 +5198,6 @@ function executeSpell(type, x, z, caster) {
             u.phantomTimer = CONFIG.EFFECTS.PHANTOM_DURATION / 1000;
         }
     }
-    else if (type === 'blink') {
-        SoundManager.playSound('magic');
-        const h = getHeight(x, z);
-        spawnPulse(caster.mesh.position.x, caster.mesh.position.y, caster.mesh.position.z, 0x00FFFF);
-        caster.placeOnGround(x, z);
-        spawnPulse(x, h, z, 0x00FFFF);
-    }
     else if (type === 'shield') {
         SoundManager.playSound('magic');
 
@@ -7388,7 +7380,7 @@ const SPELL_NAMES = Object.freeze({
     swamp:'Swamp', invisibility:'Invisibility', shield:'Shield',
     hypnotise:'Hypnotise', swarm:'Insect Swarm', tornado:'Tornado',
     firestorm:'Firestorm', volcano:'Volcano', heal:'Heal',
-    teleport:'Teleport', create:'Create Brave', phantom:'Phantom', blink:'Blink'
+    teleport:'Teleport', create:'Create Brave', phantom:'Phantom'
 });
 let spellNameTimer = null;
 function hideSpellNameTooltip() {
@@ -7435,7 +7427,7 @@ function updateContextMenus() {
 
     // Spells belong to the living Shaman, even when no unit is selected.
     if (hasShaman || (!hasSelection && state.shaman && state.shaman.state !== 'dead')) {
-        visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom', 'blink'];
+        visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom'];
     } else if (hasBrave) {
         visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy'];
         if (!(state.matchSettings && state.matchSettings.noFlyers)) visibleActions.push('build_shipyard', 'build_airship');
@@ -7569,7 +7561,7 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     // Prevent building if no brave nearby
     if (action.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
 
-    const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom', 'blink'];
+    const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom'];
 
     // Range Check for Spells
     let caster = state.shaman;
@@ -7592,7 +7584,7 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     const costs = {
         blast: CONFIG.COSTS.SPELLS.blast, lightning: CONFIG.COSTS.SPELLS.lightning, raise: CONFIG.COSTS.SPELLS.raise, lower: CONFIG.COSTS.SPELLS.lower, flatten: CONFIG.COSTS.SPELLS.flatten, landbridge: CONFIG.COSTS.SPELLS.landbridge,
         swamp: CONFIG.COSTS.SPELLS.swamp, invisibility: CONFIG.COSTS.SPELLS.invisibility, shield: CONFIG.COSTS.SPELLS.shield, hypnotise: CONFIG.COSTS.SPELLS.hypnotise, swarm: CONFIG.COSTS.SPELLS.swarm, tornado: CONFIG.COSTS.SPELLS.tornado, firestorm: CONFIG.COSTS.SPELLS.firestorm, volcano: CONFIG.COSTS.SPELLS.volcano, heal: CONFIG.COSTS.SPELLS.heal, teleport: CONFIG.COSTS.SPELLS.teleport, create: CONFIG.COSTS.SPELLS.create,
-        phantom: CONFIG.COSTS.SPELLS.phantom, blink: CONFIG.COSTS.SPELLS.blink,
+        phantom: CONFIG.COSTS.SPELLS.phantom,
         build_hut: CONFIG.COSTS.BUILDING.hut, build_tower: CONFIG.COSTS.BUILDING.tower, build_warrior: CONFIG.COSTS.BUILDING.warrior,
         build_fire: CONFIG.COSTS.BUILDING.fire, build_spy: CONFIG.COSTS.BUILDING.spy, build_shipyard: CONFIG.COSTS.BUILDING.shipyard, build_airship: CONFIG.COSTS.AIRSHIP
     };
@@ -8438,7 +8430,7 @@ const CAMPAIGN_STORIES = {
     },
     10: {
         title: "Level 10: The Void Between",
-        text: "Your enemy guards the gateway between worlds. Their realm bends physics itself—gravity reverses, distances twist, and the very concept of \"here\" becomes meaningless. But your awakening continues: you learn to step through the void, to blink across impossible distances, and finally to break the gate that holds this world hostage."
+        text: "Your enemy guards the gateway between worlds. Their realm bends physics itself—gravity reverses, distances twist, and the very concept of \"here\" becomes meaningless. But your awakening continues: you learn to step through the void, to teleport across impossible distances, and finally to break the gate that holds this world hostage."
     },
     11: {
         title: "Level 11: The Pantheon Rising",
@@ -9368,7 +9360,7 @@ function animate() {
     if (isSpyHypnotise) rangeCaster = state.selectedUnits[0];
 
     if (rangeCaster) {
-        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create', 'phantom', 'blink', 'teleport'];
+        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create', 'phantom', 'teleport'];
         if (spells.includes(state.currentAction)) {
             state.rangeRing.visible = true;
             if (state.cheatUnlimitedRange) {

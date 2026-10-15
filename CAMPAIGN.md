@@ -75,8 +75,8 @@ Each level is accessed from a new "Campaign Mode" button on the main menu, loadi
 *   **Objective:** Breach the enemy dimension and destroy the gate-keepers.
 *   **Opponent:** 1 AI Tribe (Personality: **Gatekeeper**).
 *   **Settings:** **Void Biome** (reality distortions, gravity fluctuations).
-*   **Modifiers:** **Reality Fracture** - Player can blink (instantly teleport) short distances; time briefly slows during combat.
-*   **Narrative:** Your enemy guards the gateway between worlds. Their realm bends physics itself—gravity reverses, distances twist, and the very concept of "here" becomes meaningless. But your awakening continues: you learn to step through the void, to blink across impossible distances, and finally to break the gate that holds this world hostage.
+*   **Modifiers:** **Reality Fracture** - Distances twist as the player teleports through the void; time briefly slows during combat.
+*   **Narrative:** Your enemy guards the gateway between worlds. Their realm bends physics itself—gravity reverses, distances twist, and the very concept of "here" becomes meaningless. But your awakening continues: you learn to step through the void, to teleport across impossible distances, and finally to break the gate that holds this world hostage.
 
 ### Level 11: The Pantheon Rising
 *   **Objective:** Defeat the Five Eternal Tribes—each a god in their own right.

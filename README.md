@@ -48,7 +48,7 @@ node tests/network.mjs
 
 On Windows the browser tests use installed Google Chrome; on Linux they use Playwright Chromium. The network test needs internet. Tests write reports and screenshots to `test-results/`, which is ignored by Git. See [the tested scope and remaining limitations](docs/TEST-REPORT.md).
 
-The browser suite includes dedicated effect and mana checks for all 19 spells, transport, timed status effects and save/load. AI tests exercise four-minute economy simulations, an eight-minute simulation on the original starting terrain, mixed training, attacks with defensive reserves, raid response, retreats and worker recovery. Browser CI runs on pushes and pull requests. No publishing step is included.
+The browser suite includes dedicated effect and mana checks for all 18 spells, transport, timed status effects and save/load. AI tests exercise four-minute economy simulations, an eight-minute simulation on the original starting terrain, mixed training, attacks with defensive reserves, raid response, retreats and worker recovery. Browser CI runs on pushes and pull requests. No publishing step is included.
 
 `tests/strategy-long.mjs` adds four AI scenarios totaling 65 simulated minutes, including an armed raid and loss of all workers. `tests/materials.mjs` captures an in-game close-up and verifies that the detailed building textures load without WebGL errors.
 

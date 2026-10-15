@@ -12,10 +12,10 @@ try{
   const refs=[...new Set(source.match(/CONFIG(?:\.[A-Za-z_][A-Za-z_0-9]*){2,}/g))];
   return p.evaluate(refs=>{const missing=refs.filter(r=>r.split('.').slice(1).reduce((v,k)=>v?.[k],gameTestAPI.CONFIG)===undefined);if(missing.length)throw new Error(missing.join(', '));return refs.length;},refs);
  });
- const spells=['blast','lightning','raise','lower','flatten','landbridge','swamp','invisibility','shield','hypnotise','swarm','tornado','firestorm','volcano','heal','teleport','create','phantom','blink'];
+ const spells=['blast','lightning','raise','lower','flatten','landbridge','swamp','invisibility','shield','hypnotise','swarm','tornado','firestorm','volcano','heal','teleport','create','phantom'];
  for(const spell of spells)await check('Spell effect and exact mana: '+spell,async()=>{await fresh();return p.evaluate(spell=>{
   const {caster,enemy,ally,x,z}=fixture,expect=(yes,msg)=>{if(!yes)throw new Error(msg);};
-  const cost={blast:10,lightning:50,raise:5,lower:5,flatten:10,landbridge:20,swamp:80,invisibility:20,shield:20,hypnotise:50,swarm:40,tornado:60,firestorm:80,volcano:90,heal:10,teleport:90,create:50,phantom:30,blink:20}[spell];
+  const cost={blast:10,lightning:50,raise:5,lower:5,flatten:10,landbridge:20,swamp:80,invisibility:20,shield:20,hypnotise:50,swarm:40,tornado:60,firestorm:80,volcano:90,heal:10,teleport:90,create:50,phantom:30}[spell];
   ally.hp=500;const before={h:getHeight(x,z),hp:enemy.hp,units:state.units.length,mods:state.terrainMods.size};
   const sample=()=>{const a=[];for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)a.push(getHeight(x+dx,z+dz));return Math.max(...a)-Math.min(...a);};const spread=sample();
   const sound=gameTestAPI.SoundManager,playSound=sound.playSound;
@@ -25,7 +25,7 @@ try{
   sound.playSound=playSound;
   expect(state.mana===1000-cost,'Mana '+state.mana);
   if(spell!=='lightning')expect(castingSounds>0,'No casting sound for '+spell);
-  if(['teleport','blink'].includes(spell)){for(let i=0;i<30;i++){state.physicsWorld.timestep=1/60;state.physicsWorld.step();caster.update(1/60);}expect(Math.hypot(caster.mesh.position.x-x,caster.mesh.position.z-z)<.2,'Teleport snapped back');}
+  if(spell==='teleport'){for(let i=0;i<30;i++){state.physicsWorld.timestep=1/60;state.physicsWorld.step();caster.update(1/60);}expect(Math.hypot(caster.mesh.position.x-x,caster.mesh.position.z-z)<.2,'Teleport snapped back');}
   if(spell==='heal')expect(ally.hp===1000&&enemy.hp===1000,'Heal faction/health');
   if(spell==='shield'){expect(ally.shielded&&!enemy.shielded,'Shield faction');ally.takeDamage(100,true);expect(ally.hp===500,'Shield did not block damage');}
   if(spell==='invisibility')expect(ally.invisible&&!enemy.invisible,'Invisibility faction');

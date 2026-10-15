@@ -1,10 +1,10 @@
 {
-  "date": "2026-10-09T14:28:17.426Z",
+  "date": "2026-10-15T18:37:28.426Z",
   "results": [
     {
       "name": "All referenced configuration fields exist",
       "pass": true,
-      "detail": 160
+      "detail": 158
     },
     {
       "name": "Spell effect and exact mana: blast",
@@ -169,18 +169,16 @@
       }
     },
     {
-      "name": "Spell effect and exact mana: blink",
+      "name": "Loading a save removes active firestorm illumination",
       "pass": true,
       "detail": {
-        "cost": 20,
-        "enemyHealth": 1000,
-        "unitCount": 5
+        "lightRemoved": true
       }
     },
     {
       "name": "Every spell rejects insufficient mana, out-of-range targets and a dead caster",
       "pass": true,
-      "detail": 19
+      "detail": 18
     },
     {
       "name": "Airship unload action synchronizes physics and does not charge mana",

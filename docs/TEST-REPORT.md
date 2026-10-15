@@ -38,12 +38,12 @@ Physics uses an accumulator with a fixed 1/60 s step. Render time is measured in
 
 ## Spell and action regression suite
 
-**27 / 27 browser checks passed** in `tests/spells.mjs`, now included in `npm test` and browser CI. Each of the 19 spells is tested in an isolated game with its original mana cost and actual effect: blast, lightning, raise, lower, flatten, landbridge, swamp, invisibility, shield, hypnotise, swarm, tornado, firestorm, volcano, heal, teleport, create, phantom and blink. The suite checks friendly/enemy targeting, projectile impact, damage, healing, terrain changes, summoning, conversion/reversion, hazard expiration, and teleport position after physics advances. Additional checks cover mana/range/dead-caster rejection, spy range, free divine spells, status refresh/expiration/save-load, phantom expiration, unload physics, missing-shipyard refunds and all referenced configuration fields.
+Each of the 18 spells is tested in an isolated game with its mana cost and actual effect: blast, lightning, raise, lower, flatten, landbridge, swamp, invisibility, shield, hypnotise, swarm, tornado, firestorm, volcano, heal, teleport, create and phantom. The suite checks friendly/enemy targeting, projectile impact, damage, healing, terrain changes, summoning, conversion/reversion, hazard expiration, and teleport position after physics advances. Additional checks cover mana/range/dead-caster rejection, spy range, free divine spells, status refresh/expiration/save-load, phantom expiration, unload physics, missing-shipyard refunds and all referenced configuration fields.
 
 Verified fixes:
 
-- Blink and phantom are dispatched as spells and use the same caster/range validation as other spells.
-- Teleport/blink and cargo unloading synchronize the visual position, physics body, heading, movement orders, gait and idle anchor. Cargo bodies are disabled in transit and duplicate boarding is rejected.
+- Phantom is dispatched as a spell and uses the same caster/range validation as other spells.
+- Teleport and cargo unloading synchronize the visual position, physics body, heading, movement orders, gait and idle anchor. Cargo bodies are disabled in transit and duplicate boarding is rejected.
 - Unload is handled before paid actions; missing shipyards are rejected before spending mana.
 - Volcano damage/terrain ticks use the correct combat configuration fields.
 - Shield/invisibility/phantom lifetimes use simulation time, refresh cleanly and survive save/load. A shield cannot make a phantom permanent.
