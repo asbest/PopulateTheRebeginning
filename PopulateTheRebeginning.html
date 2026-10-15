@@ -5071,21 +5071,102 @@ class Swarm extends ActiveEffect {
         this.pos = new THREE.Vector3(x, getHeight(x,z)+3, z);
         this.faction = faction;
         this.timer = CONFIG.EFFECTS.SWARM_DURATION;
-        this.particles = [];
-        const geo = new THREE.ConeGeometry(0.1, 0.4, 4);
-        geo.rotateX(Math.PI/2); // Point forward
-        const mat = new THREE.MeshBasicMaterial({color: COLORS.charred});
-
-        for(let i=0; i<CONFIG.EFFECTS.SWARM_PARTICLE_COUNT; i++) {
-            const p = new THREE.Mesh(geo, mat);
-            p.position.set(this.pos.x + (Math.random()-0.5)*4, this.pos.y + (Math.random()-0.5)*2, this.pos.z + (Math.random()-0.5)*4);
-            const targetOffset = new THREE.Vector3((Math.random()-0.5)*4, (Math.random()-0.5)*4, (Math.random()-0.5)*4);
-            this.particles.push({mesh: p, targetOffset: targetOffset, vel: new THREE.Vector3()});
-            state.scene.add(p);
+        this.age = 0;
+        this.insects = [];
+        this.mesh = new THREE.Group();
+        this.mesh.position.copy(this.pos);
+        const count = CONFIG.EFFECTS.SWARM_PARTICLE_COUNT;
+        const bodyGeo = new THREE.SphereGeometry(0.14, 8, 6);
+        bodyGeo.scale(0.78,0.72,1.75);
+        const wingShape = new THREE.Shape();
+        wingShape.moveTo(0,0);
+        wingShape.quadraticCurveTo(0.21,-0.095,0.43,-0.025);
+        wingShape.quadraticCurveTo(0.5,0.01,0.43,0.045);
+        wingShape.quadraticCurveTo(0.2,0.1,0,0);
+        const wingGeo = new THREE.ShapeGeometry(wingShape,4);
+        wingGeo.rotateX(-Math.PI / 2);
+        this.bodies = new THREE.InstancedMesh(bodyGeo,
+            new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.78,metalness:0}),count);
+        this.heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.075,6,5),
+            new THREE.MeshStandardMaterial({color:0x181511,roughness:0.72,metalness:0}),count);
+        this.wings = new THREE.InstancedMesh(wingGeo,
+            new THREE.MeshBasicMaterial({color:0xb69a74,transparent:true,opacity:0.56,side:THREE.DoubleSide,depthWrite:false}),count*2);
+        this.bodies.frustumCulled = false;
+        this.heads.frustumCulled = false;
+        this.wings.frustumCulled = false;
+        this.mesh.add(this.bodies,this.heads,this.wings);
+        this.bodyDummy = new THREE.Object3D();
+        this.headDummy = new THREE.Object3D();
+        this.wingDummy = new THREE.Object3D();
+        const colors = [0x221911,0x34251a,0x49321b,0x181611,0x483b29];
+        for(let i=0;i<count;i++) {
+            const angle = i*Math.PI*2/count + (Math.random()-0.5)*0.45;
+            const radius = 0.7+Math.random()*1.6;
+            const insect = {
+                pos:new THREE.Vector3(this.pos.x+Math.cos(angle)*radius,this.pos.y+(Math.random()-0.5)*1.7,this.pos.z+Math.sin(angle)*radius),
+                vel:new THREE.Vector3(),phase:angle,radius,speed:1.8+Math.random()*1.2,
+                size:0.8+Math.random()*0.45,yaw:angle
+            };
+            this.insects.push(insect);
+            this.bodies.setColorAt(i,new THREE.Color(colors[i%colors.length]));
         }
+        this.bodies.instanceColor.needsUpdate = true;
+        state.scene.add(this.mesh);
+        this.updateVisuals(0);
+    }
+    updateVisuals(dt) {
+        const follow = Math.min(1,dt*8);
+        for(let i=0;i<this.insects.length;i++) {
+            const insect = this.insects[i];
+            const orbit = insect.phase+this.age*insect.speed;
+            const targetX = this.pos.x+Math.cos(orbit)*insect.radius;
+            const targetZ = this.pos.z+Math.sin(orbit)*insect.radius;
+            const targetY = this.pos.y+Math.sin(this.age*3.7+insect.phase*2)*0.68;
+            insect.vel.x += ((targetX-insect.pos.x)*13-insect.vel.x*5)*dt;
+            insect.vel.y += ((targetY-insect.pos.y)*15-insect.vel.y*5)*dt;
+            insect.vel.z += ((targetZ-insect.pos.z)*13-insect.vel.z*5)*dt;
+            const speed = insect.vel.length();
+            if(speed>9)insect.vel.multiplyScalar(9/speed);
+            insect.pos.addScaledVector(insect.vel,dt);
+            insect.pos.y = Math.max(insect.pos.y,getHeight(insect.pos.x,insect.pos.z)+0.55);
+            if(speed>0.05) {
+                const heading = Math.atan2(insect.vel.x,insect.vel.z);
+                insect.yaw += Math.atan2(Math.sin(heading-insect.yaw),Math.cos(heading-insect.yaw))*follow;
+            }
+            const yaw = insect.yaw;
+            this.bodyDummy.position.copy(insect.pos).sub(this.pos);
+            this.bodyDummy.rotation.set(Math.max(-0.38,Math.min(0.38,-insect.vel.y*0.08)),yaw,0);
+            this.bodyDummy.scale.setScalar(insect.size);
+            this.bodyDummy.updateMatrix();
+            this.bodies.setMatrixAt(i,this.bodyDummy.matrix);
+            this.headDummy.position.set(
+                this.bodyDummy.position.x+Math.sin(yaw)*0.21*insect.size,
+                this.bodyDummy.position.y+0.025*insect.size,
+                this.bodyDummy.position.z+Math.cos(yaw)*0.21*insect.size
+            );
+            this.headDummy.scale.setScalar(insect.size);
+            this.headDummy.updateMatrix();
+            this.heads.setMatrixAt(i,this.headDummy.matrix);
+            for(let side=-1;side<=1;side+=2) {
+                const flap = Math.sin(this.age*48+insect.phase*3)*0.8*side;
+                this.wingDummy.position.set(
+                    this.bodyDummy.position.x+Math.cos(yaw)*side*0.075*insect.size,
+                    this.bodyDummy.position.y+0.065*insect.size,
+                    this.bodyDummy.position.z-Math.sin(yaw)*side*0.075*insect.size
+                );
+                this.wingDummy.rotation.set(0,yaw,flap);
+                this.wingDummy.scale.set(side*insect.size,1,insect.size);
+                this.wingDummy.updateMatrix();
+                this.wings.setMatrixAt(i*2+(side+1)/2,this.wingDummy.matrix);
+            }
+        }
+        this.bodies.instanceMatrix.needsUpdate = true;
+        this.heads.instanceMatrix.needsUpdate = true;
+        this.wings.instanceMatrix.needsUpdate = true;
     }
     update(dt) {
         this.timer -= dt;
+        this.age += dt;
 
         // Move towards nearest enemy
         let closest = null; let minDist = 50;
@@ -5097,36 +5178,16 @@ class Swarm extends ActiveEffect {
         });
 
         if(closest) {
-             const dir = closest.mesh.position.clone().add(new THREE.Vector3(0,2,0)).sub(this.pos).normalize();
-             this.pos.addScaledVector(dir, 10 * dt);
+             const target = closest.mesh.position;
+             const dx=target.x-this.pos.x,dy=target.y+2-this.pos.y,dz=target.z-this.pos.z;
+             const distance=Math.hypot(dx,dy,dz);
+             if(distance>0.01)this.pos.set(this.pos.x+dx/distance*Math.min(10*dt,distance),
+                 this.pos.y+dy/distance*Math.min(10*dt,distance),this.pos.z+dz/distance*Math.min(10*dt,distance));
         } else {
-             // Mill around
-             this.pos.y = Math.max(getHeight(this.pos.x, this.pos.z) + 2, this.pos.y + Math.sin(this.timer) * dt);
+             this.pos.y += (getHeight(this.pos.x,this.pos.z)+2.5+Math.sin(this.age*2)*0.25-this.pos.y)*Math.min(1,dt*3);
         }
-
-        // Update particles (boids like)
-        this.particles.forEach(p => {
-            // Update offset targets randomly
-            if(Math.random() < 0.05) {
-                p.targetOffset.set((Math.random()-0.5)*6, (Math.random()-0.5)*4, (Math.random()-0.5)*6);
-            }
-            const targetPos = this.pos.clone().add(p.targetOffset);
-
-            // Steer
-            const dir = targetPos.sub(p.mesh.position).normalize();
-            p.vel.addScaledVector(dir, 20 * dt);
-
-            // Speed limit
-            if(p.vel.length() > 10) p.vel.normalize().multiplyScalar(10);
-
-            p.mesh.position.addScaledVector(p.vel, dt);
-
-            if(p.vel.lengthSq() > 0.1) {
-                // Look in direction of travel
-                const lookTarget = p.mesh.position.clone().add(p.vel);
-                p.mesh.lookAt(lookTarget);
-            }
-        });
+        this.mesh.position.copy(this.pos);
+        this.updateVisuals(dt);
 
         // Damage
         SpatialHash.query(this.pos.x, this.pos.z, 4).forEach(u => {
@@ -5137,16 +5198,19 @@ class Swarm extends ActiveEffect {
         });
 
         if(this.timer <= 0) {
-            this.particles.forEach(p => {
-                 state.scene.remove(p.mesh);
-            });
-            if(this.particles.length > 0) {
-                 this.particles[0].mesh.geometry.dispose();
-                 this.particles[0].mesh.material.dispose();
-            }
+            this.dispose();
             return false;
         }
         return true;
+    }
+    dispose() {
+        if(!this.mesh.parent)return;
+        this.mesh.parent.remove(this.mesh);
+        for(const part of [this.bodies,this.heads,this.wings]) {
+            part.dispose();
+            part.geometry.dispose();
+            part.material.dispose();
+        }
     }
 }
 

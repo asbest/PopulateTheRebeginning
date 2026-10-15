@@ -60,6 +60,31 @@ try{
   }
   return {cost,enemyHealth:enemy.hp,unitCount:state.units.length};
  },spell);});
+ await check('Winged swarm animates in three draw calls and releases GPU resources',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {x,z}=fixture;
+   state.units=[fixture.caster];gameTestAPI.SpatialHash.update();
+   gameTestAPI.performAction(x,z,'swarm');
+   const swarm=state.activeEffects.at(-1),count=CONFIG.EFFECTS.SWARM_PARTICLE_COUNT;
+   if(!swarm?.bodies?.isInstancedMesh||!swarm.heads?.isInstancedMesh||!swarm.wings?.isInstancedMesh||
+      swarm.bodies.count!==count||swarm.heads.count!==count||swarm.wings.count!==count*2||swarm.mesh.children.length!==3)
+    throw new Error('Swarm has missing insects or excessive draw calls');
+   const beforeBody=swarm.bodies.instanceMatrix.array.slice(0,16);
+   const beforeWing=swarm.wings.instanceMatrix.array.slice(0,16);
+   const particleCount=state.particles.length;
+   for(let i=0;i<60;i++)swarm.update(1/60);
+   if(beforeBody.every((value,i)=>value===swarm.bodies.instanceMatrix.array[i])||
+      beforeWing.every((value,i)=>value===swarm.wings.instanceMatrix.array[i]))throw new Error('Swarm flight or wing beat is static');
+   if(state.particles.length!==particleCount)throw new Error('Swarm animation allocated particles');
+   if(!Array.from(swarm.bodies.instanceMatrix.array).every(Number.isFinite))throw new Error('Invalid swarm transforms');
+   let disposals=0;
+   for(const part of [swarm.bodies,swarm.heads,swarm.wings])part.geometry.addEventListener('dispose',()=>disposals++);
+   saveGame();loadGame();
+   if(swarm.mesh.parent||state.activeEffects.includes(swarm)||disposals!==3)
+    throw new Error('Swarm meshes survived save reload: '+disposals);
+   return {insects:count,draws:swarm.mesh.children.length,disposals};
+  });
+ });
  await check('Swamp and tornado visuals stay bounded and release resources',async()=>{
   await fresh();return p.evaluate(()=>{
    const caster=fixture.caster;
