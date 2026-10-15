@@ -126,7 +126,11 @@ try {
    const hp=victim.hp,projectiles=state.projectiles.length;u.attack();
    if(!u.attackFired||!Number.isFinite(u.armR.rotation.x))throw new Error(type+' animation/impact missing');
    if(['wild','warrior','shaman'].includes(type)&&victim.hp>=hp)throw new Error(type+' damage missing');
-   if(type==='firewarrior'&&state.projectiles.length!==projectiles+1)throw new Error('Fireball missing');
+   if(type==='firewarrior'){
+    if(state.projectiles.length!==projectiles+1)throw new Error('Fireball missing');
+    const shot=state.projectiles.at(-1);
+    if(!shot.unitShot||shot.light)throw new Error('Firewarrior shot allocated a costly dynamic light');
+   }
    if(type==='spy'&&victim.faction!==0)throw new Error('Spy conversion missing');
    report.push({type,damage:hp-victim.hp});u.attackTarget=null;u.attackFired=false;u.lastAttackTime=0;u.resetAnim();
   }}finally{state.clock.getElapsedTime=clock;victim.hp=0;victim.die();}
