@@ -986,7 +986,6 @@ const CONFIG = {
         BUNNY_RESPAWN_DIST: 125,
     },
     SAVED_KEYS: {
-        HELP_SHOWN: 'rebeginning_help_shown',
         MAX_CAMPAIGN_LEVEL: 'rebeginning_max_campaign_level',
         START_CAMPAIGN: 'rebeginning_start_campaign',
         SANDBOX_START: 'rebeginning_sandbox_start',
@@ -8110,10 +8109,6 @@ async function init() {
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
 
-        if (!localStorage.getItem(CONFIG.SAVED_KEYS.HELP_SHOWN)) {
-            window.showHelp();
-            localStorage.setItem(CONFIG.SAVED_KEYS.HELP_SHOWN, 'true');
-        }
         if (new URLSearchParams(location.search).has('test')) {
             window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, Fireball, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
         }

@@ -22,6 +22,9 @@ jobs:
       - name: Enemy strategy
         if: always()
         run: node tests/strategy.mjs
+      - name: Welcome screen starts the game on desktop and mobile
+        if: always()
+        run: node tests/startup.mjs
       - name: Live gameplay integration
         if: always()
         run: node tests/live-gameplay.mjs

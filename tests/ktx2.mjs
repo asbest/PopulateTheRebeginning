@@ -128,6 +128,34 @@ try{
         }finally{await page.close();}
     });
 
+    await check('A stalled KTX2 request cannot trap the welcome screen',async()=>{
+        const page=await browser.newPage();
+        const errors=[];
+        page.on('pageerror',error=>errors.push(String(error)));
+        await page.route('**/art/materials/grass.ktx2',async route=>{
+            await new Promise(resolve=>setTimeout(resolve,18000));
+            await route.continue().catch(()=>{});
+        });
+        try{
+            const started=Date.now();
+            await page.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1',
+                {waitUntil:'domcontentloaded',timeout:90000});
+            await page.waitForFunction(()=>window.gameTestAPI&&
+                document.querySelector('#loading')?.style.display==='none'&&
+                Art.textureStatus.pending===0,null,{timeout:30000});
+            const elapsed=Date.now()-started;
+            const state=await page.evaluate(()=>({status:Art.textureStatus,
+                grassCompressed:Art.textures.grass?.isCompressedTexture}));
+            assert(elapsed<18000,`Startup waited for the stalled request (${elapsed} ms)`);
+            assert(state.status.fallbacks>=1&&!state.grassCompressed,'Stalled texture did not switch to PNG');
+            assert(errors.length===0,`Browser errors: ${errors.join('; ')}`);
+            await page.waitForTimeout(Math.max(0,19000-elapsed));
+            assert(!await page.evaluate(()=>Art.textures.grass?.isCompressedTexture),
+                'Late KTX2 response replaced the PNG fallback');
+            return {elapsed,...state};
+        }finally{await page.close();}
+    });
+
 }finally{await browser.close();}
 
 await fs.mkdir(path.join(root,'test-results'),{recursive:true});

@@ -48,28 +48,49 @@ export function createTexturePipeline(T){
         }
         const ktxURL=url.replace(/\.(png|webp)(?=\?|$)/i,'.ktx2');
         status.pending++;
+        let completed=false,fallbackStarted=false,fallbackImage=null,fallbackUserData=null,timeout;
+        const finish=()=>{
+            if(completed)return false;
+            completed=true;
+            clearTimeout(timeout);
+            status.pending--;
+            resolveReady(true);
+            return true;
+        };
+        const restoreFallback=()=>{
+            if(!fallbackImage)return;
+            fallbackUserData??=texture.userData;
+            texture.copy(fallbackImage);
+            texture.isCompressedTexture=false;
+            texture.userData=fallbackUserData;
+            apply(texture,true);
+        };
         const fallback=error=>{
+            if(completed||fallbackStarted)return;
+            fallbackStarted=true;
+            clearTimeout(timeout);
             console.warn('KTX2 texture unavailable; loading original image',ktxURL,error);
             status.fallbacks++;
             plain.load(url,image=>{
-                const userData=texture.userData;
-                texture.copy(image);
-                texture.isCompressedTexture=false;
-                texture.userData=userData;
-                apply(texture,true);
-                image.dispose();
-                status.pending--;resolveReady(true);
+                fallbackImage=image;
+                restoreFallback();
+                finish();
             },undefined,fallbackError=>{
                 console.error('Texture fallback failed',url,fallbackError);
-                status.pending--;resolveReady(false);
+                if(!completed){
+                    completed=true;
+                    status.pending--;
+                    resolveReady(false);
+                }
             });
         };
         texture=compressed.load(ktxURL,()=>{
-            status.pending--;
+            if(fallbackStarted){restoreFallback();return;}
+            if(!finish())return;
             status.loaded++;
             apply(texture,true);
-            resolveReady(true);
         },undefined,fallback);
+        timeout=setTimeout(()=>fallback(new Error('KTX2 decoding timed out')),12000);
         readyByTexture.set(texture,ready);
         texturesByURL.set(url,texture);
         return apply(texture);
