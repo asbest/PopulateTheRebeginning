@@ -38,12 +38,13 @@ try{
             }
             if(result.help==='flex')throw new Error('Help overlay obscures the campaign welcome screen');
             if(result.story!=='flex')throw new Error('Campaign welcome screen is missing');
-            if(name.startsWith('mobile'))await page.locator('#story-overlay button').tap();
-            else await page.locator('#story-overlay button').click();
-            const playing=await page.evaluate(()=>!state.isPaused&&
+            // Starting the simulation can schedule navigation (for example after a quick defeat).
+            // Observe the resulting UI state instead of letting the input action wait for navigation.
+            if(name.startsWith('mobile'))await page.locator('#story-overlay button').tap({noWaitAfter:true});
+            else await page.locator('#story-overlay button').click({noWaitAfter:true});
+            await page.waitForFunction(()=>!state.isPaused&&
                 document.querySelector('#help-overlay')?.style.display==='none'&&
-                document.querySelector('#story-overlay')?.style.display==='none');
-            if(!playing)throw new Error(`Game stayed paused after closing welcome overlays: ${JSON.stringify(result)}`);
+                document.querySelector('#story-overlay')?.style.display==='none',null,{timeout:10000});
             if(errors.length||missing.length)throw new Error(JSON.stringify({result,errors,missing}));
             console.log(`PASS ${name} starts without test mode`,result);
             results.push({name,pass:true,result});
