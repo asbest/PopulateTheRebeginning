@@ -40,6 +40,16 @@ try {
  });
  await page.evaluate(()=>{window.closeHelp();window.closeStoryOverlay();if(state.isPaused)window.togglePause();});
  await page.waitForTimeout(1200);
+ await check('First fireball avoids bulk shader compilation',async()=>page.evaluate(()=>{
+  if(!state.fireballShadersReady)throw new Error('Fireball shaders were not warmed during loading');
+  const start=state.shaman.mesh.position.clone().add(new THREE.Vector3(0,3,0));
+  const projectile=new gameTestAPI.Fireball(start,start.clone().add(new THREE.Vector3(8,0,0)),0);
+  const before=state.renderer.info.programs.map(program=>program.cacheKey);
+  try{state.renderer.render(state.scene,state.camera);}finally{state.scene.remove(projectile.mesh);if(projectile.light)projectile.light.dispose();}
+  const after=state.renderer.info.programs.map(program=>program.cacheKey);
+  if(after.length-before.length>2)throw new Error(`First fireball compiled ${after.length-before.length} shader programs: ${JSON.stringify({tier:state.graphicsQuality.tier,added:after.filter(key=>!before.includes(key))})}`);
+  return {tier:state.graphicsQuality.tier,programsBefore:before.length,programsAfter:after.length};
+ }));
  await check('Six detailed faction-colored building meshes',async()=>page.evaluate(()=>{
   const report=[];
   for(const kind of ['hut','tower','warrior','fire','spy','shipyard']){const model=Art.building(kind,0xff4500);let meshes=0,banner=false;model.traverse(n=>{if(n.isMesh)meshes++;if(n.userData.isFactionBanner)banner=true;});if(meshes<10||!banner)throw new Error(kind+' incomplete');report.push({kind,meshes});}

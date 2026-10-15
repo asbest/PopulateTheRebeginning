@@ -1370,7 +1370,11 @@ window.setGraphicsQuality=function(tier='high'){
 window.cycleGraphicsQuality=function(){
     const tiers=['low','medium','high','ultra'];
     const current=state.graphicsQuality?.tier||'high';
-    return window.setGraphicsQuality(tiers[(Math.max(0,tiers.indexOf(current))+1)%tiers.length]);
+    const quality=window.setGraphicsQuality(tiers[(Math.max(0,tiers.indexOf(current))+1)%tiers.length]);
+    // A change to High/Ultra enables the projectile light; compile its shader variants
+    // while the graphics menu is open instead of during the next spell cast.
+    if(state.fireballShadersReady && ['high','ultra'].includes(quality.tier))prewarmFireballShaders();
+    return quality;
 };
 
 
@@ -4580,6 +4584,23 @@ class Fireball {
                 b.burnTimer = 3.0;
             }
         });
+    }
+}
+
+function prewarmFireballShaders() {
+    if (!state.renderer || !state.scene || !state.shaman) return;
+    const start = state.shaman.mesh.position.clone().add(new THREE.Vector3(0, 3, 0));
+    const preview = new Fireball(start, start.clone().add(new THREE.Vector3(4, 0, 0)), 0);
+    try {
+        // Point lights change the shader program for every lit material in view.
+        // Compile that variant behind the loading or graphics menu, before a shot.
+        state.renderer.compile(state.scene, state.camera);
+        state.fireballShadersReady = true;
+    } catch (error) {
+        console.warn('Fireball shader warmup unavailable:', error);
+    } finally {
+        state.scene.remove(preview.mesh);
+        if (preview.light) preview.light.dispose();
     }
 }
 
@@ -7940,6 +7961,7 @@ async function init() {
         window.addEventListener('contextmenu', e => e.preventDefault());
 
         animate();
+        prewarmFireballShaders();
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
 
