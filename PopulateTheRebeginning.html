@@ -2991,7 +2991,7 @@ function spawnSmoke(pos,color=0x4b4540,size=.55,life=2.2){
 const EXPLOSION_CORE_GEO=new THREE.SphereGeometry(.5,12,10);
 const EXPLOSION_RING_GEO=new THREE.TorusGeometry(1,.08,6,32);
 const EXPLOSION_HEAT_GEO=new THREE.IcosahedronGeometry(.78,1);
-function spawnExplosion(x, y, z, color, count) {
+function spawnExplosion(x, y, z, color, count, illuminate = true) {
     count = Math.max(1, Math.floor(count / 2));
     const pos = new THREE.Vector3(x, y, z);
     // Dynamic particles
@@ -3019,8 +3019,8 @@ function spawnExplosion(x, y, z, color, count) {
     coreMesh.add(heatShell);
 
     // Light
-    const light = new THREE.PointLight(color, 2, 10);
-    coreMesh.add(light);
+    const light = illuminate ? new THREE.PointLight(color, 2, 10) : null;
+    if (light) coreMesh.add(light);
 
     state.particles.push(new VisualEffect(coreMesh, 0.5, (eff, dt) => {
         const progress = 1.0 - (eff.life / eff.maxLife);
@@ -3031,7 +3031,7 @@ function spawnExplosion(x, y, z, color, count) {
         heatShell.scale.setScalar(1+progress*1.9);
         heatShell.material.opacity=.44*(1-progress);
         heatShell.rotation.y+=dt*3;
-        light.intensity = 2 * (eff.life / eff.maxLife);
+        if (light) light.intensity = 2 * (eff.life / eff.maxLife);
     }));
 }
 
@@ -4490,7 +4490,7 @@ const FIREBALL_CORE_MAT = new THREE.MeshBasicMaterial({color:0xffda84});
 const FIREBALL_CORONA_MAT = new THREE.MeshBasicMaterial({color:COLORS.fireBody,transparent:true,opacity:.45,
     blending:THREE.AdditiveBlending,depthWrite:false});
 class Fireball {
-    constructor(start, end, faction, unitDamage = CONFIG.COMBAT.FIREBALL_UNIT_DAMAGE, buildingDamage = CONFIG.COMBAT.FIREBALL_BUILDING_DAMAGE) {
+    constructor(start, end, faction, unitDamage = CONFIG.COMBAT.FIREBALL_UNIT_DAMAGE, buildingDamage = CONFIG.COMBAT.FIREBALL_BUILDING_DAMAGE, stormShot = false) {
         this.id = generateUUID();
         this.mesh = new THREE.Mesh(FIREBALL_CORE_GEO,FIREBALL_CORE_MAT);
         this.corona = new THREE.Mesh(FIREBALL_CORONA_GEO,FIREBALL_CORONA_MAT);
@@ -4500,6 +4500,7 @@ class Fireball {
         this.faction = faction;
         this.unitDamage = unitDamage;
         this.buildingDamage = buildingDamage;
+        this.stormShot = stormShot;
         this.speed = CONFIG.EFFECTS.FIREBALL_SPEED; this.active = true; this.trailTimer = 0;
         this.travel = 0;
         this.duration = Math.max(0.1, start.distanceTo(end) / this.speed);
@@ -4517,7 +4518,7 @@ class Fireball {
         }
 
         // Add light
-        this.light = ['high','ultra'].includes(state.graphicsQuality?.tier) ? new THREE.PointLight(0xFF4500, 1.5, 15) : null;
+        this.light = !stormShot && ['high','ultra'].includes(state.graphicsQuality?.tier) ? new THREE.PointLight(0xFF4500, 1.5, 15) : null;
         if(this.light)this.mesh.add(this.light);
 
         state.scene.add(this.mesh);
@@ -4559,7 +4560,7 @@ class Fireball {
         if(this.light)this.light.dispose();
         this.active = false;
         SurfaceMarks.add(this.mesh.position.x,this.mesh.position.z,{radius:2.8,life:120,opacity:.76});
-        spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFF4500, 20);
+        spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFF4500, 20, !this.stormShot);
         for(let i=0;i<5;i++)spawnSmoke(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.5,.2,(Math.random()-.5)*1.5)),0x3a302c,.45+Math.random()*.35,1.8+Math.random()*1.5);
         SoundManager.playSound('explosion');
         const impactPos = this.mesh.position;
@@ -4589,18 +4590,57 @@ class Fireball {
 
 function prewarmFireballShaders() {
     if (!state.renderer || !state.scene || !state.shaman) return;
+    const existingLights=[];
+    state.scene.traverse(node=>{if(node.isPointLight)existingLights.push([node,node.visible]);});
     const start = state.shaman.mesh.position.clone().add(new THREE.Vector3(0, 3, 0));
     const preview = new Fireball(start, start.clone().add(new THREE.Vector3(4, 0, 0)), 0);
+    const secondLight = new THREE.PointLight(0xFF4500, 0, 15);
+    secondLight.position.copy(start);
+    secondLight.visible = false;
+    state.scene.add(secondLight);
+    const firstParticle = state.particles.length;
+    const firstMark = SurfaceMarks.marks.length;
+    const warmMaterials = [];
     try {
-        // Point lights change the shader program for every lit material in view.
-        // Compile that variant behind the loading or graphics menu, before a shot.
+        // Keep representative impact materials compiled as well as the projectile.
+        // A firestorm otherwise pauses when its first explosion or smoke fades.
+        spawnExplosion(start.x, start.y, start.z, 0xFF4500, 2, false);
+        spawnSmoke(start.clone(), 0x3a302c, .6, 2);
+        SurfaceMarks.add(start.x, start.z, {radius:2.8,life:1,opacity:.76});
+        // Warm zero, one and (on High/Ultra) two point-light variants while
+        // the loading screen is visible. Transient flashes can overlap rain.
+        existingLights.forEach(([light])=>{light.visible=false;});
+        state.renderer.compile(state.scene, state.camera);
+        // A separate attack or impact flash can overlap the firestorm light.
+        secondLight.visible=true;
+        state.renderer.compile(state.scene, state.camera);
+        if (preview.light) preview.light.visible=false;
+        secondLight.visible=false;
         state.renderer.compile(state.scene, state.camera);
         state.fireballShadersReady = true;
     } catch (error) {
         console.warn('Fireball shader warmup unavailable:', error);
     } finally {
+        existingLights.forEach(([light,visible])=>{light.visible=visible;});
+        for (const effect of state.particles.splice(firstParticle)) {
+            state.scene.remove(effect.mesh);
+            if (effect instanceof Particle) continue;
+            effect.mesh.traverse(node => {
+                if (node.material) warmMaterials.push(node.material);
+                if (node.geometry && !node.userData.sharedGeometry && node.geometry !== AssetCache.geos.particle) node.geometry.dispose();
+            });
+        }
+        for (const mark of SurfaceMarks.marks.splice(firstMark)) {
+            state.scene.remove(mark.mesh);
+            warmMaterials.push(mark.mesh.material);
+        }
+        const oldMaterials = state.fireballShaderWarmMaterials || [];
+        state.fireballShaderWarmMaterials = warmMaterials;
+        oldMaterials.forEach(material => material.dispose());
         state.scene.remove(preview.mesh);
         if (preview.light) preview.light.dispose();
+        state.scene.remove(secondLight);
+        secondLight.dispose();
     }
 }
 
@@ -4919,6 +4959,11 @@ class Firestorm extends ActiveEffect {
         this.faction = faction;
         this.timer = CONFIG.EFFECTS.FIRESTORM_DURATION;
         this.interval = 0;
+        this.light = ['high','ultra'].includes(state.graphicsQuality?.tier) ? new THREE.PointLight(0xFF4500, 2, 20) : null;
+        if (this.light) {
+            this.light.position.set(x, getHeight(x,z) + 5, z);
+            state.scene.add(this.light);
+        }
     }
     update(dt) {
         this.timer -= dt;
@@ -4929,10 +4974,13 @@ class Firestorm extends ActiveEffect {
             const rz = this.z + (Math.random()-0.5)*15;
             const start = new THREE.Vector3(rx, 40, rz);
             const end = new THREE.Vector3(rx, getHeight(rx, rz), rz);
-            state.projectiles.push(new Fireball(start, end, this.faction));
+            state.projectiles.push(new Fireball(start, end, this.faction, undefined, undefined, true));
             SoundManager.playSound('fireball');
         }
-        return this.timer > 0;
+        if (this.light) this.light.intensity = 1.8 + Math.sin(this.timer * 7) * .35;
+        if (this.timer > 0) return true;
+        if (this.light) {state.scene.remove(this.light);this.light.dispose();this.light=null;}
+        return false;
     }
 }
 
@@ -8429,7 +8477,10 @@ window.loadGame = function() {
             }
             state.rigidBodies.clear();
         }
-        state.activeEffects.forEach(e => { if(e.mesh) state.scene.remove(e.mesh); });
+        state.activeEffects.forEach(e => {
+            if(e.mesh) state.scene.remove(e.mesh);
+            if(e.light) {state.scene.remove(e.light);e.light.dispose();e.light=null;}
+        });
         state.activeEffects.length = 0;
         state.projectiles.forEach(p => state.scene.remove(p.mesh));
         state.projectiles.length = 0;

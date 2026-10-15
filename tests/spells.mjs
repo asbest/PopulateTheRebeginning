@@ -39,11 +39,19 @@ try{
   if(spell==='lightning')expect(enemy.hp<before.hp&&ally.hp===500,'Lightning damage/faction');
   if(['swamp','swarm','tornado','volcano','firestorm'].includes(spell)){
    const effect=state.activeEffects.at(-1);expect(!!effect,'No effect');
-   if(spell==='firestorm'){const n=state.projectiles.length;effect.update(1.1);expect(state.projectiles.length===n+1,'No raining fireball');}
+   if(spell==='firestorm'){
+    const n=state.projectiles.length,stormLight=effect.light;
+    effect.update(1.1);
+    expect(state.projectiles.length===n+1,'No raining fireball');
+    const projectile=state.projectiles.at(-1);
+    expect(projectile.stormShot&&!projectile.light,'Firestorm projectile allocated an extra light');
+    if(stormLight)expect(stormLight.parent===state.scene,'Firestorm light missing');
+   }
    else{for(let i=0;i<90;i++)effect.update(1/60);expect(enemy.hp<before.hp,'Hazard has no damage');expect(ally.hp===500,'Friendly hazard damage');}
    if(spell==='volcano')expect(getHeight(x,z)>before.h,'Volcano terrain unchanged');
    effect.timer=0;expect(effect.update(.01)===false,'Effect does not expire');
    if(effect.mesh)expect(!effect.mesh.parent,'Expired effect remains visible');
+   if(spell==='firestorm')expect(!effect.light,'Expired firestorm light remains');
   }
   if(spell==='blast'){
    expect(state.projectiles.length>0,'No projectile');const projectile=state.projectiles.at(-1);
@@ -52,6 +60,16 @@ try{
   }
   return {cost,enemyHealth:enemy.hp,unitCount:state.units.length};
  },spell);});
+ await check('Loading a save removes active firestorm illumination',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {x,z}=fixture;
+   gameTestAPI.performAction(x,z,'firestorm');
+   const storm=state.activeEffects.at(-1),light=storm.light;
+   saveGame();loadGame();
+   if(state.activeEffects.includes(storm)||light?.parent||storm.light)throw new Error('Firestorm light survived load');
+   return {lightRemoved:true};
+  });
+ });
  await check('Every spell rejects insufficient mana, out-of-range targets and a dead caster',async()=>{await fresh();return p.evaluate(spells=>{const {caster,x,z}=fixture;for(const spell of spells){state.mana=0;gameTestAPI.performAction(x,z,spell);if(state.mana!==0)throw new Error(spell+' overdraft');state.mana=1000;gameTestAPI.performAction(x+1000,z,spell);if(state.mana!==1000)throw new Error(spell+' ignored range');caster.state='dead';gameTestAPI.performAction(x,z,spell);if(state.mana!==1000)throw new Error(spell+' dead caster');caster.state='idle';}return spells.length;},spells);});
  await check('Airship unload action synchronizes physics and does not charge mana',async()=>{await fresh();return p.evaluate(()=>{const {ally,x,z}=fixture,ship=new Humanoid(0,'airship',x+5,z);state.units.push(ship);ship.loadUnit(ally);if(ship.loadUnit(ally))throw new Error('Duplicate cargo');state.selectedUnits=[ship];gameTestAPI.performAction(x,z,'unload');if(ship.passengers.length||!ally.mesh.visible||ally.state==='transported'||state.mana!==1000)throw new Error('Unload action failed');for(let i=0;i<30;i++){state.physicsWorld.step();ally.update(1/60);}if(Math.hypot(ally.mesh.position.x-ship.mesh.position.x,ally.mesh.position.z-ship.mesh.position.z)>.5)throw new Error('Passenger snapped back');});});
  await check('No shipyard means no airship mana charge',async()=>{await fresh();return p.evaluate(()=>{const {x,z}=fixture;const u=new Humanoid(0,'wild',x,z);state.units.push(u);gameTestAPI.performAction(x,z,'build_airship');if(state.mana!==1000)throw new Error('Invalid construction charged mana');});});
