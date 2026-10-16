@@ -36,21 +36,22 @@ try{
  });
  await check('Fireball knockback visibly moves a struck person and recovers',async()=>{
   await fresh();return p.evaluate(()=>{
-   const {x,z,enemy}=fixture,y=getHeight(x,z),startX=x+1.5;
-   state.units=[enemy];enemy.mesh.position.set(startX,y,z);
-   enemy.rigidBody.setTranslation({x:startX,y:y+enemy.height/2,z},true);
+   const {x,z,enemy}=fixture,y=getHeight(x,z),startX=x+1.5,startY=getHeight(startX,z);
+   state.units=[enemy];enemy.mesh.position.set(startX,startY,z);
+   enemy.rigidBody.setTranslation({x:startX,y:startY+enemy.height/2,z},true);
    enemy.rigidBody.setLinvel({x:0,y:0,z:0},true);enemy.hp=enemy.maxHp=1000;enemy.hitImpulseCooldown=0;enemy.nextTargetCheck=Infinity;
    gameTestAPI.SpatialHash.update();
    const ball=new gameTestAPI.Fireball(new THREE.Vector3(x-4,y+2,z),new THREE.Vector3(x,y,z),0);
    ball.mesh.position.set(x,y,z);ball.explode();
-   const launch={...enemy.rigidBody.linvel()};let travel=0,rise=0;
+   const launch={...enemy.rigidBody.linvel()};let travel=0,rise=0,worldRise=0;
    for(let i=0;i<180;i++){
     state.physicsWorld.timestep=1/60;state.physicsWorld.step();enemy.update(1/60);
     travel=Math.max(travel,enemy.mesh.position.x-startX);
     rise=Math.max(rise,enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z));
+    worldRise=Math.max(worldRise,enemy.mesh.position.y-startY);
    }
-   const report={launch,travel,rise,state:enemy.state,groundGap:enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z)};
-   if(launch.x<12||launch.x>20||launch.y>9||travel<7||travel>20||rise<1.5||enemy.state==='stunned'||enemy.state==='getting_up'||Math.abs(report.groundGap)>.35)
+   const report={launch,travel,rise,worldRise,state:enemy.state,groundGap:enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z)};
+   if(launch.x<12||launch.x>20||launch.y<11||launch.y>17.5||travel<7||travel>25||rise<1.5||worldRise<2||worldRise>6||enemy.state==='stunned'||enemy.state==='getting_up'||Math.abs(report.groundGap)>.35)
     throw new Error('Fireball failed to launch or recover: '+JSON.stringify(report));
    return report;
   });

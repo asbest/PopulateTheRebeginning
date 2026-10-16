@@ -4765,7 +4765,7 @@ class Fireball {
             const nx = horizontal > .05 ? dx / horizontal : incomingLength > .05 ? incomingX / incomingLength : 1;
             const nz = horizontal > .05 ? dz / horizontal : incomingLength > .05 ? incomingZ / incomingLength : 0;
             const shove = (this.unitShot ? 5.2 : 8) * falloff;
-            const lift = (this.unitShot ? 2.4 : 3.3) * falloff;
+            const lift = (this.unitShot ? 5.2 : 7.2) * falloff;
             u.applyForce(new THREE.Vector3(nx * shove, lift, nz * shove), this.unitShot ? 5.5 : 8);
             u.takeDamage(this.unitDamage);
             u.burnTimer = 3.0;
