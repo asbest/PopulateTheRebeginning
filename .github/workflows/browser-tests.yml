@@ -52,6 +52,9 @@ jobs:
       - name: Spells and mana rules
         if: always()
         run: node tests/spells.mjs
+      - name: Burnable trees and five-minute regrowth
+        if: always()
+        run: node tests/trees.mjs
       - name: Spell sound assets
         if: always()
         run: node tests/sfx-assets.mjs

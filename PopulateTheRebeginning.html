@@ -1216,6 +1216,7 @@ const CONFIG = {
         SPAWN_OFFSET: -200,
     },
     TERRAIN_VEGETATION: {
+        TREE_REGROW_SECONDS: 300,
         TREE_SPAWN_CHANCE: 0.5,
         TREE_PER_CHUNK: 6,
         TREE_HEIGHT_MIN: 3,
@@ -1315,6 +1316,8 @@ const state = {
     
     // Game State
     chunks: {},
+    treeTime: 0,
+    treeBurns: new Map(),
     terrainMods: new Map(),
     units: [],
     matchSettings: { noFlyers: false, infiniteMana: false, doubleSpeed: false, suddenDeath: false, winter: false, biome: 'normal' },
@@ -1627,6 +1630,8 @@ const NetworkManager = {
             })),
             mana: state.mana,
             matchSettings: state.matchSettings,
+            treeTime: state.treeTime,
+            treeBurns: Array.from(state.treeBurns.entries()),
             isPaused: state.isPaused
         };
         if (includeTerrain) {
@@ -1735,6 +1740,15 @@ const NetworkManager = {
         if (data.mana !== undefined) state.mana = data.mana;
         if (data.matchSettings !== undefined) state.matchSettings = data.matchSettings;
         if (data.isPaused !== undefined) state.isPaused = data.isPaused;
+        if (Number.isFinite(data.treeTime) && Array.isArray(data.treeBurns)) {
+            state.treeTime=Math.max(0,data.treeTime);
+            state.treeBurns.clear();
+            for(const [id,readyAt] of data.treeBurns){
+                if(typeof id==='string'&&Number.isFinite(readyAt)&&readyAt>state.treeTime)
+                    state.treeBurns.set(id,readyAt);
+            }
+            syncTreeAppearance();
+        }
         if (data.terrainMods !== undefined) {
             let changed = false;
             data.terrainMods.forEach(([key, val]) => {
@@ -3482,38 +3496,105 @@ function initTerrainResources() {
     state.chunkWaterMat = chunkWaterMat;
 }
 
-function burnTreesAt(x, z, radius) {
-    Object.values(state.chunks).forEach(chunk => {
-        if(chunk.userData && chunk.userData.trees) {
-            chunk.userData.trees.forEach(tree => {
-                if(tree.burned) return;
-                const dist = Math.sqrt((tree.mesh.position.x - x)**2 + (tree.mesh.position.z - z)**2);
-                if(dist < radius) {
-                    tree.burned = true;
-                    // Charred visual
-                    const t = tree.mesh.children[0]; // Trunk
-                    const l = tree.mesh.children[1]; // Leaves
-                    t.material = t.material.clone();
-                    t.material.color.setHex(COLORS.hairBlack); // Black trunk
+function forEachTreeSite(cx,cz,visit) {
+    const offX=cx*CHUNK_SIZE,offZ=cz*CHUNK_SIZE;
+    const random=mulberry32(((cx*92837111)^(cz*689287499)^0x7f4a7c15)>>>0);
+    const grove=landscapeMoisture(offX,offZ)>.65&&landscapeOpening(offX,offZ)<.48;
+    for(let k=0;k<(grove?13:8);k++){
+        const x=(random()-.5)*CHUNK_SIZE+offX,z=(random()-.5)*CHUNK_SIZE+offZ;
+        const moisture=landscapeMoisture(x,z),opening=landscapeOpening(x,z);
+        if(random()>=.13+.67*moisture*(1-opening*.65))continue;
+        const h=getHeight(x,z);
+        if(h<=3||h>=10)continue;
+        const slope=Math.hypot(getHeight(x+.7,z)-getHeight(x-.7,z),
+            getHeight(x,z+.7)-getHeight(x,z-.7));
+        if(slope>1.7)continue;
+        const rotation=random()*Math.PI*2,scale=.78+random()*.48,scaleY=.9+random()*.35;
+        visit({id:`${cx},${cz}:${k}`,x,z,h,rotation,scale,scaleY});
+    }
+}
 
-                    l.material = l.material.clone();
-                    l.material.color.setHex(COLORS.charred); // Charred leaves
-                    l.scale.set(0.8, 0.5, 0.8); // Shriveled
-                    for(const branch of tree.mesh.children.slice(2)) {
-                        if(!branch.isMesh)continue;
-                        branch.material=branch.material.clone();
-                        branch.material.color.setHex(COLORS.hairBlack);
-                    }
-
-                    // Smoke
-                    for(let i=0; i<1; i++) {
-                        const p = new Particle(tree.mesh.position.clone().add(new THREE.Vector3(0, 2, 0)), 0x333333, 0.2, 2.0, -1);
-                        state.particles.push(p);
-                    }
-                }
-            });
-        }
+function charTree(tree) {
+    if(tree.burned)return false;
+    const crown=tree.mesh.children[1];
+    tree.originalParts=[];
+    const clonedMaterials=new Map();
+    tree.mesh.traverse(part=>{
+        if(!part.isMesh||part.name==='Tree canopy contact shadow'||!part.material)return;
+        let inCrown=false;
+        for(let node=part;node&&node!==tree.mesh;node=node.parent)if(node===crown){inCrown=true;break;}
+        const original=part.material;
+        const charMaterial=material=>{
+            const key=`${material.uuid}:${inCrown?'crown':'wood'}`;
+            if(clonedMaterials.has(key))return clonedMaterials.get(key);
+            const copy=material.clone();
+            copy.color?.setHex(inCrown?0x504033:0x49362b);
+            copy.emissive?.setHex(0x000000);
+            if('roughness' in copy)copy.roughness=1;
+            clonedMaterials.set(key,copy);
+            return copy;
+        };
+        tree.originalParts.push({mesh:part,material:original});
+        part.material=Array.isArray(original)?original.map(charMaterial):charMaterial(original);
     });
+    tree.charredMaterials=[...clonedMaterials.values()];
+    tree.crownScale=crown?.scale.clone();
+    if(crown)crown.scale.multiply(new THREE.Vector3(.8,.55,.8));
+    tree.burned=true;
+    return true;
+}
+
+function restoreTree(tree) {
+    if(!tree.burned)return;
+    for(const part of tree.originalParts||[]){
+        part.mesh.material=part.material;
+    }
+    for(const material of tree.charredMaterials||[])material.dispose();
+    if(tree.crownScale&&tree.mesh.children[1])tree.mesh.children[1].scale.copy(tree.crownScale);
+    tree.originalParts=null;
+    tree.charredMaterials=null;
+    tree.crownScale=null;
+    tree.burned=false;
+}
+
+function burnTreesAt(x, z, radius) {
+    const radiusSquared=radius*radius;
+    const half=CHUNK_SIZE/2;
+    const minX=Math.floor((x-radius+half)/CHUNK_SIZE),maxX=Math.floor((x+radius+half)/CHUNK_SIZE);
+    const minZ=Math.floor((z-radius+half)/CHUNK_SIZE),maxZ=Math.floor((z+radius+half)/CHUNK_SIZE);
+    for(let cx=minX;cx<=maxX;cx++)for(let cz=minZ;cz<=maxZ;cz++){
+        const chunk=state.chunks[`${cx},${cz}`];
+        const hit=(id,treeX,treeZ,tree)=>{
+            const dx=treeX-x,dz=treeZ-z;
+            if(dx*dx+dz*dz>=radiusSquared)return;
+            // A fresh hit renews the timer, even if the tree is already charred.
+            state.treeBurns.set(id,state.treeTime+CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
+            if(tree&&charTree(tree))state.particles.push(new Particle(
+                tree.mesh.position.clone().add(new THREE.Vector3(0,2,0)),0x493a32,.2,2,-1));
+        };
+        if(chunk){
+            for(const tree of chunk.userData?.trees||[])
+                hit(tree.id,tree.mesh.position.x,tree.mesh.position.z,tree);
+        }else forEachTreeSite(cx,cz,site=>hit(site.id,site.x,site.z,null));
+    }
+}
+
+function updateTreeRegrowth(dt) {
+    state.treeTime+=dt;
+    for(const [id,readyAt] of state.treeBurns){
+        if(readyAt>state.treeTime)continue;
+        state.treeBurns.delete(id);
+        const chunk=state.chunks[id.split(':')[0]];
+        const tree=chunk?.userData?.trees.find(item=>item.id===id);
+        if(tree)restoreTree(tree);
+    }
+}
+
+function syncTreeAppearance() {
+    for(const chunk of Object.values(state.chunks))for(const tree of chunk.userData?.trees||[]){
+        if((state.treeBurns.get(tree.id)||0)>state.treeTime)charTree(tree);
+        else restoreTree(tree);
+    }
 }
 
 function modifyTerrain(centerX, centerZ, radius, amount) {
@@ -3581,6 +3662,7 @@ for(let x=-RENDER_DISTANCE;x<=RENDER_DISTANCE;x++)for(let z=-RENDER_DISTANCE;z<=
 CHUNK_OFFSETS.sort((a,b)=>(a.x*a.x+a.z*a.z)-(b.x*b.x+b.z*b.z));
 
 function disposeChunkGeometry(chunk) {
+    for(const tree of chunk.userData?.trees||[])restoreTree(tree);
     const owned=[chunk.children[0],chunk.children[1]];
     const cover=chunk.userData?.groundCover;
     if(cover)for(const layer of Object.values(cover))if(layer?.mesh)owned.push(layer.mesh);
@@ -4302,32 +4384,17 @@ function createChunk(cx, cz) {
     grp.userData = { trees: [], flowers: [], groundCover: null, palms: null };
     createGroundCover(grp,cx,cz);
     createCoastalPalms(grp,cx,cz);
-    const chunkRandom=mulberry32(((cx*92837111)^(cz*689287499)^0x7f4a7c15)>>>0);
-    const grove=landscapeMoisture(offX,offZ)>.65&&landscapeOpening(offX,offZ)<.48;
-    for(let k=0; k<(grove?13:8); k++) {
-        const lx = (chunkRandom()-0.5)*CHUNK_SIZE; const lz = (chunkRandom()-0.5)*CHUNK_SIZE;
-        const worldX=lx+offX,worldZ=lz+offZ;
-        const moisture=landscapeMoisture(worldX,worldZ),opening=landscapeOpening(worldX,worldZ);
-        if(chunkRandom() < .13+.67*moisture*(1-opening*.65)) {
-             const h = getHeight(worldX,worldZ);
-             if(h > 3 && h < 10) {
-                const slope=Math.hypot(getHeight(worldX+.7,worldZ)-getHeight(worldX-.7,worldZ),
-                    getHeight(worldX,worldZ+.7)-getHeight(worldX,worldZ-.7));
-                if(slope>1.7)continue;
-                const treeGroup = Art.tree();
-                treeGroup.position.set(worldX,h,worldZ);
-                treeGroup.rotation.y=chunkRandom()*Math.PI*2;
-                const treeScale=.78+chunkRandom()*.48;treeGroup.scale.set(treeScale,.9+chunkRandom()*.35,treeScale);
-                const treeShadow=createContactShadow(1.45);treeShadow.name='Tree canopy contact shadow';treeGroup.add(treeShadow);
-                grp.add(treeGroup);
-
-                grp.userData.trees.push({
-                    mesh: treeGroup,
-                    burned: false
-                });
-             }
-        }
-    }
+    forEachTreeSite(cx,cz,site=>{
+        const treeGroup=Art.tree();
+        treeGroup.position.set(site.x,site.h,site.z);
+        treeGroup.rotation.y=site.rotation;
+        treeGroup.scale.set(site.scale,site.scaleY,site.scale);
+        const treeShadow=createContactShadow(1.45);treeShadow.name='Tree canopy contact shadow';treeGroup.add(treeShadow);
+        grp.add(treeGroup);
+        const tree={id:site.id,mesh:treeGroup,burned:false};
+        grp.userData.trees.push(tree);
+        if((state.treeBurns.get(tree.id)||0)>state.treeTime)charTree(tree);
+    });
 
     // Generate large coherent flower fields
     const spacing = 0.6;
@@ -8591,7 +8658,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, Fireball, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -8654,6 +8721,8 @@ window.applyLandGen = function() {
 
         // Regenerate world visually
         state.terrainMods.clear();
+        state.treeBurns.clear();
+        state.treeTime=0;
         state.heightCache.clear();
 
         // Remove existing chunk meshes
@@ -8999,6 +9068,8 @@ window.saveGame = function() {
         matchSettings: state.matchSettings,
         mana: state.mana,
         terrainMods: Array.from(state.terrainMods.entries()),
+        treeTime: state.treeTime,
+        treeBurns: Array.from(state.treeBurns.entries()),
         cameraLookAt: {x: state.cameraLookAt.x, y: state.cameraLookAt.y, z: state.cameraLookAt.z},
 
         enemyAIs: window.enemyAIs.map(ai => ({
@@ -9120,6 +9191,12 @@ window.loadGame = function() {
         data.terrainMods.forEach(([k, v]) => {
             state.terrainMods.set(k, v);
         });
+        state.treeTime=Number.isFinite(data.treeTime)?Math.max(0,data.treeTime):0;
+        state.treeBurns.clear();
+        if(Array.isArray(data.treeBurns))for(const [id,readyAt] of data.treeBurns){
+            if(typeof id==='string'&&Number.isFinite(readyAt)&&readyAt>state.treeTime)
+                state.treeBurns.set(id,readyAt);
+        }
         updateChunks(true);
 
         if (data.teams) state.teams = data.teams;
@@ -9800,6 +9877,7 @@ function animate() {
     }
 
     if(!state.isPaused) {
+    updateTreeRegrowth(dt);
     if (state.clock && Math.floor(state.clock.elapsedTime * 60) % 2 === 0) {
         SpatialHash.update();
         BuildingSpatialHash.update();
