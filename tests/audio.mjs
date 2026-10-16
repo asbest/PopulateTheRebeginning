@@ -94,7 +94,7 @@ try {
         if(after>=before)throw new Error(`${spell} was not cast`);
         await page.waitForFunction(count=>testSounds.length>count,soundCount);
         const soundName=await page.evaluate(()=>testSounds.at(-1));
-        const expected={blast:'fireball',heal:'magic',raise:'rumble',lightning:'explosion',firestorm:'fireball'}[spell];
+        const expected={blast:'fireball',heal:'heal',raise:'raise',lightning:'lightning',firestorm:'firestorm'}[spell];
         if(soundName!==expected)throw new Error(`${spell} played ${soundName} instead of ${expected}`);
         const peak=await stopRecording(page);
         if(peak<0.015)throw new Error(`${spell} produced no audible signal (peak ${peak})`);
@@ -112,6 +112,35 @@ try {
     const testPeak=await stopRecording(page);
     if(testPeak<0.03)throw new Error(`Pause-menu sound test was silent (peak ${testPeak})`);
     console.log(`PASS Pause-menu sound test (peak ${testPeak.toFixed(3)})`);
+
+    const sustain=await page.evaluate(()=>{
+        document.getElementById('pause-menu').style.display='none';
+        state.isPaused=false;
+        const sound=gameTestAPI.SoundManager;
+        sound.syncSustains(false);
+        state.mana=1000;
+        state.selectedUnits=[state.shaman];
+        gameTestAPI.performAction(state.shaman.mesh.position.x+2,state.shaman.mesh.position.z,'firestorm');
+        const effect=state.activeEffects.at(-1),handle=effect?.soundLoop;
+        if(effect?.constructor.name!=='Firestorm'||!handle||!sound.activeSustains.has(handle))
+            throw new Error('Firestorm did not start its persistent sound');
+        window.testSustainHandle=handle;
+        return {duration:effect.timer,loop:handle.audio.loop,src:handle.audio.currentSrc};
+    });
+    if(sustain.duration<9||!sustain.loop||!sustain.src.endsWith('/sfx/firestorm_loop.wav'))
+        throw new Error(`Wrong firestorm sustain: ${JSON.stringify(sustain)}`);
+    await page.waitForFunction(()=>testSustainHandle.audio.currentTime>.1,null,{timeout:15000});
+    await page.evaluate(()=>{state.isPaused=true;gameTestAPI.SoundManager.syncSustains(true);});
+    if(!await page.evaluate(()=>testSustainHandle.audio.paused))
+        throw new Error('Sustained spell kept playing while paused');
+    await page.evaluate(()=>{
+        const sound=gameTestAPI.SoundManager,effect=state.activeEffects.at(-1);
+        state.isPaused=false;sound.syncSustains(false);
+        effect.timer=0;effect.update(.01);
+    });
+    await page.waitForFunction(()=>gameTestAPI.SoundManager.activeSustains.size===0);
+    await page.waitForFunction(()=>testSustainHandle.audio.paused,null,{timeout:3000});
+    console.log('PASS Firestorm bed plays through its lifetime, pauses and stops on expiry');
 
     const mobile=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,
         userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'});
@@ -167,12 +196,37 @@ try {
             throw new Error(`Android-style fireball was not a sustained media effect: ${JSON.stringify(mobileAudio)}`);
         console.log(`PASS Android touch fireball plays a sustained WAV effect: ${JSON.stringify(mobileAudio)}`);
         const assets=await phone.evaluate(async()=>Promise.all(
-            ['attack','fireball','explosion','magic','construct','rumble'].map(async name=>{
+            [...gameTestAPI.SoundManager.mediaEffects.keys()].map(async name=>{
                 const response=await fetch(`sfx/${name}.wav`);
                 return {name,ok:response.ok,type:response.headers.get('content-type'),bytes:(await response.arrayBuffer()).byteLength};
             })));
-        if(assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
+        if(assets.length!==28||assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
             throw new Error(`Missing Android effect assets: ${JSON.stringify(assets)}`);
+        console.log(`PASS Android can load all ${assets.length} spell effects and ambient beds`);
+        await phone.evaluate(()=>{
+            state.isPaused=false;state.mana=1000;
+            gameTestAPI.SoundManager.syncSustains(false);
+            state.selectedUnits=[state.shaman];
+        });
+        const stormPoint=await clickControl(phone,'#btn-firestorm');
+        await phone.touchscreen.tap(stormPoint.x,stormPoint.y);
+        const stormTarget=await phone.evaluate(()=>{
+            const point=state.shaman.mesh.position.clone();point.x+=2;point.project(state.camera);
+            return {x:(point.x+1)*innerWidth/2,y:(1-point.y)*innerHeight/2};
+        });
+        await phone.touchscreen.tap(stormTarget.x,stormTarget.y);
+        await phone.waitForFunction(()=>[...gameTestAPI.SoundManager.activeSustains]
+            .some(handle=>handle.audio.currentSrc.endsWith('/sfx/firestorm_loop.wav')&&handle.audio.currentTime>.1),null,{timeout:15000});
+        await phone.evaluate(()=>{
+            const sound=gameTestAPI.SoundManager;
+            window.phoneStorm=[...sound.activeSustains].find(handle=>handle.audio.currentSrc.endsWith('/sfx/firestorm_loop.wav'));
+            state.isPaused=true;sound.syncSustains(true);
+            if(!phoneStorm.audio.paused)throw new Error('Android storm audio ignored pause');
+            const effect=state.activeEffects.find(item=>item.constructor.name==='Firestorm');
+            effect.timer=0;effect.update(.01);
+        });
+        await phone.waitForFunction(()=>phoneStorm.audio.paused&&phoneStorm.stopped,null,{timeout:3000});
+        console.log('PASS Android touch firestorm sustains, pauses and stops with the spell');
         await phone.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
         const phoneSoundPoint=await clickControl(phone,'#btn-test-sound');
         await phone.touchscreen.tap(phoneSoundPoint.x,phoneSoundPoint.y);

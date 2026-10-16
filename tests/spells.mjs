@@ -63,12 +63,16 @@ try{
   ally.hp=500;const before={h:getHeight(x,z),hp:enemy.hp,units:state.units.length,mods:state.terrainMods.size};
   const sample=()=>{const a=[];for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)a.push(getHeight(x+dx,z+dz));return Math.max(...a)-Math.min(...a);};const spread=sample();
   const sound=gameTestAPI.SoundManager,playSound=sound.playSound;
-  let castingSounds=0;
-  sound.playSound=function(name){castingSounds++;return playSound.call(this,name);};
+  const castingSounds=[];
+  sound.playSound=function(name,volume){castingSounds.push(name);return playSound.call(this,name,volume);};
   gameTestAPI.performAction(x,z,spell);
   sound.playSound=playSound;
   expect(state.mana===1000-cost,'Mana '+state.mana);
-  if(spell!=='lightning')expect(castingSounds>0,'No casting sound for '+spell);
+  const expectedSound={blast:'fireball',lightning:'lightning',raise:'raise',lower:'lower',flatten:'flatten',
+   landbridge:'landbridge',swamp:'swamp',invisibility:'invisibility',shield:'shield',hypnotise:'hypnotise',
+   swarm:'swarm',tornado:'tornado',firestorm:'firestorm',volcano:'volcano',heal:'heal',teleport:'teleport',
+   create:'create',phantom:'phantom'}[spell];
+  expect(castingSounds.includes(expectedSound),'Wrong or missing casting sound for '+spell+': '+castingSounds);
   if(spell==='teleport'){for(let i=0;i<30;i++){state.physicsWorld.timestep=1/60;state.physicsWorld.step();caster.update(1/60);}expect(Math.hypot(caster.mesh.position.x-x,caster.mesh.position.z-z)<.2,'Teleport snapped back');}
   if(spell==='heal')expect(ally.hp===1000&&enemy.hp===1000,'Heal faction/health');
   if(spell==='shield'){expect(ally.shielded&&!enemy.shielded,'Shield faction');ally.takeDamage(100,true);expect(ally.hp===500,'Shield did not block damage');}

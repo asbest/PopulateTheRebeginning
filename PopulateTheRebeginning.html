@@ -297,22 +297,28 @@
             pointer-events: none;
         }
         #game-toast[data-kind="error"] { border-color: #e38270; color: #ffe7df; }
+        #game-toast[data-kind="story"] { border-color: #e4c980; color: #fff4ce; max-width: min(560px, calc(100vw - 110px)); }
         #game-toast[hidden], #game-dialog[hidden] { display: none; }
+        #story-overlay, #campaign-ending { overflow-y: auto; }
+        #campaign-ending:not([hidden]) { display: flex; }
+        #campaign-ending-choices[hidden], #campaign-ending-finished[hidden] { display: none; }
+        #story-objective, #story-discovery { max-width: 760px; line-height: 1.45; color: #f3dfad; }
+        #story-discovery { border-top: 1px solid rgba(243, 223, 173, .4); padding-top: 15px; }
         #game-dialog {
             position: fixed; inset: 0; z-index: 1010;
             display: flex; align-items: center; justify-content: center;
             padding: 16px; box-sizing: border-box;
             background: rgba(5, 10, 12, .72); pointer-events: auto;
         }
-        .game-dialog-card {
+        .game-dialog-card, .campaign-ending-card {
             width: min(420px, 100%); box-sizing: border-box;
             padding: 24px; border: 1px solid #c5a563; border-radius: 12px;
             background: linear-gradient(150deg, #26312f, #151b1b);
             color: #f8efd8; box-shadow: 0 18px 55px rgba(0,0,0,.65);
             text-align: center;
         }
-        .game-dialog-card h2 { margin: 0 0 12px; color: #f3d78b; font-size: 22px; }
-        .game-dialog-card p { margin: 0 0 22px; color: #f8efd8; font-size: 15px; line-height: 1.5; }
+        .game-dialog-card h2, .campaign-ending-card h2 { margin: 0 0 12px; color: #f3d78b; font-size: 22px; }
+        .game-dialog-card p, .campaign-ending-card p { margin: 0 0 22px; color: #f8efd8; font-size: 15px; line-height: 1.5; white-space: pre-line; }
         .game-dialog-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
         .game-dialog-actions button {
             min-width: 112px; min-height: 44px; padding: 9px 15px;
@@ -432,10 +438,26 @@
         <button class="menu-btn" style="margin-top: 10px; font-size: 18px; width: auto; padding: 10px 30px;" onclick="closeHelp()">Close</button>
     </div>
 
-    <div id="story-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); flex-direction:column; align-items:center; justify-content:center; z-index:300; color:white; pointer-events:auto; text-align:center; padding: 20px; box-sizing: border-box;">
+    <div id="story-overlay" role="dialog" aria-modal="true" aria-labelledby="story-title" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); flex-direction:column; align-items:center; justify-content:center; z-index:300; color:white; pointer-events:auto; text-align:center; padding: 20px; box-sizing: border-box;">
         <h1 id="story-title" style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000; max-width: 800px;"></h1>
-        <div id="story-text" style="margin-bottom:30px; font-size: 18px; line-height: 1.5; max-width: 800px; text-shadow: 1px 1px 0 #000;"></div>
-        <button class="menu-btn" style="font-size: 20px; padding: 10px 20px; width: auto;" onclick="closeStoryOverlay()">Begin</button>
+        <div id="story-text" style="margin-bottom:20px; font-size: 18px; line-height: 1.5; max-width: 800px; text-shadow: 1px 1px 0 #000;"></div>
+        <p id="story-objective"></p>
+        <p id="story-discovery" hidden></p>
+        <button id="story-close" class="menu-btn" style="font-size: 20px; padding: 10px 20px; width: auto;" onclick="closeStoryOverlay()">Begin</button>
+    </div>
+
+    <div id="campaign-ending" role="dialog" aria-modal="true" aria-labelledby="campaign-ending-title" hidden style="position:fixed; inset:0; z-index:1020; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; background:rgba(5,10,12,.88); color:#f8efd8; text-align:center; pointer-events:auto;">
+        <div class="campaign-ending-card" style="width:min(620px,100%); max-height:100%; overflow-y:auto;">
+            <h2 id="campaign-ending-title">The Price of Divinity</h2>
+            <p id="campaign-ending-text"></p>
+            <div id="campaign-ending-choices" class="game-dialog-actions">
+                <button type="button" onclick="chooseCampaignEnding('keep')">Keep the power</button>
+                <button type="button" onclick="chooseCampaignEnding('return')">Return it to the world</button>
+            </div>
+            <div id="campaign-ending-finished" class="game-dialog-actions" hidden>
+                <button type="button" onclick="closeCampaignEnding()">Back to levels</button>
+            </div>
+        </div>
     </div>
 
     <div id="fps-indicator" style="position: absolute; top: 10px; left: 10px; font-family: monospace; font-size: 10px; color: white; display: none; z-index: 1000; text-shadow: 1px 1px 0 #000;">FPS: 0</div>
@@ -446,6 +468,7 @@
             <button class="menu-btn" style="margin:0; width:100%;" onclick="loadGame()">Load Game</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="openMultiplayer()">Multiplayer</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="openCampaignMenu()">Level selection</button>
+            <button class="menu-btn" style="margin:0; width:100%;" id="btn-campaign-journal" onclick="showCampaignJournal()">Campaign journal</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFps()">Toggle FPS</button>
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-toggle-music" onclick="toggleMusic()">Music: On</button>
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-test-sound" onclick="testSpellSound()">Test spell sound</button>
@@ -543,20 +566,21 @@
     <div id="campaign-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto; overflow-y:auto;">
         <h1 style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">LEVEL SELECTION</h1>
         <div id="campaign-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; width:400px;">
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(1)">Level 1: The Awakening (Tutorial)</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(2)" id="btn-camp-2">Level 2: The Swarm</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(3)" id="btn-camp-3">Level 3: The Frozen Wastes</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(4)" id="btn-camp-4">Level 4: The Opportunist's Trap</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(5)" id="btn-camp-5">Level 5: The Grand Melee</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(6)" id="btn-camp-6">Level 6: The Tithe of Shadows</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(7)" id="btn-camp-7">Level 7: The Crumbling Peak</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(8)" id="btn-camp-8">Level 8: The Web of Minds</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(9)" id="btn-camp-9">Level 9: The Stormgods' Crucible</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(10)" id="btn-camp-10">Level 10: The Void Between</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(11)" id="btn-camp-11">Level 11: The Pantheon Rising</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(12)" id="btn-camp-12">Level 12: The First Shaman Ascends</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(1)">Level 1: The Broken Shore (Tutorial)</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(2)" id="btn-camp-2">Level 2: The Displaced</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(3)" id="btn-camp-3">Level 3: Fire in the Snow</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(4)" id="btn-camp-4">Level 4: The Last Refuge</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(5)" id="btn-camp-5">Level 5: The Mana Tide</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(6)" id="btn-camp-6">Level 6: The Hidden Tithe</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(7)" id="btn-camp-7">Level 7: The Scarred Peak</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(8)" id="btn-camp-8">Level 8: The Shared Mind</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(9)" id="btn-camp-9">Level 9: Borrowed Storms</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(10)" id="btn-camp-10">Level 10: The Breach Between Worlds</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(11)" id="btn-camp-11">Level 11: The Covenant</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCampaignLevel(12)" id="btn-camp-12">Level 12: The Price of Divinity</button>
             <button class="menu-btn" style="width:100%; margin-top:20px; background-color:#555;" onclick="newGame()">Sandbox Mode (Random Start)</button>
         </div>
+        <button id="btn-review-ending" class="menu-btn" style="display:none; width:400px; max-width:calc(100vw - 40px);" onclick="reviewCampaignEnding()">Read your ending</button>
         <button class="menu-btn" onclick="closeCampaignMenu()">Back</button>
     </div>
 
@@ -614,6 +638,7 @@ import { createArtKit } from './art/art-kit.js';
 import { createCharacters } from './art/characters.js';
 import { createLocomotion } from './art/locomotion.js';
 import { icon } from './art/icons.js';
+import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 const Art = createArtKit(THREE);
 const Characters = createCharacters(THREE,Art);
 const Locomotion = createLocomotion(THREE);
@@ -629,7 +654,7 @@ function showGameMessage(message, kind = 'info') {
     toast.textContent = message;
     toast.dataset.kind = kind;
     toast.hidden = false;
-    gameToastTimer = setTimeout(() => { toast.hidden = true; }, kind === 'error' ? 6500 : 4000);
+    gameToastTimer = setTimeout(() => { toast.hidden = true; }, kind === 'story' ? 10000 : kind === 'error' ? 6500 : 4000);
 }
 
 function showGameDialog(title, message, onConfirm = null, cancelLabel = null, confirmLabel = 'OK') {
@@ -1091,6 +1116,7 @@ const CONFIG = {
     },
     SAVED_KEYS: {
         MAX_CAMPAIGN_LEVEL: 'rebeginning_max_campaign_level',
+        CAMPAIGN_ENDING: 'rebeginning_campaign_ending',
         START_CAMPAIGN: 'rebeginning_start_campaign',
         SANDBOX_START: 'rebeginning_sandbox_start',
         SAVE_DATA: 'populous_save',
@@ -1309,6 +1335,7 @@ const state = {
     viewScale: CONFIG.CAMERA.INITIAL_VIEW_SCALE,
     currentAction: 'select',
     mana: 100,
+    campaignNarrative: null,
 
     isDragging: false,
     dragStart: { x: 0, y: 0 },
@@ -1757,6 +1784,8 @@ window.toggleMatchSettings = function() {
 window.openCampaignMenu = function() {
     document.getElementById('pause-menu').style.display = 'none';
     document.getElementById('campaign-menu').style.display = 'flex';
+    const endingChoice = localStorage.getItem(CONFIG.SAVED_KEYS.CAMPAIGN_ENDING);
+    document.getElementById('btn-review-ending').style.display = CAMPAIGN_ENDINGS[endingChoice] ? '' : 'none';
 
     // Update lock status based on localStorage
     const maxLevel = parseInt(localStorage.getItem(CONFIG.SAVED_KEYS.MAX_CAMPAIGN_LEVEL) || '1');
@@ -1877,12 +1906,30 @@ window.closeMultiplayer = () => {
 
 
 // --- js/audio.js ---
+const SOUND_ASSETS = [
+    'attack','construct','fireball','explosion','magic','rumble',
+    'lightning','raise','lower','flatten','landbridge','swamp','invisibility',
+    'shield','hypnotise','swarm','tornado','firestorm','volcano','heal',
+    'teleport','create','phantom'
+];
+const SUSTAIN_ASSETS = ['swamp_loop','swarm_loop','tornado_loop','firestorm_loop','volcano_loop'];
+const SOUND_LEVELS = {
+    attack:.45,construct:.4,fireball:.67,explosion:.73,magic:.48,rumble:.57,
+    lightning:.72,raise:.53,lower:.53,flatten:.52,landbridge:.56,swamp:.48,
+    invisibility:.42,shield:.47,hypnotise:.46,swarm:.42,tornado:.55,
+    firestorm:.6,volcano:.72,heal:.43,teleport:.5,create:.46,phantom:.4,
+    swamp_loop:.14,swarm_loop:.11,tornado_loop:.15,firestorm_loop:.16,volcano_loop:.16
+};
 const SoundManager = {
     ctx: null,
     effectsBus: null,
     noiseBuffers: new Map(),
     mediaEffects: new Map(),
     mediaEffectIndex: new Map(),
+    effectBuffers: new Map(),
+    effectLoads: new Map(),
+    activeSustains: new Set(),
+    sustainsPaused: false,
     useMediaEffects: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
         (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches),
     hasUserGesture: false,
@@ -1903,18 +1950,33 @@ const SoundManager = {
             this.combatMusic.volume = CONFIG.AUDIO.COMBAT_VOLUME;
         }
         this.prepareMediaEffects();
+        this.preloadEffects();
     },
     prepareMediaEffects: function() {
-        if (!this.useMediaEffects || this.mediaEffects.size) return;
-        for (const name of ['attack','fireball','explosion','magic','construct','rumble']) {
+        if (this.mediaEffects.size) return;
+        const names = this.useMediaEffects ? [...SOUND_ASSETS,...SUSTAIN_ASSETS] : SUSTAIN_ASSETS;
+        for (const name of names) {
             const voices=[];
-            for (let i=0;i<2;i++) {
+            for (let i=0;i<(SUSTAIN_ASSETS.includes(name)?3:2);i++) {
                 const audio=new Audio(`sfx/${name}.wav`);
-                audio.preload='auto';
-                audio.volume=.9;
+                audio.preload=i===0?'auto':'metadata';
+                audio.volume=SOUND_LEVELS[name] || .5;
                 voices.push(audio);
             }
             this.mediaEffects.set(name,voices);
+        }
+    },
+    preloadEffects: function() {
+        if (this.useMediaEffects || this.effectLoads.size) return;
+        const ctx=this.ensureContext();
+        if (!ctx) return;
+        for (const name of SOUND_ASSETS) {
+            const loading=fetch(`sfx/${name}.wav`)
+                .then(response => { if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`); return response.arrayBuffer(); })
+                .then(bytes => ctx.decodeAudioData(bytes))
+                .then(buffer => { this.effectBuffers.set(name,buffer); return buffer; })
+                .catch(error => { console.warn(`Sound effect ${name} unavailable:`,error); return null; });
+            this.effectLoads.set(name,loading);
         }
     },
     ensureContext: function() {
@@ -1955,7 +2017,7 @@ const SoundManager = {
         const now = performance.now();
         const pending = this.pendingSounds.splice(0);
         for (const sound of pending) {
-            if (now - sound.queuedAt < 2000) this.emitSound(sound.name);
+            if (now - sound.queuedAt < 2000) this.emitSound(sound.name,sound.volume);
         }
     },
     duckMusic: function() {
@@ -2009,7 +2071,7 @@ const SoundManager = {
         gain.connect(this.effectsBus);
         noise.start(start);
     },
-    playMediaEffect: function(name) {
+    playMediaEffect: function(name,volume=1) {
         this.prepareMediaEffects();
         const voices=this.mediaEffects.get(name);
         if (!voices) return null;
@@ -2019,36 +2081,51 @@ const SoundManager = {
         try {
             if (!audio.paused) audio.pause();
             if (audio.readyState >= 1) audio.currentTime=0;
-            this.duckMusic();
+            audio.volume=Math.min(1,(SOUND_LEVELS[name]||.5)*volume);
+            if (['fireball','explosion','lightning','firestorm','volcano'].includes(name)) this.duckMusic();
             const playback=audio.play();
-            return Promise.resolve(playback).then(()=>true,()=>this.playWebSound(name));
+            return Promise.resolve(playback).then(()=>true,()=>this.playWebSound(name,volume));
         } catch(e) {
-            return this.playWebSound(name);
+            return this.playWebSound(name,volume);
         }
     },
-    playWebSound: function(name) {
+    playWebSound: function(name,volume=1) {
         const ctx=this.ensureContext();
         if (!ctx) return Promise.resolve(false);
         if (ctx.state !== 'running') {
-            this.pendingSounds.push({name, queuedAt: performance.now()});
+            this.pendingSounds.push({name,volume, queuedAt: performance.now()});
             if (this.pendingSounds.length > 8) this.pendingSounds.shift();
             return this.unlock();
         }
-        this.emitSound(name);
+        this.emitSound(name,volume);
         return Promise.resolve(true);
     },
-    playSound: function(name) {
+    playSound: function(name,volume=1) {
         // Create Web Audio only after an actual gesture; early AI effects otherwise
         // leave some browsers with a context that cannot start playback yet.
         if (!this.hasUserGesture) return Promise.resolve(false);
         if (this.useMediaEffects) {
             this.prepareMediaEffects();
-            if (this.mediaEffects.has(name)) return this.playMediaEffect(name);
+            if (this.mediaEffects.has(name)) return this.playMediaEffect(name,volume);
         }
-        return this.playWebSound(name);
+        return this.playWebSound(name,volume);
     },
-    emitSound: function(name) {
-        if (name === 'fireball' || name === 'magic' || name === 'rumble' || name === 'explosion') this.duckMusic();
+    emitSound: function(name,volume=1) {
+        if (['fireball','explosion','lightning','firestorm','volcano'].includes(name)) this.duckMusic();
+        const buffer=this.effectBuffers.get(name);
+        if (buffer) {
+            const source=this.ctx.createBufferSource(),gain=this.ctx.createGain();
+            source.buffer=buffer;
+            gain.gain.value=Math.min(1,(SOUND_LEVELS[name]||.5)*volume);
+            source.connect(gain);gain.connect(this.effectsBus);
+            source.onended=()=>{source.disconnect();gain.disconnect();};
+            source.start();
+            return;
+        }
+        const fallback={lightning:'explosion',raise:'rumble',lower:'rumble',flatten:'rumble',landbridge:'rumble',
+            swamp:'magic',invisibility:'magic',shield:'magic',hypnotise:'magic',swarm:'magic',tornado:'rumble',
+            firestorm:'fireball',volcano:'explosion',heal:'magic',teleport:'magic',create:'magic',phantom:'magic'}[name];
+        if (fallback) { this.emitSound(fallback,volume); return; }
         switch(name) {
             case 'attack':
                 this.playNoise(0.1, 0.2);
@@ -2089,6 +2166,57 @@ const SoundManager = {
                 break;
         }
     },
+    startSustain: function(name) {
+        if (!this.hasUserGesture || !SUSTAIN_ASSETS.includes(name)) return null;
+        this.prepareMediaEffects();
+        const voices=this.mediaEffects.get(name);
+        if (!voices?.length) return null;
+        const audio=voices.find(voice => !voice.__sustainOwner) || voices[0];
+        if (audio.__sustainOwner) audio.__sustainOwner.stop(true);
+        const handle={audio,stopped:false,fadeTimer:null,stop:(immediate=false)=>{
+            if (handle.stopped) {
+                if (immediate && handle.fadeTimer && audio.__sustainOwner===handle) {
+                    clearInterval(handle.fadeTimer);audio.pause();audio.volume=0;audio.__sustainOwner=null;
+                }
+                return;
+            }
+            handle.stopped=true;
+            this.activeSustains.delete(handle);
+            if (audio.__sustainOwner!==handle) return;
+            if (immediate || audio.paused) {
+                audio.pause();audio.volume=0;audio.__sustainOwner=null;
+                return;
+            }
+            const startVolume=audio.volume;
+            let step=0;
+            handle.fadeTimer=setInterval(()=>{
+                if(audio.__sustainOwner!==handle){clearInterval(handle.fadeTimer);return;}
+                step++;
+                audio.volume=startVolume*(1-step/5);
+                if(step>=5){clearInterval(handle.fadeTimer);audio.pause();audio.__sustainOwner=null;}
+            },50);
+        }};
+        audio.__sustainOwner=handle;
+        audio.loop=true;
+        audio.volume=SOUND_LEVELS[name]||.13;
+        if (audio.readyState>=1) audio.currentTime=0;
+        this.activeSustains.add(handle);
+        if (!this.sustainsPaused) audio.play().catch(()=>{handle.stop(true);});
+        return handle;
+    },
+    syncSustains: function(paused) {
+        if (this.sustainsPaused===paused) return;
+        this.sustainsPaused=paused;
+        for (const handle of this.activeSustains) {
+            if (paused) handle.audio.pause();
+            else if (!handle.stopped) handle.audio.play().catch(()=>handle.stop(true));
+        }
+    },
+    stopAllSustains: function() {
+        for (const name of SUSTAIN_ASSETS) {
+            for (const audio of this.mediaEffects.get(name)||[]) audio.__sustainOwner?.stop(true);
+        }
+    },
     updateMusic: function(enemyInRange) {
         if (!this.musicEnabled) {
             if (this.explorationMusic) this.explorationMusic.pause();
@@ -2119,6 +2247,7 @@ const SoundManager = {
         }
     }
 };
+SoundManager.preloadEffects();
 SoundManager.installUnlockHandlers();
 
 
@@ -4742,7 +4871,7 @@ class Fireball {
         spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFF4500,
             this.unitShot ? 8 : 20, !this.stormShot && !this.unitShot);
         for(let i=0;i<(this.unitShot?2:5);i++)spawnSmoke(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.5,.2,(Math.random()-.5)*1.5)),0x3a302c,.45+Math.random()*.35,1.8+Math.random()*1.5);
-        SoundManager.playSound('explosion');
+        SoundManager.playSound('explosion', this.stormShot ? .36 : this.unitShot ? .45 : 1);
         const impactPos = this.mesh.position;
         burnTreesAt(impactPos.x, impactPos.z, 8); // Burn trees
         // Use the blast centre and the person's body centre, rather than the
@@ -4852,7 +4981,8 @@ class Volcano extends ActiveEffect {
         this.faction = faction;
         this.timer = CONFIG.EFFECTS.VOLCANO_DURATION;
         this.interval = 0;
-        SoundManager.playSound('explosion');
+        SoundManager.playSound('volcano');
+        this.soundLoop = SoundManager.startSustain('volcano_loop');
         SurfaceMarks.add(x,z,{radius:5.5,color:0x35140b,life:CONFIG.EFFECTS.VOLCANO_DURATION+90,opacity:.82});
 
         // Add persistent light
@@ -4924,12 +5054,12 @@ class Volcano extends ActiveEffect {
                  if(dist < CONFIG.COMBAT.VOLCANO_TICK_RADIUS && b.faction !== this.faction) b.takeDamage(CONFIG.COMBAT.VOLCANO_BUILDING_DAMAGE);
             });
         }
-        if(this.timer <= 0) {
-            state.scene.remove(this.light);
-            this.light.dispose();
-            return false;
-        }
+        if(this.timer <= 0) { this.dispose(); return false; }
         return true;
+    }
+    dispose() {
+        this.soundLoop?.stop();
+        if (this.light) {state.scene.remove(this.light);this.light.dispose();this.light=null;}
     }
 }
 
@@ -4999,7 +5129,8 @@ class Swamp extends ActiveEffect {
         this.instanceDummy=new THREE.Object3D();
         this.animateVisuals();
         state.scene.add(this.mesh);
-        SoundManager.playSound('magic');
+        SoundManager.playSound('swamp');
+        this.soundLoop = SoundManager.startSustain('swamp_loop');
     }
     animateVisuals() {
         const dummy=this.instanceDummy;
@@ -5023,6 +5154,7 @@ class Swamp extends ActiveEffect {
         this.bubbles.instanceMatrix.needsUpdate=true;
     }
     dispose() {
+        this.soundLoop?.stop();
         state.scene.remove(this.mesh);
         this.surface.geometry.dispose();this.surface.material.dispose();
         this.ripples.geometry.dispose();this.ripples.material.dispose();
@@ -5112,7 +5244,8 @@ class Tornado extends ActiveEffect {
         this.instanceDummy=new THREE.Object3D();
         this.animateVisuals();
         state.scene.add(this.mesh);
-        SoundManager.playSound('rumble');
+        SoundManager.playSound('tornado');
+        this.soundLoop = SoundManager.startSustain('tornado_loop');
     }
     animateVisuals() {
         this.mesh.position.copy(this.pos);
@@ -5138,6 +5271,7 @@ class Tornado extends ActiveEffect {
         this.debris.instanceMatrix.needsUpdate=true;
     }
     dispose() {
+        this.soundLoop?.stop();
         state.scene.remove(this.mesh);
         this.funnel.geometry.dispose();this.funnel.material.dispose();
         this.ribbons.geometry.dispose();this.ribbons.material.dispose();
@@ -5230,6 +5364,8 @@ class Swarm extends ActiveEffect {
         this.bodies.instanceColor.needsUpdate = true;
         state.scene.add(this.mesh);
         this.updateVisuals(0);
+        SoundManager.playSound('swarm');
+        this.soundLoop = SoundManager.startSustain('swarm_loop');
     }
     updateVisuals(dt) {
         const follow = Math.min(1,dt*8);
@@ -5321,6 +5457,7 @@ class Swarm extends ActiveEffect {
         return true;
     }
     dispose() {
+        this.soundLoop?.stop();
         if(!this.mesh.parent)return;
         this.mesh.parent.remove(this.mesh);
         for(const part of [this.bodies,this.heads,this.wings]) {
@@ -5338,6 +5475,8 @@ class Firestorm extends ActiveEffect {
         this.faction = faction;
         this.timer = CONFIG.EFFECTS.FIRESTORM_DURATION;
         this.interval = 0;
+        SoundManager.playSound('firestorm');
+        this.soundLoop = SoundManager.startSustain('firestorm_loop');
         this.light = ['high','ultra'].includes(state.graphicsQuality?.tier) ? new THREE.PointLight(0xFF4500, 2, 20) : null;
         if (this.light) {
             this.light.position.set(x, getHeight(x,z) + 5, z);
@@ -5354,12 +5493,16 @@ class Firestorm extends ActiveEffect {
             const start = new THREE.Vector3(rx, 40, rz);
             const end = new THREE.Vector3(rx, getHeight(rx, rz), rz);
             state.projectiles.push(new Fireball(start, end, this.faction, undefined, undefined, true));
-            SoundManager.playSound('fireball');
+            SoundManager.playSound('fireball',.38);
         }
         if (this.light) this.light.intensity = 1.8 + Math.sin(this.timer * 7) * .35;
         if (this.timer > 0) return true;
-        if (this.light) {state.scene.remove(this.light);this.light.dispose();this.light=null;}
+        this.dispose();
         return false;
+    }
+    dispose() {
+        this.soundLoop?.stop();
+        if (this.light) {state.scene.remove(this.light);this.light.dispose();this.light=null;}
     }
 }
 
@@ -5404,7 +5547,7 @@ function castLandbridge(caster, x, z) {
     });
 
     updateChunks(true, allMods);
-    SoundManager.playSound('rumble');
+    SoundManager.playSound('landbridge');
 }
 
 function executeSpell(type, x, z, caster) {
@@ -5429,20 +5572,19 @@ function executeSpell(type, x, z, caster) {
         const mods = modifyTerrain(x, z, CONFIG.TERRAIN.RAISE_LOWER_RADIUS, CONFIG.TERRAIN.RAISE_AMOUNT);
         updateChunks(true, mods);
         spawnDust(x, getHeight(x, z), z, 0x696969, 5);
-        SoundManager.playSound('rumble');
+        SoundManager.playSound('raise');
     }
     else if (type === 'lower') {
         const mods = modifyTerrain(x, z, CONFIG.TERRAIN.RAISE_LOWER_RADIUS, -CONFIG.TERRAIN.RAISE_AMOUNT);
         updateChunks(true, mods);
         spawnDust(x, getHeight(x, z), z, 0xEEDC82, 5);
-        SoundManager.playSound('rumble');
+        SoundManager.playSound('lower');
     }
     else if (type === 'volcano') {
         state.activeEffects.push(new Volcano(x, z, caster.faction));
-        SoundManager.playSound('explosion');
     }
     else if (type === 'heal') {
-        SoundManager.playSound('magic');
+        SoundManager.playSound('heal');
 
         SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction === caster.faction && u.state !== 'dead') {
@@ -5456,14 +5598,14 @@ function executeSpell(type, x, z, caster) {
         });
     }
     else if (type === 'create') {
-        SoundManager.playSound('magic');
+        SoundManager.playSound('create');
         const safe = findNearestLand(x, z);
         const u = new Humanoid(caster.faction, 'wild', safe.x, safe.z);
         state.units.push(u);
 
     }
     else if (type === 'teleport') {
-        SoundManager.playSound('magic');
+        SoundManager.playSound('teleport');
         const h = getHeight(x, z);
 
         // Departure effect
@@ -5480,14 +5622,12 @@ function executeSpell(type, x, z, caster) {
     }
     else if (type === 'swarm') {
         state.activeEffects.push(new Swarm(x, z, caster.faction));
-        SoundManager.playSound('magic');
     }
     else if (type === 'firestorm') {
         state.activeEffects.push(new Firestorm(x, z, caster.faction));
-        SoundManager.playSound('fireball');
     }
     else if (type === 'phantom') {
-        SoundManager.playSound('magic');
+        SoundManager.playSound('phantom');
         for(let i=0; i<3; i++) {
             const angle = Math.random() * Math.PI * 2;
             const dist = 2 + Math.random() * 3;
@@ -5502,7 +5642,7 @@ function executeSpell(type, x, z, caster) {
         }
     }
     else if (type === 'shield') {
-        SoundManager.playSound('magic');
+        SoundManager.playSound('shield');
 
         SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction === caster.faction) {
@@ -5515,7 +5655,7 @@ function executeSpell(type, x, z, caster) {
         });
     }
     else if (type === 'invisibility') {
-        SoundManager.playSound('magic');
+        SoundManager.playSound('invisibility');
         SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction === caster.faction) {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
@@ -5527,7 +5667,7 @@ function executeSpell(type, x, z, caster) {
         });
     }
     else if (type === 'hypnotise') {
-        SoundManager.playSound('magic');
+        SoundManager.playSound('hypnotise');
 
         const h = getHeight(x, z);
 
@@ -5587,7 +5727,7 @@ function executeSpell(type, x, z, caster) {
             }
             updateChunks(true, modifiedChunks);
             spawnDust(x, getHeight(x, z), z, 0x696969, r);
-            SoundManager.playSound('rumble');
+            SoundManager.playSound('flatten');
         }
     }
     else if (type === 'landbridge') {
@@ -5677,7 +5817,7 @@ function executeSpell(type, x, z, caster) {
                   hit = true;
              }
         });
-        requestAnimationFrame(() => SoundManager.playSound('explosion'));
+        SoundManager.playSound('lightning');
     }
 }
 
@@ -6256,7 +6396,7 @@ window.Humanoid = class Humanoid {
                  const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
                  const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
                  state.projectiles.push(new Fireball(startPos, targetPos, this.faction, CONFIG.COMBAT.FIREWARRIOR_BALL_UNIT_DMG, CONFIG.COMBAT.FIREWARRIOR_BULLDING_DMG, false, true));
-                 SoundManager.playSound('fireball');
+                 SoundManager.playSound('fireball',.45);
             } else if (this.type === 'spy') {
                 // Spy Conversion
                 const target = this.attackTarget;
@@ -8637,6 +8777,7 @@ window.togglePause = function() {
     if(menu) {
         menu.style.display = state.isPaused ? 'flex' : 'none';
         if (state.isPaused) {
+            document.getElementById('btn-campaign-journal').style.display = state.isCampaign ? '' : 'none';
             const musicBtn = document.getElementById('btn-toggle-music');
             if (musicBtn) musicBtn.innerText = SoundManager.musicEnabled ? "Music: On" : "Music: Off";
             const graphicsBtn = document.getElementById('btn-graphics-quality');
@@ -8694,69 +8835,53 @@ window.toggleFps = function() {
 }
 
 
-const CAMPAIGN_STORIES = {
-    1: {
-        title: "Level 1: The Awakening",
-        text: "The First Shaman wakes up on a pristine island, the sun rising over untouched shores. The world is young, fractured, and filled with untamed magic pulsing beneath the soil. You are the chosen one, destined to unite the scattered tribes under a single banner. But survival comes first. You must learn to gather your wandering followers, construct basic buildings to house them, and tap into the primal forces of nature to eliminate the feral tribe that threatens your very existence. This is the dawn of your legacy, a quiet beginning to an epic saga of conquest and creation."
-    },
-    2: {
-        title: "Level 2: The Swarm",
-        text: "The whispers of your growing power have spread across the seas, drawing the ire of two aggressive clans. Driven by fear and ambition, they have allied against you, pooling their resources to crush your fledgling empire before it can take root. They build rapidly, churning out warriors at a terrifying pace, and attack in relentless, overwhelming numbers. You must balance desperate defense—erecting towers and unleashing strategic, devastating spell usage—with the agonizingly slow task of building up a strong enough force to break their siege. Every moment is a struggle for survival as the swarm descends upon your borders."
-    },
-    3: {
-        title: "Level 3: The Frozen Wastes",
-        text: "Your journey leads you to the bitter, desolate north, a realm of perpetual winter where the land itself seems hostile to life. Here reigns the Sorcerer King, a tyrant obsessed with the destructive purity of fire magic. With your mighty airships grounded by the howling blizzards and unrelenting gales, you are forced to rely entirely on ground troops marching through deep snow. The treacherous, shifting ice mechanic means you must carefully time your desperate assaults when the freezing waters solidify into temporary bridges, or risk your entire army drowning when the sudden thaw comes. The enemy Sorcerer will ruthlessly rain down heavy fire spells and deploy elite Fire Warriors, turning the icy battlefield into a frozen hellscape."
-    },
-    4: {
-        title: "Level 4: The Opportunist's Trap",
-        text: "Deep within a labyrinthine canyon lies a highly defensive tribe, their fortress a masterpiece of paranoid engineering. A cunning, calculating enemy awaits, refusing to engage in open, honorable combat. They are patient, watching your every move, and won't attack you outright unless they sense a moment of fatal weakness—specifically, if your Shaman is struck down or your reserves of magical mana are completely depleted. It is a deadly game of cat and mouse. You must carefully, methodically dismantle their impenetrable defenses using stealthy spies, precise surgical strikes, and overwhelming patience, all while keeping your fragile Shaman safely protected behind unyielding lines at all times. One mistake means instant annihilation."
-    },
-    5: {
-        title: "Level 5: The Grand Melee",
-        text: "The final confrontation is at hand. The remaining tribes, desperate and driven mad by the prolonged conflict, have gathered in a massive, sprawling archipelago for a final, apocalyptic battle to determine the fate of the world. With limitless magical power surging through the ley lines and units moving at lightning-fast, supernatural speeds, the battlefield descends into absolute, unmitigated chaos. The sky burns with arcane fire, the earth shatters under the weight of endless armies, and alliances mean nothing. You must spam reality-bending spells, maneuver your forces with blinding rapidity, and master the art of manipulation, letting your enemies brutally weaken each other before swooping in for the final, decisive kill. Only one tribe will survive the Grand Melee."
-    },
-    6: {
-        title: "Level 6: The Tithe of Shadows",
-        text: "A master of deception has risen. Their tribe seems everywhere at once, yet never commits to a real fight. You must use your newly awakened gift of illusion to see through their tricks, turn their own deception against them, and corrupt their followers to your cause."
-    },
-    7: {
-        title: "Level 7: The Crumbling Peak",
-        text: "Your enemy has built their fortress into the peaks, unreachable by conventional means. As your connection to the earth deepens, you learn to reshape the mountains themselves—triggering rockslides to expose hidden supply lines or creating ramps to assault the seemingly impregnable."
-    },
-    8: {
-        title: "Level 8: The Web of Minds",
-        text: "The three sister tribes have merged their consciousness into a single hive mind. They anticipate your every move with terrifying coordination. But as your mind expands, you too learn to think beyond one body—you command legions with a single thought, everywhere at once."
-    },
-    9: {
-        title: "Level 9: The Stormgods' Crucible",
-        text: "This enemy has bound the elemental forces of storm and sky. Lightning strikes their enemies before they can march. Rain drowns fire. But as the storm reaches its apex, you ascend further—becoming the storm itself, turning their own weather against them in a cataclysmic final confrontation."
-    },
-    10: {
-        title: "Level 10: The Void Between",
-        text: "Your enemy guards the gateway between worlds. Their realm bends physics itself—gravity reverses, distances twist, and the very concept of \"here\" becomes meaningless. But your awakening continues: you learn to step through the void, to teleport across impossible distances, and finally to break the gate that holds this world hostage."
-    },
-    11: {
-        title: "Level 11: The Pantheon Rising",
-        text: "The gods have united against the ascending mortal. Each commands an aspect of reality—fire, storm, earth, mind, and shadow. Only by mastering all elements can you hope to stand among them. The final battle is a cataclysm that echoes across all worlds."
-    },
-    12: {
-        title: "Level 12: The First Shaman Ascends",
-        text: "The Primordial One—the being that birthed this world—has returned, and it does not recognize your ascension. You are no longer the student; you are the peer. In the cosmic void where time and space are meaningless, your final form emerges: a god among gods."
-    }
-};
+let storyOpenedFromPause = false;
+
+function ensureCampaignNarrative(level) {
+    if (state.campaignNarrative?.level === level) return;
+    state.campaignNarrative = {
+        level,
+        beatShown: false,
+        initialEnemyCount: state.units.filter(u => !window.isAllied(u.faction, 0) && u.state !== 'dead').length
+    };
+}
+
+function renderCampaignStory(level) {
+    const story = CAMPAIGN_STORIES[level];
+    if (!story) return;
+    document.getElementById('story-title').textContent = story.title;
+    document.getElementById('story-text').textContent = story.text;
+    document.getElementById('story-objective').textContent = 'Objective: ' + story.objective;
+    const discovery = document.getElementById('story-discovery');
+    discovery.hidden = !state.campaignNarrative?.beatShown;
+    discovery.textContent = state.campaignNarrative?.beatShown ? 'Discovered: ' + story.beat : '';
+    document.getElementById('story-close').textContent = storyOpenedFromPause ? 'Return' : 'Begin';
+    document.getElementById('story-overlay').style.display = 'flex';
+    state.isPaused = true;
+    document.getElementById('btn-pause').textContent = '▶️';
+}
 
 window.showCampaignStory = function(level) {
-    const story = CAMPAIGN_STORIES[level];
-    if (story) {
-        document.getElementById('story-title').innerText = story.title;
-        document.getElementById('story-text').innerText = story.text;
-        document.getElementById('story-overlay').style.display = 'flex';
-        state.isPaused = true;
-    }
+    ensureCampaignNarrative(level);
+    storyOpenedFromPause = false;
+    renderCampaignStory(level);
+};
+
+window.showCampaignJournal = function() {
+    if (!state.isCampaign || !CAMPAIGN_STORIES[state.campaignLevel]) return;
+    ensureCampaignNarrative(state.campaignLevel);
+    storyOpenedFromPause = true;
+    document.getElementById('pause-menu').style.display = 'none';
+    renderCampaignStory(state.campaignLevel);
 };
 
 window.closeStoryOverlay = function() {
     document.getElementById('story-overlay').style.display = 'none';
+    if (storyOpenedFromPause) {
+        storyOpenedFromPause = false;
+        document.getElementById('pause-menu').style.display = 'flex';
+        return;
+    }
     const pauseMenu = document.getElementById('pause-menu');
     const helpOverlay = document.getElementById('help-overlay');
     if ((!pauseMenu || pauseMenu.style.display === 'none') &&
@@ -8765,6 +8890,60 @@ window.closeStoryOverlay = function() {
         const btn = document.getElementById('btn-pause');
         if(btn) btn.innerText = '⏸️';
     }
+};
+
+function updateCampaignNarrative() {
+    if (!state.isCampaign || !CAMPAIGN_STORIES[state.campaignLevel]) return;
+    ensureCampaignNarrative(state.campaignLevel);
+    const narrative = state.campaignNarrative;
+    if (narrative.beatShown || narrative.initialEnemyCount < 1) return;
+    const remaining = state.units.filter(u => !window.isAllied(u.faction, 0) && u.state !== 'dead').length;
+    if (remaining >= narrative.initialEnemyCount) return;
+    narrative.beatShown = true;
+    showGameMessage(CAMPAIGN_STORIES[state.campaignLevel].beat, 'story');
+}
+
+window.showCampaignEnding = function() {
+    const ending = document.getElementById('campaign-ending');
+    document.getElementById('campaign-ending-title').textContent = 'The Price of Divinity';
+    document.getElementById('campaign-ending-text').textContent = CAMPAIGN_STORIES[12].outro + '\n\nKeep the power that holds the worlds together, or return it to the people and lands below?';
+    document.getElementById('campaign-ending-choices').hidden = false;
+    document.getElementById('campaign-ending-finished').hidden = true;
+    document.getElementById('pause-menu').style.display = 'none';
+    document.getElementById('campaign-menu').style.display = 'none';
+    ending.hidden = false;
+    state.isPaused = true;
+    document.getElementById('btn-pause').textContent = '▶️';
+    document.querySelector('#campaign-ending-choices button').focus();
+};
+
+window.chooseCampaignEnding = function(choice) {
+    const ending = CAMPAIGN_ENDINGS[choice];
+    if (!ending || document.getElementById('campaign-ending').hidden || document.getElementById('campaign-ending-choices').hidden) return;
+    localStorage.setItem(CONFIG.SAVED_KEYS.CAMPAIGN_ENDING, choice);
+    document.getElementById('campaign-ending-title').textContent = ending.title;
+    document.getElementById('campaign-ending-text').textContent = ending.text;
+    document.getElementById('campaign-ending-choices').hidden = true;
+    document.getElementById('campaign-ending-finished').hidden = false;
+    document.querySelector('#campaign-ending-finished button').focus();
+};
+
+window.reviewCampaignEnding = function() {
+    const ending = CAMPAIGN_ENDINGS[localStorage.getItem(CONFIG.SAVED_KEYS.CAMPAIGN_ENDING)];
+    if (!ending) return;
+    document.getElementById('campaign-ending-title').textContent = ending.title;
+    document.getElementById('campaign-ending-text').textContent = ending.text;
+    document.getElementById('campaign-ending-choices').hidden = true;
+    document.getElementById('campaign-ending-finished').hidden = false;
+    document.getElementById('campaign-menu').style.display = 'none';
+    document.getElementById('campaign-ending').hidden = false;
+    state.isPaused = true;
+    document.querySelector('#campaign-ending-finished button').focus();
+};
+
+window.closeCampaignEnding = function() {
+    document.getElementById('campaign-ending').hidden = true;
+    window.openCampaignMenu();
 };
 
 window.showHelp = function() {
@@ -8816,6 +8995,7 @@ window.saveGame = function() {
     const data = {
         isCampaign: state.isCampaign,
         campaignLevel: state.campaignLevel,
+        campaignNarrative: state.isCampaign ? state.campaignNarrative : null,
         matchSettings: state.matchSettings,
         mana: state.mana,
         terrainMods: Array.from(state.terrainMods.entries()),
@@ -8910,6 +9090,7 @@ window.loadGame = function() {
             }
             state.rigidBodies.clear();
         }
+        SoundManager.stopAllSustains();
         state.activeEffects.forEach(e => {
             if(e.dispose) e.dispose();
             else if(e.mesh) state.scene.remove(e.mesh);
@@ -8925,6 +9106,7 @@ window.loadGame = function() {
         state.shaman = null;
         state.isCampaign = !!data.isCampaign;
         state.campaignLevel = data.campaignLevel || 0;
+        state.campaignNarrative = null;
         if (data.matchSettings) state.matchSettings = data.matchSettings;
 
         state.mana = data.mana;
@@ -9005,6 +9187,16 @@ window.loadGame = function() {
                 });
             }
         });
+
+        if (state.isCampaign && CAMPAIGN_STORIES[state.campaignLevel]) {
+            ensureCampaignNarrative(state.campaignLevel);
+            if (data.campaignNarrative?.level === state.campaignLevel) {
+                state.campaignNarrative.beatShown = !!data.campaignNarrative.beatShown;
+                if (Number.isFinite(data.campaignNarrative.initialEnemyCount)) {
+                    state.campaignNarrative.initialEnemyCount = Math.max(0, data.campaignNarrative.initialEnemyCount);
+                }
+            }
+        }
 
         SpatialHash.update();
         updateUnitList();
@@ -9523,6 +9715,7 @@ function animate() {
     requestAnimationFrame(animate);
     const frameTime=performance.now(),dt=Math.min(state.lastFrameTime===undefined?1/60:(frameTime-state.lastFrameTime)/1000,.1);
     state.lastFrameTime=frameTime;
+    SoundManager.syncSustains(!!state.isPaused);
 
     const biome = state.matchSettings.biome || 'normal';
     const biomeCfg = CONFIG.BIOMES[biome] || CONFIG.BIOMES.normal;
@@ -9871,6 +10064,7 @@ function animate() {
         updateUnitList();
         lastAliveCount = currentAlive;
     }
+    updateCampaignNarrative();
 
         // Win Condition
     const hasEnemy = state.units.some(u => !window.isAllied(u.faction, 0) && u.state !== 'dead');
@@ -9885,19 +10079,22 @@ function animate() {
              // Check if there ever were any non allied tribes
              if (window.enemyAIs.some(ai => !window.isAllied(ai.faction, 0))) {
                 if (state.isCampaign) {
+                    const story = CAMPAIGN_STORIES[state.campaignLevel];
                     let maxLevel = parseInt(localStorage.getItem(CONFIG.SAVED_KEYS.MAX_CAMPAIGN_LEVEL) || '1');
                     if(state.campaignLevel >= maxLevel && state.campaignLevel < 12) {
                         maxLevel = state.campaignLevel + 1;
                         localStorage.setItem(CONFIG.SAVED_KEYS.MAX_CAMPAIGN_LEVEL, maxLevel.toString());
-                        showGameDialog('Campaign Victory', 'Level ' + state.campaignLevel + ' complete. Level ' + maxLevel + ' unlocked!');
+                        showGameDialog('Campaign Victory', (story?.outro || 'Level complete.') + '\n\nLevel ' + maxLevel + ' unlocked!');
                     } else if (state.campaignLevel === 12) {
-                        showGameDialog('Campaign Complete', 'You have ascended to godhood. Thank you for playing.');
+                        window.showCampaignEnding();
                     } else {
-                        showGameDialog('Campaign Victory', 'Level ' + state.campaignLevel + ' complete.');
+                        showGameDialog('Campaign Victory', story?.outro || 'Level ' + state.campaignLevel + ' complete.');
                     }
-                    document.getElementById('campaign-menu').style.display = 'flex';
-                    window.openCampaignMenu(); // update buttons
-                    if (!state.isPaused) window.togglePause();
+                    if (state.campaignLevel !== 12) {
+                        document.getElementById('campaign-menu').style.display = 'flex';
+                        window.openCampaignMenu(); // update buttons
+                        if (!state.isPaused) window.togglePause();
+                    }
                 } else {
                     showGameDialog('Victory', 'All enemy units defeated!');
                 }

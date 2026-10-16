@@ -25,6 +25,12 @@ jobs:
       - name: Welcome screen starts the game on desktop and mobile
         if: always()
         run: node tests/startup.mjs
+      - name: Campaign story, clues and endings
+        if: always()
+        run: node tests/campaign-story.mjs
+      - name: Campaign levels, progression and defeat
+        if: always()
+        run: node tests/campaign-levels.mjs
       - name: Live gameplay integration
         if: always()
         run: node tests/live-gameplay.mjs
@@ -46,6 +52,9 @@ jobs:
       - name: Spells and mana rules
         if: always()
         run: node tests/spells.mjs
+      - name: Spell sound assets
+        if: always()
+        run: node tests/sfx-assets.mjs
       - name: Spell audio
         if: always()
         run: node tests/audio.mjs
