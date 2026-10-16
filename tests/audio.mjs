@@ -133,6 +133,7 @@ try {
         if(effect?.constructor.name!=='Firestorm'||!handle||!sound.activeSustains.has(handle))
             throw new Error('Firestorm did not start its persistent sound');
         window.testSustainHandle=handle;
+        window.testSustainEffect=effect;
         return {duration:effect.timer,loop:handle.audio.loop,src:handle.audio.currentSrc};
     });
     if(sustain.duration<9||!sustain.loop||!sustain.src.endsWith('/sfx/firestorm_loop.wav'))
@@ -142,11 +143,11 @@ try {
     if(!await page.evaluate(()=>testSustainHandle.audio.paused))
         throw new Error('Sustained spell kept playing while paused');
     await page.evaluate(()=>{
-        const sound=gameTestAPI.SoundManager,effect=state.activeEffects.at(-1);
+        const sound=gameTestAPI.SoundManager,effect=testSustainEffect;
         state.isPaused=false;sound.syncSustains(false);
         effect.timer=0;effect.update(.01);
     });
-    await page.waitForFunction(()=>gameTestAPI.SoundManager.activeSustains.size===0);
+    await page.waitForFunction(()=>!gameTestAPI.SoundManager.activeSustains.has(testSustainHandle));
     await page.waitForFunction(()=>testSustainHandle.audio.paused,null,{timeout:3000});
     console.log('PASS Firestorm bed plays through its lifetime, pauses and stops on expiry');
 
