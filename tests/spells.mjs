@@ -27,10 +27,31 @@ try{
    ball.mesh.position.set(x,y,z);ball.explode();
    const v=u=>u.rigidBody.linvel();
    const report={centre:v(enemy),east:v(east),west:v(west),far:v(far),above:v(above),ally:v(ally),health:[enemy.hp,east.hp,west.hp,far.hp,above.hp,ally.hp]};
-   if(!(v(enemy).x>0&&v(enemy).y>0&&v(east).x>0&&v(west).x<0&&v(far).x>0&&v(east).x>v(far).x*1.5))
+   if(!(v(enemy).x>8&&v(enemy).y>0&&v(east).x>6&&v(west).x< -6&&v(far).x>0&&v(east).x>v(far).x*1.5))
     throw new Error('Blast direction or distance falloff: '+JSON.stringify(report));
    if(enemy.hp!==1000-damage||east.hp!==1000-damage||west.hp!==1000-damage||far.hp!==1000-damage||above.hp!==1000||ally.hp!==1000||Math.hypot(v(above).x,v(above).y,v(above).z)>.01||Math.hypot(v(ally).x,v(ally).y,v(ally).z)>.01)
     throw new Error('Blast height, faction or damage: '+JSON.stringify(report));
+   return report;
+  });
+ });
+ await check('Fireball knockback visibly moves a struck person and recovers',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {x,z,enemy}=fixture,y=getHeight(x,z),startX=x+1.5;
+   state.units=[enemy];enemy.mesh.position.set(startX,y,z);
+   enemy.rigidBody.setTranslation({x:startX,y:y+enemy.height/2,z},true);
+   enemy.rigidBody.setLinvel({x:0,y:0,z:0},true);enemy.hp=enemy.maxHp=1000;enemy.hitImpulseCooldown=0;enemy.nextTargetCheck=Infinity;
+   gameTestAPI.SpatialHash.update();
+   const ball=new gameTestAPI.Fireball(new THREE.Vector3(x-4,y+2,z),new THREE.Vector3(x,y,z),0);
+   ball.mesh.position.set(x,y,z);ball.explode();
+   const launch={...enemy.rigidBody.linvel()};let travel=0,rise=0;
+   for(let i=0;i<180;i++){
+    state.physicsWorld.timestep=1/60;state.physicsWorld.step();enemy.update(1/60);
+    travel=Math.max(travel,enemy.mesh.position.x-startX);
+    rise=Math.max(rise,enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z));
+   }
+   const report={launch,travel,rise,state:enemy.state,groundGap:enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z)};
+   if(launch.x<12||launch.x>20||launch.y>9||travel<7||travel>20||rise<1.5||enemy.state==='stunned'||enemy.state==='getting_up'||Math.abs(report.groundGap)>.35)
+    throw new Error('Fireball failed to launch or recover: '+JSON.stringify(report));
    return report;
   });
  });
