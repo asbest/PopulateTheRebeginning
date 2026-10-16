@@ -4745,17 +4745,30 @@ class Fireball {
         SoundManager.playSound('explosion');
         const impactPos = this.mesh.position;
         burnTreesAt(impactPos.x, impactPos.z, 8); // Burn trees
-        // Units
-        SpatialHash.query(impactPos.x, impactPos.z, 8).forEach(u => {
-            const d = u.mesh.position.distanceTo(impactPos);
-            if(d < 8) {
-                if (u.faction !== this.faction) {
-                    const forceDir = u.mesh.position.clone().sub(impactPos).normalize(); const force = (8 - d) * 3;
-                    forceDir.multiplyScalar(Math.min(force, 5)); forceDir.y = Math.min(2.8, force * 0.16);
-                    u.applyForce(forceDir); u.takeDamage(this.unitDamage);
-                    u.burnTimer = 3.0;
-                }
-            }
+        // Use the blast centre and the person's body centre, rather than the
+        // projectile's 3D distance to their feet, for a radial shock wave.
+        const radius = 8;
+        const incomingX = this.target.x - this.start.x;
+        const incomingZ = this.target.z - this.start.z;
+        const incomingLength = Math.hypot(incomingX, incomingZ);
+        SpatialHash.query(impactPos.x, impactPos.z, radius).forEach(u => {
+            if (u.faction === this.faction || u.state === 'dead') return;
+            const dx = u.mesh.position.x - impactPos.x;
+            const dz = u.mesh.position.z - impactPos.z;
+            const dy = u.mesh.position.y + Math.min(u.height || 2, 2) * .5 - impactPos.y;
+            const distance = Math.hypot(dx, dy, dz);
+            if (distance >= radius) return;
+            const falloff = 1 - distance / radius;
+            const horizontal = Math.hypot(dx, dz);
+            // A direct hit has no radial XZ direction. Continue the projectile's
+            // travel instead; a vertical firestorm impact uses a fixed direction.
+            const nx = horizontal > .05 ? dx / horizontal : incomingLength > .05 ? incomingX / incomingLength : 1;
+            const nz = horizontal > .05 ? dz / horizontal : incomingLength > .05 ? incomingZ / incomingLength : 0;
+            const shove = (this.unitShot ? 3.2 : 5.5) * falloff;
+            const lift = (this.unitShot ? 1.2 : 2.4) * falloff;
+            u.applyForce(new THREE.Vector3(nx * shove, lift, nz * shove));
+            u.takeDamage(this.unitDamage);
+            u.burnTimer = 3.0;
         });
         // Buildings
         state.buildings.forEach(b => {

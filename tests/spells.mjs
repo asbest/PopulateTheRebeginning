@@ -12,6 +12,28 @@ try{
   const refs=[...new Set(source.match(/CONFIG(?:\.[A-Za-z_][A-Za-z_0-9]*){2,}/g))];
   return p.evaluate(refs=>{const missing=refs.filter(r=>r.split('.').slice(1).reduce((v,k)=>v?.[k],gameTestAPI.CONFIG)===undefined);if(missing.length)throw new Error(missing.join(', '));return refs.length;},refs);
  });
+ await check('Fireball blast throws nearby enemies away from its impact',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {x,z,enemy,ally}=fixture,y=getHeight(x,z),damage=gameTestAPI.CONFIG.COMBAT.FIREBALL_UNIT_DAMAGE;
+   const east=new Humanoid(1,'warrior',x+2,z),west=new Humanoid(1,'warrior',x-2,z),far=new Humanoid(1,'warrior',x+6,z),above=new Humanoid(1,'warrior',x,z+2);
+   state.units.push(east,west,far,above);
+   const place=(u,px,py,pz)=>{
+    u.mesh.position.set(px,py,pz);u.rigidBody.setTranslation({x:px,y:py+u.height/2,z:pz},true);
+    u.rigidBody.setLinvel({x:0,y:0,z:0},true);u.hp=1000;u.maxHp=1000;u.hitImpulseCooldown=0;
+   };
+   place(enemy,x,y,z);place(east,x+2,y,z);place(west,x-2,y,z);place(far,x+6,y,z);place(above,x,y+10,z+2);place(ally,x,y,z+2);
+   gameTestAPI.SpatialHash.update();
+   const ball=new gameTestAPI.Fireball(new THREE.Vector3(x-4,y+2,z),new THREE.Vector3(x,y,z),0);
+   ball.mesh.position.set(x,y,z);ball.explode();
+   const v=u=>u.rigidBody.linvel();
+   const report={centre:v(enemy),east:v(east),west:v(west),far:v(far),above:v(above),ally:v(ally),health:[enemy.hp,east.hp,west.hp,far.hp,above.hp,ally.hp]};
+   if(!(v(enemy).x>0&&v(enemy).y>0&&v(east).x>0&&v(west).x<0&&v(far).x>0&&v(east).x>v(far).x*1.5))
+    throw new Error('Blast direction or distance falloff: '+JSON.stringify(report));
+   if(enemy.hp!==1000-damage||east.hp!==1000-damage||west.hp!==1000-damage||far.hp!==1000-damage||above.hp!==1000||ally.hp!==1000||Math.hypot(v(above).x,v(above).y,v(above).z)>.01||Math.hypot(v(ally).x,v(ally).y,v(ally).z)>.01)
+    throw new Error('Blast height, faction or damage: '+JSON.stringify(report));
+   return report;
+  });
+ });
  const spells=['blast','lightning','raise','lower','flatten','landbridge','swamp','invisibility','shield','hypnotise','swarm','tornado','firestorm','volcano','heal','teleport','create','phantom'];
  for(const spell of spells)await check('Spell effect and exact mana: '+spell,async()=>{await fresh();return p.evaluate(spell=>{
   const {caster,enemy,ally,x,z}=fixture,expect=(yes,msg)=>{if(!yes)throw new Error(msg);};
