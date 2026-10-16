@@ -1942,11 +1942,13 @@ const SoundManager = {
     mediaEffectIndex: new Map(),
     effectBuffers: new Map(),
     effectLoads: new Map(),
+    undecodedEffects: new Map(),
     activeSustains: new Set(),
     sustainsPaused: false,
     useMediaEffects: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
         (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches),
     hasUserGesture: false,
+    mediaEffectsBlocked: false,
     pendingSounds: [],
     musicRestoreTimer: null,
     explorationMusic: null,
@@ -1981,16 +1983,39 @@ const SoundManager = {
         }
     },
     preloadEffects: function() {
-        if (this.useMediaEffects || this.effectLoads.size) return;
-        const ctx=this.ensureContext();
-        if (!ctx) return;
-        for (const name of SOUND_ASSETS) {
+        if (this.effectLoads.size) return;
+        // Offline decoding prepares the WAVs without creating a suspended playback
+        // context before the browser has received a user gesture.
+        let decoder=null;
+        try {
+            const OfflineContext=window.OfflineAudioContext || window.webkitOfflineAudioContext;
+            if (OfflineContext) decoder=new OfflineContext(1,1,32000);
+        } catch (error) { console.warn('Offline sound decoding unavailable:',error); }
+        for (const name of [...SOUND_ASSETS,...SUSTAIN_ASSETS]) {
             const loading=fetch(`sfx/${name}.wav`)
                 .then(response => { if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`); return response.arrayBuffer(); })
-                .then(bytes => ctx.decodeAudioData(bytes))
-                .then(buffer => { this.effectBuffers.set(name,buffer); return buffer; })
+                .then(async bytes => {
+                    if (decoder) {
+                        try {
+                            const buffer=await decoder.decodeAudioData(bytes.slice(0));
+                            this.effectBuffers.set(name,buffer);
+                            return buffer;
+                        } catch (error) { console.warn(`Offline decoding ${name} failed:`,error); }
+                    }
+                    this.undecodedEffects.set(name,bytes);
+                    if (this.ctx) this.decodePendingEffects(this.ctx);
+                    return null;
+                })
                 .catch(error => { console.warn(`Sound effect ${name} unavailable:`,error); return null; });
             this.effectLoads.set(name,loading);
+        }
+    },
+    decodePendingEffects: function(ctx) {
+        for (const [name,bytes] of this.undecodedEffects) {
+            this.undecodedEffects.delete(name);
+            ctx.decodeAudioData(bytes).then(buffer => {
+                if (this.ctx===ctx) this.effectBuffers.set(name,buffer);
+            }).catch(error => console.warn(`Sound effect ${name} could not be decoded:`,error));
         }
     },
     ensureContext: function() {
@@ -2002,6 +2027,7 @@ const SoundManager = {
             this.noiseBuffers.clear();
             this.effectsBus = this.ctx.createGain();
             this.effectsBus.connect(this.ctx.destination);
+            this.decodePendingEffects(this.ctx);
             return this.ctx;
         } catch (e) {
             console.warn('Sound effects unavailable:', e);
@@ -2020,8 +2046,12 @@ const SoundManager = {
             return active;
         });
     },
+    unlockFromGesture: function() {
+        this.hasUserGesture=true;
+        return this.unlock();
+    },
     installUnlockHandlers: function() {
-        const unlock = () => { this.hasUserGesture = true; this.unlock(); };
+        const unlock = () => { this.unlockFromGesture(); };
         window.addEventListener('pointerdown', unlock, {passive: true});
         window.addEventListener('keydown', unlock, {passive: true});
         window.addEventListener('touchstart', unlock, {passive: true});
@@ -2086,6 +2116,7 @@ const SoundManager = {
         noise.start(start);
     },
     playMediaEffect: function(name,volume=1) {
+        if (this.mediaEffectsBlocked) return this.playWebSound(name,volume);
         this.prepareMediaEffects();
         const voices=this.mediaEffects.get(name);
         if (!voices) return null;
@@ -2098,8 +2129,12 @@ const SoundManager = {
             audio.volume=Math.min(1,(SOUND_LEVELS[name]||.5)*volume);
             if (['fireball','explosion','lightning','firestorm','volcano'].includes(name)) this.duckMusic();
             const playback=audio.play();
-            return Promise.resolve(playback).then(()=>true,()=>this.playWebSound(name,volume));
+            return Promise.resolve(playback).then(()=>true,error=>{
+                if (error?.name==='NotAllowedError') this.mediaEffectsBlocked=true;
+                return this.playWebSound(name,volume);
+            });
         } catch(e) {
+            if (e?.name==='NotAllowedError') this.mediaEffectsBlocked=true;
             return this.playWebSound(name,volume);
         }
     },
@@ -2180,6 +2215,42 @@ const SoundManager = {
                 break;
         }
     },
+    startWebSustain: function(handle) {
+        if (handle.stopped || this.sustainsPaused || handle.webSource) return;
+        const ctx=this.ensureContext();
+        if (!ctx) return;
+        if (ctx.state!=='running') {
+            this.unlock().then(active=>{if(active)this.startWebSustain(handle);});
+            return;
+        }
+        const buffer=this.effectBuffers.get(handle.name);
+        if (!buffer) {
+            this.effectLoads.get(handle.name)?.then(loaded=>{
+                if (loaded) this.startWebSustain(handle);
+                else handle.stop(true);
+            });
+            return;
+        }
+        const source=ctx.createBufferSource(),gain=ctx.createGain();
+        source.buffer=buffer;source.loop=true;
+        gain.gain.value=SOUND_LEVELS[handle.name]||.13;
+        source.connect(gain);gain.connect(this.effectsBus);
+        source.onended=()=>{source.disconnect();gain.disconnect();};
+        handle.webSource=source;handle.webGain=gain;handle.webStartedAt=ctx.currentTime;
+        source.start(0,handle.webOffset||0);
+    },
+    stopWebSustain: function(handle,immediate=true,preserveOffset=false) {
+        const source=handle.webSource;
+        if (!source) return;
+        const ctx=this.ctx,buffer=source.buffer;
+        if (preserveOffset && buffer?.duration)
+            handle.webOffset=((handle.webOffset||0)+ctx.currentTime-handle.webStartedAt)%buffer.duration;
+        if (!immediate) {
+            handle.webGain.gain.setTargetAtTime(0,ctx.currentTime,.06);
+            source.stop(ctx.currentTime+.3);
+        } else source.stop();
+        handle.webSource=null;handle.webGain=null;
+    },
     startSustain: function(name) {
         if (!this.hasUserGesture || !SUSTAIN_ASSETS.includes(name)) return null;
         this.prepareMediaEffects();
@@ -2187,7 +2258,8 @@ const SoundManager = {
         if (!voices?.length) return null;
         const audio=voices.find(voice => !voice.__sustainOwner) || voices[0];
         if (audio.__sustainOwner) audio.__sustainOwner.stop(true);
-        const handle={audio,stopped:false,fadeTimer:null,stop:(immediate=false)=>{
+        const handle={name,audio,stopped:false,fadeTimer:null,usingWebAudio:false,
+            webSource:null,webGain:null,webOffset:0,stop:(immediate=false)=>{
             if (handle.stopped) {
                 if (immediate && handle.fadeTimer && audio.__sustainOwner===handle) {
                     clearInterval(handle.fadeTimer);audio.pause();audio.volume=0;audio.__sustainOwner=null;
@@ -2197,6 +2269,11 @@ const SoundManager = {
             handle.stopped=true;
             this.activeSustains.delete(handle);
             if (audio.__sustainOwner!==handle) return;
+            if (handle.usingWebAudio) {
+                this.stopWebSustain(handle,immediate);
+                audio.__sustainOwner=null;
+                return;
+            }
             if (immediate || audio.paused) {
                 audio.pause();audio.volume=0;audio.__sustainOwner=null;
                 return;
@@ -2215,15 +2292,31 @@ const SoundManager = {
         audio.volume=SOUND_LEVELS[name]||.13;
         if (audio.readyState>=1) audio.currentTime=0;
         this.activeSustains.add(handle);
-        if (!this.sustainsPaused) audio.play().catch(()=>{handle.stop(true);});
+        if (this.mediaEffectsBlocked) {
+            handle.usingWebAudio=true;
+            this.startWebSustain(handle);
+        } else if (!this.sustainsPaused) audio.play().catch(error=>{
+            if (handle.stopped) return;
+            if (error?.name==='NotAllowedError') this.mediaEffectsBlocked=true;
+            handle.usingWebAudio=true;
+            this.startWebSustain(handle);
+        });
         return handle;
     },
     syncSustains: function(paused) {
         if (this.sustainsPaused===paused) return;
         this.sustainsPaused=paused;
         for (const handle of this.activeSustains) {
-            if (paused) handle.audio.pause();
-            else if (!handle.stopped) handle.audio.play().catch(()=>handle.stop(true));
+            if (handle.usingWebAudio) {
+                if (paused) this.stopWebSustain(handle,true,true);
+                else this.startWebSustain(handle);
+            } else if (paused) handle.audio.pause();
+            else if (!handle.stopped) handle.audio.play().catch(error=>{
+                if (handle.stopped) return;
+                if (error?.name==='NotAllowedError') this.mediaEffectsBlocked=true;
+                handle.usingWebAudio=true;
+                this.startWebSustain(handle);
+            });
         }
     },
     stopAllSustains: function() {
@@ -8865,8 +8958,8 @@ window.toggleMusic = function() {
 window.testSpellSound = async function() {
     const button = document.getElementById('btn-test-sound');
     if (button) button.innerText = 'Checking sound…';
-    SoundManager.hasUserGesture = true;
-    // Start the media element inside the tap handler on mobile browsers.
+    // Both the playback context and the media element must start in this tap.
+    SoundManager.unlockFromGesture();
     const playback = SoundManager.playSound('fireball');
     const ready = await Promise.race([
         playback,

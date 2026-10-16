@@ -42,6 +42,9 @@ const stopRecording=target=>target.evaluate(async()=>{
 try {
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:60000});
+    if(await page.evaluate(()=>gameTestAPI.SoundManager.ctx!==null))
+        throw new Error('AudioContext was created before the first user gesture');
+    console.log('PASS Sound assets preload without opening a blocked AudioContext');
     await page.evaluate(async()=>{
         window.closeHelp();
         window.closeStoryOverlay();
@@ -150,6 +153,8 @@ try {
         phone.on('dialog',dialog=>dialog.accept());
         await phone.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
         await phone.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
+        if(await phone.evaluate(()=>gameTestAPI.SoundManager.ctx!==null))
+            throw new Error('Android AudioContext was created before the first touch');
         await phone.evaluate(async()=>{
             window.closeHelp();window.closeStoryOverlay();
             document.getElementById('pause-menu').style.display='none';
@@ -227,11 +232,59 @@ try {
         });
         await phone.waitForFunction(()=>phoneStorm.audio.paused&&phoneStorm.stopped,null,{timeout:3000});
         console.log('PASS Android touch firestorm sustains, pauses and stops with the spell');
+        await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('heal')&&
+            gameTestAPI.SoundManager.effectBuffers.has('swamp_loop'));
+        await phone.evaluate(()=>{
+            const sound=gameTestAPI.SoundManager;
+            const destination=sound.ctx.createMediaStreamDestination();
+            sound.effectsBus.connect(destination);
+            window.testSpellAudioDestination=destination;
+            for(const voice of sound.mediaEffects.get('heal'))
+                voice.play=()=>Promise.reject(new DOMException('Media playback blocked','NotAllowedError'));
+        });
+        await startRecording(phone);
+        const fallbackResult=await phone.evaluate(()=>gameTestAPI.SoundManager.playSound('heal'));
+        const fallbackPeak=await stopRecording(phone);
+        if(!fallbackResult||fallbackPeak<.015||!await phone.evaluate(()=>gameTestAPI.SoundManager.mediaEffectsBlocked))
+            throw new Error(`Blocked Android media did not fall back to audible Web Audio: ${fallbackPeak}`);
+        console.log(`PASS Blocked Android media uses audible Web Audio fallback (peak ${fallbackPeak.toFixed(3)})`);
+        await phone.evaluate(()=>{state.isPaused=false;gameTestAPI.SoundManager.syncSustains(false);});
+        const webLoop=await phone.evaluate(async()=>{
+            const sound=gameTestAPI.SoundManager;
+            const analyser=sound.ctx.createAnalyser();
+            analyser.fftSize=2048;
+            sound.effectsBus.connect(analyser);
+            const handle=sound.startSustain('swamp_loop');
+            window.testWebLoop=handle;
+            const data=new Float32Array(analyser.fftSize);
+            let peak=0;
+            for(let frame=0;frame<12;frame++){
+                await new Promise(resolve=>setTimeout(resolve,50));
+                analyser.getFloatTimeDomainData(data);
+                for(const sample of data)peak=Math.max(peak,Math.abs(sample));
+            }
+            sound.effectsBus.disconnect(analyser);
+            analyser.disconnect();
+            return {playing:Boolean(handle?.usingWebAudio&&handle.webSource),peak};
+        });
+        if(!webLoop.playing||webLoop.peak<.005)throw new Error(`Blocked Android loop was silent: ${JSON.stringify(webLoop)}`);
+        await phone.evaluate(()=>{
+            const sound=gameTestAPI.SoundManager;
+            state.isPaused=true;sound.syncSustains(true);
+            if(testWebLoop.webSource)throw new Error('Web Audio loop ignored pause');
+            state.isPaused=false;sound.syncSustains(false);
+            if(!testWebLoop.webSource)throw new Error('Web Audio loop did not resume');
+            testWebLoop.stop(true);
+            if(sound.activeSustains.has(testWebLoop))throw new Error('Web Audio loop did not stop');
+        });
+        console.log(`PASS Blocked Android spell loop plays, pauses and stops (peak ${webLoop.peak.toFixed(3)})`);
         await phone.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
+        await startRecording(phone);
         const phoneSoundPoint=await clickControl(phone,'#btn-test-sound');
         await phone.touchscreen.tap(phoneSoundPoint.x,phoneSoundPoint.y);
-        await phone.waitForFunction(()=>testMediaPlayback.playCount>1,null,{timeout:30000});
-        console.log('PASS Android pause-menu sound test starts another media effect');
+        const phoneTestPeak=await stopRecording(phone);
+        if(phoneTestPeak<.03)throw new Error(`Android pause-menu sound test was silent after media rejection (peak ${phoneTestPeak})`);
+        console.log(`PASS Android pause-menu sound test remains audible after media rejection (peak ${phoneTestPeak.toFixed(3)})`);
     } finally {
         await mobile.close();
     }
