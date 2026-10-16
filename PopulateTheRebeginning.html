@@ -1071,6 +1071,7 @@ const CONFIG = {
     CRITTERS: {
         BUNNY_COUNT: 15,
         BIRD_COUNT: 10,
+        ANIMAL_SCALE: 0.61,
         CLOUD_COUNT: 15,
         BUNNY_SPAWN_RANGE: 150,
         BIRD_SPAWN_RANGE: 220,
@@ -2512,6 +2513,7 @@ const CritterManager = {
     spawnBunny: function(randomPos=false) {
         const group = new THREE.Group();
         group.name='Wild rabbit';group.userData.wildlife='rabbit';
+        group.scale.setScalar(CONFIG.CRITTERS.ANIMAL_SCALE);
         const coat=this.nextPalette('rabbit');
         const tone=(Math.random()-.5)*.06,color=coat.back;
         const mat = new THREE.MeshStandardMaterial({color: color, roughness: 0.88,
@@ -2631,6 +2633,7 @@ const CritterManager = {
     spawnBird: function(randomPos=false) {
         const group = new THREE.Group();
         group.name='Wild bird';group.userData.wildlife='bird';
+        group.scale.setScalar(CONFIG.CRITTERS.ANIMAL_SCALE);
         const plumage=this.nextPalette('bird');
         const tone=(Math.random()-.5)*.06,color=plumage.back;
         const mat = new THREE.MeshStandardMaterial({color: color, side: THREE.DoubleSide, roughness: 0.84,
