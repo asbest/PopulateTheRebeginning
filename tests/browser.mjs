@@ -120,7 +120,7 @@ try {
     const x=window.innerWidth/2+dx,y=window.innerHeight/2+dy;
     state.raycaster.setFromCamera(new THREE.Vector2(x/window.innerWidth*2-1,1-y/window.innerHeight*2),state.camera);
     const hit=state.raycaster.intersectObjects(meshes)[0];
-    if(hit&&hit.point.y>CONFIG.TERRAIN.WATER_LEVEL+.5&&Math.hypot(hit.point.x-p.x,hit.point.z-p.z)>3&&Math.hypot(hit.point.x-p.x,hit.point.z-p.z)<25)
+     if(hit&&hit.point.y>gameTestAPI.CONFIG.TERRAIN.WATER_LEVEL+.5&&Math.hypot(hit.point.x-p.x,hit.point.z-p.z)>3&&Math.hypot(hit.point.x-p.x,hit.point.z-p.z)<25)
      return {x,y};
    }
    return null;
@@ -464,7 +464,7 @@ try {
  // Each campaign startup is checked independently, including its biome and AI roster.
  for(let level=1;level<=12;level++){
   await check('Campaign '+level+' startup',async()=>{
-   await page.evaluate(level=>{localStorage.setItem(CONFIG.SAVED_KEYS.START_CAMPAIGN,String(level));},level);
+   await page.evaluate(level=>{localStorage.setItem(gameTestAPI.CONFIG.SAVED_KEYS.START_CAMPAIGN,String(level));},level);
    await page.goto(url+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
    await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
    const data=await page.evaluate(()=>({level:state.campaignLevel,isCampaign:state.isCampaign,biome:state.matchSettings.biome,ai:window.enemyAIs.length,units:state.units.length}));
