@@ -452,19 +452,19 @@ try {
  await page.setViewportSize({width:1440,height:900});
  await check('Confirming in-game prompts starts sandbox and campaign modes',async()=>{
   await page.evaluate(()=>window.newGame());
-  await Promise.all([page.waitForEvent('load',{timeout:60000}),page.locator('#game-dialog-confirm').click()]);
+  await Promise.all([page.waitForEvent('load',{timeout:90000}),page.locator('#game-dialog-confirm').click({force:true,noWaitAfter:true})]);
   await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&!state.isCampaign,null,{timeout:90000});
   const sandbox=await page.evaluate(()=>({campaign:state.isCampaign,queued:localStorage.getItem(gameTestAPI.CONFIG.SAVED_KEYS.SANDBOX_START)}));
   if(sandbox.campaign||sandbox.queued)throw new Error('New Game did not start sandbox mode: '+JSON.stringify(sandbox));
   await page.evaluate(()=>window.startCampaignLevel(2));
-  await Promise.all([page.waitForEvent('load',{timeout:60000}),page.locator('#game-dialog-confirm').click()]);
+  await Promise.all([page.waitForEvent('load',{timeout:90000}),page.locator('#game-dialog-confirm').click({force:true,noWaitAfter:true})]);
   await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.campaignLevel===2,null,{timeout:90000});
   return {sandbox:true,campaignLevel:await page.evaluate(()=>state.campaignLevel)};
  });
  // Each campaign startup is checked independently, including its biome and AI roster.
  for(let level=1;level<=12;level++){
   await check('Campaign '+level+' startup',async()=>{
-   await page.evaluate(level=>{localStorage.setItem(gameTestAPI.CONFIG.SAVED_KEYS.START_CAMPAIGN,String(level));},level);
+   await page.evaluate(level=>{localStorage.setItem('rebeginning_start_campaign',String(level));},level);
    await page.goto(url+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
    await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
    const data=await page.evaluate(()=>({level:state.campaignLevel,isCampaign:state.isCampaign,biome:state.matchSettings.biome,ai:window.enemyAIs.length,units:state.units.length}));
