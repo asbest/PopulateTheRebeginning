@@ -58,9 +58,6 @@ jobs:
       - name: Spell sound assets
         if: always()
         run: node tests/sfx-assets.mjs
-      - name: Spell audio
-        if: always()
-        run: node tests/audio.mjs
       - name: Materials and terrain transitions
         if: always()
         run: node tests/materials.mjs
@@ -69,6 +66,26 @@ jobs:
         with:
           name: browser-test-report
           path: test-results/
+  audio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Start game server
+        run: |
+          nohup node tools/serve.mjs > /tmp/populate-server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8765/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/populate-server.log
+          exit 1
+      - name: Spell audio
+        run: node tests/audio.mjs
   strategy-long:
     runs-on: ubuntu-latest
     steps:
