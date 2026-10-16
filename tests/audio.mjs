@@ -6,6 +6,7 @@ const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createR
 const browser=await chromium.launch({headless:true,args:['--autoplay-policy=user-gesture-required'],...(process.platform==='win32'?{channel:'chrome'}:{})});
 const page=await browser.newPage({viewport:{width:1440,height:900}});
 const errors=[];
+let checkpoint='desktop startup';
 page.on('pageerror',error=>errors.push(String(error)));
 page.on('dialog',dialog=>dialog.accept());
 const clickControl=async (target,selector)=>{
@@ -71,6 +72,7 @@ try {
         window.testSpellAudioDestination=recordingDestination;
     });
     await startRecording(page);
+    checkpoint='desktop fireball click';
     const target=await page.evaluate(()=>{
         const point=state.shaman.mesh.position.clone();
         point.x+=2;
@@ -86,6 +88,7 @@ try {
 
     await page.evaluate(()=>{state.mana=1000;state.selectedUnits=[state.shaman];});
     for(const spell of ['blast','heal','raise','lightning','firestorm']) {
+        checkpoint=`desktop ${spell} sound`;
         await startRecording(page);
         const before=await page.evaluate(()=>state.mana);
         const soundCount=await page.evaluate(()=>testSounds.length);
@@ -104,6 +107,7 @@ try {
         console.log(`PASS ${spell} produces spell audio (peak ${peak.toFixed(3)})`);
     }
     await page.evaluate(()=>gameTestAPI.SoundManager.ctx.suspend());
+    checkpoint='desktop keyboard unlock and sound test';
     if(await page.evaluate(()=>gameTestAPI.SoundManager.ctx.state)!=='suspended')throw new Error('Audio context did not suspend');
     await page.keyboard.press('q');
     await page.waitForFunction(()=>gameTestAPI.SoundManager.ctx.state==='running');
@@ -116,6 +120,7 @@ try {
     if(testPeak<0.03)throw new Error(`Pause-menu sound test was silent (peak ${testPeak})`);
     console.log(`PASS Pause-menu sound test (peak ${testPeak.toFixed(3)})`);
 
+    checkpoint='desktop sustained firestorm';
     const sustain=await page.evaluate(()=>{
         document.getElementById('pause-menu').style.display='none';
         state.isPaused=false;
@@ -145,6 +150,7 @@ try {
     await page.waitForFunction(()=>testSustainHandle.audio.paused,null,{timeout:3000});
     console.log('PASS Firestorm bed plays through its lifetime, pauses and stops on expiry');
 
+    checkpoint='Android startup';
     const mobile=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,
         userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'});
     try {
@@ -171,6 +177,7 @@ try {
             gameTestAPI.updateUnitList();
         });
         const mobileUnit=await clickControl(phone,'#unit-list .unit-item');
+        checkpoint='Android fireball touch';
         await phone.touchscreen.tap(mobileUnit.x,mobileUnit.y);
         const mobileBlast=await clickControl(phone,'#btn-blast');
         await phone.touchscreen.tap(mobileBlast.x,mobileBlast.y);
@@ -214,6 +221,7 @@ try {
             state.selectedUnits=[state.shaman];
         });
         const stormPoint=await clickControl(phone,'#btn-firestorm');
+        checkpoint='Android sustained firestorm';
         await phone.touchscreen.tap(stormPoint.x,stormPoint.y);
         const stormTarget=await phone.evaluate(()=>{
             const point=state.shaman.mesh.position.clone();point.x+=2;point.project(state.camera);
@@ -234,6 +242,7 @@ try {
         console.log('PASS Android touch firestorm sustains, pauses and stops with the spell');
         await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('heal')&&
             gameTestAPI.SoundManager.effectBuffers.has('swamp_loop'));
+        checkpoint='Android blocked-media fallback';
         await phone.evaluate(()=>{
             const sound=gameTestAPI.SoundManager;
             const destination=sound.ctx.createMediaStreamDestination();
@@ -279,6 +288,7 @@ try {
         });
         console.log(`PASS Blocked Android spell loop plays, pauses and stops (peak ${webLoop.peak.toFixed(3)})`);
         await phone.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
+        checkpoint='Android pause-menu sound test';
         await startRecording(phone);
         const phoneSoundPoint=await clickControl(phone,'#btn-test-sound');
         await phone.touchscreen.tap(phoneSoundPoint.x,phoneSoundPoint.y);
@@ -289,6 +299,11 @@ try {
         await mobile.close();
     }
     if(errors.length)throw new Error(errors.join('\n'));
+} catch(error) {
+    const message=String(error?.stack||error).slice(0,1400)
+        .replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');
+    console.error(`::error title=Spell audio at ${checkpoint}::${message}`);
+    throw error;
 } finally {
     await browser.close();
 }
