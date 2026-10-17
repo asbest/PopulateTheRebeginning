@@ -234,15 +234,19 @@ try {
         await phone.touchscreen.tap(stormTarget.x,stormTarget.y);
         await phone.waitForFunction(()=>[...gameTestAPI.SoundManager.activeSustains]
             .some(handle=>handle.audio.currentSrc.endsWith('/sfx/firestorm_loop.wav')&&handle.audio.currentTime>.1),null,{timeout:15000});
-        await phone.evaluate(()=>{
+        const stoppedPhoneStorm=await phone.evaluate(()=>{
             const sound=gameTestAPI.SoundManager;
             window.phoneStorm=[...sound.activeSustains].find(handle=>handle.audio.currentSrc.endsWith('/sfx/firestorm_loop.wav'));
             state.isPaused=true;sound.syncSustains(true);
             if(!phoneStorm.audio.paused)throw new Error('Android storm audio ignored pause');
-            const effect=state.activeEffects.find(item=>item.constructor.name==='Firestorm');
+            const effect=state.activeEffects.find(item=>item.soundLoop===phoneStorm);
+            if(!effect)throw new Error('Android storm sound has no matching effect');
             effect.timer=0;effect.update(.01);
+            return {paused:phoneStorm.audio.paused,stopped:phoneStorm.stopped,
+                released:phoneStorm.audio.__sustainOwner!==phoneStorm};
         });
-        await phone.waitForFunction(()=>phoneStorm.audio.paused&&phoneStorm.stopped,null,{timeout:3000});
+        if(!stoppedPhoneStorm.paused||!stoppedPhoneStorm.stopped||!stoppedPhoneStorm.released)
+            throw new Error(`Android firestorm kept its sound after expiry: ${JSON.stringify(stoppedPhoneStorm)}`);
         console.log('PASS Android touch firestorm sustains, pauses and stops with the spell');
         await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('heal')&&
             gameTestAPI.SoundManager.effectBuffers.has('swamp_loop'));
