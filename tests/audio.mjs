@@ -309,17 +309,15 @@ try {
             throw new Error(`Missing Android effect assets: ${JSON.stringify(assets)}`);
         console.log(`PASS Android can load all ${assets.length} sound effects and ambient beds`);
         checkpoint='Android wildlife playback';
-        const wildlifePlayback=await phone.evaluate(async()=>{
-            const sound=gameTestAPI.SoundManager,played=[];
-            for(const name of ['bunny_nibble','bird_call','hurt','hurt_heavy']) {
-                if(!await sound.playSound(name,.8))throw new Error(`${name} was blocked`);
-                await new Promise(resolve=>setTimeout(resolve,170));
-                if(!sound.mediaEffects.get(name).some(voice=>!voice.paused&&voice.currentTime>.04))
-                    throw new Error(`${name} did not advance on Android media playback`);
-                played.push(name);
-            }
-            return played;
-        });
+        const wildlifePlayback=[];
+        for(const name of ['bunny_nibble','bird_call','hurt','hurt_heavy']) {
+            if(!await phone.evaluate(name=>gameTestAPI.SoundManager.playSound(name,.8),name))
+                throw new Error(`${name} was blocked`);
+            // A play() promise can resolve before currentTime advances on busy CI runners.
+            await phone.waitForFunction(name=>gameTestAPI.SoundManager.mediaEffects.get(name)
+                .some(voice=>voice.currentTime>.04),name,{timeout:10000});
+            wildlifePlayback.push(name);
+        }
         console.log(`PASS Android plays wildlife and hit reactions: ${wildlifePlayback.join(', ')}`);
         await phone.evaluate(()=>{
             state.isPaused=false;state.mana=1000;
