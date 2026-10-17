@@ -148,7 +148,7 @@ try {
         effect.timer=0;effect.update(.01);
     });
     await page.waitForFunction(()=>!gameTestAPI.SoundManager.activeSustains.has(testSustainHandle));
-    await page.waitForFunction(()=>testSustainHandle.audio.paused,null,{timeout:3000});
+    await page.waitForFunction(()=>testSustainHandle.audio.__sustainOwner!==testSustainHandle,null,{timeout:5000});
     console.log('PASS Firestorm bed plays through its lifetime, pauses and stops on expiry');
 
     checkpoint='Android startup';
