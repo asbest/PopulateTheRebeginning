@@ -55,6 +55,9 @@ jobs:
       - name: Group attack rendering budget
         if: always()
         run: node tools/benchmark-group-impact.mjs
+      - name: Hut destruction rendering budget
+        if: always()
+        run: node tools/benchmark-hut-destruction.mjs
       - name: Burnable trees and five-minute regrowth
         if: always()
         run: node tests/trees.mjs

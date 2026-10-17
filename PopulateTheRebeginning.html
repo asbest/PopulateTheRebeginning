@@ -3858,6 +3858,7 @@ function modifyTerrain(centerX, centerZ, radius, amount) {
 
     // Check if buildings collapse
     state.buildings.forEach(b => {
+        if(b.dead)return;
         if(Math.hypot(b.mesh.position.x-centerX,b.mesh.position.z-centerZ)<radius+6)updateSettlementPath(b);
         const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
         if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
@@ -5181,10 +5182,12 @@ class Fireball {
         });
         // Buildings
         state.buildings.forEach(b => {
+            if(b.dead)return;
             const d = b.mesh.position.distanceTo(impactPos);
             if(d < 8 && b.faction !== this.faction) {
-                b.takeDamage(this.buildingDamage); // Fireball deals damage to buildings
-                b.burnTimer = 3.0;
+                // The fireball already supplied the impact sound and flash.
+                b.takeDamage(this.buildingDamage, false, false);
+                if(!b.dead)b.burnTimer = 3.0;
             }
         });
     }
@@ -5821,6 +5824,7 @@ function castLandbridge(caster, x, z) {
     state.heightCache.clear();
     // Building collapse check
     state.buildings.forEach(b => {
+        if(b.dead)return;
         const groundH = getHeight(b.mesh.position.x, b.mesh.position.z);
         if(Math.abs(groundH - b.mesh.position.y) > 1.0) {
             b.takeDamage(100, true);
@@ -7409,19 +7413,26 @@ window.Humanoid = class Humanoid {
 
 // --- js/building.js ---
 
+const buildingDetailAssets={scaffold:new Map(),damage:new Map()};
 function createConstructionRig(radius,height) {
     const group=new THREE.Group();group.name='Construction scaffolding';
-    const wood=new THREE.MeshStandardMaterial({color:0xb28250,roughness:.92,map:Art.textures.wood,
-        normalMap:Art.blender.texture('wood','normal'),roughnessMap:Art.blender.texture('wood','roughness')});
-    const rope=new THREE.MeshStandardMaterial({color:0xa88c65,roughness:1,map:Art.blender.texture('rope','map'),
-        normalMap:Art.blender.texture('rope','normal'),roughnessMap:Art.blender.texture('rope','roughness')});
-    const beamGeo=new THREE.CylinderGeometry(.045,.065,height,7),railGeo=new THREE.CylinderGeometry(.035,.035,radius*1.8,6);
+    const key=`${radius}/${height}`;
+    if(!buildingDetailAssets.scaffold.has(key))buildingDetailAssets.scaffold.set(key,{
+        wood:new THREE.MeshStandardMaterial({color:0xb28250,roughness:.92,map:Art.textures.wood,
+            normalMap:Art.blender.texture('wood','normal'),roughnessMap:Art.blender.texture('wood','roughness')}),
+        rope:new THREE.MeshStandardMaterial({color:0xa88c65,roughness:1,map:Art.blender.texture('rope','map'),
+            normalMap:Art.blender.texture('rope','normal'),roughnessMap:Art.blender.texture('rope','roughness')}),
+        beamGeo:new THREE.CylinderGeometry(.045,.065,height,7),
+        railGeo:new THREE.CylinderGeometry(.035,.035,radius*1.8,6),
+        ringGeo:new THREE.TorusGeometry(radius,.038,5,32)
+    });
+    const {wood,rope,beamGeo,railGeo,ringGeo}=buildingDetailAssets.scaffold.get(key);
     for(let i=0;i<8;i++){
         const a=i*Math.PI/4,post=new THREE.Mesh(beamGeo,wood);post.position.set(Math.sin(a)*radius,height*.5,Math.cos(a)*radius);post.castShadow=true;group.add(post);
         if(i%2===0){const rail=new THREE.Mesh(railGeo,rope);rail.position.set(Math.sin(a)*radius,height*(.35+(i%4)*.14),Math.cos(a)*radius);rail.rotation.z=Math.PI/2;rail.rotation.y=a;group.add(rail);}
     }
     for(const y of [.28,.58,.86]){
-        const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.038,5,32),rope);ring.rotation.x=Math.PI/2;ring.position.y=height*y;group.add(ring);
+        const ring=new THREE.Mesh(ringGeo,rope);ring.rotation.x=Math.PI/2;ring.position.y=height*y;group.add(ring);
     }
     return group;
 }
@@ -7438,14 +7449,21 @@ function applyBuildingConstructionVisual(building) {
 
 function createBuildingDamageVisual(radius,height){
     const group=new THREE.Group();group.name='Structural damage';group.visible=false;
-    const charred=new THREE.MeshStandardMaterial({color:0x241b16,roughness:1,map:Art.blender.texture('dark','map'),
-        normalMap:Art.blender.texture('dark','normal'),roughnessMap:Art.blender.texture('dark','roughness')});
+    if(!buildingDetailAssets.damage.has(radius))buildingDetailAssets.damage.set(radius,{
+        charred:new THREE.MeshStandardMaterial({color:0x241b16,roughness:1,map:Art.blender.texture('dark','map'),
+            normalMap:Art.blender.texture('dark','normal'),roughnessMap:Art.blender.texture('dark','roughness')}),
+        shards:[0,1,2].map(i=>new THREE.BoxGeometry(.12,.8+i*.3,.1)),
+        crackGeo:new THREE.RingGeometry(radius*.35,radius*.39,9),
+        crackMat:new THREE.MeshBasicMaterial({color:0x160f0c,transparent:true,opacity:.7,
+            side:THREE.DoubleSide,depthWrite:false})
+    });
+    const {charred,shards,crackGeo,crackMat}=buildingDetailAssets.damage.get(radius);
     for(let i=0;i<7;i++){
-        const shard=new THREE.Mesh(new THREE.BoxGeometry(.12,.8+(i%3)*.3,.1),charred);const a=i*2.399;
+        const shard=new THREE.Mesh(shards[i%3],charred);const a=i*2.399;
         shard.position.set(Math.sin(a)*radius*(.55+(i%2)*.3),.65+(i%3)*.42,Math.cos(a)*radius*(.55+(i%2)*.3));
         shard.rotation.set((i%2-.5)*.45,a,(i%3-1)*.3);shard.castShadow=true;group.add(shard);
     }
-    const crack=new THREE.Mesh(new THREE.RingGeometry(radius*.35,radius*.39,9),new THREE.MeshBasicMaterial({color:0x160f0c,transparent:true,opacity:.7,side:THREE.DoubleSide,depthWrite:false}));
+    const crack=new THREE.Mesh(crackGeo,crackMat);
     crack.rotation.x=-Math.PI/2;crack.position.y=.06;group.add(crack);return group;
 }
 
@@ -7610,24 +7628,39 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                 this.rallyLine.geometry.setFromPoints([start, end]);
                 this.rallyLine.visible = (state.selectedBuilding === this);
             },
-            takeDamage: function(amount, silent = false) {
+            takeDamage: function(amount, silent = false, collapseSound = true) {
+                if(this.dead)return;
                 this.hp -= amount;
                 this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
                 this.damageVisual.visible=this.hp/this.maxHp<.7;
-                if (!silent) spawnPulse(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z, 0xFF4500);
+                if (!silent) HitPulseManager.add(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z, 0xFF4500);
                 if(this.hp <= 0) {
-                    this.destroy();
+                    this.destroy(collapseSound);
                 }
             },
-            destroy: function() {
+            destroy: function(withSound = true) {
+                if(this.dead)return;
                 this.dead = true;
                 state.scene.remove(this.mesh);
                 this.pathVisual?.geometry.dispose();
-                spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, COLORS.wood, 20);
-                SoundManager.playSound('explosion');
+                this.hpGroup.traverse(node=>{
+                    if(node.isMesh){node.geometry.dispose();node.material.dispose();}
+                });
+                if(this.rallyLine){
+                    state.scene.remove(this.rallyLine);
+                    this.rallyLine.geometry.dispose();
+                    this.rallyLine.material.dispose();
+                    this.rallyLine=null;
+                }
+                if(state.selectedBuilding===this){state.selectedBuilding=null;updateContextMenus();}
+                // The impact already lights the scene; another point light makes
+                // every nearby surface more expensive during a building collapse.
+                spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, COLORS.wood, 20, false);
+                if(withSound)SoundManager.playSound('explosion');
                 BuildingSpatialHash.markDirty();
             },
             update: function(dt) {
+                if(this.dead)return;
                 const isSelected = (state.selectedBuilding === this);
                 const isDamaged = this.hp < this.maxHp;
                 this.damageVisual.visible=this.hp/this.maxHp<.7;
