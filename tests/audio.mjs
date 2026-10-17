@@ -142,13 +142,16 @@ try {
     await page.evaluate(()=>{state.isPaused=true;gameTestAPI.SoundManager.syncSustains(true);});
     if(!await page.evaluate(()=>testSustainHandle.audio.paused))
         throw new Error('Sustained spell kept playing while paused');
-    await page.evaluate(()=>{
+    const stoppedSustain=await page.evaluate(()=>{
         const sound=gameTestAPI.SoundManager,effect=testSustainEffect;
         state.isPaused=false;sound.syncSustains(false);
         effect.timer=0;effect.update(.01);
+        return {inactive:!sound.activeSustains.has(testSustainHandle),
+            released:testSustainHandle.audio.__sustainOwner!==testSustainHandle,
+            paused:testSustainHandle.audio.paused};
     });
-    await page.waitForFunction(()=>!gameTestAPI.SoundManager.activeSustains.has(testSustainHandle));
-    await page.waitForFunction(()=>testSustainHandle.audio.__sustainOwner!==testSustainHandle,null,{timeout:5000});
+    if(!stoppedSustain.inactive||!stoppedSustain.released||!stoppedSustain.paused)
+        throw new Error(`Expired firestorm did not release its sound immediately: ${JSON.stringify(stoppedSustain)}`);
     console.log('PASS Firestorm bed plays through its lifetime, pauses and stops on expiry');
 
     checkpoint='Android startup';

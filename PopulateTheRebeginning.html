@@ -2258,14 +2258,9 @@ const SoundManager = {
         if (!voices?.length) return null;
         const audio=voices.find(voice => !voice.__sustainOwner) || voices[0];
         if (audio.__sustainOwner) audio.__sustainOwner.stop(true);
-        const handle={name,audio,stopped:false,fadeTimer:null,usingWebAudio:false,
+        const handle={name,audio,stopped:false,usingWebAudio:false,
             webSource:null,webGain:null,webOffset:0,stop:(immediate=false)=>{
-            if (handle.stopped) {
-                if (immediate && handle.fadeTimer && audio.__sustainOwner===handle) {
-                    clearInterval(handle.fadeTimer);audio.pause();audio.volume=0;audio.__sustainOwner=null;
-                }
-                return;
-            }
+            if (handle.stopped) return;
             handle.stopped=true;
             this.activeSustains.delete(handle);
             if (audio.__sustainOwner!==handle) return;
@@ -2274,18 +2269,9 @@ const SoundManager = {
                 audio.__sustainOwner=null;
                 return;
             }
-            if (immediate || audio.paused) {
-                audio.pause();audio.volume=0;audio.__sustainOwner=null;
-                return;
-            }
-            const startVolume=audio.volume;
-            let step=0;
-            handle.fadeTimer=setInterval(()=>{
-                if(audio.__sustainOwner!==handle){clearInterval(handle.fadeTimer);return;}
-                step++;
-                audio.volume=startVolume*(1-step/5);
-                if(step>=5){clearInterval(handle.fadeTimer);audio.pause();audio.__sustainOwner=null;}
-            },50);
+            // Timers can be throttled in background tabs. Release the voice now
+            // so an expired spell cannot keep sounding after its effect ends.
+            audio.pause();audio.volume=0;audio.__sustainOwner=null;
         }};
         audio.__sustainOwner=handle;
         audio.loop=true;
