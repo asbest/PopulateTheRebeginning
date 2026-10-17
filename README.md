@@ -15,7 +15,7 @@ Open **http://127.0.0.1:8765/**. The entry point stays on the current host and t
 
 Do not open the HTML directly via `file://`; browsers require HTTP for JavaScript modules. To publish on GitHub Pages, serve the repository root. No build step is needed.
 
-The visual renewal follows the readable tribal silhouettes of *Populous: The Beginning*, with newly authored meshes, materials, vector icons and title art. The campaign now tells [The Price of Divinity](CAMPAIGN.md), a twelve-chapter continuation about the consequences of a shaman's ascension. Its existing battles and progression, unit statistics, mana costs, terrain mechanics and multiplayer mode remain in the browser game.
+The visual renewal follows the readable tribal silhouettes of *Populous: The Beginning*, with newly authored meshes, materials, vector icons and title art. The campaign tells [The Price of Divinity](CAMPAIGN.md), a twelve-chapter continuation about the consequences of a shaman's ascension. Chapters now have playable objectives including defense, passages, conduit control and escort, while unit statistics, mana costs, terrain mechanics and multiplayer remain in the browser game.
 
 The character bodies are fully replaced: sculpted faces, articulated limbs, copper-haired shaman, warrior, fire warrior, spy and wild follower. A revised 1254 × 1254 skin texture, embroidered cloth, leather, bronze and strand-detailed hair materials add surface detail. Faces have finer eyes, ears and nose profiles. Reload an already open game tab to load the latest models.
 
@@ -52,7 +52,7 @@ node tests/network.mjs
 
 On Windows the browser tests use installed Google Chrome; on Linux they use Playwright Chromium. The network test needs internet. Tests write reports and screenshots to `test-results/`, which is ignored by Git. See [the tested scope and remaining limitations](docs/TEST-REPORT.md).
 
-The browser suite includes dedicated effect and mana checks for all 18 spells, transport, timed status effects and save/load. Campaign tests cover all twelve playable levels, progression, the midpoint clue, the journal and both persistent endings. AI tests exercise four-minute economy simulations, an eight-minute simulation on the original starting terrain, mixed training, attacks with defensive reserves, raid response, retreats and worker recovery. Browser CI runs on pushes and pull requests. No publishing step is included.
+The browser suite includes dedicated effect and mana checks for all 18 spells, transport, timed status effects and save/load. Campaign tests cover all twelve playable levels and their mission rules, progression, mission save/load, the midpoint clue, the journal and both persistent endings. AI tests exercise four-minute economy simulations, an eight-minute simulation on the original starting terrain, mixed training, attacks with defensive reserves, raid response, retreats and worker recovery. Browser CI runs on pushes and pull requests. No publishing step is included.
 
 `tests/strategy-long.mjs` adds four AI scenarios totaling 65 simulated minutes, including an armed raid and loss of all workers. `tests/materials.mjs` captures an in-game close-up and verifies that the detailed building textures load without WebGL errors.
 

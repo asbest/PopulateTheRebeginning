@@ -8,7 +8,9 @@ const durations={
     lightning:1.36,raise:1.16,lower:1.18,flatten:1.1,landbridge:1.55,
     swamp:1.16,invisibility:.92,shield:.9,hypnotise:1.25,swarm:1.12,
     tornado:1.38,firestorm:1.47,volcano:1.64,heal:1.08,teleport:1.18,
-    create:1.08,phantom:1.16,swamp_loop:2.72,swarm_loop:2.44,
+    create:1.08,phantom:1.16,bunny_nibble:.72,bird_call:.84,
+    hurt:.36,hurt_heavy:.49,
+    swamp_loop:2.72,swarm_loop:2.44,
     tornado_loop:3.12,firestorm_loop:2.76,volcano_loop:2.92
 };
 const signature=new Set();
@@ -40,7 +42,7 @@ for(const [name,duration] of Object.entries(durations)){
         }
     }
     const fingerprint=bytes.subarray(44,Math.min(bytes.length,64044)).toString('base64');
-    assert.ok(!signature.has(fingerprint),`${name} duplicates another spell sound`);
+    assert.ok(!signature.has(fingerprint),`${name} duplicates another sound`);
     signature.add(fingerprint);
 }
-console.log(`PASS ${Object.keys(durations).length} distinct, audible spell sounds with matching durations and seamless sustained beds`);
+console.log(`PASS ${Object.keys(durations).length} distinct, audible game sounds with matching durations and seamless sustained beds`);

@@ -60,9 +60,22 @@ try {
         !journal.clue.includes(CAMPAIGN_STORIES[5].beat) || !journal.objective.includes('three rival tribes')) {
         throw new Error('Midpoint clue or journal failed: ' + JSON.stringify(journal));
     }
-    await page.evaluate(() => { closeStoryOverlay(); saveGame(); loadGame(); });
-    const saved = await page.evaluate(() => ({ level: state.campaignLevel, beatShown: state.campaignNarrative?.beatShown }));
-    if (saved.level !== 5 || !saved.beatShown) throw new Error('Campaign clue did not survive save/load: ' + JSON.stringify(saved));
+    await page.evaluate(() => {
+        closeStoryOverlay();
+        if (state.isPaused) togglePause();
+        const site=state.campaignMission.sites[0];
+        for(const enemy of state.units)if(!window.isAllied(enemy.faction,0) &&
+            Math.hypot(enemy.mesh.position.x-site.x,enemy.mesh.position.z-site.z)<6)enemy.state='dead';
+        state.shaman.mesh.position.set(site.x,state.shaman.mesh.position.y,site.z);
+        gameTestAPI.updateCampaignMission(12);
+        if(!site.captured)throw new Error('First conduit was not captured');
+        saveGame();loadGame();
+    });
+    const saved = await page.evaluate(() => ({ level: state.campaignLevel, beatShown: state.campaignNarrative?.beatShown,
+        missionLevel:state.campaignMission?.level,sites:state.campaignMission?.sites.length,
+        captured:state.campaignMission?.sites.filter(site=>site.captured).length }));
+    if (saved.level !== 5 || !saved.beatShown || saved.missionLevel !== 5 || saved.sites !== 3 || saved.captured !== 1)
+        throw new Error('Campaign clue or mission did not survive save/load: ' + JSON.stringify(saved));
     console.log('PASS Mid-battle revelation, journal and save/load');
     await page.setViewportSize({ width: 390, height: 640 });
     await page.evaluate(() => { if (!state.isPaused) togglePause(); });

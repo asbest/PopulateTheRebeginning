@@ -343,6 +343,42 @@ try {
   if(await page.locator('#spell-name-tooltip').isVisible())throw new Error('Moving away did not cancel the spell name');
   await page.mouse.up();
  });
+ await check('Holding unit and building icons reveals their types',async()=>{
+  const unitPoint=await controlCenter(page,'#unit-list .unit-item');
+  await page.mouse.move(unitPoint.x,unitPoint.y);await page.mouse.down();
+  try{
+   await waitForSpellName(page);
+   const shown=await page.evaluate(()=>({name:document.getElementById('spell-name-tooltip').textContent,
+    tip:document.getElementById('spell-name-tooltip').getBoundingClientRect().toJSON(),
+    icon:document.querySelector('#unit-list .unit-item').getBoundingClientRect().toJSON()}));
+   if(shown.name!=='Shaman'||shown.tip.left<shown.icon.right||shown.tip.right>page.viewportSize().width)
+    throw new Error('Unit type tooltip is misplaced: '+JSON.stringify(shown));
+  }finally{await page.mouse.up();}
+  if(await page.locator('#spell-name-tooltip').isVisible())throw new Error('Unit type stayed visible after release');
+  await page.evaluate(()=>{
+   const p=state.shaman.mesh.position;
+   const brave=new Humanoid(0,'wild',p.x+3,p.z+3);
+   state.units.push(brave);state.selectedUnits=[brave];
+   gameTestAPI.updateUnitList();gameTestAPI.updateContextMenus();
+  });
+  const buildingPoint=await controlCenter(page,'#btn-build_warrior');
+  const before=await page.evaluate(()=>state.currentAction);
+  await page.mouse.move(buildingPoint.x,buildingPoint.y);await page.mouse.down();
+  try{
+   await waitForSpellName(page);
+   const shown=await page.evaluate(()=>({name:document.getElementById('spell-name-tooltip').textContent,
+    tip:document.getElementById('spell-name-tooltip').getBoundingClientRect().toJSON(),
+    icon:document.getElementById('btn-build_warrior').getBoundingClientRect().toJSON(),
+    action:state.currentAction}));
+   if(shown.name!=='Warrior Training Hut'||shown.tip.right>shown.icon.left||shown.tip.left<0||shown.action!==before)
+    throw new Error('Building type tooltip is misplaced or selected too soon: '+JSON.stringify(shown));
+  }finally{await page.mouse.up();}
+  if(await page.locator('#spell-name-tooltip').isVisible())throw new Error('Building type stayed visible after release');
+  await page.evaluate(()=>window.selectAction('move'));
+  await page.mouse.click(buildingPoint.x,buildingPoint.y);
+  if(await page.evaluate(()=>state.currentAction)!=='build_warrior')throw new Error('Short building click stopped selecting its action');
+  await page.evaluate(()=>{state.selectedUnits=[state.shaman];gameTestAPI.updateContextMenus();window.selectAction('move');});
+ });
  await check('Airship cargo, upgrades, rally points and campaign survive save/load',async()=>{
   const before=await page.evaluate(()=>{
    state.isPaused=true;const p=state.shaman.mesh.position;
@@ -439,6 +475,33 @@ try {
    await phone.touchscreen.tap(point.x,point.y);
    const mana=await phone.evaluate(()=>state.mana);
    if(mana>499||mana<480)throw new Error('Touch spell did not consume mana: '+mana);
+   const holdTouchName=async(selector,expected,side)=>{
+    const target=await controlCenter(phone,selector);
+    const session=await mobile.newCDPSession(phone);
+    await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:target.x,y:target.y}]});
+    try{
+     await waitForSpellName(phone);
+     const shown=await phone.evaluate(selector=>({name:document.getElementById('spell-name-tooltip').textContent,
+      tip:document.getElementById('spell-name-tooltip').getBoundingClientRect().toJSON(),
+      icon:document.querySelector(selector).getBoundingClientRect().toJSON()}),selector);
+     if(shown.name!==expected||shown.tip.left<0||shown.tip.right>390||shown.tip.top<0||shown.tip.bottom>844||
+        (side==='right'&&shown.tip.left<shown.icon.right)||(side==='left'&&shown.tip.right>shown.icon.left))
+      throw new Error('Touch icon tooltip is clipped or misplaced: '+JSON.stringify(shown));
+    }finally{
+     await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+     await session.detach();
+    }
+    if(await phone.locator('#spell-name-tooltip').isVisible())throw new Error('Touch icon tooltip stayed visible after release');
+   };
+   await holdTouchName('#unit-list .unit-item','Shaman','right');
+   await phone.evaluate(()=>{
+    const p=state.shaman.mesh.position;
+    const brave=new Humanoid(0,'wild',p.x+3,p.z+3);
+    state.units.push(brave);state.selectedUnits=[brave];
+    gameTestAPI.updateUnitList();gameTestAPI.updateContextMenus();
+   });
+   await holdTouchName('#btn-build_hut','Hut','left');
+   await phone.evaluate(()=>{state.selectedUnits=[state.shaman];gameTestAPI.updateContextMenus();});
    await phone.evaluate(()=>window.newGame());
    const card=await phone.locator('.game-dialog-card').boundingBox();
    if(!card||card.x<0||card.y<0||card.x+card.width>390||card.y+card.height>844)

@@ -19,6 +19,10 @@ const sounds = [
     ['volcano', 1.64, 'volcano'], ['heal', 1.08, 'heal'],
     ['teleport', 1.18, 'teleport'], ['create', 1.08, 'create'],
     ['phantom', 1.16, 'phantom'],
+    ['bunny_nibble', .72, 'bunnyNibble'],
+    ['bird_call', .84, 'birdCall'],
+    ['hurt', .36, 'hurt'],
+    ['hurt_heavy', .49, 'hurtHeavy'],
     ['swamp_loop', 2.72, 'swampLoop', true],
     ['swarm_loop', 2.44, 'swarmLoop', true],
     ['tornado_loop', 3.12, 'tornadoLoop', true],
@@ -36,7 +40,7 @@ function render(name, duration, kind, loop) {
     const count = Math.round(duration * sampleRate);
     const wrap = loop ? Math.round(.18 * sampleRate) : 0;
     const raw = new Float32Array(count + wrap);
-    let seed = hash(name), bass = 0, middle = 0, air = 0, phase = 0, phase2 = 0, crackle = 0;
+    let seed = hash(name), bass = 0, middle = 0, air = 0, phase = 0, phase2 = 0, voicePhase = 0, crackle = 0;
     let bubbleAge = 100, bubblePitch = 300;
     const random = () => {
         seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
@@ -87,6 +91,37 @@ function render(name, duration, kind, loop) {
             case 'teleport': value = (wind * .52 + up * .24) * (1 - p * .4) + hiss * pulse(t, .63, .10) * .25; break;
             case 'create': value = (up * .19 + Math.sin(phase2 * .749) * .15 + bubble * .15) * (1 - p * .3); break;
             case 'phantom': value = (up * .14 + Math.sin(phase2 * .498) * .16 + wind * .18) * (1 - p * .45); break;
+            case 'bunnyNibble': {
+                // Small uneven chewing clicks over a faint, close grass rustle.
+                const chew=[.07,.19,.31,.47,.59].reduce((level,at)=>level+pulse(t,at,.012),0);
+                value=(grit*.7+hiss*.15+low*.12)*chew + (grit*.09+low*.04)*(.5+.5*Math.sin(2*Math.PI*5*t));
+                break;
+            }
+            case 'birdCall': {
+                // Two airy rising whistles and a shorter answering chirp.
+                const phrase=[{at:.05,length:.17,base:1450},{at:.30,length:.19,base:1710},{at:.59,length:.11,base:1900}];
+                for(const note of phrase) {
+                    const age=t-note.at;
+                    if(age<0||age>note.length) continue;
+                    const envelope=Math.sin(Math.PI*age/note.length)**1.5;
+                    const frequency=note.base*(1+.22*age/note.length);
+                    value+=envelope*(Math.sin(2*Math.PI*(note.base*age+.11*note.base*age*age/note.length))*.64+
+                        Math.sin(4*Math.PI*frequency*age)*.12+hiss*.05);
+                }
+                break;
+            }
+            case 'hurt':
+            case 'hurtHeavy': {
+                // A short breathy voiced grunt, lower and longer for a hard hit.
+                const heavy=kind==='hurtHeavy';
+                const pitch=(heavy?165:225)*(1-(heavy?.3:.4)*p)+7*Math.sin(2*Math.PI*11*t)+middle*11;
+                voicePhase+=2*Math.PI*pitch/sampleRate;
+                const voiced=Math.sin(voicePhase)*.5+Math.sin(2*voicePhase)*.27+
+                    Math.sin(3*voicePhase)*.13+Math.sin(4*voicePhase)*.07;
+                const breath=grit*.18+hiss*.05;
+                value=(voiced+breath)*(1-.35*p)*(.86+.14*Math.sin(2*Math.PI*15*t));
+                break;
+            }
             case 'swampLoop': value = low * .24 + bubble * .75 + grit * .09; break;
             case 'swarmLoop': value = (grit * .38 + hiss * .18) * (0.7 + .3 * Math.sin(2 * Math.PI * 78 * t)) + low * .08; break;
             case 'tornadoLoop': value = wind * .52 + low * .21 + spark * .08; break;

@@ -16,6 +16,7 @@
             width: 200px; height: 10px; background: #333; margin: 0 auto; border: 1px solid white; border-radius: 5px; overflow: hidden;
         }
         #mana-fill { width: 100%; height: 100%; background: #00BFFF; transition: width 0.2s; }
+        #campaign-objective { display:none; max-width:min(640px,calc(100vw - 110px)); margin:4px auto 0; color:#fff0bb; font-size:11px; line-height:1.2; text-shadow:0 1px 3px #000; }
 
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -398,6 +399,7 @@
                 <p>Command the elements and guide your followers using divine spells and unit abilities:</p>
                 <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
                     <li><strong>Cast Spells:</strong> Select a spell (like Blast, Lightning, Raise, Lower, Flatten, Swamp, etc.) using the hotkeys <strong>1-9/0</strong> or the menu. Left-click the terrain to execute it.</li>
+                    <li><strong>Icon Names:</strong> Hold a unit, building or spell icon to see its full name. A short tap still selects it.</li>
                     <li><strong>Spell Conditions:</strong> Spells require your Shaman to be alive, and they consume Mana. You must cast within the Shaman's range (which scales with the Shaman's height).</li>
                     <li><strong>Move / Attack:</strong> Even when a spell is active, you can always <strong>Right-Click</strong> on the ground to order selected units to move there, or Right-Click an enemy to attack them.</li>
                     <li><strong>Upgrades:</strong> Select units and click the 'Upgrade' action (50 Mana) to scale up their movement speed, attack damage, and stats dynamically.</li>
@@ -607,6 +609,7 @@
     <div id="top-bar">
         <div id="mana-bar"><div id="mana-fill"></div></div>
         <p>Mana: <span id="mana-text">100</span></p>
+        <p id="campaign-objective" role="status" aria-live="off"></p>
     </div>
 
     <!-- Right Side Action Menu -->
@@ -639,6 +642,7 @@ import { createCharacters } from './art/characters.js';
 import { createLocomotion } from './art/locomotion.js';
 import { icon } from './art/icons.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
+import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
 const Art = createArtKit(THREE);
 const Characters = createCharacters(THREE,Art);
 const Locomotion = createLocomotion(THREE);
@@ -1339,6 +1343,7 @@ const state = {
     currentAction: 'select',
     mana: 100,
     campaignNarrative: null,
+    campaignMission: null,
 
     isDragging: false,
     dragStart: { x: 0, y: 0 },
@@ -1924,7 +1929,7 @@ const SOUND_ASSETS = [
     'attack','construct','fireball','explosion','magic','rumble',
     'lightning','raise','lower','flatten','landbridge','swamp','invisibility',
     'shield','hypnotise','swarm','tornado','firestorm','volcano','heal',
-    'teleport','create','phantom'
+    'teleport','create','phantom','bunny_nibble','bird_call','hurt','hurt_heavy'
 ];
 const SUSTAIN_ASSETS = ['swamp_loop','swarm_loop','tornado_loop','firestorm_loop','volcano_loop'];
 const SOUND_LEVELS = {
@@ -1932,6 +1937,7 @@ const SOUND_LEVELS = {
     lightning:.72,raise:.53,lower:.53,flatten:.52,landbridge:.56,swamp:.48,
     invisibility:.42,shield:.47,hypnotise:.46,swarm:.42,tornado:.55,
     firestorm:.6,volcano:.72,heal:.43,teleport:.5,create:.46,phantom:.4,
+    bunny_nibble:.3,bird_call:.34,hurt:.44,hurt_heavy:.5,
     swamp_loop:.14,swarm_loop:.11,tornado_loop:.15,firestorm_loop:.16,volcano_loop:.16
 };
 const SoundManager = {
@@ -1948,6 +1954,7 @@ const SoundManager = {
     useMediaEffects: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
         (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches),
     hasUserGesture: false,
+    lastPainAt: -Infinity,
     mediaEffectsBlocked: false,
     pendingSounds: [],
     musicRestoreTimer: null,
@@ -2158,6 +2165,19 @@ const SoundManager = {
             if (this.mediaEffects.has(name)) return this.playMediaEffect(name,volume);
         }
         return this.playWebSound(name,volume);
+    },
+    playPain: function(unit,damage) {
+        if(!this.hasUserGesture || state.isPaused || document.hidden || unit.type==='airship' || damage<=0) return;
+        const listener=state.isFPV&&state.selectedUnits[0]?.mesh?.position
+            ? state.selectedUnits[0].mesh.position : state.cameraLookAt;
+        if(!listener) return;
+        const distance=Math.hypot(unit.mesh.position.x-listener.x,unit.mesh.position.z-listener.z);
+        if(distance>36) return;
+        const now=performance.now();
+        if(now-(unit.lastPainAt??-Infinity)<850 || now-this.lastPainAt<140) return;
+        unit.lastPainAt=now;this.lastPainAt=now;
+        const volume=Math.max(.25,(1-distance/36)**1.3);
+        this.playSound(damage>=unit.maxHp*.2?'hurt_heavy':'hurt',volume);
     },
     emitSound: function(name,volume=1) {
         if (['fireball','explosion','lightning','firestorm','volcano'].includes(name)) this.duckMusic();
@@ -2710,6 +2730,8 @@ const CritterManager = {
     bunnies: [],
     birds: [],
     refillTimer: 0,
+    soundCheckTimer: 0,
+    soundCooldown: 0,
     rabbitPaletteBag: [],
     birdPaletteBag: [],
     nextPalette: function(kind) {
@@ -2848,6 +2870,7 @@ const CritterManager = {
             rig:bunnyRig,
             phase:Math.random()*Math.PI*2,
             age:0,
+            nextSoundAt:1+Math.random()*4,
             facing:Math.random()*Math.PI*2
         });
         return true;
@@ -2973,6 +2996,7 @@ const CritterManager = {
             altitude:y,
             phase:Math.random()*Math.PI*2,
             age:0,
+            nextSoundAt:1+Math.random()*4,
             turnTimer:1+Math.random()*3,
             flapMix:1
         });
@@ -2982,6 +3006,41 @@ const CritterManager = {
         state.scene.remove(group);
         group.traverse(node=>{if(node.isMesh&&!node.userData.blenderAsset)node.geometry.dispose();});
         for(const material of group.userData.wildlifeMaterials||[])material.dispose();
+    },
+    updateAudio: function(dt) {
+        this.soundCheckTimer-=dt;
+        this.soundCooldown=Math.max(0,this.soundCooldown-dt);
+        if(this.soundCheckTimer>0) return;
+        this.soundCheckTimer=.25;
+        if(this.soundCooldown>0 || state.isPaused || document.hidden || !SoundManager.hasUserGesture) return;
+
+        // In strategy view the ground under the camera focus is the listener.
+        // First-person view follows the selected figure instead.
+        const listener=state.isFPV&&state.selectedUnits[0]?.mesh?.position
+            ? state.selectedUnits[0].mesh.position : this.focus();
+        if(!listener) return;
+        let nearest=null,nearestWeight=0;
+        for(const [animals,name,radius] of [
+            [this.bunnies,'bunny_nibble',11],
+            [this.birds,'bird_call',25]
+        ]) {
+            for(const animal of animals) {
+                if((name==='bunny_nibble' && animal.state!=='idle') || animal.age<(animal.nextSoundAt||0)) continue;
+                const p=animal.mesh.position;
+                const dx=p.x-listener.x,dz=p.z-listener.z;
+                // Birds fly above the listener; altitude should soften, not mute, their calls.
+                const dy=name==='bird_call' ? Math.max(0,p.y-getHeight(p.x,p.z))*.35 : 0;
+                const distance=Math.hypot(dx,dz,dy);
+                if(distance>=radius) continue;
+                const weight=(1-distance/radius)**2;
+                if(weight>nearestWeight) {nearest={animal,name};nearestWeight=weight;}
+            }
+        }
+        if(!nearest) return;
+        const zoom=state.isFPV?1:THREE.MathUtils.clamp((CONFIG.CAMERA.MAX_ZOOM-state.viewScale)/35,.2,1);
+        SoundManager.playSound(nearest.name,Math.max(.12,nearestWeight*zoom));
+        nearest.animal.nextSoundAt=nearest.animal.age+3+Math.random()*5;
+        this.soundCooldown=1.7+Math.random()*1.2;
     },
     update: function(dt) {
         // Update Bunnies
@@ -3138,6 +3197,7 @@ const CritterManager = {
             if(this.birds.length<CONFIG.CRITTERS.BIRD_COUNT)this.spawnBird(true);
             this.refillTimer=.5;
         }
+        this.updateAudio(dt);
     }
 };
 
@@ -6066,6 +6126,7 @@ window.Humanoid = class Humanoid {
         this.velocity = new THREE.Vector3(0,0,0);
         this.isGrounded = true; this.target = null; this.attackTarget = null; this.state = 'idle'; this.animTime = Math.random() * 100;
         this.lastAttackTime = 0;
+        this.lastPainAt = -Infinity;
         this.path = []; this.pathIndex = 0; this.pathTimer = 0;
         this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
         this.stuckThreshold = CONFIG.ANIMATION.STUCK_THRESHOLD_BASE + Math.random();
@@ -6147,7 +6208,7 @@ window.Humanoid = class Humanoid {
         this.mesh.rotation.y = Math.atan2(dx, dz);
     }
 
-    takeDamage(amount, silent = false) {
+    takeDamage(amount, silent = false, impact = true) {
         if(this.state === 'dead') return;
         if(this.faction === 0 && state.isGodMode) return;
         if(this.shielded) {
@@ -6156,6 +6217,7 @@ window.Humanoid = class Humanoid {
         }
         this.hp -= amount;
         this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
+        if(impact) SoundManager.playPain(this,amount);
         if (!silent) spawnPulse(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0xFF0000);
         if(this.hp <= 0) this.die();
     }
@@ -6325,7 +6387,7 @@ window.Humanoid = class Humanoid {
                 this.rigidBody.setLinvel({x:v.x*.94,y:0,z:v.z*.94},true);
             } else this.velocity.y=0;
             this.waterExposure=(this.waterExposure||0)+dt;
-            if(this.waterExposure>2) this.takeDamage(this.maxHp*.055*Math.min(1,depth/1.5)*dt,true);
+            if(this.waterExposure>2) this.takeDamage(this.maxHp*.055*Math.min(1,depth/1.5)*dt,true,false);
         }
         if(['stunned','getting_up'].includes(this.state))return;
         if(manualSwim)return;
@@ -7866,6 +7928,14 @@ function updateUnitList() {
             item.appendChild(hpDiv);
             item._hpVal = hpVal;
             item.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); item.click(); } };
+            item.addEventListener('pointerdown', e => {
+                const unit = item._unitRef;
+                if (unit) armIconNameTooltip(item, UNIT_TYPE_NAMES[unit.type] || unit.type, e);
+            });
+            item.addEventListener('pointerup', hideIconNameTooltip);
+            item.addEventListener('pointercancel', hideIconNameTooltip);
+            item.addEventListener('pointerleave', hideIconNameTooltip);
+            item.addEventListener('contextmenu', e => e.preventDefault());
             item.onclick = (e) => {
                 e.stopPropagation();
                 const unit=item._unitRef;
@@ -7971,35 +8041,50 @@ const SPELL_NAMES = Object.freeze({
     firestorm:'Firestorm', volcano:'Volcano', heal:'Heal',
     teleport:'Teleport', create:'Create Brave', phantom:'Phantom'
 });
-let spellNameTimer = null;
-function hideSpellNameTooltip() {
-    clearTimeout(spellNameTimer);
-    spellNameTimer = null;
+const UNIT_TYPE_NAMES = Object.freeze({
+    wild:'Brave', warrior:'Warrior', firewarrior:'Fire Warrior',
+    shaman:'Shaman', spy:'Spy', airship:'Airship'
+});
+const ACTION_TYPE_NAMES = Object.freeze({
+    build_hut:'Hut', build_tower:'Guard Tower',
+    build_warrior:'Warrior Training Hut', build_fire:'Fire Warrior Temple',
+    build_spy:'Spy Training Hut', build_shipyard:'Shipyard',
+    build_airship:'Airship', upgrade_unit:'Upgrade Unit', airship_rocket:'Airship Rocket'
+});
+let iconNameTimer = null;
+function hideIconNameTooltip() {
+    clearTimeout(iconNameTimer);
+    iconNameTimer = null;
     const tooltip = document.getElementById('spell-name-tooltip');
     if(tooltip) {
         tooltip.style.display = 'none';
         tooltip.setAttribute('aria-hidden','true');
     }
 }
-function armSpellNameTooltip(button,name,event) {
+function armIconNameTooltip(button,name,event) {
     if(event.pointerType === 'mouse' && event.button !== 0)return;
-    hideSpellNameTooltip();
-    spellNameTimer = setTimeout(() => {
+    hideIconNameTooltip();
+    iconNameTimer = setTimeout(() => {
         if(!button.isConnected)return;
         const tooltip = document.getElementById('spell-name-tooltip');
         const rect = button.getBoundingClientRect();
         tooltip.textContent = name;
         tooltip.style.display = 'block';
-        tooltip.style.left = `${Math.max(8,rect.left-tooltip.offsetWidth-10)}px`;
+        const left = rect.left < innerWidth / 2
+            ? rect.right + 10 : rect.left - tooltip.offsetWidth - 10;
+        tooltip.style.left = `${Math.max(8,Math.min(innerWidth-tooltip.offsetWidth-8,left))}px`;
         tooltip.style.top = `${Math.max(8,Math.min(innerHeight-tooltip.offsetHeight-8,
             rect.top+(rect.height-tooltip.offsetHeight)/2))}px`;
         tooltip.setAttribute('aria-hidden','false');
     },450);
 }
+window.addEventListener('pointerup', hideIconNameTooltip);
+window.addEventListener('pointercancel', hideIconNameTooltip);
+window.addEventListener('blur', hideIconNameTooltip);
 
 function updateContextMenus() {
     const menu = document.getElementById('right-menu');
-    hideSpellNameTooltip();
+    hideIconNameTooltip();
     menu.innerHTML = '';
 
     const hasShaman = state.selectedUnits.some(u => u.isShaman && u.state !== 'dead');
@@ -8042,17 +8127,17 @@ function updateContextMenus() {
          btn.id = `btn-${act}`;
          btn.setAttribute('role', 'button');
          btn.setAttribute('tabindex', '0');
-         const spellName = SPELL_NAMES[act];
-         btn.setAttribute('aria-label', `${spellName || data.label}, ${data.cost} mana`);
+         const iconName = SPELL_NAMES[act] || ACTION_TYPE_NAMES[act];
+         btn.setAttribute('aria-label', `${iconName || data.label}, ${data.cost} mana`);
          const hotkey = index < 9 ? (index + 1) : (index === 9 ? 0 : '');
-         btn.title = `${spellName || data.label} (${data.cost} mana)${hotkey !== '' ? ` · ${hotkey}` : ''}`;
+         btn.title = `${iconName || data.label} (${data.cost} mana)${hotkey !== '' ? ` · ${hotkey}` : ''}`;
          btn.innerHTML = data.icon;
          btn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); } };
-         if(spellName) {
-             btn.addEventListener('pointerdown',e=>armSpellNameTooltip(btn,spellName,e));
-             btn.addEventListener('pointerup',hideSpellNameTooltip);
-             btn.addEventListener('pointercancel',hideSpellNameTooltip);
-             btn.addEventListener('pointerleave',hideSpellNameTooltip);
+         if(iconName) {
+             btn.addEventListener('pointerdown',e=>armIconNameTooltip(btn,iconName,e));
+             btn.addEventListener('pointerup',hideIconNameTooltip);
+             btn.addEventListener('pointercancel',hideIconNameTooltip);
+             btn.addEventListener('pointerleave',hideIconNameTooltip);
              btn.addEventListener('contextmenu',e=>e.preventDefault());
          }
          if(state.currentAction === act) btn.classList.add('active');
@@ -8737,7 +8822,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -8984,6 +9069,217 @@ window.toggleFps = function() {
 
 
 let storyOpenedFromPause = false;
+let campaignMarkers = [];
+let campaignMarkersReady = false;
+
+function clearCampaignMarkers() {
+    for (const marker of campaignMarkers) {
+        marker.parent?.remove(marker);
+        marker.traverse(part => {
+            part.geometry?.dispose();
+            part.material?.dispose();
+        });
+    }
+    campaignMarkers = [];
+    campaignMarkersReady = false;
+}
+
+function addCampaignMarker(point, color = 0xffd875) {
+    if (!state.scene || !point) return;
+    const group = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(5.5, .18, 5, 32),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .86, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2;
+    group.add(ring);
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(.15, .65, 7, 8, 1, true),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .25, depthWrite: false, side: THREE.DoubleSide }));
+    beacon.position.y = 3.5;
+    group.add(beacon);
+    group.position.set(point.x, getHeight(point.x, point.z) + .18, point.z);
+    group.userData.ring = ring;
+    group.userData.beacon = beacon;
+    state.scene.add(group);
+    campaignMarkers.push(group);
+}
+
+function addEscortMarker(unit) {
+    const marker = new THREE.Mesh(new THREE.TorusGeometry(1.1, .09, 5, 24),
+        new THREE.MeshBasicMaterial({ color: 0x8addff, transparent: true, opacity: .9, depthWrite: false }));
+    marker.rotation.x = -Math.PI / 2;
+    marker.position.y = .12;
+    marker.userData.escort = true;
+    unit.mesh.add(marker);
+    campaignMarkers.push(marker);
+}
+
+function buildCampaignMarkers() {
+    clearCampaignMarkers();
+    const mission = state.campaignMission;
+    if (!mission) return;
+    for (const site of mission.sites || []) {
+        addCampaignMarker(site, site.captured ? 0x78efae : 0xffd875);
+    }
+    if (mission.destination) addCampaignMarker(mission.destination, 0x8addff);
+    for (const id of mission.escortIds || []) {
+        const unit = state.units.find(candidate => candidate.id === id);
+        if (unit) addEscortMarker(unit);
+    }
+    campaignMarkersReady = true;
+}
+
+function campaignEnemyAlive() {
+    return state.units.some(unit => !window.isAllied(unit.faction, 0) && unit.state !== 'dead');
+}
+
+function campaignEnemyShamansAlive() {
+    return state.units.some(unit => unit.type === 'shaman' && !window.isAllied(unit.faction, 0) && unit.state !== 'dead');
+}
+
+function campaignCompletedBuildings(type = null) {
+    return state.buildings.filter(building => building.faction === 0 && !building.dead &&
+        !building.underConstruction && (!type || building.type === type)).length;
+}
+
+function ensureCampaignMission() {
+    if (!state.isCampaign || !CAMPAIGN_MISSIONS[state.campaignLevel] || !state.shaman) return;
+    if (state.campaignMission?.level === state.campaignLevel) {
+        if (!campaignMarkersReady) buildCampaignMarkers();
+        return;
+    }
+    const rule = CAMPAIGN_MISSIONS[state.campaignLevel];
+    const mission = { level: state.campaignLevel, elapsed: 0, reached: false, pivotal: false, sites: [] };
+    const origin = state.shaman.mesh.position;
+    if (rule.kind === 'capture' || rule.kind === 'stronghold') {
+        const rivals = rule.kind === 'stronghold' ? window.enemyAIs.slice(0, 1) : window.enemyAIs;
+        mission.sites = rivals.map(ai => {
+            const mix = rule.kind === 'stronghold' ? .72 : .66;
+            const land = findNearestLand(origin.x + (ai.baseX - origin.x) * mix,
+                origin.z + (ai.baseZ - origin.z) * mix, 35, aiDryHeight());
+            return { x: land.x, z: land.z, progress: 0, captured: false };
+        });
+    }
+    if (rule.kind === 'breach' || rule.kind === 'escort') {
+        const rival = window.enemyAIs[0];
+        if (rival) {
+            const mix = rule.kind === 'escort' ? .76 : .9;
+            const land = findNearestLand(origin.x + (rival.baseX - origin.x) * mix,
+                origin.z + (rival.baseZ - origin.z) * mix, 35, aiDryHeight());
+            mission.destination = { x: land.x, z: land.z };
+        }
+    }
+    if (rule.kind === 'escort') {
+        mission.escortIds = [];
+        mission.arrivedIds = [];
+        for (let i = 0; i < rule.followers; i++) {
+            const land = findNearestLand(origin.x + (i ? 2.5 : -2.5), origin.z + 2, 15, aiDryHeight());
+            const follower = new Humanoid(0, 'wild', land.x, land.z);
+            state.units.push(follower);
+            mission.escortIds.push(follower.id);
+        }
+        updateUnitList();
+    }
+    state.campaignMission = mission;
+    buildCampaignMarkers();
+    updateCampaignObjective();
+}
+
+function campaignMissionComplete() {
+    const mission = state.campaignMission;
+    const rule = CAMPAIGN_MISSIONS[state.campaignLevel];
+    if (!state.isCampaign || !mission || !rule || mission.level !== state.campaignLevel) return false;
+    if (rule.kind === 'settlement') return campaignCompletedBuildings('hut') >= rule.huts && !campaignEnemyAlive();
+    if (rule.kind === 'defense') return campaignCompletedBuildings('hut') >= rule.buildings &&
+        (mission.elapsed >= rule.seconds || !campaignEnemyAlive());
+    if (rule.kind === 'breach') return mission.reached && !campaignEnemyShamansAlive();
+    if (rule.kind === 'assassination') return !campaignEnemyShamansAlive();
+    if (rule.kind === 'capture') return mission.sites.filter(site => site.captured).length >= rule.required;
+    if (rule.kind === 'stronghold') return mission.sites.some(site => site.captured) && !campaignEnemyShamansAlive();
+    if (rule.kind === 'escort') return mission.arrivedIds?.length === rule.followers;
+    return false;
+}
+
+function updateCampaignObjective() {
+    const label = document.getElementById('campaign-objective');
+    if (!label) return;
+    const mission = state.campaignMission;
+    const rule = CAMPAIGN_MISSIONS[state.campaignLevel];
+    label.style.display = state.isCampaign && mission && rule ? 'block' : 'none';
+    if (!mission || !rule) return;
+    let detail = '';
+    if (rule.kind === 'settlement') detail = `Huts ${campaignCompletedBuildings('hut')}/${rule.huts} · Rival ${campaignEnemyAlive() ? 'active' : 'defeated'}`;
+    else if (rule.kind === 'defense') detail = `Shelters ${campaignCompletedBuildings('hut')}/${rule.buildings} · Hold ${Math.max(0, Math.ceil(rule.seconds - mission.elapsed))}s`;
+    else if (rule.kind === 'breach') detail = `Reach marker ${mission.reached ? '✓' : '○'} · Defeat enemy shaman ${campaignEnemyShamansAlive() ? '○' : '✓'}`;
+    else if (rule.kind === 'assassination') detail = `Enemy shaman ${campaignEnemyShamansAlive() ? 'still alive' : 'defeated'}`;
+    else if (rule.kind === 'capture' || rule.kind === 'stronghold') {
+        const hold = Math.floor(Math.max(0, ...mission.sites.filter(site => !site.captured).map(site => site.progress)));
+        detail = `Conduits ${mission.sites.filter(site => site.captured).length}/${rule.required} · Hold ${hold}/${rule.seconds}s${rule.kind === 'stronghold' ? ' · Defeat fortress shaman' : ''}`;
+    }
+    else if (rule.kind === 'escort') detail = `Followers at gate ${mission.arrivedIds?.length || 0}/${rule.followers}`;
+    const value = `Level ${state.campaignLevel}: ${detail}`;
+    if (label.textContent !== value) label.textContent = value;
+}
+
+function updateCampaignMission(dt) {
+    if (!state.isCampaign || state.isPaused || window.gameWonAlertShown || window.gameOverAlertShown) return;
+    ensureCampaignMission();
+    const mission = state.campaignMission;
+    const rule = CAMPAIGN_MISSIONS[state.campaignLevel];
+    if (!mission || !rule) return;
+    mission.elapsed += dt;
+    if (Math.floor(mission.elapsed) !== Math.floor(mission.elapsed - dt)) {
+        campaignMarkers.forEach(marker => {
+            if (!marker.userData.escort) marker.position.y = getHeight(marker.position.x, marker.position.z) + .18;
+        });
+    }
+    if (rule.kind === 'defense' && mission.elapsed >= rule.seconds * .5) mission.pivotal = true;
+    if (rule.kind === 'settlement' && campaignCompletedBuildings('hut') >= rule.huts) mission.pivotal = true;
+    if (rule.kind === 'breach' && !mission.reached && mission.destination && state.shaman?.state !== 'dead' &&
+        Math.hypot(state.shaman.mesh.position.x - mission.destination.x, state.shaman.mesh.position.z - mission.destination.z) <= rule.radius) {
+        mission.reached = true;
+        mission.pivotal = true;
+        showGameMessage('The path has been opened. Defeat the rival shaman.', 'story');
+    }
+    if (rule.kind === 'capture' || rule.kind === 'stronghold') {
+        for (let i = 0; i < mission.sites.length; i++) {
+            const site = mission.sites[i];
+            if (site.captured) continue;
+            const nearby = state.units.filter(unit => unit.state !== 'dead' && unit.state !== 'transported' &&
+                !unit.isVehicle && !unit.isPhantom && Math.hypot(unit.mesh.position.x - site.x, unit.mesh.position.z - site.z) <= 6);
+            const held = nearby.some(unit => window.isAllied(unit.faction, 0)) &&
+                !nearby.some(unit => !window.isAllied(unit.faction, 0));
+            site.progress = Math.max(0, Math.min(rule.seconds, site.progress + (held ? dt : -dt * .5)));
+            if (site.progress >= rule.seconds) {
+                site.captured = true;
+                mission.pivotal = true;
+                const marker = campaignMarkers[i];
+                marker?.userData.ring.material.color.setHex(0x78efae);
+                marker?.userData.beacon.material.color.setHex(0x78efae);
+                showGameMessage('Mana conduit secured!', 'story');
+            }
+        }
+    }
+    if (rule.kind === 'escort') {
+        mission.arrivedIds ||= [];
+        for (const id of mission.escortIds) {
+            if (mission.arrivedIds.includes(id)) continue;
+            const unit = state.units.find(candidate => candidate.id === id && candidate.state !== 'dead');
+            if (unit && mission.destination &&
+                Math.hypot(unit.mesh.position.x - mission.destination.x, unit.mesh.position.z - mission.destination.z) <= rule.radius) {
+                mission.arrivedIds.push(id);
+                mission.pivotal = true;
+                showGameMessage('A follower has reached the gate safely.', 'story');
+            }
+        }
+        const dead = mission.escortIds.some(id => !mission.arrivedIds.includes(id) &&
+            !state.units.some(unit => unit.id === id && unit.state !== 'dead'));
+        if (dead) {
+            window.gameOverAlertShown = true;
+            showGameDialog('Campaign Defeat', 'A refugee was lost before reaching the gate.');
+            if (!state.isPaused) window.togglePause();
+        }
+    }
+    if (Math.floor(mission.elapsed * 4) !== Math.floor((mission.elapsed - dt) * 4) || mission.pivotal) updateCampaignObjective();
+}
 
 function ensureCampaignNarrative(level) {
     if (state.campaignNarrative?.level === level) return;
@@ -8997,9 +9293,15 @@ function ensureCampaignNarrative(level) {
 function renderCampaignStory(level) {
     const story = CAMPAIGN_STORIES[level];
     if (!story) return;
+    ensureCampaignMission();
     document.getElementById('story-title').textContent = story.title;
     document.getElementById('story-text').textContent = story.text;
-    document.getElementById('story-objective').textContent = 'Objective: ' + story.objective;
+    const rule = CAMPAIGN_MISSIONS[level];
+    const hint = rule?.kind === 'capture' || rule?.kind === 'stronghold'
+        ? ' Hold an allied ground unit in a marked circle without nearby enemies until it turns green.'
+        : rule?.kind === 'escort' ? ' Blue rings mark the two followers and the gate.'
+        : rule?.kind === 'breach' ? ' The blue beam marks the passage.' : '';
+    document.getElementById('story-objective').textContent = 'Objective: ' + story.objective + hint;
     const discovery = document.getElementById('story-discovery');
     discovery.hidden = !state.campaignNarrative?.beatShown;
     discovery.textContent = state.campaignNarrative?.beatShown ? 'Discovered: ' + story.beat : '';
@@ -9044,9 +9346,9 @@ function updateCampaignNarrative() {
     if (!state.isCampaign || !CAMPAIGN_STORIES[state.campaignLevel]) return;
     ensureCampaignNarrative(state.campaignLevel);
     const narrative = state.campaignNarrative;
-    if (narrative.beatShown || narrative.initialEnemyCount < 1) return;
+    if (narrative.beatShown) return;
     const remaining = state.units.filter(u => !window.isAllied(u.faction, 0) && u.state !== 'dead').length;
-    if (remaining >= narrative.initialEnemyCount) return;
+    if (!state.campaignMission?.pivotal && (narrative.initialEnemyCount < 1 || remaining >= narrative.initialEnemyCount)) return;
     narrative.beatShown = true;
     showGameMessage(CAMPAIGN_STORIES[state.campaignLevel].beat, 'story');
 }
@@ -9144,6 +9446,7 @@ window.saveGame = function() {
         isCampaign: state.isCampaign,
         campaignLevel: state.campaignLevel,
         campaignNarrative: state.isCampaign ? state.campaignNarrative : null,
+        campaignMission: state.isCampaign ? state.campaignMission : null,
         matchSettings: state.matchSettings,
         mana: state.mana,
         terrainMods: Array.from(state.terrainMods.entries()),
@@ -9257,6 +9560,8 @@ window.loadGame = function() {
         state.isCampaign = !!data.isCampaign;
         state.campaignLevel = data.campaignLevel || 0;
         state.campaignNarrative = null;
+        state.campaignMission = null;
+        clearCampaignMarkers();
         if (data.matchSettings) state.matchSettings = data.matchSettings;
 
         state.mana = data.mana;
@@ -9345,6 +9650,8 @@ window.loadGame = function() {
         });
 
         if (state.isCampaign && CAMPAIGN_STORIES[state.campaignLevel]) {
+            if (data.campaignMission?.level === state.campaignLevel) state.campaignMission = data.campaignMission;
+            ensureCampaignMission();
             ensureCampaignNarrative(state.campaignLevel);
             if (data.campaignNarrative?.level === state.campaignLevel) {
                 state.campaignNarrative.beatShown = !!data.campaignNarrative.beatShown;
@@ -9352,6 +9659,7 @@ window.loadGame = function() {
                     state.campaignNarrative.initialEnemyCount = Math.max(0, data.campaignNarrative.initialEnemyCount);
                 }
             }
+            updateCampaignObjective();
         }
 
         SpatialHash.update();
@@ -9850,6 +10158,7 @@ function findSafeSpawnAndStart() {
         ai.init(startX, startZ);
         forceLandConnection(r, r, startX, startZ);
     });
+    ensureCampaignMission();
 
 }
 
@@ -10221,6 +10530,7 @@ function animate() {
         updateUnitList();
         lastAliveCount = currentAlive;
     }
+    updateCampaignMission(dt);
     updateCampaignNarrative();
 
         // Win Condition
@@ -10231,7 +10541,8 @@ function animate() {
         if (!state.isPaused) window.togglePause();
     }
 
-    if (!hasEnemy && state.units.some(u => window.isAllied(u.faction, 0))) {
+    if ((state.isCampaign ? campaignMissionComplete() : !hasEnemy) &&
+        state.units.some(u => window.isAllied(u.faction, 0) && u.state !== 'dead')) {
          if (!window.gameWonAlertShown && window.enemyAIs && window.enemyAIs.length > 0) { // Don't win immediately if there are no tribes to start with
              // Check if there ever were any non allied tribes
              if (window.enemyAIs.some(ai => !window.isAllied(ai.faction, 0))) {

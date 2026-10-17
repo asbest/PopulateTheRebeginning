@@ -112,6 +112,95 @@ try {
     await page.keyboard.press('q');
     await page.waitForFunction(()=>gameTestAPI.SoundManager.ctx.state==='running');
     console.log('PASS Keyboard gesture resumes spell audio');
+    checkpoint='wildlife proximity audio';
+    const wildlife=await page.evaluate(()=>{
+        const critters=gameTestAPI.CritterManager,sound=gameTestAPI.SoundManager;
+        const previous={bunnies:critters.bunnies,birds:critters.birds,check:critters.soundCheckTimer,
+            cooldown:critters.soundCooldown,focus:state.cameraLookAt.clone(),paused:state.isPaused,
+            fpv:state.isFPV,selected:state.selectedUnits,viewScale:state.viewScale,
+            gesture:sound.hasUserGesture,play:sound.playSound};
+        const calls=[];
+        try {
+            sound.playSound=(name,volume)=>{calls.push({name,volume});return Promise.resolve(true);};
+            state.isPaused=false;state.isFPV=false;state.viewScale=35;
+            state.cameraLookAt.set(0,0,0);
+            const rabbit={mesh:{position:{x:40,y:0,z:0}},state:'idle',age:10,nextSoundAt:0};
+            const bird={mesh:{position:{x:50,y:15,z:0}},age:10,nextSoundAt:0};
+            critters.bunnies=[rabbit];critters.birds=[bird];
+            const check=()=>{critters.soundCheckTimer=0;critters.soundCooldown=0;critters.updateAudio(.3);};
+            check();
+            if(calls.length)throw new Error('Distant animals made a sound');
+            rabbit.mesh.position.x=2;
+            sound.hasUserGesture=false;check();
+            if(calls.length)throw new Error('Wildlife sounded before audio unlock');
+            sound.hasUserGesture=true;check();
+            if(calls.length!==1||calls[0].name!=='bunny_nibble')throw new Error('Near idle rabbit did not nibble');
+            critters.updateAudio(.3);
+            if(calls.length!==1)throw new Error('Wildlife sound ignored global cooldown');
+            rabbit.state='hopping';rabbit.nextSoundAt=0;check();
+            if(calls.length!==1)throw new Error('Hopping rabbit nibbled');
+            bird.mesh.position.x=3;check();
+            if(calls.length!==2||calls[1].name!=='bird_call')throw new Error('Near bird did not call');
+            state.viewScale=70;bird.nextSoundAt=0;check();
+            if(calls.length!==3||calls[2].volume>=calls[1].volume)
+                throw new Error('Zooming out did not soften the bird call');
+            state.isFPV=true;state.cameraLookAt.set(100,0,100);
+            state.selectedUnits=[{mesh:{position:{x:3,y:0,z:0}}}];
+            bird.nextSoundAt=0;check();
+            if(calls.length!==4||calls[3].name!=='bird_call')
+                throw new Error('First-person listener did not follow the selected unit');
+            state.isPaused=true;bird.nextSoundAt=0;check();
+            if(calls.length!==4)throw new Error('Wildlife sounded while paused');
+            return calls;
+        } finally {
+            critters.bunnies=previous.bunnies;critters.birds=previous.birds;
+            critters.soundCheckTimer=previous.check;critters.soundCooldown=previous.cooldown;
+            state.cameraLookAt.copy(previous.focus);state.isPaused=previous.paused;
+            state.isFPV=previous.fpv;state.selectedUnits=previous.selected;
+            state.viewScale=previous.viewScale;sound.hasUserGesture=previous.gesture;sound.playSound=previous.play;
+        }
+    });
+    console.log(`PASS Wildlife sounds require proximity, idle behavior and active audio: ${wildlife.map(call=>call.name).join(', ')}`);
+    checkpoint='combat pain reactions';
+    const painSounds=await page.evaluate(()=>{
+        const sound=gameTestAPI.SoundManager;
+        const previous={play:sound.playSound,lastPainAt:sound.lastPainAt,paused:state.isPaused,
+            focus:state.cameraLookAt.clone(),fpv:state.isFPV,gesture:sound.hasUserGesture};
+        const calls=[];
+        const unit={type:'warrior',faction:1,state:'idle',hp:500,maxHp:500,shielded:false,
+            mesh:{position:{x:1,y:0,z:0}},hpBar:{scale:{x:1}},lastPainAt:-Infinity,
+            die(){this.state='dead';}};
+        try {
+            sound.playSound=(name,volume)=>{calls.push({name,volume});return Promise.resolve(true);};
+            sound.lastPainAt=-Infinity;sound.hasUserGesture=true;
+            state.isPaused=false;state.isFPV=false;state.cameraLookAt.set(0,0,0);
+            Humanoid.prototype.takeDamage.call(unit,40,true);
+            if(calls.length!==1||calls[0].name!=='hurt')throw new Error('Normal hit did not play a short pain sound');
+            Humanoid.prototype.takeDamage.call(unit,40,true);
+            if(calls.length!==1)throw new Error('Repeated hits ignored the pain cooldown');
+            unit.lastPainAt=sound.lastPainAt=-Infinity;
+            Humanoid.prototype.takeDamage.call(unit,150,true);
+            if(calls.length!==2||calls[1].name!=='hurt_heavy')throw new Error('Heavy hit did not use the stronger reaction');
+            unit.shielded=true;unit.lastPainAt=sound.lastPainAt=-Infinity;
+            Humanoid.prototype.takeDamage.call(unit,40,true);
+            if(calls.length!==2)throw new Error('Shielded figure cried out');
+            unit.shielded=false;
+            Humanoid.prototype.takeDamage.call(unit,1,true,false);
+            if(calls.length!==2)throw new Error('Drowning tick played a hit sound');
+            unit.mesh.position.x=100;
+            Humanoid.prototype.takeDamage.call(unit,30,true);
+            if(calls.length!==2)throw new Error('Distant combat played a pain sound');
+            unit.mesh.position.x=1;unit.type='airship';
+            Humanoid.prototype.takeDamage.call(unit,30,true);
+            if(calls.length!==2)throw new Error('Airship made a human pain sound');
+            return calls;
+        } finally {
+            sound.playSound=previous.play;sound.lastPainAt=previous.lastPainAt;
+            sound.hasUserGesture=previous.gesture;state.isPaused=previous.paused;
+            state.cameraLookAt.copy(previous.focus);state.isFPV=previous.fpv;
+        }
+    });
+    console.log(`PASS Nearby combat hits trigger restrained pain reactions: ${painSounds.map(call=>call.name).join(', ')}`);
     await page.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
     await startRecording(page);
     const soundPoint=await clickControl(page,'#btn-test-sound');
@@ -216,9 +305,22 @@ try {
                 const response=await fetch(`sfx/${name}.wav`);
                 return {name,ok:response.ok,type:response.headers.get('content-type'),bytes:(await response.arrayBuffer()).byteLength};
             })));
-        if(assets.length!==28||assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
+        if(assets.length!==32||assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
             throw new Error(`Missing Android effect assets: ${JSON.stringify(assets)}`);
-        console.log(`PASS Android can load all ${assets.length} spell effects and ambient beds`);
+        console.log(`PASS Android can load all ${assets.length} sound effects and ambient beds`);
+        checkpoint='Android wildlife playback';
+        const wildlifePlayback=await phone.evaluate(async()=>{
+            const sound=gameTestAPI.SoundManager,played=[];
+            for(const name of ['bunny_nibble','bird_call','hurt','hurt_heavy']) {
+                if(!await sound.playSound(name,.8))throw new Error(`${name} was blocked`);
+                await new Promise(resolve=>setTimeout(resolve,170));
+                if(!sound.mediaEffects.get(name).some(voice=>!voice.paused&&voice.currentTime>.04))
+                    throw new Error(`${name} did not advance on Android media playback`);
+                played.push(name);
+            }
+            return played;
+        });
+        console.log(`PASS Android plays wildlife and hit reactions: ${wildlifePlayback.join(', ')}`);
         await phone.evaluate(()=>{
             state.isPaused=false;state.mana=1000;
             gameTestAPI.SoundManager.syncSustains(false);
