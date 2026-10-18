@@ -31,21 +31,32 @@ try {
             max=Math.max(max,h);min=Math.min(min,h);
         }
         const mean=values=>values.reduce((sum,value)=>sum+value,0)/Math.max(1,values.length);
-        const treeCounts=[];
+        const treeCounts=[],species=new Set();
         for(let cx=-5;cx<=5;cx++)for(let cz=-5;cz<=5;cz++){
-            let count=0;forEachTreeSite(cx,cz,()=>count++);treeCounts.push(count);
+            let count=0;forEachTreeSite(cx,cz,site=>{count++;species.add(site.style);});treeCounts.push(count);
+        }
+        let ritualSites=0;
+        for(let cx=-5;cx<=5;cx++)for(let cz=-5;cz<=5;cz++){
+            const group=new THREE.Group();group.userData={};
+            gameTestAPI.createRitualSite(group,cx,cz);
+            if(group.userData.ritualSite){
+                if(group.userData.ritualSite.ring.count!==7)throw new Error('Incomplete stone circle');
+                ritualSites++;
+            }
         }
         const seam=Math.abs(getBaseHeight(20-.0001,12)-getBaseHeight(20+.0001,12));
         const repeat=getBaseHeight(47,81)===getBaseHeight(47,81);
         return {dry,wet,high,flatHigh,min,max,seam,repeat,
             regions:Object.fromEntries(Object.entries(samples).map(([name,values])=>[name,{count:values.length,mean:mean(values)}])),
-            forest:{min:Math.min(...treeCounts),max:Math.max(...treeCounts),occupied:treeCounts.filter(n=>n>0).length}};
+            forest:{min:Math.min(...treeCounts),max:Math.max(...treeCounts),occupied:treeCounts.filter(n=>n>0).length,
+                species:[...species]},ritualSites};
     });
-    if(errors.length||result.dry<300||result.wet<300||result.high<10||result.flatHigh<10||
+    if(errors.length||result.dry<300||result.wet<300||result.high<250||result.flatHigh<40||
         result.max-result.min<20||result.seam>.01||!result.repeat||
         Object.values(result.regions).some(region=>region.count<10)||
         result.regions.mountain.mean<=result.regions.archipelago.mean+2||
-        result.forest.max<10||result.forest.min!==0||result.forest.occupied<15)
+        result.forest.max<10||result.forest.min!==0||result.forest.occupied<15||
+        result.forest.species.length<3||result.ritualSites<3)
         throw new Error(JSON.stringify({errors,result}));
     console.log('PASS continuous procedural mountains, plateaus, valleys, islands and forests',result);
 } finally {

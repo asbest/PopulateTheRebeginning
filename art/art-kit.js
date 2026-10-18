@@ -136,7 +136,8 @@ export function createArtKit(T) {
         return p;
     }
     const uniforms={windTime:{value:0}};
-    const crownMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:1,side:T.DoubleSide});
+    const crownMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:1,side:T.DoubleSide,
+        map:blender.texture('foliage','map')});
     crownMaterial.onBeforeCompile=shader=>{
         shader.uniforms.artWindTime=uniforms.windTime;
         shader.vertexShader='uniform float artWindTime;\nvarying float vArtLeafHeight;\n'+shader.vertexShader;
@@ -146,22 +147,34 @@ export function createArtKit(T) {
             transformed.xz+=vec2(artGust,-artGust*.42)*vArtLeafHeight*.018;`);
     };
     crownMaterial.customProgramCacheKey=()=> 'island-tree-wind-v1';
-    function tree() {
+    function tree(style='broadleaf') {
         // First two children remain the trunk and a single crown mesh for burnTreesAt.
         const p=new T.Group();
         cyl(p,[0,1.35,0],0.16,0.29,2.7,palette.wood,'wood',12);
-        const crownGeometry=cachedGeometry('tree-crown-v2',()=>{
+        const crownGeometry=cachedGeometry('tree-crown-v3-'+style,()=>{
             const crownGeometry = new T.BufferGeometry();
             const vertices=[],normals=[],colors=[],uvs=[];
             const leafGeometry=geometry('IcosahedronGeometry',[0.5,1]);
-            const leaves=[0x315d31,0x3d7237,0x4d8240,0x628e49,0x789d52];
+            const leaves=style==='conifer'
+                ? [0x294b37,0x315b3c,0x3b6841,0x436e43,0x50784a]
+                : style==='umbrella'
+                    ? [0x496f35,0x628344,0x799348,0x8ca552,0x9aab59]
+                    : [0x315d31,0x3d7237,0x4d8240,0x628e49,0x789d52];
             for(let i=0;i<24;i++) {
                 const a=i*2.39996,ring=Math.sqrt((i+0.5)/24);
                 const geometryCopy=leafGeometry.clone();
-                const sx=0.72+(i%5)*0.085,sy=0.45+(i%4)*0.06;
-                geometryCopy.scale(sx,sy,sx*0.85);
+                const tier=i%6;
+                const height=style==='conifer'?1.88+tier*.42+Math.sin(i*2.1)*.08
+                    : style==='umbrella'?3.03+Math.sin(i*2.1)*.18
+                    : 2.75+Math.sin(i*2.1)*.26-ring*.15;
+                const radius=style==='conifer'?(4.55-height)*.42*(.55+ring*.55)
+                    : style==='umbrella'?.42+ring*1.35:ring*1.12;
+                const sx=style==='conifer'?.39+(4.55-height)*.12
+                    : style==='umbrella'?.59+(i%5)*.055:.72+(i%5)*.085;
+                const sy=style==='conifer'?.35:style==='umbrella'?.32:.45+(i%4)*.06;
+                geometryCopy.scale(sx,sy,sx*(style==='umbrella'?1:.85));
                 geometryCopy.rotateY(a);geometryCopy.rotateZ(Math.sin(i*1.7)*0.27);
-                geometryCopy.translate(Math.sin(a)*ring*1.15,2.75+Math.sin(i*2.1)*0.26-ring*0.15,Math.cos(a)*ring*1.05);
+                geometryCopy.translate(Math.sin(a)*radius,height,Math.cos(a)*radius);
                 const flat=geometryCopy.toNonIndexed();vertices.push(...flat.attributes.position.array);normals.push(...flat.attributes.normal.array);uvs.push(...flat.attributes.uv.array);
                 const tone=new T.Color(leaves[i%leaves.length]);
                 for(let k=0;k<flat.attributes.position.count;k++)colors.push(tone.r,tone.g,tone.b);
@@ -180,7 +193,9 @@ export function createArtKit(T) {
             beam(p,[0,1.65,0],[Math.sin(a)*0.83,2.55,Math.cos(a)*0.83],0.065,0x5c4932);
         }
         blender.attach(p.children[0],'tree/trunk');
-        blender.attach(crown,'tree/crown');
+        // The authored crown fits the broadleaf silhouette; other species keep
+        // the lighter shared procedural mesh at strategy distance and close up.
+        if(style==='broadleaf')blender.attach(crown,'tree/crown');
         return p;
     }
     function dress(unit) {
@@ -246,14 +261,16 @@ export function createArtKit(T) {
                 vec3 rockTop=pow(texture2D(artRock,vArtPosition.xz*.22+warp*.12).rgb,vec3(2.2));
                 vec3 rockSide=pow(texture2D(artRock,cliffSideUv*.22+warp*.12).rgb,vec3(2.2));
                 vec3 rock=mix(rockTop,rockSide,smoothstep(.14,.52,slope));
-                float rockWeight=max(rockTint*.76,smoothstep(.13,.47,slope+(artPatch-.5)*.16))*organic;
+                float heightRock=smoothstep(8.0,17.0,vArtPosition.y);
+                float rockWeight=max(rockTint*.72,
+                    smoothstep(.19,.56,slope+(artPatch-.5)*.14)*(.30+.70*heightRock))*organic;
                 diffuseColor.rgb=mix(diffuseColor.rgb,grass*1.38*(.90+.17*artPatch),grassWeight*.69*(1.0-smoothstep(.15,.52,slope)));
                 diffuseColor.rgb=mix(diffuseColor.rgb,dirt*1.30,artDirtWeight*.48);
                 diffuseColor.rgb=mix(diffuseColor.rgb,sand*1.23*(.94+.13*artPatch),sandWeight*.54*(1.0-smoothstep(.38,.78,slope)));
                 diffuseColor.rgb=mix(diffuseColor.rgb,mud*1.16,artWet*.54);
                 diffuseColor.rgb=mix(diffuseColor.rgb,mix(dirt,rock,.56)*1.23,artGravelWeight*.32);
                 diffuseColor.rgb=mix(diffuseColor.rgb,grass*1.22,artMossWeight*.27);
-                diffuseColor.rgb=mix(diffuseColor.rgb,rock*1.73,rockWeight*.86);
+                diffuseColor.rgb=mix(diffuseColor.rgb,rock*1.60*(.91+.15*artFine),rockWeight*.82);
                 diffuseColor.rgb*=1.0-.13*max(cavity-.52,0.0)*organic;
             `);
             shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
@@ -264,7 +281,7 @@ export function createArtKit(T) {
                     texture2D(artDirtNormal,vArtPosition.xz*.34).xyz,artDirtWeight)*2.0-1.0;
                 normal=normalize(normal+vec3(artN.x,artN.z,artN.y)*(.038+.068*grassWeight)*organic);`);
         };
-        material.customProgramCacheKey=()=> 'island-terrain-detail-v7';
+        material.customProgramCacheKey=()=> 'island-terrain-detail-v8';
     }
     return {building,tree,dress,terrainDetail,textures,palette,uniforms,ready:blender.ready,blender,
         configureTextures,textureStatus:pipeline.status,loadTexture:pipeline.load,

@@ -1075,8 +1075,8 @@ const CONFIG = {
     },
     BIOMES: {
         normal: {
-            bg: 0x65b4e8, fog: 0x91c7e9, fogNear: 130, fogFar: 340,
-            sunIntensity: 2.05, sunColor: 0xffe2b4, waterColor: 0x087bd8,
+            bg: 0x65b4e8, fog: 0x93c7dc, fogNear: 145, fogFar: 355,
+            sunIntensity: 2.2, sunColor: 0xffdbaf, waterColor: 0x087bd8,
         },
         winter: {
             bg: 0x7EC8E3, fog: 0x7EC8E3, fogNear: 30, fogFar: 180,
@@ -2850,7 +2850,8 @@ function getBaseHeight(x, z) {
     if (biome === 'jungle') ns *= TC.BIOME_JUNGLE_NOISE_MULT;
 
     for (let o of TC.NOISE_OCTAVES) {
-        y += state.simplex.noise2D(x * ns * o.factor, z * ns * o.factor) * o.amp;
+        // Small octaves add detail without turning every hill into a sharp cone.
+        y += state.simplex.noise2D(x * ns * o.factor, z * ns * o.factor) * o.amp * (o.factor>=4?.76:1);
     }
 
     y *= hm;
@@ -2865,13 +2866,13 @@ function getBaseHeight(x, z) {
         const archipelago=landscapeBlend(.18,.58,-region);
         const plateau=landscapeBlend(.18,.55,relief)*(1-mountains);
         y+=(Math.abs(relief)-.38)*(biome==='mountain'?2.0:1.25)*land;
-        y+=mountains*(2.2+Math.abs(relief)*5.5)*(biome==='mountain'?1.4:1);
+        y+=mountains*(3.4+Math.abs(relief)*3.8)*(biome==='mountain'?1.4:1);
         y+=plateau*2.5*land;
         // Flatten only elevated ground; the feathered mask retains walkable
         // slopes around the rim instead of making an impassable vertical wall.
-        const terrace=plateau*land*.64;
-        if(y>5)y+=(9.5-y)*terrace;
-        y-=Math.max(0,-relief-.1)*2.8*(1-mountains);
+        const terrace=plateau*land*.76;
+        if(y>5)y+=(10-y)*terrace;
+        y-=Math.max(0,-relief-.1)*3.2*(1-mountains);
         y-=archipelago*3.2;
     }
 
@@ -4024,23 +4025,24 @@ function initTerrainResources() {
             float swell = sin(vWorldXZ.x * 0.43 + time * 0.7) * cos(vWorldXZ.y * 0.37 - time * 0.56);
             float detail = sin(vWorldXZ.x * 1.21 - time * 1.3 + sin(vWorldXZ.y * 0.45)) * sin(vWorldXZ.y * 0.86 + time);
             vec3 deep = color * vec3(0.35,0.69,0.98);
-            vec3 lagoon = vec3(0.035,0.62,0.70);
+            vec3 lagoon = vec3(0.035,0.64,0.67);
             vec3 viewDir=normalize(cameraPosition-vWorldPosition);
             vec3 normal=normalize(vWaveNormal+vec3(detail*.035,0.0,swell*.025));
             float fresnel=pow(1.0-max(dot(viewDir,normal),0.0),3.2);
             vec3 reflected=mix(skyColor,vec3(0.82,0.91,1.0),pow(max(dot(reflect(-viewDir,normal),normalize(sunDirection)),0.0),64.0));
             float shallows=1.0-smoothstep(0.4,9.0,vDepth);
-            vec3 baseColor = mix(deep,lagoon,clamp(shallows * 0.62 + vFoam * 0.12 + swell * 0.06,0.0,0.76));
+            vec3 baseColor = mix(deep,lagoon,clamp(shallows * 0.68 + vFoam * 0.10 + swell * 0.05,0.0,0.82));
+            baseColor=mix(baseColor,vec3(.20,.69,.64),shallows*shallows*.12);
             baseColor += vec3(0.016,0.047,0.056) * detail;
             baseColor=mix(baseColor,reflected,.12+fresnel*.58);
             float f = vFoam;
             float ripples = sin(vWorldXZ.x * 2.4 + time * 1.5) * cos(vWorldXZ.y * 2.1 - time * 1.2) * 0.5 + 0.5;
             float noise=waterNoise(vWorldXZ*.72+vec2(time*.16,-time*.11));
             float breakers=sin(vWorldXZ.x*.53+vWorldXZ.y*.29-time*2.3+noise*2.8)*.5+.5;
-            float shoreFoam=smoothstep(.24,.86,f*(.74+.32*breakers)+noise*.15*f);
+            float shoreFoam=smoothstep(.48,.96,f*(.58+.34*breakers)+noise*.12*f);
             float crestFoam=smoothstep(.9,.985,breakers)*smoothstep(.76,1.02,vCrest+noise*.08);
             float foamAmount=clamp(shoreFoam+crestFoam*.14,0.0,1.0);
-            vec3 finalColor = mix(baseColor, vec3(0.90, 0.98, 0.97), foamAmount * 0.72);
+            vec3 finalColor = mix(baseColor, vec3(0.90, 0.98, 0.97), foamAmount * 0.62);
             float glint = pow(max(dot(reflect(-normalize(sunDirection),normal),viewDir),0.0),72.0)*1.25+
                 pow(max(0.0, ripples * (0.55 + swell * 0.45)), 12.0) * 0.07;
             finalColor += vec3(glint);
@@ -4082,8 +4084,11 @@ function forEachTreeSite(cx,cz,visit) {
         const slope=Math.hypot(getHeight(x+.7,z)-getHeight(x-.7,z),
             getHeight(x,z+.7)-getHeight(x,z-.7));
         if(slope>1.7)continue;
-        const rotation=random()*Math.PI*2,scale=.78+random()*.48,scaleY=.9+random()*.35;
-        visit({id:`${cx},${cz}:${k}`,x,z,h,rotation,scale,scaleY});
+        const rotation=random()*Math.PI*2,scale=1.02+random()*.54,scaleY=1+random()*.42;
+        const biome=state.matchSettings?.biome||'normal';
+        const style=h>9||biome==='mountain'||state.matchSettings?.winter ? 'conifer'
+            : opening>.58&&moisture<.55 ? 'umbrella' : 'broadleaf';
+        visit({id:`${cx},${cz}:${k}`,x,z,h,rotation,scale,scaleY,style});
     }
 }
 
@@ -4452,8 +4457,8 @@ function updateChunkGeometry(mesh, cx, cz) {
          } else {
              if (h < WATER_LEVEL) col.copy(shoreTone);
              else if (materialH < WATER_LEVEL + 1.3) col.copy(shoreTone).lerp(grassTone, smoothBand(materialH,WATER_LEVEL,WATER_LEVEL+1.3));
-             else if (materialH < 18) col.copy(grassTone);
-             else if (materialH < 28) col.copy(grassTone).lerp(cRock, smoothBand(materialH,18,28));
+             else if (materialH < 11) col.copy(grassTone);
+             else if (materialH < 19) col.copy(grassTone).lerp(cRock, smoothBand(materialH,11,19));
              else if (materialH < 36) col.copy(cRock);
              else if (materialH < 42) col.copy(cRock).lerp(cSnow, smoothBand(materialH,36,42));
              else col.copy(cSnow);
@@ -4510,6 +4515,20 @@ function updateChunkDecorations(chunk, cx, cz) {
             // Hide if underwater
             tMesh.visible = (h >= WATER_LEVEL);
         }
+    }
+
+    const ritual=chunk.userData.ritualSite;
+    if(ritual){
+        const h=getHeight(ritual.x,ritual.z),dummy=new THREE.Object3D();
+        ritual.mesh.position.y=h;
+        ritual.mesh.visible=h>WATER_LEVEL+1;
+        ritual.stones.forEach((stone,i)=>{
+            dummy.position.set(stone.x-ritual.x,getHeight(stone.x,stone.z)-h+.46,stone.z-ritual.z);
+            dummy.rotation.set(stone.tilt,stone.angle,stone.tilt*.4);
+            dummy.scale.set(stone.scale,.85+stone.scale*.35,stone.scale);
+            dummy.updateMatrix();ritual.ring.setMatrixAt(i,dummy.matrix);
+        });
+        ritual.ring.instanceMatrix.needsUpdate=true;
     }
 
     if (chunk.userData.flowers) {
@@ -4799,6 +4818,55 @@ function createCoastalPalms(grp,cx,cz) {
     setPalmBounds(mesh,data);grp.add(mesh);grp.userData.palms={mesh,data};
 }
 
+let ritualAssets;
+function createRitualSite(grp,cx,cz) {
+    if(!['normal','jungle','mountain','night'].includes(state.matchSettings?.biome||'normal'))return;
+    const hash=((cx*92837111)^(cz*689287499)^0x31e7ca19)>>>0;
+    if(hash%8!==0)return;
+    const rand=mulberry32(hash),offX=cx*CHUNK_SIZE,offZ=cz*CHUNK_SIZE;
+    let x,z,h,found=false;
+    for(let attempt=0;attempt<36;attempt++){
+        x=offX+(rand()-.5)*CHUNK_SIZE*.72;
+        z=offZ+(rand()-.5)*CHUNK_SIZE*.72;
+        h=getHeight(x,z);
+        if(h<WATER_LEVEL+1.6||h>14||landscapeOpening(x,z)<.3)continue;
+        const slope=Math.hypot(getHeight(x+1,z)-getHeight(x-1,z),getHeight(x,z+1)-getHeight(x,z-1));
+        if(slope<.58){found=true;break;}
+    }
+    if(!found)return;
+    if(!ritualAssets)ritualAssets={
+        stone:new THREE.DodecahedronGeometry(.47,1),
+        stoneMat:new THREE.MeshStandardMaterial({color:0xbfb49a,roughness:.93,
+            map:Art.blender.texture('stone','map')}),
+        totem:new THREE.CylinderGeometry(.22,.38,2.35,7),
+        woodMat:new THREE.MeshStandardMaterial({color:0x8b623e,roughness:.87,
+            map:Art.blender.texture('wood','map')}),
+        crown:new THREE.OctahedronGeometry(.4,0),
+        crownMat:new THREE.MeshStandardMaterial({color:0x65bdca,roughness:.4,metalness:.1,
+            emissive:0x0c4453,emissiveIntensity:.16})
+    };
+    ritualAssets.stone.boundingSphere=new THREE.Sphere(new THREE.Vector3(),3.4);
+    const site=new THREE.Group();site.position.set(x,h,z);site.name='Ancient stone circle';
+    const ring=new THREE.InstancedMesh(ritualAssets.stone,ritualAssets.stoneMat,7);
+    ring.name='Standing stones';ring.castShadow=true;ring.receiveShadow=true;
+    const stones=[],dummy=new THREE.Object3D();
+    for(let i=0;i<7;i++){
+        const angle=i*Math.PI*2/7+.22,px=x+Math.cos(angle)*2.3,pz=z+Math.sin(angle)*2.3;
+        const stone={x:px,z:pz,angle:rand()*Math.PI*2,tilt:(rand()-.5)*.18,scale:.8+rand()*.4};
+        stones.push(stone);
+        dummy.position.set(px-x,getHeight(px,pz)-h+.46,pz-z);
+        dummy.rotation.set(stone.tilt,stone.angle,stone.tilt*.4);
+        dummy.scale.set(stone.scale,.85+stone.scale*.35,stone.scale);
+        dummy.updateMatrix();ring.setMatrixAt(i,dummy.matrix);
+    }
+    ring.instanceMatrix.needsUpdate=true;site.add(ring);
+    const totem=new THREE.Mesh(ritualAssets.totem,ritualAssets.woodMat);
+    totem.position.y=1.2;totem.castShadow=true;site.add(totem);
+    const crown=new THREE.Mesh(ritualAssets.crown,ritualAssets.crownMat);
+    crown.position.y=2.62;site.add(crown);
+    grp.add(site);grp.userData.ritualSite={mesh:site,ring,stones,x,z};
+}
+
 function createGroundCover(grp,cx,cz) {
     if(!groundCoverGrassGeo) {
         groundCoverGrassGeo=new THREE.BufferGeometry();
@@ -4855,13 +4923,14 @@ function createGroundCover(grp,cx,cz) {
     const density=state.graphicsQuality?.coverDensity||1;
     const grassData=[],stoneData=[],bushData=[],offX=cx*CHUNK_SIZE,offZ=cz*CHUNK_SIZE;
     const populate=(target,total,isGrass,isBush=false,rng=rand)=>{
-        for(let i=0;target.length<total&&i<total*4;i++) {
+        for(let i=0;target.length<total&&i<total*(isBush?12:4);i++) {
             const x=offX+(rng()-.5)*CHUNK_SIZE,z=offZ+(rng()-.5)*CHUNK_SIZE,h=getHeight(x,z);
             const hx=getHeight(x+.45,z)-getHeight(x-.45,z),hz=getHeight(x,z+.45)-getHeight(x,z-.45);
             const slope=Math.sqrt(hx*hx+hz*hz);
             if(h<=WATER_LEVEL+(isGrass?.4:.12)||(isGrass&&h>17)||(!isGrass&&h>36)||(isGrass&&slope>.8))continue;
             const moisture=landscapeMoisture(x,z),opening=landscapeOpening(x,z);
-            const suitability=isBush ? .12+.68*moisture*(1-opening*.65)
+            if(isBush&&opening>.54)continue;
+            const suitability=isBush ? .08+.82*moisture*Math.pow(1-opening*.92,2)
                 : isGrass ? .28+.65*opening*(.65+.35*moisture)
                 : .18+.55*Math.min(1,slope)+.22*(1-moisture);
             if(rng()>suitability)continue;
@@ -4872,7 +4941,7 @@ function createGroundCover(grp,cx,cz) {
     };
     populate(grassData,Math.floor(220*density),true);
     populate(grassData,Math.floor(300*density),true,false,grassExtraRandom);
-    populate(stoneData,Math.floor(4*density),false);
+    populate(stoneData,Math.floor(7*density),false);
     populate(bushData,Math.floor((state.matchSettings.biome==='jungle'?32:12)*density),true,true);
     let shoreRocks=0;
     for(let attempt=0;attempt<45&&shoreRocks<1;attempt++){
@@ -4966,11 +5035,12 @@ function createChunk(cx, cz) {
 
     updateChunkPhysics(cx, cz, geo);
 
-    grp.userData = { trees: [], flowers: [], groundCover: null, palms: null };
+    grp.userData = { trees: [], flowers: [], groundCover: null, palms: null, ritualSite: null };
     createGroundCover(grp,cx,cz);
     createCoastalPalms(grp,cx,cz);
+    createRitualSite(grp,cx,cz);
     forEachTreeSite(cx,cz,site=>{
-        const treeGroup=Art.tree();
+        const treeGroup=Art.tree(site.style);
         treeGroup.position.set(site.x,site.h,site.z);
         treeGroup.rotation.y=site.rotation;
         treeGroup.scale.set(site.scale,site.scaleY,site.scale);
@@ -8183,6 +8253,7 @@ class EnemyAI {
         if (this.personality === 'primordial') this.targetHutCount = CONFIG.AI.TARGET_HUT_COUNT_PRIMORDIAL;
         this.knownUnitCounts = { warrior: 0, firewarrior: 0, spy: 0, airship: 0 };
         this.lossQueue = [];
+        this.blockedBuildSites = [];
     }
 
     init(x, z) {
@@ -8329,25 +8400,48 @@ class EnemyAI {
             // Finished settlements continue population growth through hut replacement/expansion.
             if(!type&&workers.length<4&&counts.hut<14)type='hut';
             if(type){
+                const buildRoute=(u,x,z)=>{
+                    const destination=new THREE.Vector3(x,0,z);
+                    const path=Pathfinder.findPath(u.mesh.position,destination,false,u.height,true);
+                    if(!path)return false;
+                    // A* reaches a rounded grid cell. Check its final metres too: a
+                    // shoreline or steep bank can separate that cell from the site.
+                    const last=path.length?path[path.length-1]:u.mesh.position;
+                    return isWalkableLine(last,destination,false,u.height,true);
+                };
                 let pending=this.pendingBuild;
                 if(!pending||pending.type!==type){
                     pending=null;
-                    for(let i=0;i<192;i++){
+                    let nextIndex=this.buildSearchIndex||0,routeChecks=0;
+                    for(let n=0;n<192&&routeChecks<24;n++){
+                        const i=(nextIndex+n)%192;
+                        this.buildSearchIndex=(i+1)%192;
                         const radius=8+Math.floor(i/24)*4,angle=i*2.399963+this.faction;
                         const x=home.x+Math.cos(angle)*radius,z=home.z+Math.sin(angle)*radius;
                         const h=getHeight(x,z);
-                        if(h<WATER_LEVEL+.6||state.buildings.some(b=>!b.dead&&this.distance(b.mesh.position,{x,z})<7))continue;
+                        if(h<aiDryHeight()+.15||state.buildings.some(b=>!b.dead&&this.distance(b.mesh.position,{x,z})<7)||
+                            this.blockedBuildSites.some(p=>this.distance(p,{x,z})<4))continue;
                         if([[3,0],[-3,0],[0,3],[0,-3]].some(([dx,dz])=>getHeight(x+dx,z+dz)<WATER_LEVEL||Math.abs(getHeight(x+dx,z+dz)-h)>4))continue;
-                        if(!builders.some(u=>Pathfinder.findPath(u.mesh.position,new THREE.Vector3(x,0,z),false,u.height)))continue;
-                        pending={type,x,z};break;
+                        routeChecks++;
+                        if(!builders.some(u=>buildRoute(u,x,z)))continue;
+                        pending={type,x,z,bestDistance:Infinity,stalledFor:0};break;
                     }
                     this.pendingBuild=pending;
                 }
                 if(pending){
-                    const builder=nearest(builders.filter(u=>Pathfinder.findPath(u.mesh.position,new THREE.Vector3(pending.x,0,pending.z),false,u.height)),pending);
+                    const builder=nearest(builders.filter(u=>buildRoute(u,pending.x,pending.z)),pending);
                     if(!builder)this.pendingBuild=null;
                     else if(this.distance(builder.mesh.position,pending)<=3){createBuilding(type,pending.x,pending.z,this.faction);this.pendingBuild=null;}
-                    else if(!this.moveUnit(builder,pending,'builder'))this.pendingBuild=null;
+                    else {
+                        const distance=this.distance(builder.mesh.position,pending);
+                        if(distance<pending.bestDistance-.35){pending.bestDistance=distance;pending.stalledFor=0;}
+                        else pending.stalledFor+=Math.min(2,CONFIG.AI.THINK_INTERVAL);
+                        if(pending.stalledFor>=12){
+                            this.blockedBuildSites.push({x:pending.x,z:pending.z});
+                            if(this.blockedBuildSites.length>24)this.blockedBuildSites.shift();
+                            this.pendingBuild=null;
+                        }else if(!this.moveUnit(builder,pending,'builder'))this.pendingBuild=null;
+                    }
                 }
             }
         }
@@ -9255,7 +9349,7 @@ async function init() {
         await Characters.ready;
         initTerrainResources();
 
-        const amb = new THREE.HemisphereLight(0xdcecf4, 0x596650, 0.72);
+        const amb = new THREE.HemisphereLight(0xdcecf4, 0x596650, 0.62);
         state.ambLight = amb;
         state.scene.add(amb);
         state.skyDome=createSkyDome();state.scene.add(state.skyDome);
@@ -9360,7 +9454,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -10792,7 +10886,7 @@ function animate() {
     const biome = state.matchSettings.biome || 'normal';
     const biomeCfg = CONFIG.BIOMES[biome] || CONFIG.BIOMES.normal;
     const atmosphereTime=state.clock?.elapsedTime||0;
-    const sunAzimuth=atmosphereTime*.0018+.65,sunElevation=.76+.1*Math.sin(atmosphereTime*.0011);
+    const sunAzimuth=atmosphereTime*.0018+.65,sunElevation=.62+.09*Math.sin(atmosphereTime*.0011);
     _movingSunDirection.set(Math.cos(sunAzimuth)*.58,sunElevation,Math.sin(sunAzimuth)*.58).normalize();
     if(state.sunLight){_movingSunFocus.copy(state.cameraLookAt||state.sunLight.target.position);state.sunLight.target.position.copy(_movingSunFocus);
         state.sunLight.position.copy(_movingSunFocus).addScaledVector(_movingSunDirection,125);state.sunLight.target.updateMatrixWorld();}

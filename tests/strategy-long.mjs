@@ -6,8 +6,9 @@ const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 const results=[],errors=[],root=path.resolve(import.meta.dirname,'..');
+const selectedPersonality=process.argv.find(arg=>arg.startsWith('--personality='))?.slice('--personality='.length);
 try {
- for(const [personality,seed,minutes,raid] of [['default',84721,20,false],['swarmer',29107,15,true],['sorcerer',71283,15,false],['fortress',41827,15,false]]) {
+ for(const [personality,seed,minutes,raid] of [['default',84721,20,false],['swarmer',29107,15,true],['sorcerer',71283,15,false],['fortress',41827,15,false]].filter(([name])=>!selectedPersonality||selectedPersonality===name)) {
   const page=await browser.newPage();
   page.on('pageerror',e=>errors.push(String(e)));
   await page.addInitScript(seed=>{Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};},seed);

@@ -73,7 +73,7 @@ try {
   roughness:(await fs.stat(path.join(root,'art/blender',name+'-roughness.png'))).size})));
  const report={pass:errors.length===0&&detail.images.some(([w,h])=>w>=1000&&h>=1000)&&assets.every(a=>a.bytes>1000000)&&
   terrainLayers.every(a=>a.albedo>400000&&a.normal>200000&&a.roughness>100000)&&
-  detail.grass===0x65bd38&&detail.terrainSamples>10&&detail.grassVariation>.01&&detail.shaderVersion==='island-terrain-detail-v7'&&
+  detail.grass===0x65bd38&&detail.terrainSamples>10&&detail.grassVariation>.01&&detail.shaderVersion==='island-terrain-detail-v8'&&
   detail.patterns===detail.chunks&&detail.normalSeamError<.001&&detail.colorSeamError<.001&&detail.terrainTextureReads<=8&&
   Math.abs(detail.shoreLevel-detail.visualWaterLevel)<.00001&&
   detail.cliffSize[0]===1024&&detail.sandSize[0]===1024,
