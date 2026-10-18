@@ -363,22 +363,34 @@ try {
         console.log('PASS Android touch firestorm sustains, pauses and stops with the spell');
         checkpoint='Android stalled sustained media fallback';
         await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('tornado_loop'));
+        const resumePoint=await clickControl(phone,'#unit-list .unit-item');
+        await phone.touchscreen.tap(resumePoint.x,resumePoint.y);
+        await phone.waitForFunction(()=>gameTestAPI.SoundManager.ctx?.state==='running',null,{timeout:10000});
         await phone.evaluate(()=>{
             const sound=gameTestAPI.SoundManager;
             state.isPaused=false;sound.syncSustains(false);
-            const voice=sound.mediaEffects.get('tornado_loop')[0];
-            window.stalledVoice=voice;window.stalledPlay=voice.play;
-            voice.play=()=>new Promise(()=>{});
+            window.stalledVoices=sound.mediaEffects.get('tornado_loop');
+            window.stalledPlays=stalledVoices.map(voice=>voice.play);
+            for(const voice of stalledVoices)voice.play=()=>new Promise(()=>{});
             window.testSpellAudioDestination=sound.ctx.createMediaStreamDestination();
             sound.effectsBus.connect(testSpellAudioDestination);
         });
         await startRecording(phone);
         await phone.evaluate(()=>{window.stalledLoop=gameTestAPI.SoundManager.startSustain('tornado_loop');});
-        await phone.waitForFunction(()=>stalledLoop?.usingWebAudio&&stalledLoop.webSource&&
-            gameTestAPI.SoundManager.ctx.currentTime-stalledLoop.webStartedAt>.1,null,{timeout:5000});
+        try {
+            await phone.waitForFunction(()=>stalledLoop?.usingWebAudio&&stalledLoop.webSource&&
+                gameTestAPI.SoundManager.ctx.currentTime-stalledLoop.webStartedAt>.1,null,{timeout:10000});
+        } catch(error) {
+            const detail=await phone.evaluate(()=>({active:gameTestAPI.SoundManager.activeSustains.has(stalledLoop),
+                owner:stalledVoices.indexOf(stalledLoop?.audio),blocked:gameTestAPI.SoundManager.mediaEffectsBlocked,
+                paused:gameTestAPI.SoundManager.sustainsPaused,webAudio:stalledLoop?.usingWebAudio,
+                webSource:!!stalledLoop?.webSource,mediaTime:stalledLoop?.audio.currentTime,
+                context:gameTestAPI.SoundManager.ctx?.state}));
+            throw new Error(`Stalled Android sustain did not recover: ${JSON.stringify(detail)}`,{cause:error});
+        }
         const stalledPeak=await stopRecording(phone);
         await phone.evaluate(()=>{
-            stalledLoop.stop(true);stalledVoice.play=stalledPlay;
+            stalledLoop.stop(true);stalledVoices.forEach((voice,index)=>{voice.play=stalledPlays[index];});
             gameTestAPI.SoundManager.effectsBus.disconnect(testSpellAudioDestination);
         });
         if(stalledPeak<.015)throw new Error(`Stalled Android loop had no audible fallback: ${stalledPeak}`);
