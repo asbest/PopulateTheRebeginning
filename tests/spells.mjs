@@ -29,9 +29,76 @@ try{
    const report={centre:v(enemy),east:v(east),west:v(west),far:v(far),above:v(above),ally:v(ally),health:[enemy.hp,east.hp,west.hp,far.hp,above.hp,ally.hp]};
    if(!(v(enemy).x>8&&v(enemy).y>0&&v(east).x>6&&v(west).x< -6&&v(far).x>0&&v(east).x>v(far).x*1.5))
     throw new Error('Blast direction or distance falloff: '+JSON.stringify(report));
-   if(enemy.hp!==1000-damage||east.hp!==1000-damage||west.hp!==1000-damage||far.hp!==1000-damage||above.hp!==1000||ally.hp!==1000||Math.hypot(v(above).x,v(above).y,v(above).z)>.01||Math.hypot(v(ally).x,v(ally).y,v(ally).z)>.01)
+   const expected=(u)=>{
+    const d=Math.hypot(u.mesh.position.x-x,u.mesh.position.y+Math.min(u.height||2,2)*.5-y,u.mesh.position.z-z);
+    return damage*(1-(d/8)**2);
+   };
+   if(Math.abs((1000-enemy.hp)-expected(enemy))>.01||Math.abs((1000-east.hp)-expected(east))>.01||
+      Math.abs((1000-west.hp)-expected(west))>.01||Math.abs((1000-far.hp)-expected(far))>.01||
+      !(enemy.hp<east.hp&&east.hp<far.hp)||above.hp!==1000||ally.hp!==1000||
+      Math.hypot(v(above).x,v(above).y,v(above).z)>.01||Math.hypot(v(ally).x,v(ally).y,v(ally).z)>.01)
     throw new Error('Blast height, faction or damage: '+JSON.stringify(report));
    return report;
+  });
+ });
+ await check('Shaman endures three times a warrior and takes swamp and volcano damage',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {x,z,enemy}=fixture;
+   const warrior=new Humanoid(1,'warrior',x,z),shaman=new Humanoid(1,'shaman',x,z);
+   state.units.push(warrior,shaman);
+   if(shaman.maxHp!==3*warrior.maxHp)throw new Error(`Wrong endurance: ${shaman.maxHp}/${warrior.maxHp}`);
+   gameTestAPI.SpatialHash.update();
+   gameTestAPI.performAction(x,z,'swamp');
+   const swamp=state.activeEffects.at(-1),beforeSwamp=shaman.hp;
+   swamp.update(.5);
+   const swampLoss=beforeSwamp-shaman.hp;
+   if(swampLoss<=0||swampLoss>=shaman.maxHp||Math.abs((1000-enemy.hp)-swampLoss)>.01)
+    throw new Error(`Swamp damage or shaman immunity: ${swampLoss}, ${enemy.hp}`);
+   shaman.hp=beforeSwamp;enemy.hp=1000;
+   for(let i=0;i<30;i++)swamp.update(1/60);
+   if(Math.abs((beforeSwamp-shaman.hp)-swampLoss)>.01)
+    throw new Error('Swamp damage depends on frame rate');
+   gameTestAPI.performAction(x,z,'volcano');
+   const volcano=state.activeEffects.at(-1),beforeVolcano=shaman.hp;
+   volcano.update(.21);
+   const volcanoLoss=beforeVolcano-shaman.hp;
+   if(volcanoLoss<=0||volcanoLoss>=shaman.maxHp)
+    throw new Error(`Volcano still ignores the shaman: ${volcanoLoss}`);
+   return {shamanHp:shaman.maxHp,warriorHp:warrior.maxHp,swampLoss,volcanoLoss};
+  });
+ });
+ await check('Older saves preserve the shaman health fraction after the balance change',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const key=gameTestAPI.CONFIG.SAVED_KEYS.SAVE_DATA;
+   window.saveGame();
+   const save=JSON.parse(localStorage.getItem(key));
+   const shaman=save.units.find(unit=>unit.type==='shaman'&&unit.faction===0);
+   shaman.hp=250;delete shaman.maxHp;
+   localStorage.setItem(key,JSON.stringify(save));
+   window.loadGame();
+   const restored=state.shaman.hp;
+   if(Math.abs(restored-300)>.01)throw new Error(`Legacy shaman health ratio changed: ${restored}`);
+   window.saveGame();window.loadGame();
+   if(Math.abs(state.shaman.hp-restored)>.01)
+    throw new Error(`Current save changed the shaman's health: ${state.shaman.hp}`);
+   return {legacyHp:250,restoredHp:restored,maxHp:state.shaman.maxHp};
+  });
+ });
+ await check('Lightning weakens with distance and chains to each target once',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {caster,enemy,ally,x,z}=fixture;
+   const near=new Humanoid(1,'warrior',x+1,z),edge=new Humanoid(1,'warrior',x+3.5,z);
+   const chain=[5,9,13].map(offset=>new Humanoid(1,'warrior',x+offset,z));
+   state.units=[caster,enemy,ally,near,edge,...chain];
+   for(const unit of state.units.filter(u=>u.faction===1))unit.hp=unit.maxHp=1000;
+   gameTestAPI.SpatialHash.update();
+   state.campaignLevel=gameTestAPI.CONFIG.CAMPAGIN.CHAIN_LIGHTNING_LEVEL;
+   gameTestAPI.performAction(x,z,'lightning');
+   const losses=[enemy,near,edge].map(unit=>1000-unit.hp),chained=chain.map(unit=>1000-unit.hp);
+   if(!(losses[0]>losses[1]&&losses[1]>losses[2]&&losses[2]>0)||
+      chained.some(loss=>loss<=0||loss>gameTestAPI.CONFIG.COMBAT.LIGHTNING_CHAIN_DAMAGE)||ally.hp!==1000)
+    throw new Error(JSON.stringify({losses,chained,ally:ally.hp}));
+   return {losses,chained};
   });
  });
  await check('Fireball knockback visibly moves a struck person and recovers',async()=>{

@@ -915,16 +915,19 @@ const CONFIG = {
         warrior: { maxHp: 200, damage: 52.5 },
         firewarrior: { maxHp: 120, damage: 5, range: 12, attackSpeed: 2.0 },
         spy: { damage: 0 },
-        shaman: { maxHp: 500, damage: 30, range: 15, height: 2.2 },
+        shaman: { maxHp: 600, damage: 30, range: 15, height: 2.2 },
         airship: { maxHp: 500, damage: 0, moveSpeed: 15, capacity: 5, height: 2.0 },
     },
     COMBAT: {
-        FIREBALL_UNIT_DAMAGE: 27,
+        FIREBALL_UNIT_DAMAGE: 115,
         FIREBALL_BUILDING_DAMAGE: 75,
-        FIREWARRIOR_BALL_UNIT_DMG: 5.4,
+        FIREWARRIOR_BALL_UNIT_DMG: 18,
         FIREWARRIOR_BULLDING_DMG: 15,
-        LIGHTNING_DAMAGE: 400,
-        LIGHTNING_CHAIN_DAMAGE: 200,
+        FIRESTORM_UNIT_DAMAGE: 70,
+        FIRESTORM_BUILDING_DAMAGE: 50,
+        FIREBALL_BURN_DPS: 4,
+        LIGHTNING_DAMAGE: 260,
+        LIGHTNING_CHAIN_DAMAGE: 110,
         LIGHTNING_RADIUS: 4,
         LIGHTNING_CHAIN_RADIUS: 10,
         FALL_DAMAGE_THRESHOLD: -15,
@@ -932,12 +935,12 @@ const CONFIG = {
         DEEP_WATER_DMG_FACTOR: 0.10,
         BURN_DURATION: 3.0,
         BURN_TREE_RADIUS: 8,
-        SWAMP_KILL_DAMAGE: 10000,
-        SWARM_DPS: 25,
+        SWAMP_DPS: 90,
+        SWARM_DPS: 30,
         SHAMAN_DPS: 25,
-        TORNADO_DPS: 300,
+        TORNADO_DPS: 60,
         TORNADO_RADIUS: 5,
-        VOLCANO_TICK_DAMAGE: 5,
+        VOLCANO_TICK_DAMAGE: 12,
         VOLCANO_BUILDING_DAMAGE: 10,
         COLLAPSE_DAMAGE: 100,
         VOLCANO_TICK_INTERVAL: 0.2,
@@ -5426,6 +5429,11 @@ function smoothPath(path, isFlying, unitHeight, avoidWater = false) {
 
 // --- js/projectiles.js ---
 
+function radialDamageFactor(distance,radius) {
+    const ratio=Math.min(1,distance/radius);
+    return Math.max(0,1-ratio*ratio);
+}
+
 const FIREBALL_CORE_GEO = new THREE.IcosahedronGeometry(0.42,1);
 const FIREBALL_CORONA_GEO = new THREE.IcosahedronGeometry(.69,1);
 const FIREBALL_TRAIL_GEO = new THREE.SphereGeometry(.3,6,5);
@@ -5513,10 +5521,10 @@ class Fireball {
         for(let i=0;i<(this.unitShot?2:5);i++)spawnSmoke(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.5,.2,(Math.random()-.5)*1.5)),0x3a302c,.45+Math.random()*.35,1.8+Math.random()*1.5);
         SoundManager.playSound('explosion', this.stormShot ? .36 : this.unitShot ? .45 : 1);
         const impactPos = this.mesh.position;
-        burnTreesAt(impactPos.x, impactPos.z, 8); // Burn trees
+        const radius = this.unitShot ? 4 : this.stormShot ? 6 : 8;
+        burnTreesAt(impactPos.x, impactPos.z, radius);
         // Use the blast centre and the person's body centre, rather than the
         // projectile's 3D distance to their feet, for a radial shock wave.
-        const radius = 8;
         const incomingX = this.target.x - this.start.x;
         const incomingZ = this.target.z - this.start.z;
         const incomingLength = Math.hypot(incomingX, incomingZ);
@@ -5536,17 +5544,17 @@ class Fireball {
             const shove = (this.unitShot ? 5.2 : 8) * falloff;
             const lift = (this.unitShot ? 5.2 : 7.2) * falloff;
             u.applyForce(new THREE.Vector3(nx * shove, lift, nz * shove), this.unitShot ? 5.5 : 8);
-            u.takeDamage(this.unitDamage);
-            u.burnTimer = 3.0;
+            u.takeDamage(this.unitDamage*radialDamageFactor(distance,radius));
+            u.burnTimer = Math.max(u.burnTimer||0,3*falloff);
         });
         // Buildings
         state.buildings.forEach(b => {
             if(b.dead)return;
             const d = b.mesh.position.distanceTo(impactPos);
-            if(d < 8 && b.faction !== this.faction) {
+            if(d < radius && b.faction !== this.faction) {
                 // The fireball already supplied the impact sound and flash.
-                b.takeDamage(this.buildingDamage, false, false);
-                if(!b.dead)b.burnTimer = 3.0;
+                b.takeDamage(this.buildingDamage*radialDamageFactor(d,radius), false, false);
+                if(!b.dead)b.burnTimer = Math.max(b.burnTimer||0,3*(1-d/radius));
             }
         });
     }
@@ -5685,16 +5693,19 @@ class Volcano extends ActiveEffect {
 
             // Push & Damage
             SpatialHash.query(this.x, this.z, CONFIG.COMBAT.VOLCANO_TICK_RADIUS).forEach(u => {
-                const dist = u.mesh.position.distanceTo(new THREE.Vector3(this.x, u.mesh.position.y, this.z));
-                if(dist < CONFIG.COMBAT.VOLCANO_TICK_RADIUS && u.faction !== this.faction) {
+                const dist = Math.hypot(u.mesh.position.x-this.x,u.mesh.position.z-this.z);
+                if(dist < CONFIG.COMBAT.VOLCANO_TICK_RADIUS && u.faction !== this.faction && u.state!=='dead') {
                     const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
                     u.applyForce(dir.multiplyScalar(3.5).add(new THREE.Vector3(0, 2.2, 0)));
-                    if (!u.isShaman) u.takeDamage(CONFIG.COMBAT.VOLCANO_TICK_DAMAGE);
+                    u.takeDamage(CONFIG.COMBAT.VOLCANO_TICK_DAMAGE*
+                        radialDamageFactor(dist,CONFIG.COMBAT.VOLCANO_TICK_RADIUS));
                 }
             });
             state.buildings.forEach(b => {
                  const dist = b.mesh.position.distanceTo(new THREE.Vector3(this.x, b.mesh.position.y, this.z));
-                 if(dist < CONFIG.COMBAT.VOLCANO_TICK_RADIUS && b.faction !== this.faction) b.takeDamage(CONFIG.COMBAT.VOLCANO_BUILDING_DAMAGE);
+                 if(dist < CONFIG.COMBAT.VOLCANO_TICK_RADIUS && b.faction !== this.faction)
+                     b.takeDamage(CONFIG.COMBAT.VOLCANO_BUILDING_DAMAGE*
+                         radialDamageFactor(dist,CONFIG.COMBAT.VOLCANO_TICK_RADIUS));
             });
         }
         if(this.timer <= 0) { this.dispose(); return false; }
@@ -5810,13 +5821,13 @@ class Swamp extends ActiveEffect {
         this.surface.material.opacity=0.84+0.035*Math.sin(this.age*2.1);
         this.animateVisuals();
 
-        // Kill units
+        // Staying in the mire hurts progressively; touching its edge is survivable.
         SpatialHash.query(this.pos.x, this.pos.z, this.radius * 0.8).forEach(u => {
-            if(u.state !== 'dead' && !u.isShaman && u.faction !== this.faction) {
+            if(u.state !== 'dead' && u.faction !== this.faction) {
                 const dist = Math.sqrt((u.mesh.position.x - this.pos.x)**2 + (u.mesh.position.z - this.pos.z)**2);
                 if(dist < this.radius * 0.8) {
-                 u.takeDamage(CONFIG.COMBAT.SWAMP_KILL_DAMAGE); // Instant death
-                     spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0x000000);
+                    u.takeDamage(CONFIG.COMBAT.SWAMP_DPS*dt*
+                        radialDamageFactor(dist,this.radius*.8),true,false);
                 }
             }
         });
@@ -5943,12 +5954,13 @@ class Tornado extends ActiveEffect {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < CONFIG.COMBAT.TORNADO_RADIUS && u.faction !== this.faction) {
                  u.applyForce(new THREE.Vector3((Math.random()-0.5)*3, 1.2, (Math.random()-0.5)*3));
-                 u.takeDamage(damagePerSecond * dt);
+                 u.takeDamage(damagePerSecond*dt*radialDamageFactor(d,CONFIG.COMBAT.TORNADO_RADIUS),true,false);
             }
         });
         state.buildings.forEach(b => {
              const d = b.mesh.position.distanceTo(this.pos);
-             if(d < CONFIG.COMBAT.TORNADO_RADIUS && b.faction !== this.faction) b.takeDamage(damagePerSecond * dt);
+             if(d < CONFIG.COMBAT.TORNADO_RADIUS && b.faction !== this.faction)
+                 b.takeDamage(damagePerSecond*dt*radialDamageFactor(d,CONFIG.COMBAT.TORNADO_RADIUS));
         });
 
         if(this.timer <= 0) {
@@ -6089,7 +6101,7 @@ class Swarm extends ActiveEffect {
         SpatialHash.query(this.pos.x, this.pos.z, 4).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 4 && u.faction !== this.faction) {
-                u.takeDamage(CONFIG.COMBAT.SWARM_DPS * dt);
+                u.takeDamage(CONFIG.COMBAT.SWARM_DPS*dt*radialDamageFactor(d,4),true,false);
             }
         });
 
@@ -6135,7 +6147,8 @@ class Firestorm extends ActiveEffect {
             const rz = this.z + (Math.random()-0.5)*15;
             const start = new THREE.Vector3(rx, 40, rz);
             const end = new THREE.Vector3(rx, getHeight(rx, rz), rz);
-            state.projectiles.push(new Fireball(start, end, this.faction, undefined, undefined, true));
+            state.projectiles.push(new Fireball(start, end, this.faction,
+                CONFIG.COMBAT.FIRESTORM_UNIT_DAMAGE,CONFIG.COMBAT.FIRESTORM_BUILDING_DAMAGE,true));
             SoundManager.playSound('fireball',.38);
         }
         if (this.light) this.light.intensity = 1.8 + Math.sin(this.timer * 7) * .35;
@@ -6433,7 +6446,7 @@ function executeSpell(type, x, z, caster) {
         SpatialHash.query(x, z, 4).forEach(u => {
              const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
              if(dist < 4 && u.faction !== caster.faction) {
-                 u.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE);
+                 u.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE*radialDamageFactor(dist,4));
                  const forceDir = u.mesh.position.clone().sub(new THREE.Vector3(x, h, z)).normalize();
                  forceDir.y = 0.8;
                  u.applyForce(forceDir.multiplyScalar(2.5));
@@ -6443,21 +6456,28 @@ function executeSpell(type, x, z, caster) {
         });
 
         // Chain Lightning Mod
-        if (state.campaignLevel >= CONFIG.CAMPAGIN.CHAIN_LIGHTNING_LEVEL) {
-            hitUnits.forEach(u => {
-                SpatialHash.query(u.mesh.position.x, u.mesh.position.z, 10).forEach(extra => {
-                    if (extra.faction !== caster.faction && !hitUnits.includes(extra)) {
-                        extra.takeDamage(CONFIG.COMBAT.LIGHTNING_CHAIN_DAMAGE);
-                        spawnPulse(extra.mesh.position.x, extra.mesh.position.y, extra.mesh.position.z, 0xFFFFFF);
-                    }
+        if (state.campaignLevel >= CONFIG.CAMPAGIN.CHAIN_LIGHTNING_LEVEL && hitUnits.length) {
+            const struck=new Set(hitUnits);
+            let current=hitUnits[0];
+            for(let jump=0;jump<3;jump++) {
+                let next=null,nearest=CONFIG.COMBAT.LIGHTNING_CHAIN_RADIUS;
+                SpatialHash.query(current.mesh.position.x,current.mesh.position.z,nearest).forEach(extra=>{
+                    if(extra.faction===caster.faction||extra.state==='dead'||struck.has(extra))return;
+                    const distance=extra.mesh.position.distanceTo(current.mesh.position);
+                    if(distance<nearest){next=extra;nearest=distance;}
                 });
-            });
+                if(!next)break;
+                next.takeDamage(CONFIG.COMBAT.LIGHTNING_CHAIN_DAMAGE*(1-jump*.2)*
+                    radialDamageFactor(nearest,CONFIG.COMBAT.LIGHTNING_CHAIN_RADIUS));
+                spawnPulse(next.mesh.position.x,next.mesh.position.y,next.mesh.position.z,0xFFFFFF);
+                struck.add(next);current=next;
+            }
         }
 
         state.buildings.forEach(b => {
              const dist = b.mesh.position.distanceTo(new THREE.Vector3(x, b.mesh.position.y, z));
              if(dist < 4 && b.faction !== caster.faction) {
-                  b.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE);
+                  b.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE*radialDamageFactor(dist,4));
                   hit = true;
              }
         });
@@ -7146,12 +7166,11 @@ window.Humanoid = class Humanoid {
         }
 
         if (this.burnTimer > 0) {
-            this.burnTimer -= dt;
+            this.burnTimer = Math.max(0,this.burnTimer-dt);
+            this.takeDamage(CONFIG.COMBAT.FIREBALL_BURN_DPS*dt,true,false);
             if(Math.random() < 0.25) {
                 state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1, (Math.random()-0.5))), 0xFF4500, 0.1, 0.5));
             }
-            // Optional: DOT
-            // this.takeDamage(5 * dt);
         }
 
         if (this.conversionTimer > 0) {
@@ -10032,6 +10051,7 @@ window.saveGame = function() {
             y: u.mesh.position.y,
             z: u.mesh.position.z,
             hp: u.hp,
+            maxHp: u.maxHp,
             state: u.state,
             dead: u.state === 'dead',
             deathTimer: u.deathTimer,
@@ -10043,7 +10063,8 @@ window.saveGame = function() {
             originalFaction: u.originalFaction,
             spellStatus: saveSpellStatus(u),
             passengers: (u.passengers || []).map(p => ({
-                id: p.id, faction: p.faction, type: p.type, hp: p.hp, upgradeLevel: p.upgradeLevel || 0, spellStatus: saveSpellStatus(p)
+                id: p.id, faction: p.faction, type: p.type, hp: p.hp, maxHp: p.maxHp,
+                upgradeLevel: p.upgradeLevel || 0, spellStatus: saveSpellStatus(p)
             }))
         })),
         buildings: state.buildings.map(b => ({
@@ -10062,6 +10083,12 @@ window.saveGame = function() {
     showGameMessage('Game saved!');
 }
 
+function restoredUnitHealth(unit,saved) {
+    // Older saves predate the shaman's health increase; keep the same health fraction.
+    const oldMax=Number.isFinite(saved.maxHp) ? saved.maxHp : saved.type==='shaman'
+        ? 500*Math.pow(1.1,Math.min(100,saved.upgradeLevel||0)) : unit.maxHp;
+    return THREE.MathUtils.clamp((saved.hp||0)*unit.maxHp/Math.max(1,oldMax),0,unit.maxHp);
+}
 window.loadGame = function() {
     const json = localStorage.getItem(CONFIG.SAVED_KEYS.SAVE_DATA);
     if(!json) { showGameMessage('No save found!', 'error'); return; }
@@ -10178,7 +10205,7 @@ window.loadGame = function() {
             if (uData.dead && (uData.type !== 'shaman' || uData.respawnComplete)) return;
             const u = new Humanoid(uData.faction, uData.type, uData.x, uData.z, uData.id || null);
             for (let i = 0; i < Math.min(100, uData.upgradeLevel || 0); i++) u.upgrade();
-            u.hp = uData.hp;
+            u.hp = restoredUnitHealth(u,uData);
             restoreSpellStatus(u,uData.spellStatus);
             u.state = 'idle';
             u.hpBar.scale.x = Math.max(0, u.hp / u.maxHp);
@@ -10202,7 +10229,7 @@ window.loadGame = function() {
                 uData.passengers.forEach(pData => {
                     const p = new Humanoid(pData.faction, pData.type, uData.x, uData.z, pData.id || null);
                     for (let i = 0; i < Math.min(100, pData.upgradeLevel || 0); i++) p.upgrade();
-                    p.hp = pData.hp;
+                    p.hp = restoredUnitHealth(p,pData);
                     restoreSpellStatus(p,pData.spellStatus);
                     state.units.push(p);
                     u.loadUnit(p);
