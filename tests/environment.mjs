@@ -16,6 +16,12 @@ try{
   state.camera.updateMatrixWorld();
   const frustum=new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(state.camera.projectionMatrix,state.camera.matrixWorldInverse));
   const flowerMeshes=chunks.map(c=>c.userData.flowers?.stems).filter(Boolean);
+  const flowerData=chunks.flatMap(c=>c.userData.flowers?.data||[]);
+  const flowerStyle={count:flowerData.length,colors:new Set(flowerData.map(f=>f.cIndex)).size,
+   petalCounts:[...new Set(flowerData.map(f=>f.petalCount))].sort((a,b)=>a-b),
+   daisy:flowerData.filter(f=>!f.isTulip).length,tulip:flowerData.filter(f=>f.isTulip).length,
+   maxMeshes:Math.max(...chunks.map(c=>c.userData.flowers?.stems?c.children.filter(m=>
+    [c.userData.flowers.stems,c.userData.flowers.centers,c.userData.flowers.petals,c.userData.flowers.tulips].includes(m)).length:0))};
   const flowerVisibility={total:flowerMeshes.length,inside:flowerMeshes.filter(mesh=>frustum.intersectsObject(mesh)).length,
    culled:flowerMeshes.every(mesh=>mesh.frustumCulled&&mesh.geometry.boundingSphere?.radius>0)};
   const grass=covers.reduce((n,c)=>n+(c.grass?.mesh?.count||0),0),stones=covers.reduce((n,c)=>n+(c.stones?.mesh?.count||0),0),
@@ -24,6 +30,7 @@ try{
   const grassData=coverData('grass'),bushData=coverData('bushes'),stoneData=coverData('stones');
   const meanOpening=data=>data.reduce((sum,d)=>sum+(d.opening||0),0)/Math.max(1,data.length);
   const landscape={grassOpening:meanOpening(grassData),bushOpening:meanOpening(bushData),
+   grassVarieties:new Set(grassData.map(d=>d.variety)).size,
    landmarks:stoneData.filter(d=>d.landmark).length,treeCounts:chunks.map(c=>c.userData.trees?.length||0)};
   const grassMesh=covers.find(c=>c.grass?.mesh)?.grass.mesh,grassGeo=grassMesh.geometry,bases=grassGeo.attributes.aBasePos;
   const stoneMesh=covers.find(c=>c.stones?.mesh)?.stones.mesh;
@@ -62,7 +69,7 @@ try{
   const graphicsUi={menu:document.getElementById('pause-menu').style.display,label:document.getElementById('btn-graphics-quality')?.innerText,
    tier:state.graphicsQuality.tier,saved:localStorage.getItem('graphics-quality')};
   window.setGraphicsQuality('high');togglePause();
-  return {chunks:chunks.length,grass,stones,bushes,landscape,flowerVisibility,basePositions:bases?.count||0,grassVolume,stoneStyle,contacts:contacts.length,construction,damaged,
+  return {chunks:chunks.length,grass,stones,bushes,landscape,flowerVisibility,flowerStyle,basePositions:bases?.count||0,grassVolume,stoneStyle,contacts:contacts.length,construction,damaged,
    marksAdded:gameTestAPI.SurfaceMarks.marks.length-marksBefore,
    sky:state.skyDome?.name,rim:state.rimLight?.intensity,quality:state.graphicsQuality,
    profiles:{low:{tier:low.tier,grass:lowGrass,pixel:low.maxPixelRatio},ultra:{tier:ultra.tier,pixel:ultra.maxPixelRatio}},graphicsUi,
@@ -75,7 +82,9 @@ try{
  });
  if(errors.length||result.grass<100||result.stones<10||result.bushes<10||
     result.landscape.grassOpening<=result.landscape.bushOpening+.02||result.landscape.landmarks<1||
-    Math.max(...result.landscape.treeCounts)<2||!result.landscape.treeCounts.includes(0)||!result.flowerVisibility.culled||
+    Math.max(...result.landscape.treeCounts)<2||!result.landscape.treeCounts.includes(0)||result.landscape.grassVarieties!==4||
+    result.flowerStyle.count<30||result.flowerStyle.colors<4||result.flowerStyle.petalCounts.length<4||
+    !result.flowerStyle.daisy||!result.flowerStyle.tulip||result.flowerStyle.maxMeshes>4||!result.flowerVisibility.culled||
     result.flowerVisibility.inside<1||result.basePositions<1||result.contacts<2||
     result.grassVolume.triangles<220||result.grassVolume.normals!==result.grassVolume.vertices||result.grassVolume.minColor<.18||
     result.grassVolume.instanceColors<1||result.grassVolume.photoMap||result.grassVolume.emissive<.14||!result.grassVolume.stableCulling||
