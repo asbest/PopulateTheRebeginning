@@ -1118,6 +1118,7 @@ const CONFIG = {
     },
     AUDIO: {
         EXPLORATION_MUSIC: 'IngameMusic.mp3',
+        EXPLORATION_TRACKS: ['IngameMusic.mp3', 'IngameMusic2.mp3'],
         COMBAT_MUSIC: 'FightMusic.mp3',
         EXPLORATION_VOLUME: 0.5,
         COMBAT_VOLUME: 0.6,
@@ -2219,13 +2220,23 @@ const SoundManager = {
     pendingSounds: [],
     musicRestoreTimer: null,
     explorationMusic: null,
+    explorationTracks: [],
+    lastExplorationTrack: -1,
+    musicMode: null,
     combatMusic: null,
     musicEnabled: localStorage.getItem(CONFIG.SAVED_KEYS.MUSIC_ENABLED) !== 'false',
     init: function() {
-        if (!this.explorationMusic) {
-            this.explorationMusic = new Audio(CONFIG.AUDIO.EXPLORATION_MUSIC);
-            this.explorationMusic.loop = true;
-            this.explorationMusic.volume = CONFIG.AUDIO.EXPLORATION_VOLUME;
+        if (!this.explorationTracks.length) {
+            this.explorationTracks = CONFIG.AUDIO.EXPLORATION_TRACKS.map(src => {
+                const audio = new Audio(src);
+                audio.preload = 'metadata';
+                audio.volume = CONFIG.AUDIO.EXPLORATION_VOLUME;
+                audio.addEventListener('ended', () => {
+                    if (this.explorationMusic === audio && this.musicEnabled && this.musicMode === 'exploration')
+                        this.playNextExplorationTrack();
+                });
+                return audio;
+            });
         }
         if (!this.combatMusic) {
             this.combatMusic = new Audio(CONFIG.AUDIO.COMBAT_MUSIC);
@@ -2615,16 +2626,30 @@ const SoundManager = {
         this.init();
 
         if (enemyInRange) {
+            this.musicMode = 'combat';
             if (this.combatMusic.paused) {
                 if (this.explorationMusic) this.explorationMusic.pause();
                 this.combatMusic.play().catch(e => {});
             }
         } else {
-            if (this.explorationMusic && this.explorationMusic.paused) {
-                if (this.combatMusic) this.combatMusic.pause();
-                this.explorationMusic.play().catch(e => {});
-            }
+            const enteringExploration = this.musicMode !== 'exploration';
+            this.musicMode = 'exploration';
+            if (this.combatMusic) this.combatMusic.pause();
+            if (enteringExploration || !this.explorationMusic) this.playNextExplorationTrack();
+            else if (this.explorationMusic.paused) this.explorationMusic.play().catch(() => {});
         }
+    },
+    playNextExplorationTrack: function() {
+        const tracks = this.explorationTracks;
+        if (!tracks.length) return;
+        const previous = this.lastExplorationTrack;
+        const offset = Math.floor(Math.random() * (tracks.length - (previous < 0 ? 0 : 1)));
+        const next = previous < 0 ? offset : offset >= previous ? offset + 1 : offset;
+        if (this.explorationMusic) this.explorationMusic.pause();
+        this.lastExplorationTrack = next;
+        this.explorationMusic = tracks[next];
+        this.explorationMusic.currentTime = 0;
+        this.explorationMusic.play().catch(() => {});
     },
     setMusicEnabled: function(enabled) {
         this.musicEnabled = enabled;

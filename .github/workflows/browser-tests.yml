@@ -107,7 +107,10 @@ jobs:
           done
           cat /tmp/populate-server.log
           exit 1
+      - name: Gameplay music rotation
+        run: node tests/music.mjs
       - name: Spell audio
+        if: always()
         run: node tests/audio.mjs
   strategy-long:
     runs-on: ubuntu-latest

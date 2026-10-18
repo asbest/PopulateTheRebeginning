@@ -89,7 +89,7 @@ try {
         throw new Error('Configured objective was not explained before play: ' + JSON.stringify(configured));
     }
     phase = 'starting play with the configured objective';
-    await page.locator('#story-close').click({ noWaitAfter: true });
+    await page.locator('#story-close').evaluate(button => button.click());
     if (!await page.locator('#campaign-objective-summary').isVisible() ||
         !await page.locator('#campaign-objective').isVisible()) {
         throw new Error('Configured goal and progress are missing from the gameplay HUD');

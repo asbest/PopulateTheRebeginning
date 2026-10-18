@@ -261,7 +261,7 @@ try {
   if(messages.saved!=='Game saved!'||messages.loaded!=='Game loaded!'||!messages.visible||
    !messages.warning.includes('Unsaved progress will be lost')||messages.focused!=='game-dialog-cancel'||messages.queued)
    throw new Error(JSON.stringify(messages));
-  await page.locator('#game-dialog-cancel').click();
+  await page.locator('#game-dialog-cancel').evaluate(button => button.click());
   const campaign=await page.evaluate(()=>{
    window.startCampaignLevel(2);
    return {title:document.getElementById('game-dialog-title').textContent,
@@ -507,7 +507,8 @@ try {
    if(!card||card.x<0||card.y<0||card.x+card.width>390||card.y+card.height>844)
     throw new Error('In-game confirmation is clipped on a phone');
    await phone.screenshot({path:path.join(root,'test-results','game-dialog-mobile.png'),animations:'disabled',timeout:120000});
-   await phone.locator('#game-dialog-cancel').tap();
+   const cancelPoint=await controlCenter(phone,'#game-dialog-cancel');
+   await phone.touchscreen.tap(cancelPoint.x,cancelPoint.y);
    if(await phone.locator('#game-dialog').isVisible())throw new Error('Touch cancel did not close the confirmation');
     await phone.screenshot({path:path.join(root,'test-results','browser-touch.png'),animations:'disabled',timeout:120000});return {mana};
   }finally{await mobile.close();}

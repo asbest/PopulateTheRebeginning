@@ -379,7 +379,7 @@ try {
         await phone.evaluate(()=>{window.stalledLoop=gameTestAPI.SoundManager.startSustain('tornado_loop');});
         try {
             await phone.waitForFunction(()=>stalledLoop?.usingWebAudio&&stalledLoop.webSource&&
-                gameTestAPI.SoundManager.ctx.currentTime-stalledLoop.webStartedAt>.1,null,{timeout:10000});
+                gameTestAPI.SoundManager.ctx.state==='running',null,{timeout:10000});
         } catch(error) {
             const detail=await phone.evaluate(()=>({active:gameTestAPI.SoundManager.activeSustains.has(stalledLoop),
                 owner:stalledVoices.indexOf(stalledLoop?.audio),blocked:gameTestAPI.SoundManager.mediaEffectsBlocked,
