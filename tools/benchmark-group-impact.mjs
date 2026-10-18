@@ -11,9 +11,18 @@ try {
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
         {waitUntil:'load',timeout:90000});
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.renderer,null,{timeout:90000});
+    // Chunk streaming continues after the shaman appears. An in-flight chunk
+    // changes draw calls and shader counts independently of the explosion.
+    await page.waitForFunction(()=>Object.keys(state.chunks).length===
+        (2*gameTestAPI.CONFIG.TERRAIN.RENDER_DISTANCE+1)**2&&
+        performance.now()-(state.lastTerrainBuildAt||0)>250,null,{timeout:90000});
     const report=await page.evaluate(()=>{
         closeHelp();closeStoryOverlay();state.isPaused=true;
         state.renderer.setPixelRatio(1);
+        // Startup construction effects can still be alive when CI reaches this
+        // checkpoint. Measure only the pulses produced by the group impact.
+        gameTestAPI.HitPulseManager.active.length=0;
+        gameTestAPI.HitPulseManager.update(0);
         const center=state.shaman.mesh.position;
         const x=center.x+3,z=center.z+3;
         const units=[];
@@ -56,8 +65,10 @@ try {
             hitPulses,expired};
     });
     if(report.hits!==24 || report.hitPulses!==24 || !report.expired || report.extraCalls>30 ||
-        report.extraParticles>24 || report.after.programs>report.before.programs+2)
+        report.extraParticles>24 || report.after.programs>report.before.programs+2) {
+        console.error(`::error title=Group impact rendering budget::${JSON.stringify(report)}`);
         throw new Error(`Group impact regressed: ${JSON.stringify(report)}`);
+    }
     console.log(JSON.stringify(report));
 } finally {
     await browser.close();

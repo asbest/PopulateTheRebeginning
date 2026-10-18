@@ -327,16 +327,25 @@ try {
         const stormPoint=await clickControl(phone,'#btn-firestorm');
         checkpoint='Android sustained firestorm';
         await phone.touchscreen.tap(stormPoint.x,stormPoint.y);
+        if(await phone.evaluate(()=>state.currentAction)!=='firestorm')
+            throw new Error('Android touch did not select firestorm');
         const stormTarget=await phone.evaluate(()=>{
             const point=state.shaman.mesh.position.clone();point.x+=2;point.project(state.camera);
             return {x:(point.x+1)*innerWidth/2,y:(1-point.y)*innerHeight/2};
         });
         await phone.touchscreen.tap(stormTarget.x,stormTarget.y);
+        await phone.waitForFunction(()=>state.activeEffects.some(effect=>effect.soundLoop?.name==='firestorm_loop'),
+            null,{timeout:10000});
         await phone.waitForFunction(()=>[...gameTestAPI.SoundManager.activeSustains]
-            .some(handle=>handle.audio.currentSrc.endsWith('/sfx/firestorm_loop.wav')&&handle.audio.currentTime>.1),null,{timeout:15000});
+            .some(handle=>handle.name==='firestorm_loop'&&
+                (handle.audio.currentTime>.1||
+                    (handle.usingWebAudio&&handle.webSource&&
+                        gameTestAPI.SoundManager.ctx.state==='running'&&
+                        gameTestAPI.SoundManager.ctx.currentTime-handle.webStartedAt>.1))),
+            null,{timeout:15000});
         const stoppedPhoneStorm=await phone.evaluate(()=>{
             const sound=gameTestAPI.SoundManager;
-            window.phoneStorm=[...sound.activeSustains].find(handle=>handle.audio.currentSrc.endsWith('/sfx/firestorm_loop.wav'));
+            window.phoneStorm=[...sound.activeSustains].find(handle=>handle.name==='firestorm_loop');
             state.isPaused=true;sound.syncSustains(true);
             if(!phoneStorm.audio.paused)throw new Error('Android storm audio ignored pause');
             const effect=state.activeEffects.find(item=>item.soundLoop===phoneStorm);
