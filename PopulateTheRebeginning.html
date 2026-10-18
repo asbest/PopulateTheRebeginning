@@ -3478,30 +3478,65 @@ const CritterManager = {
 
 let cloudPuffGeometry,cloudTopMaterial,cloudBaseMaterial;
 const cloudTransformDummy=new THREE.Object3D();
+function makeCloudTexture(){
+    const size=128,data=new Uint8Array(size*size*4);
+    const hash=(x,y)=>{
+        let n=Math.imul(x,374761393)+Math.imul(y,668265263);
+        n=Math.imul(n^(n>>>13),1274126177);
+        return ((n^(n>>>16))>>>0)/4294967295;
+    };
+    const noise=(x,y)=>{
+        const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
+        const sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy);
+        return THREE.MathUtils.lerp(THREE.MathUtils.lerp(hash(ix,iy),hash(ix+1,iy),sx),
+            THREE.MathUtils.lerp(hash(ix,iy+1),hash(ix+1,iy+1),sx),sy);
+    };
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+        const u=(x+.5)/size*2-1,v=(y+.5)/size*2-1;
+        const large=noise(u*3.2+17,v*3.2+11),fine=noise(u*8.5+37,v*8.5+23);
+        const radius=Math.hypot(u*.94,v*1.05);
+        const edge=radius+(large-.5)*.32+(fine-.5)*.11;
+        const density=THREE.MathUtils.clamp((1.03-edge)/.42,0,1);
+        const i=(y*size+x)*4,shade=.91+.09*large;
+        data[i]=Math.round(255*shade);data[i+1]=Math.round(255*shade);data[i+2]=Math.round(255*shade);
+        data[i+3]=Math.round(255*density*density);
+    }
+    const texture=new THREE.DataTexture(data,size,size,THREE.RGBAFormat);
+    texture.colorSpace=THREE.SRGBColorSpace;
+    texture.minFilter=THREE.LinearMipmapLinearFilter;texture.magFilter=THREE.LinearFilter;
+    texture.generateMipmaps=true;texture.needsUpdate=true;
+    return texture;
+}
 const CloudManager = {
     clouds: [],
     init: function() {
         // Two instanced layers replace up to sixteen separate draw calls per cloud.
         // A little emissive fill keeps the shaded undersides blue-grey instead of black.
-        cloudPuffGeometry=new THREE.SphereGeometry(1,14,9);
-        cloudTopMaterial=new THREE.MeshStandardMaterial({color:0xf5fafc,emissive:0xb8c8d2,emissiveIntensity:.2,
-            transparent:true,opacity:.48,depthWrite:false,roughness:1,metalness:0,fog:true,premultipliedAlpha:true});
-        cloudBaseMaterial=new THREE.MeshStandardMaterial({color:0xa8bac6,emissive:0x607381,emissiveIntensity:.18,
-            transparent:true,opacity:.3,depthWrite:false,roughness:1,metalness:0,fog:true,premultipliedAlpha:true});
+        cloudPuffGeometry=new THREE.PlaneGeometry(2,2);
+        const cloudTexture=makeCloudTexture();
+        cloudTopMaterial=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xd7e5ee,emissiveIntensity:.32,
+            map:cloudTexture,transparent:true,opacity:.68,depthWrite:false,roughness:1,metalness:0,fog:true,side:THREE.DoubleSide});
+        cloudBaseMaterial=new THREE.MeshStandardMaterial({color:0x9fafbd,emissive:0x607381,emissiveIntensity:.18,
+            map:cloudTexture,transparent:true,opacity:.4,depthWrite:false,roughness:1,metalness:0,fog:true,side:THREE.DoubleSide});
         for(let i=0; i<CONFIG.CRITTERS.CLOUD_COUNT; i++) {
             this.spawnCloud(true);
         }
     },
     spawnCloud: function(randomPos=false) {
         const group = new THREE.Group();group.name='Instanced volumetric cloud';
-        const chunks=8+Math.floor(Math.random()*5),puffs=[],layers={top:[],base:[]};
+        const chunks=9+Math.floor(Math.random()*4),baseCount=3+Math.floor(Math.random()*2),puffs=[],layers={top:[],base:[]};
         for(let j=0;j<chunks;j++){
-            const t=(j+.5)/chunks,center=1-Math.abs(t-.5)*2;
-            const size=.9+center*1.65+Math.random()*.5;
-            const position=new THREE.Vector3((t-.5)*8+(Math.random()-.5)*1.5,
-                -.48+center*1.05+(Math.random()-.5)*.42,(Math.random()-.5)*(2.1+center*1.6));
-            const scale=new THREE.Vector3(size*(1.15+Math.random()*.35),size*(.42+Math.random()*.16),size*(.72+Math.random()*.3));
-            const layer=(j%4===0||position.y<-.05)?'base':'top';
+            const layer=j<baseCount?'base':'top';
+            const t=layer==='base'?(j+.5)/baseCount:(j-baseCount+.5)/(chunks-baseCount);
+            const center=1-Math.abs(t-.5)*2;
+            const position=layer==='base'
+                ?new THREE.Vector3((t-.5)*9.5+(Math.random()-.5)*.8,-.65+(Math.random()-.5)*.14,
+                    (Math.random()-.5)*2.2)
+                :new THREE.Vector3((t-.5)*9+(Math.random()-.5)*1.5,-.06+center*.98+Math.random()*.48,
+                    (Math.random()-.5)*(2.1+center));
+            const size=layer==='base'?1.5+Math.random()*.45:1.05+center*.85+Math.random()*.48;
+            const scale=layer==='base'?new THREE.Vector3(size*1.65,size*.62,size*1.15)
+                :new THREE.Vector3(size*(1.05+Math.random()*.2),size*(.63+Math.random()*.2),size*(.8+Math.random()*.28));
             const puff={layer,index:layers[layer].length,position,base:position.clone(),scale,phase:Math.random()*Math.PI*2};
             layers[layer].push(puff);puffs.push(puff);
         }
@@ -3510,7 +3545,8 @@ const CloudManager = {
             mesh.name=kind==='top'?'Sunlit cloud layer':'Cloud underside layer';mesh.frustumCulled=false;
             mesh.renderOrder=kind==='top'?3:2;
             layers[kind].forEach(p=>{cloudTransformDummy.position.copy(p.position);cloudTransformDummy.scale.copy(p.scale);
-                cloudTransformDummy.rotation.set(0,p.phase*.18,0);cloudTransformDummy.updateMatrix();mesh.setMatrixAt(p.index,cloudTransformDummy.matrix);});
+                cloudTransformDummy.quaternion.copy(state.camera.quaternion);cloudTransformDummy.rotateZ(Math.sin(p.phase)*.08);
+                cloudTransformDummy.updateMatrix();mesh.setMatrixAt(p.index,cloudTransformDummy.matrix);});
             mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.instanceMatrix.needsUpdate=true;group.add(mesh);return mesh;
         };
         const baseLayer=makeLayer('base',cloudBaseMaterial),topLayer=makeLayer('top',cloudTopMaterial);
@@ -3529,7 +3565,7 @@ const CloudManager = {
         const scale=.8+Math.random()*.35;group.scale.set(scale,scale*.82,scale);
 
         state.scene.add(group);
-        const shadow=createContactShadow(5+scale*2);shadow.material=shadow.material.clone();shadow.material.opacity=.035;
+        const shadow=createContactShadow(8+scale*3);shadow.material=shadow.material.clone();shadow.material.opacity=.03;
         shadow.userData.cloudShadow=true;state.scene.add(shadow);
         this.clouds.push({mesh:group,shadow,puffs,layers:{top:topLayer,base:baseLayer},speed:.85+Math.random()*1.45,
             phase:Math.random()*Math.PI*2,age:Math.random()*100});
@@ -3537,14 +3573,16 @@ const CloudManager = {
     update: function(dt) {
         for(let i = this.clouds.length - 1; i >= 0; i--) {
             const c = this.clouds[i];
-            c.age+=dt;const gust=.84+.16*Math.sin(c.age*.17+c.phase);
+            c.age+=dt;const gust=.9+.1*Math.sin(c.age*.09+c.phase);
             c.mesh.position.x+=c.speed*gust*dt;
-            c.mesh.position.z+=Math.sin(c.age*.09+c.phase)*dt*.16;
+            c.mesh.position.z+=Math.sin(c.age*.045+c.phase)*dt*.07;
             c.puffs.forEach((p,j)=>{
-                p.position.copy(p.base);p.position.y+=Math.sin(c.age*.11+p.phase)*.13;
-                const breathe=1+Math.sin(c.age*.07+p.phase+j)*.018;
+                p.position.copy(p.base);p.position.y+=Math.sin(c.age*.055+p.phase)*.045;
+                const breathe=1+Math.sin(c.age*.045+p.phase+j)*.008;
                 cloudTransformDummy.position.copy(p.position);cloudTransformDummy.scale.copy(p.scale).multiplyScalar(breathe);
-                cloudTransformDummy.rotation.set(0,p.phase*.18+Math.sin(c.age*.025+p.phase)*.035,0);cloudTransformDummy.updateMatrix();
+                cloudTransformDummy.quaternion.copy(state.camera.quaternion);
+                cloudTransformDummy.rotateZ(Math.sin(p.phase)*.08+Math.sin(c.age*.018+p.phase)*.012);
+                cloudTransformDummy.updateMatrix();
                 c.layers[p.layer].setMatrixAt(p.index,cloudTransformDummy.matrix);
             });
             c.layers.top.instanceMatrix.needsUpdate=true;c.layers.base.instanceMatrix.needsUpdate=true;
@@ -6774,6 +6812,10 @@ window.Humanoid = class Humanoid {
 
     manualMove(vec, dt = 0.016) {
         if(this.state === 'dead' || this.state === 'stunned') return;
+        this.manualInputFrame=state.manualInputFrame||0;
+        this.manualStopOrigin=null;
+        if(!this.lastManualControlledPosition)this.lastManualControlledPosition=this.mesh.position.clone();
+        else this.lastManualControlledPosition.copy(this.mesh.position);
         if(vec.lengthSq()>0.001) {
             if(!this.manualSwimDirection)this.manualSwimDirection=new THREE.Vector3();
             this.manualSwimDirection.copy(vec);
@@ -6838,6 +6880,33 @@ window.Humanoid = class Humanoid {
         this.state = 'manual';
         this.target = null;
         this.path = [];
+    }
+
+    brakeManualMotion(dt) {
+        if(!this.manualStopOrigin)this.manualStopOrigin=(this.lastManualControlledPosition||this.mesh.position).clone();
+        const origin=this.manualStopOrigin,position=this.mesh.position;
+        const dx=position.x-origin.x,dz=position.z-origin.z,distance=Math.hypot(dx,dz);
+        // One gait cycle is two steps. Never let the residual physics motion exceed it.
+        const limit=Math.max(.45,1.02*this.mesh.scale.y);
+        if(distance>=limit){
+            position.x=origin.x+dx/distance*limit;position.z=origin.z+dz/distance*limit;
+            if(this.rigidBody){
+                const body=this.rigidBody.translation();
+                this.rigidBody.setTranslation({x:position.x,y:body.y,z:position.z},true);
+            }
+        }
+        const v=this.rigidBody?this.rigidBody.linvel():this.velocity;
+        const speed=Math.hypot(v.x,v.z),remaining=Math.max(0,limit-distance);
+        const decay=Math.min(Math.exp(-14*Math.min(dt,.1)),
+            Math.sqrt(24*remaining)/Math.max(speed,.001));
+        const vx=distance>=limit?0:v.x*decay,vz=distance>=limit?0:v.z*decay;
+        if(this.rigidBody)this.rigidBody.setLinvel({x:vx,y:v.y,z:vz},true);
+        this.velocity.x=vx;this.velocity.z=vz;
+        if(Math.hypot(vx,vz)<.08||distance>=limit){
+            if(this.rigidBody)this.rigidBody.setLinvel({x:0,y:v.y,z:0},true);
+            this.velocity.x=0;this.velocity.z=0;
+            this.state='idle';this.manualStopOrigin=null;
+        }
     }
 
     goto(x, z) {
@@ -7106,6 +7175,8 @@ window.Humanoid = class Humanoid {
             }
             this.mesh.position.addScaledVector(this.velocity, dt);
         }
+        if(this.state==='manual'&&this.manualInputFrame!==(state.manualInputFrame||0))
+            this.brakeManualMotion(dt);
 
         // Physics separation and residual velocity can drift across a shoreline even
         // when every planned waypoint is dry. Keep the last valid ground position.
@@ -10744,6 +10815,7 @@ function animate() {
         if(Art.uniforms)Art.uniforms.windTime.value=state.clock.getElapsedTime();
     }
 
+    state.manualInputFrame=(state.manualInputFrame||0)+1;
     _inputVector.copy(state.joystickVector).add(state.keyboardVector).clampLength(0, 1);
     const inputVector = _inputVector;
     if(inputVector.lengthSq() > 0.001 && state.selectedUnits.length > 0) {

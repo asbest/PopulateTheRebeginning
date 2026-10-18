@@ -141,6 +141,29 @@ try{
   u.state='idle';for(let i=0;i<90;i++){state.physicsWorld.step();u.update(1/60);}
   const v=u.rigidBody.linvel();if(Math.hypot(v.x,v.z)>.05)throw new Error('Idle slides '+JSON.stringify(v));return {travelled,maxGap,stoppedSpeed:Math.hypot(v.x,v.z)};
  }));
+ await check('Releasing direct control stops within two steps and accepts a new command',()=>page.evaluate(()=>{
+  const u=state.units[0],direction=new THREE.Vector3(0,0,-1),dt=1/60;
+  for(let i=0;i<35;i++){
+   state.manualInputFrame=(state.manualInputFrame||0)+1;
+   u.manualMove(direction,dt);state.physicsWorld.timestep=dt;state.physicsWorld.step();u.update(dt);
+  }
+  const start=u.mesh.position.clone(),speed=Math.hypot(u.velocity.x,u.velocity.z);
+  let maxTravel=0,stoppedAt=-1;
+  for(let i=0;i<90;i++){
+   state.manualInputFrame++;
+   state.physicsWorld.step();u.update(dt);
+   maxTravel=Math.max(maxTravel,Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z));
+   if(u.state==='idle'){stoppedAt=i;break;}
+  }
+  const limit=1.02*u.mesh.scale.y;
+  if(speed<1||stoppedAt<0||stoppedAt>45||maxTravel>limit+.08||Math.hypot(u.velocity.x,u.velocity.z)>.05)
+   throw new Error(JSON.stringify({speed,stoppedAt,maxTravel,limit,state:u.state}));
+  state.manualInputFrame++;u.manualMove(direction,dt);
+  if(u.state!=='manual')throw new Error('A new manual command did not resume movement');
+  u.state='idle';u.velocity.set(0,0,0);
+  if(u.rigidBody)u.rigidBody.setLinvel({x:0,y:0,z:0},true);
+  return {speed,stoppedAt,maxTravel,limit};
+ }));
  await check('Knockback remains physical and does not trigger ground adhesion',()=>page.evaluate(()=>{
   const u=state.units[0];u.applyForce(new THREE.Vector3(0,6,0));const before=u.mesh.position.y;
   for(let i=0;i<8;i++){state.physicsWorld.step();u.update(1/60);}

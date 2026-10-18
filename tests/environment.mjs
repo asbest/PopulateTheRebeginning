@@ -57,9 +57,13 @@ try{
   const firstWind=Art.uniforms.windTime.value;Art.uniforms.windTime.value=firstWind+1;
   const cloud=gameTestAPI.CloudManager.clouds[0],cloudBefore=cloud.mesh.position.clone(),puffBefore=cloud.puffs[0].position.y;
   gameTestAPI.CloudManager.update(.5);
+  const cloudTexture=cloud.layers.top.material.map,cloudPixels=cloudTexture.image.data,
+   cloudSize=cloudTexture.image.width,cloudCenter=(Math.floor(cloudSize/2)*cloudSize+Math.floor(cloudSize/2))*4;
   const cloudMotion={distance:cloud.mesh.position.distanceTo(cloudBefore),puff:Math.abs(cloud.puffs[0].position.y-puffBefore),shadow:cloud.shadow.userData.cloudShadow,
    drawLayers:cloud.mesh.children.filter(child=>child.isInstancedMesh).length,puffs:cloud.puffs.length,
-   vertices:cloud.layers.top.geometry.attributes.position.count,undersideFill:cloud.layers.base.material.emissiveIntensity};
+   vertices:cloud.layers.top.geometry.attributes.position.count,undersideFill:cloud.layers.base.material.emissiveIntensity,
+   softEdges:cloudPixels[3]<5&&cloudPixels[cloudCenter+3]>150,
+   sharedTexture:cloudTexture===cloud.layers.base.material.map,textureSize:cloudSize};
   let shore=null;for(let x=-160;x<=160&&!shore;x+=3)for(let z=-160;z<=160;z+=3){const h=getHeight(x,z);if(Math.min(Math.abs(h-CONFIG.TERRAIN.VISUAL_WATER_LEVEL),Math.abs(h-CONFIG.TERRAIN.WATER_LEVEL))<.3){shore={x,z};break;}}
   if(shore){state.cameraLookAt.set(shore.x,0,shore.z);for(let i=0;i<180;i++)gameTestAPI.WaterSprayManager.update(1/60);}
   const spray={alive:Array.from(gameTestAPI.WaterSprayManager.life||[]).filter(v=>v>0).length,name:gameTestAPI.WaterSprayManager.points?.name};
@@ -96,7 +100,9 @@ try{
     result.graphicsUi.menu!=='flex'||result.graphicsUi.tier!=='ultra'||result.graphicsUi.saved!=='ultra'||!result.graphicsUi.label?.includes('Ultra')||
     result.sky!=='Procedural atmosphere'||!result.rim||result.water.depthWrite||!result.water.hasFresnel||!result.water.hasWaveNormal||!result.water.coastalDepth||
     !result.water.vertical||!result.water.gerstner||!result.water.breakers||result.cloudMotion.distance<=0||result.cloudMotion.puff<=0||!result.cloudMotion.shadow||
-    result.cloudMotion.drawLayers!==2||result.cloudMotion.puffs>12||result.cloudMotion.vertices>180||result.cloudMotion.undersideFill<.15||
+    result.cloudMotion.drawLayers!==2||result.cloudMotion.puffs>12||result.cloudMotion.vertices>4||
+    !result.cloudMotion.softEdges||!result.cloudMotion.sharedTexture||result.cloudMotion.textureSize<128||
+    result.cloudMotion.undersideFill<.15||
     result.spray.name!=='Shore spray'||result.spray.alive<1||!result.skyShader.scattering||!result.skyShader.cirrus||!result.skyShader.night||
     result.wind.cache!=='island-tree-wind-v1'||!result.wind.advanced||!result.quality?.maxPixelRatio)
    throw new Error(JSON.stringify({errors,result}));
