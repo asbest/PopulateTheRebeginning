@@ -46,6 +46,9 @@ jobs:
       - name: Environment rendering
         if: always()
         run: node tests/environment.mjs
+      - name: Procedural terrain variety
+        if: always()
+        run: node tests/terrain-variety.mjs
       - name: Locomotion and terrain physics
         if: always()
         run: node tests/locomotion.mjs

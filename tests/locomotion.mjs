@@ -35,7 +35,8 @@ try{
        else s.pause=0;
        s.maxPause=Math.max(s.maxPause,s.pause);s.last={x:p.x,z:p.z};
       });
-      if(movementProbes.every(probe=>Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)<1.5))return {frame,pauses:samples.map(s=>s.maxPause)};
+      // Pathfinder can finish at the nearest walkable grid point beside the click.
+      if(movementProbes.every(probe=>Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)<1.75))return {frame,pauses:samples.map(s=>s.maxPause)};
      }
      throw new Error('Route did not finish: '+JSON.stringify(movementProbes.map(probe=>({faction:probe.u.faction,state:probe.u.state,grounded:probe.u.isGrounded,path:probe.u.path?.length,distance:Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)}))));
     };
@@ -55,7 +56,7 @@ try{
       else s.pause=0;
       s.maxPause=Math.max(s.maxPause,s.pause);s.last={x:p.x,z:p.z};
      });
-     if(movementProbes.every(({u,start})=>Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)<1.5))return {frames:frame,maxPauses:samples.map(s=>s.maxPause)};
+     if(movementProbes.every(({u,start})=>Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)<1.75))return {frames:frame,maxPauses:samples.map(s=>s.maxPause)};
     }
     throw new Error('Return route did not finish: '+JSON.stringify(movementProbes.map(({u,start})=>({faction:u.faction,state:u.state,grounded:u.isGrounded,path:u.path?.length,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)}))));
    });

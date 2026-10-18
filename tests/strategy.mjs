@@ -56,7 +56,7 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
    state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
    for(let x=-35;x<=35;x++)for(let z=-28;z<=28;z++){
     const height=Math.min(6,Math.max(0,Math.abs(x)-1,Math.abs(z)-6));
-    state.terrainMods.set(`${x},${z}`,height-getHeight(x,z));
+    state.terrainMods.set(`${x},${z}`,height-gameTestAPI.getBaseHeight(x,z));
    }
    state.heightCache.clear();gameTestAPI.updateChunks(true);
    const start=new THREE.Vector3(-12,0,0),end=new THREE.Vector3(12,0,0);
@@ -114,7 +114,7 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
    for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
    for(let x=-12;x<=12;x++)for(let z=-8;z<=8;z++){
     const height=x<0?-1:x<1?-1+9*x:8;
-    state.terrainMods.set(`${x},${z}`,height-getHeight(x,z));
+    state.terrainMods.set(`${x},${z}`,height-gameTestAPI.getBaseHeight(x,z));
    }
    state.heightCache.clear();gameTestAPI.updateChunks(true);
    const waterClimber=new Humanoid(1,'warrior',-3,0);state.units.push(waterClimber);

@@ -2829,6 +2829,13 @@ function landscapeMoisture(x,z) {
 function landscapeOpening(x,z) {
     return .5+.5*state.simplex.noise2D(x*.023-139,z*.023+57);
 }
+function landscapeForest(moisture,opening) {
+    return moisture*.7+(1-opening)*.3;
+}
+function landscapeBlend(a,b,value) {
+    const t=Math.max(0,Math.min(1,(value-a)/(b-a)));
+    return t*t*(3-2*t);
+}
 
 function getBaseHeight(x, z) {
     if (!state.simplex) return 0;
@@ -2849,11 +2856,23 @@ function getBaseHeight(x, z) {
     y *= hm;
 
     if (biome!=='void'&&biome!=='celestial'&&biome!=='cosmic') {
-        // Broad, restrained ridges and shallow hollows add recognizable landforms.
-        // Fade them near sea level so the shoreline remains traversable.
+        // One slow field groups hills into mountain, plateau and archipelago
+        // regions. All terms use world coordinates, so mesh and collider agree.
+        const region=state.simplex.noise2D(x*.004+211,z*.004-173);
         const relief=state.simplex.noise2D(x*.011+47,z*.011-29);
         const land=Math.max(0,Math.min(1,(y-WATER_LEVEL+1.5)/4));
+        const mountains=landscapeBlend(.16,.58,region);
+        const archipelago=landscapeBlend(.18,.58,-region);
+        const plateau=landscapeBlend(.18,.55,relief)*(1-mountains);
         y+=(Math.abs(relief)-.38)*(biome==='mountain'?2.0:1.25)*land;
+        y+=mountains*(2.2+Math.abs(relief)*5.5)*(biome==='mountain'?1.4:1);
+        y+=plateau*2.5*land;
+        // Flatten only elevated ground; the feathered mask retains walkable
+        // slopes around the rim instead of making an impassable vertical wall.
+        const terrace=plateau*land*.64;
+        if(y>5)y+=(9.5-y)*terrace;
+        y-=Math.max(0,-relief-.1)*2.8*(1-mountains);
+        y-=archipelago*3.2;
     }
 
     if (biome === 'celestial') {
@@ -4053,13 +4072,13 @@ function initTerrainResources() {
 function forEachTreeSite(cx,cz,visit) {
     const offX=cx*CHUNK_SIZE,offZ=cz*CHUNK_SIZE;
     const random=mulberry32(((cx*92837111)^(cz*689287499)^0x7f4a7c15)>>>0);
-    const grove=landscapeMoisture(offX,offZ)>.65&&landscapeOpening(offX,offZ)<.48;
-    for(let k=0;k<(grove?13:8);k++){
+    for(let k=0;k<32;k++){
         const x=(random()-.5)*CHUNK_SIZE+offX,z=(random()-.5)*CHUNK_SIZE+offZ;
         const moisture=landscapeMoisture(x,z),opening=landscapeOpening(x,z);
-        if(random()>=.13+.67*moisture*(1-opening*.65))continue;
+        const forest=landscapeForest(moisture,opening);
+        if(random()>=.03+Math.min(.9,Math.max(0,(forest-.38)*2.2)))continue;
         const h=getHeight(x,z);
-        if(h<=3||h>=10)continue;
+        if(h<=3||h>=13)continue;
         const slope=Math.hypot(getHeight(x+.7,z)-getHeight(x-.7,z),
             getHeight(x,z+.7)-getHeight(x,z-.7));
         if(slope>1.7)continue;
@@ -9341,7 +9360,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);

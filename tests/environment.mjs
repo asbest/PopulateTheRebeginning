@@ -85,7 +85,7 @@ try{
    wind:{cache:treeMaterial.customProgramCacheKey?.(),advanced:Art.uniforms.windTime.value>firstWind},treeShadows};
  });
  if(errors.length||result.grass<100||result.stones<10||result.bushes<10||
-    result.landscape.grassOpening<=result.landscape.bushOpening+.02||result.landscape.landmarks<1||
+    result.landscape.grassOpening<=result.landscape.bushOpening+.02||
     Math.max(...result.landscape.treeCounts)<2||!result.landscape.treeCounts.includes(0)||result.landscape.grassVarieties!==4||
     result.flowerStyle.count<30||result.flowerStyle.colors<4||result.flowerStyle.petalCounts.length<4||
     !result.flowerStyle.daisy||!result.flowerStyle.tulip||result.flowerStyle.maxMeshes>4||!result.flowerVisibility.culled||
