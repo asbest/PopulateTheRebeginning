@@ -41,28 +41,37 @@ try {
         opening.visible !== 'flex' || !opening.paused) throw new Error('Opening chapter failed: ' + JSON.stringify(opening));
     console.log('PASS Campaign opens with the new premise and a playable objective');
 
+    await page.setViewportSize({ width: 390, height: 640 });
+    await page.locator('#story-settings').click();
+    await page.locator('#objective-kind-select').selectOption('escort');
+    await page.locator('[data-objective-field="followers"]').fill('4');
+    await page.locator('[data-objective-field="followers"]').press('Tab');
     const editor = await page.evaluate(() => {
-        toggleMatchSettings();
+        if (document.getElementById('match-settings-menu').style.display !== 'flex' ||
+            document.getElementById('story-overlay').style.display !== 'none') throw new Error('Pre-level settings did not open');
         const select = document.getElementById('objective-level-select');
         select.value = '1';
         renderObjectiveSettings();
         const kind = document.getElementById('objective-kind-select');
-        kind.value = 'escort';
-        kind.dispatchEvent(new Event('change'));
-        const input = document.querySelector('[data-objective-field="followers"]');
-        input.value = '4';
-        input.dispatchEvent(new Event('change'));
         return {
             levels: select.options.length,
             kinds: kind.options.length,
             summary: document.getElementById('objective-settings-summary').textContent,
             stored: JSON.parse(localStorage.getItem('rebeginning_campaign_objectives')),
-            fields: document.querySelectorAll('#objective-settings-fields input').length
+            fields: document.querySelectorAll('#objective-settings-fields input').length,
+            liveRule: state.campaignMission?.rule,
+            liveEscorts: state.campaignMission?.escortIds?.length,
+            liveHud: document.getElementById('campaign-objective-summary').textContent
         };
     });
     if (editor.levels !== 12 || editor.kinds !== 7 || editor.fields !== 2 ||
         editor.stored?.['1']?.kind !== 'escort' || editor.stored?.['1']?.followers !== 4 ||
+        editor.liveRule?.followers !== 4 || editor.liveEscorts !== 4 || !editor.liveHud.includes('Escort 4 followers') ||
         !editor.summary.includes('4 marked followers')) throw new Error('Objective editor failed: ' + JSON.stringify(editor));
+    await page.locator('#match-settings-menu button').last().click();
+    const revisedStory = await page.locator('#story-objective-list').textContent();
+    if (!revisedStory.includes('4 marked followers')) throw new Error('Pre-level story did not update');
+    await page.setViewportSize({ width: 1280, height: 800 });
     await startLevel(1);
     const configured = await page.evaluate(() => ({
         kind: state.campaignMission?.rule?.kind,
@@ -75,11 +84,47 @@ try {
         !configured.steps.includes('4 marked followers') || !configured.paused) {
         throw new Error('Configured objective was not explained before play: ' + JSON.stringify(configured));
     }
+    await page.locator('#story-close').click();
+    if (!await page.locator('#campaign-objective-summary').isVisible() ||
+        !await page.locator('#campaign-objective').isVisible()) {
+        throw new Error('Configured goal and progress are missing from the gameplay HUD');
+    }
     await page.evaluate(() => {
+        if (!state.isPaused) togglePause();
+        toggleMatchSettings();
+        const previousEscorts = [...state.campaignMission.escortIds];
+        document.getElementById('objective-kind-select').value = 'settlement';
+        setObjectiveKind('settlement');
+        const huts = document.querySelector('[data-objective-field="huts"]');
+        huts.value = '4';
+        huts.dispatchEvent(new Event('change'));
+        if (state.campaignMission.rule.kind !== 'settlement' || state.campaignMission.rule.huts !== 4 ||
+            previousEscorts.some(id => state.units.some(unit => unit.id === id)) ||
+            !document.getElementById('campaign-objective-summary').textContent.includes('Build 4 huts') ||
+            !document.getElementById('campaign-objective').textContent.includes('Huts 0/4')) {
+            throw new Error('Edited goal did not change the running level and HUD');
+        }
+        saveGame();
+        loadGame();
+        if (state.campaignMission.rule.huts !== 4 ||
+            !document.getElementById('campaign-objective-summary').textContent.includes('Build 4 huts')) {
+            throw new Error('Edited goal did not survive save/load');
+        }
+        setObjectiveKind('capture');
+        if (state.campaignMission.rule.kind !== 'capture' || state.campaignMission.sites.length !== 1 ||
+            state.campaignMission.rule.required !== 1 ||
+            !document.getElementById('campaign-objective-summary').textContent.includes('Secure 1 conduit')) {
+            throw new Error('Changed goal did not create a reachable capture marker');
+        }
         resetAllObjectiveSettings();
-        if (localStorage.getItem('rebeginning_campaign_objectives') !== '{}') throw new Error('Objective reset was not persisted');
+        if (localStorage.getItem('rebeginning_campaign_objectives') !== '{}' ||
+            state.campaignMission.rule.huts !== 2 ||
+            state.campaignMission.sites.length !== 0 ||
+            !document.getElementById('campaign-objective-summary').textContent.includes('Build 2 huts')) {
+            throw new Error('Objective reset did not update the running level');
+        }
     });
-    console.log('PASS Match Settings edits, persists and explains every level objective before play');
+    console.log('PASS Match Settings updates live objectives, HUD, story, save/load and reset');
 
     await startLevel(5);
     await page.evaluate(() => { closeStoryOverlay(); if (state.isPaused) togglePause(); });

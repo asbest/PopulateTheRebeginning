@@ -17,6 +17,7 @@
         }
         #mana-fill { width: 100%; height: 100%; background: #00BFFF; transition: width 0.2s; }
         #campaign-objective { display:none; max-width:min(640px,calc(100vw - 110px)); margin:4px auto 0; color:#fff0bb; font-size:11px; line-height:1.2; text-shadow:0 1px 3px #000; }
+        #campaign-objective-summary { display:none; max-width:min(640px,calc(100vw - 110px)); margin:5px auto 0; color:#fff; font-size:12px; line-height:1.25; font-weight:600; text-shadow:0 1px 3px #000; }
 
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -317,6 +318,9 @@
         .objective-setting-row { display:grid; grid-template-columns:1fr 100px; align-items:center; gap:12px; }
         .objective-setting-row input { width:100%; min-height:38px; box-sizing:border-box; padding:6px; color:#17201e; font:inherit; }
         .objective-settings-note { margin:12px 0 0; color:#bdd1c9; font-size:12px; line-height:1.4; }
+        @media (max-height: 760px) {
+            #story-overlay, #match-settings-menu { justify-content:flex-start !important; padding-top:16px !important; padding-bottom:16px !important; box-sizing:border-box; }
+        }
         #story-discovery { border-top: 1px solid rgba(243, 223, 173, .4); padding-top: 15px; }
         #game-dialog {
             position: fixed; inset: 0; z-index: 1010;
@@ -463,7 +467,10 @@
             <p id="story-objective-hint"></p>
         </section>
         <p id="story-discovery" hidden></p>
-        <button id="story-close" class="menu-btn" style="font-size: 20px; padding: 10px 20px; width: auto;" onclick="closeStoryOverlay()">Begin</button>
+        <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:12px;">
+            <button id="story-settings" class="menu-btn" style="font-size:16px; padding:10px 20px; width:auto;" onclick="openStoryMatchSettings()">Match Settings</button>
+            <button id="story-close" class="menu-btn" style="font-size:20px; padding:10px 20px; width:auto;" onclick="closeStoryOverlay()">Begin</button>
+        </div>
     </div>
 
     <div id="campaign-ending" role="dialog" aria-modal="true" aria-labelledby="campaign-ending-title" hidden style="position:fixed; inset:0; z-index:1020; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; background:rgba(5,10,12,.88); color:#f8efd8; text-align:center; pointer-events:auto;">
@@ -588,7 +595,7 @@
             <select id="objective-kind-select" onchange="setObjectiveKind(this.value)"></select>
             <p id="objective-settings-summary"></p>
             <div id="objective-settings-fields"></div>
-            <p class="objective-settings-note">Changes are saved automatically and apply the next time this level starts.</p>
+            <p class="objective-settings-note">Changes to the current level apply immediately. Switching the victory condition or the number of escorts restarts that objective's progress.</p>
             <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
                 <button class="menu-btn" style="width:auto; margin:0;" onclick="resetSelectedObjectiveSettings()">Reset level</button>
                 <button class="menu-btn" style="width:auto; margin:0;" onclick="resetAllObjectiveSettings()">Reset all</button>
@@ -641,6 +648,7 @@
     <div id="top-bar">
         <div id="mana-bar"><div id="mana-fill"></div></div>
         <p>Mana: <span id="mana-text">100</span></p>
+        <p id="campaign-objective-summary" role="status" aria-live="polite"></p>
         <p id="campaign-objective" role="status" aria-live="off"></p>
     </div>
 
@@ -1444,6 +1452,18 @@ function campaignObjectiveSteps(rule) {
     return [];
 }
 
+function campaignObjectiveSummary(rule) {
+    if (!rule) return '';
+    if (rule.kind === 'settlement') return `Build ${rule.huts} huts + defeat the rival tribe`;
+    if (rule.kind === 'defense') return `Build ${rule.buildings} shelters + survive ${rule.seconds}s (or defeat attackers)`;
+    if (rule.kind === 'breach') return `Reach the marker within ${rule.radius}m + defeat the shaman`;
+    if (rule.kind === 'assassination') return 'Defeat every enemy shaman';
+    if (rule.kind === 'capture') return `Secure ${rule.required} ${rule.required === 1 ? 'conduit' : 'conduits'} · hold each for ${rule.seconds}s`;
+    if (rule.kind === 'stronghold') return `Secure the fortress conduit for ${rule.seconds}s + defeat the shaman`;
+    if (rule.kind === 'escort') return `Escort ${rule.followers} followers to the gate (within ${rule.radius}m)`;
+    return '';
+}
+
 
 // --- js/state.js ---
 
@@ -1930,6 +1950,7 @@ window.openMultiplayer = () => {
 function persistCampaignObjectives() {
     state.matchSettings.campaignObjectives = sanitizeCampaignObjectives(state.matchSettings.campaignObjectives);
     localStorage.setItem(CONFIG.SAVED_KEYS.OBJECTIVE_SETTINGS, JSON.stringify(state.matchSettings.campaignObjectives));
+    applyCurrentCampaignObjective();
 }
 
 window.renderObjectiveSettings = function() {
@@ -2030,7 +2051,12 @@ window.toggleMatchSettings = function() {
         menu.style.display = 'flex';
     } else {
         menu.style.display = 'none';
-        pauseMenu.style.display = 'flex';
+        if (matchSettingsReturnToStory) {
+            matchSettingsReturnToStory = false;
+            renderCampaignStory(state.campaignLevel);
+        } else {
+            pauseMenu.style.display = 'flex';
+        }
     }
 }
 
@@ -9426,6 +9452,7 @@ window.toggleFps = function() {
 
 
 let storyOpenedFromPause = false;
+let matchSettingsReturnToStory = false;
 let campaignMarkers = [];
 let campaignMarkersReady = false;
 
@@ -9497,6 +9524,42 @@ function campaignCompletedBuildings(type = null) {
         !building.underConstruction && (!type || building.type === type)).length;
 }
 
+function applyCurrentCampaignObjective() {
+    if (!state.isCampaign || !state.shaman || !CAMPAIGN_MISSIONS[state.campaignLevel]) return;
+    const current = state.campaignMission;
+    const nextRule = getCampaignMissionRule(state.campaignLevel);
+    if (!current || current.level !== state.campaignLevel) {
+        ensureCampaignMission();
+        return;
+    }
+    const previous = current.rule || CAMPAIGN_MISSIONS[state.campaignLevel];
+    const needsNewMarkers = previous.kind !== nextRule.kind ||
+        (nextRule.kind === 'escort' && previous.followers !== nextRule.followers);
+    if (needsNewMarkers) {
+        clearCampaignMarkers();
+        const oldEscorts = new Set(current.escortIds || []);
+        if (oldEscorts.size) {
+            for (let index = state.units.length - 1; index >= 0; index--) {
+                const unit = state.units[index];
+                if (!oldEscorts.has(unit.id)) continue;
+                if (unit.rigidBody && state.physicsWorld) state.physicsWorld.removeRigidBody(unit.rigidBody);
+                state.rigidBodies.delete(unit.id);
+                if (unit.transportedBy) unit.transportedBy.passengers = unit.transportedBy.passengers.filter(passenger => passenger.id !== unit.id);
+                unit.mesh.parent?.remove(unit.mesh);
+                state.units.splice(index, 1);
+            }
+            state.selectedUnits = state.selectedUnits.filter(unit => !oldEscorts.has(unit.id));
+        }
+        state.campaignMission = null;
+        ensureCampaignMission();
+        updateUnitList();
+        updateContextMenus();
+    } else {
+        current.rule = { ...nextRule };
+        updateCampaignObjective();
+    }
+}
+
 function ensureCampaignMission() {
     if (!state.isCampaign || !CAMPAIGN_MISSIONS[state.campaignLevel] || !state.shaman) return;
     if (state.campaignMission?.level === state.campaignLevel) {
@@ -9529,7 +9592,8 @@ function ensureCampaignMission() {
         mission.escortIds = [];
         mission.arrivedIds = [];
         for (let i = 0; i < rule.followers; i++) {
-            const land = findNearestLand(origin.x + (i ? 2.5 : -2.5), origin.z + 2, 15, aiDryHeight());
+            const land = findNearestLand(origin.x + (i - (rule.followers - 1) / 2) * 2.5,
+                origin.z + 2, 15, aiDryHeight());
             const follower = new Humanoid(0, 'wild', land.x, land.z);
             state.units.push(follower);
             mission.escortIds.push(follower.id);
@@ -9558,11 +9622,14 @@ function campaignMissionComplete() {
 
 function updateCampaignObjective() {
     const label = document.getElementById('campaign-objective');
+    const summary = document.getElementById('campaign-objective-summary');
     if (!label) return;
     const mission = state.campaignMission;
     const rule = getActiveCampaignRule();
     label.style.display = state.isCampaign && mission && rule ? 'block' : 'none';
+    if (summary) summary.style.display = state.isCampaign && mission && rule ? 'block' : 'none';
     if (!mission || !rule) return;
+    if (summary) summary.textContent = `Level ${state.campaignLevel} goal: ${campaignObjectiveSummary(rule)}`;
     let detail = '';
     if (rule.kind === 'settlement') detail = `Huts ${campaignCompletedBuildings('hut')}/${rule.huts} · Rival ${campaignEnemyAlive() ? 'active' : 'defeated'}`;
     else if (rule.kind === 'defense') detail = `Shelters ${campaignCompletedBuildings('hut')}/${rule.buildings} · Hold ${Math.max(0, Math.ceil(rule.seconds - mission.elapsed))}s`;
@@ -9682,6 +9749,13 @@ window.showCampaignStory = function(level) {
     ensureCampaignNarrative(level);
     storyOpenedFromPause = false;
     renderCampaignStory(level);
+};
+
+window.openStoryMatchSettings = function() {
+    if (!state.isCampaign) return;
+    matchSettingsReturnToStory = true;
+    document.getElementById('story-overlay').style.display = 'none';
+    toggleMatchSettings();
 };
 
 window.showCampaignJournal = function() {
