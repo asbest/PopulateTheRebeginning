@@ -11,16 +11,13 @@ try {
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
         {waitUntil:'load',timeout:90000});
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.renderer,null,{timeout:90000});
-    // Chunk streaming continues after the shaman appears. An in-flight chunk
-    // changes draw calls and shader counts independently of the explosion.
-    await page.waitForFunction(()=>Object.keys(state.chunks).length===
-        (2*gameTestAPI.CONFIG.TERRAIN.RENDER_DISTANCE+1)**2&&
-        performance.now()-(state.lastTerrainBuildAt||0)>250,null,{timeout:90000});
     const report=await page.evaluate(()=>{
         closeHelp();closeStoryOverlay();state.isPaused=true;
         state.renderer.setPixelRatio(1);
-        // Startup construction effects can still be alive when CI reaches this
-        // checkpoint. Measure only the pulses produced by the group impact.
+        // All measurements run in this synchronous evaluation, so chunk
+        // streaming cannot advance between the baseline and impact renders.
+        const loadedChunks=Object.keys(state.chunks).length;
+        const startupPulses=gameTestAPI.HitPulseManager.active.length;
         gameTestAPI.HitPulseManager.active.length=0;
         gameTestAPI.HitPulseManager.update(0);
         const center=state.shaman.mesh.position;
@@ -59,7 +56,7 @@ try {
         gameTestAPI.HitPulseManager.update(.71);
         const expired=gameTestAPI.HitPulseManager.active.length===0&&
             gameTestAPI.HitPulseManager.meshes.every(mesh=>mesh.count===0&&!mesh.visible);
-        return {units:units.length,hits:units.filter(unit=>unit.hp<1000).length,
+        return {loadedChunks,startupPulses,units:units.length,hits:units.filter(unit=>unit.hp<1000).length,
             impactMs,before,after,extraCalls:after.calls-before.calls,
             extraParticles:after.particles-before.particles,
             hitPulses,expired};
