@@ -227,7 +227,11 @@ try {
     });
     if(sustain.duration<9||!sustain.loop||!sustain.src.endsWith('/sfx/firestorm_loop.wav'))
         throw new Error(`Wrong firestorm sustain: ${JSON.stringify(sustain)}`);
-    await page.waitForFunction(()=>testSustainHandle.audio.currentTime>.1,null,{timeout:15000});
+    await page.waitForFunction(()=>testSustainHandle.audio.currentTime>.1||
+        (testSustainHandle.usingWebAudio&&testSustainHandle.webSource&&
+            gameTestAPI.SoundManager.ctx.state==='running'&&
+            gameTestAPI.SoundManager.ctx.currentTime-testSustainHandle.webStartedAt>.1),
+        null,{timeout:15000});
     await page.evaluate(()=>{state.isPaused=true;gameTestAPI.SoundManager.syncSustains(true);});
     if(!await page.evaluate(()=>testSustainHandle.audio.paused))
         throw new Error('Sustained spell kept playing while paused');
@@ -357,6 +361,28 @@ try {
         if(!stoppedPhoneStorm.paused||!stoppedPhoneStorm.stopped||!stoppedPhoneStorm.released)
             throw new Error(`Android firestorm kept its sound after expiry: ${JSON.stringify(stoppedPhoneStorm)}`);
         console.log('PASS Android touch firestorm sustains, pauses and stops with the spell');
+        checkpoint='Android stalled sustained media fallback';
+        await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('tornado_loop'));
+        await phone.evaluate(()=>{
+            const sound=gameTestAPI.SoundManager;
+            state.isPaused=false;sound.syncSustains(false);
+            const voice=sound.mediaEffects.get('tornado_loop')[0];
+            window.stalledVoice=voice;window.stalledPlay=voice.play;
+            voice.play=()=>new Promise(()=>{});
+            window.testSpellAudioDestination=sound.ctx.createMediaStreamDestination();
+            sound.effectsBus.connect(testSpellAudioDestination);
+        });
+        await startRecording(phone);
+        await phone.evaluate(()=>{window.stalledLoop=gameTestAPI.SoundManager.startSustain('tornado_loop');});
+        await phone.waitForFunction(()=>stalledLoop?.usingWebAudio&&stalledLoop.webSource&&
+            gameTestAPI.SoundManager.ctx.currentTime-stalledLoop.webStartedAt>.1,null,{timeout:5000});
+        const stalledPeak=await stopRecording(phone);
+        await phone.evaluate(()=>{
+            stalledLoop.stop(true);stalledVoice.play=stalledPlay;
+            gameTestAPI.SoundManager.effectsBus.disconnect(testSpellAudioDestination);
+        });
+        if(stalledPeak<.015)throw new Error(`Stalled Android loop had no audible fallback: ${stalledPeak}`);
+        console.log(`PASS Stalled Android sustain switches to audible Web Audio (peak ${stalledPeak.toFixed(3)})`);
         await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('heal')&&
             gameTestAPI.SoundManager.effectBuffers.has('swamp_loop'));
         checkpoint='Android blocked-media fallback';

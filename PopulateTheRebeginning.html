@@ -2271,6 +2271,28 @@ const SoundManager = {
         } else source.stop();
         handle.webSource=null;handle.webGain=null;
     },
+    playMediaSustain: function(handle) {
+        if(handle.stopped || handle.usingWebAudio || this.sustainsPaused)return;
+        const audio=handle.audio,startTime=audio.currentTime;
+        const fallback=error=>{
+            if(handle.stopped || handle.usingWebAudio || this.sustainsPaused)return;
+            if(error?.name==='NotAllowedError')this.mediaEffectsBlocked=true;
+            clearTimeout(handle.mediaWatchdog);handle.mediaWatchdog=null;
+            handle.webOffset=audio.currentTime||0;
+            audio.pause();
+            handle.usingWebAudio=true;
+            this.startWebSustain(handle);
+        };
+        try { Promise.resolve(audio.play()).catch(fallback); }
+        catch(error) { fallback(error);return; }
+        clearTimeout(handle.mediaWatchdog);
+        // Some Android browsers leave play() pending with no time progression.
+        // Move that loop to the already unlocked Web Audio bus before the spell ends.
+        handle.mediaWatchdog=setTimeout(()=>{
+            handle.mediaWatchdog=null;
+            if(audio.currentTime-startTime<.06)fallback(new Error('Sustained media stalled'));
+        },1000);
+    },
     startSustain: function(name) {
         if (!this.hasUserGesture || !SUSTAIN_ASSETS.includes(name)) return null;
         this.prepareMediaEffects();
@@ -2278,10 +2300,11 @@ const SoundManager = {
         if (!voices?.length) return null;
         const audio=voices.find(voice => !voice.__sustainOwner) || voices[0];
         if (audio.__sustainOwner) audio.__sustainOwner.stop(true);
-        const handle={name,audio,stopped:false,usingWebAudio:false,
+        const handle={name,audio,stopped:false,usingWebAudio:false,mediaWatchdog:null,
             webSource:null,webGain:null,webOffset:0,stop:(immediate=false)=>{
             if (handle.stopped) return;
             handle.stopped=true;
+            clearTimeout(handle.mediaWatchdog);handle.mediaWatchdog=null;
             this.activeSustains.delete(handle);
             if (audio.__sustainOwner!==handle) return;
             if (handle.usingWebAudio) {
@@ -2301,12 +2324,7 @@ const SoundManager = {
         if (this.mediaEffectsBlocked) {
             handle.usingWebAudio=true;
             this.startWebSustain(handle);
-        } else if (!this.sustainsPaused) audio.play().catch(error=>{
-            if (handle.stopped) return;
-            if (error?.name==='NotAllowedError') this.mediaEffectsBlocked=true;
-            handle.usingWebAudio=true;
-            this.startWebSustain(handle);
-        });
+        } else this.playMediaSustain(handle);
         return handle;
     },
     syncSustains: function(paused) {
@@ -2316,13 +2334,10 @@ const SoundManager = {
             if (handle.usingWebAudio) {
                 if (paused) this.stopWebSustain(handle,true,true);
                 else this.startWebSustain(handle);
-            } else if (paused) handle.audio.pause();
-            else if (!handle.stopped) handle.audio.play().catch(error=>{
-                if (handle.stopped) return;
-                if (error?.name==='NotAllowedError') this.mediaEffectsBlocked=true;
-                handle.usingWebAudio=true;
-                this.startWebSustain(handle);
-            });
+            } else if (paused) {
+                clearTimeout(handle.mediaWatchdog);handle.mediaWatchdog=null;
+                handle.audio.pause();
+            } else this.playMediaSustain(handle);
         }
     },
     stopAllSustains: function() {
