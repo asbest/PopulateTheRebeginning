@@ -5150,7 +5150,7 @@ class Fireball {
         SurfaceMarks.add(this.mesh.position.x,this.mesh.position.z,this.unitShot
             ? {kind:'ember',radius:1.6,life:18,opacity:.56} : {radius:2.8,life:120,opacity:.76});
         spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFF4500,
-            this.unitShot ? 8 : 20, !this.stormShot && !this.unitShot);
+            this.unitShot ? 8 : 20, !!this.light);
         for(let i=0;i<(this.unitShot?2:5);i++)spawnSmoke(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.5,.2,(Math.random()-.5)*1.5)),0x3a302c,.45+Math.random()*.35,1.8+Math.random()*1.5);
         SoundManager.playSound('explosion', this.stormShot ? .36 : this.unitShot ? .45 : 1);
         const impactPos = this.mesh.position;

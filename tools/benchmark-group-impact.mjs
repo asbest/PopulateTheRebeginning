@@ -8,6 +8,8 @@ const {chromium}=playwrightPath
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try {
     const page=await browser.newPage({viewport:{width:1280,height:800}});
+    await page.addInitScript(tier=>localStorage.setItem('graphics-quality',tier),
+        process.env.GAME_GRAPHICS_QUALITY||'medium');
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
         {waitUntil:'load',timeout:90000});
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.renderer,null,{timeout:90000});
