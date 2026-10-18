@@ -19,12 +19,6 @@ jobs:
           done
           cat /tmp/populate-server.log
           exit 1
-      - name: Group attack rendering budget
-        if: always()
-        run: node tools/benchmark-group-impact.mjs
-      - name: Hut destruction rendering budget
-        if: always()
-        run: node tools/benchmark-hut-destruction.mjs
       - name: Enemy strategy
         if: always()
         run: node tests/strategy.mjs
@@ -72,6 +66,29 @@ jobs:
         with:
           name: browser-test-report
           path: test-results/
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Start game server
+        run: |
+          nohup node tools/serve.mjs > /tmp/populate-server.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8765/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/populate-server.log
+          exit 1
+      - name: Group attack rendering budget
+        run: node tools/benchmark-group-impact.mjs
+      - name: Hut destruction rendering budget
+        if: always()
+        run: node tools/benchmark-hut-destruction.mjs
   audio:
     runs-on: ubuntu-latest
     steps:
