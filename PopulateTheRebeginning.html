@@ -2850,8 +2850,9 @@ function getBaseHeight(x, z) {
     if (biome === 'jungle') ns *= TC.BIOME_JUNGLE_NOISE_MULT;
 
     for (let o of TC.NOISE_OCTAVES) {
-        // Small octaves add detail without turning every hill into a sharp cone.
-        y += state.simplex.noise2D(x * ns * o.factor, z * ns * o.factor) * o.amp * (o.factor>=4?.76:1);
+        // Preserve lowland detail while reducing small serrations on high ridges.
+        const ridgeDetail=o.factor>=4 ? .76-.28*landscapeBlend(5,13,y*hm) : 1;
+        y += state.simplex.noise2D(x * ns * o.factor, z * ns * o.factor) * o.amp * ridgeDetail;
     }
 
     y *= hm;
@@ -2870,8 +2871,8 @@ function getBaseHeight(x, z) {
         y+=plateau*2.5*land;
         // Flatten only elevated ground; the feathered mask retains walkable
         // slopes around the rim instead of making an impassable vertical wall.
-        const terrace=plateau*land*.76;
-        if(y>5)y+=(10-y)*terrace;
+        const terrace=plateau*land*.74*landscapeBlend(2,12,y);
+        y+=(10-y)*terrace;
         y-=Math.max(0,-relief-.1)*3.2*(1-mountains);
         y-=archipelago*3.2;
     }
@@ -2881,11 +2882,15 @@ function getBaseHeight(x, z) {
     }
 
     const bridgeNoise = Math.abs(state.simplex.noise2D(x * NOISE_SCALE * TC.BRIDGE_NOISE_MULT + 100, z * NOISE_SCALE * TC.BRIDGE_NOISE_MULT + 100));
-    const finalBridgeHeight = Math.max(0, 1.0 - bridgeNoise * BRIDGE_WIDTH) * BRIDGE_HEIGHT;
+    // A rounded crest avoids the cusp at the zero contour of abs(noise).
+    const finalBridgeHeight = (1-landscapeBlend(0,1,bridgeNoise*BRIDGE_WIDTH)) * BRIDGE_HEIGHT;
     y += finalBridgeHeight;
 
     if (y < WATER_LEVEL) y -= (WATER_LEVEL - y) * TC.WATER_SMOOTH_FACTOR;
-    if (y > TC.LAND_HEIGHT_CAP) y += (y - TC.LAND_HEIGHT_CAP) * TC.LAND_ABOVE_CAP_SLOPE;
+    const aboveCap=Math.max(0,y-TC.LAND_HEIGHT_CAP);
+    y+=aboveCap*TC.LAND_ABOVE_CAP_SLOPE*landscapeBlend(0,5,aboveCap);
+    const summit=Math.max(0,y-13);
+    y-=summit*.24*landscapeBlend(0,5,summit);
     return y;
 }
 

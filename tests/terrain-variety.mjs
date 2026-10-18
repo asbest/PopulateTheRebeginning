@@ -15,7 +15,7 @@ try {
         const sea=CONFIG.TERRAIN.WATER_LEVEL;
         const {getBaseHeight,forEachTreeSite}=gameTestAPI;
         const samples={mountain:[],archipelago:[],plateau:[],valley:[]};
-        let dry=0,wet=0,high=0,flatHigh=0,max=-Infinity,min=Infinity;
+        let dry=0,wet=0,high=0,flatHigh=0,max=-Infinity,min=Infinity,maxShortRise=0,sharpest=null;
         for(let x=-360;x<=360;x+=12)for(let z=-360;z<=360;z+=12){
             const h=getBaseHeight(x,z);
             const region=state.simplex.noise2D(x*.004+211,z*.004-173);
@@ -29,6 +29,13 @@ try {
             if(h>7&&Math.hypot(getBaseHeight(x+2,z)-getBaseHeight(x-2,z),
                 getBaseHeight(x,z+2)-getBaseHeight(x,z-2))<1)flatHigh++;
             max=Math.max(max,h);min=Math.min(min,h);
+        }
+        // Short-distance rises catch discontinuous terraces and needle-sharp ridges.
+        for(let x=-180;x<=180;x+=3)for(let z=-180;z<=180;z+=3){
+            const left=getBaseHeight(x-.25,z),right=getBaseHeight(x+.25,z);
+            const near=getBaseHeight(x,z-.25),far=getBaseHeight(x,z+.25);
+            const rise=Math.max(Math.abs(right-left),Math.abs(far-near));
+            if(rise>maxShortRise){maxShortRise=rise;sharpest={x,z,left,right,near,far};}
         }
         const mean=values=>values.reduce((sum,value)=>sum+value,0)/Math.max(1,values.length);
         const treeCounts=[],species=new Set();
@@ -46,13 +53,13 @@ try {
         }
         const seam=Math.abs(getBaseHeight(20-.0001,12)-getBaseHeight(20+.0001,12));
         const repeat=getBaseHeight(47,81)===getBaseHeight(47,81);
-        return {dry,wet,high,flatHigh,min,max,seam,repeat,
+        return {dry,wet,high,flatHigh,min,max,maxShortRise,sharpest,seam,repeat,
             regions:Object.fromEntries(Object.entries(samples).map(([name,values])=>[name,{count:values.length,mean:mean(values)}])),
             forest:{min:Math.min(...treeCounts),max:Math.max(...treeCounts),occupied:treeCounts.filter(n=>n>0).length,
                 species:[...species]},ritualSites};
     });
     if(errors.length||result.dry<300||result.wet<300||result.high<250||result.flatHigh<40||
-        result.max-result.min<20||result.seam>.01||!result.repeat||
+        result.max-result.min<20||result.maxShortRise>2.6||result.seam>.01||!result.repeat||
         Object.values(result.regions).some(region=>region.count<10)||
         result.regions.mountain.mean<=result.regions.archipelago.mean+2||
         result.forest.max<10||result.forest.min!==0||result.forest.occupied<15||
