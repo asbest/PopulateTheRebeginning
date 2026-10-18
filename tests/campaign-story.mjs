@@ -15,6 +15,7 @@ const { chromium } = modulePath ? await import(pathToFileURL(modulePath).href) :
 const browser = await chromium.launch({ headless: true, ...(process.platform === 'win32' ? { channel: 'chrome' } : {}) });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errors = [];
+let phase = 'initial campaign load';
 page.on('pageerror', error => errors.push(String(error)));
 const url = (process.env.GAME_URL || 'http://127.0.0.1:8765') + '/PopulateTheRebeginning.html?test=1';
 
@@ -41,6 +42,7 @@ try {
         opening.visible !== 'flex' || !opening.paused) throw new Error('Opening chapter failed: ' + JSON.stringify(opening));
     console.log('PASS Campaign opens with the new premise and a playable objective');
 
+    phase = 'phone-sized pre-level Match Settings';
     await page.setViewportSize({ width: 390, height: 640 });
     await page.locator('#story-settings').click();
     await page.locator('#objective-kind-select').selectOption('escort');
@@ -68,10 +70,12 @@ try {
         editor.stored?.['1']?.kind !== 'escort' || editor.stored?.['1']?.followers !== 4 ||
         editor.liveRule?.followers !== 4 || editor.liveEscorts !== 4 || !editor.liveHud.includes('Escort 4 followers') ||
         !editor.summary.includes('4 marked followers')) throw new Error('Objective editor failed: ' + JSON.stringify(editor));
-    await page.locator('#match-settings-menu button').last().click();
+    phase = 'returning from Match Settings to the story';
+    await page.locator('#match-settings-menu button').last().click({ noWaitAfter: true });
     const revisedStory = await page.locator('#story-objective-list').textContent();
     if (!revisedStory.includes('4 marked followers')) throw new Error('Pre-level story did not update');
     await page.setViewportSize({ width: 1280, height: 800 });
+    phase = 'reloading the configured level';
     await startLevel(1);
     const configured = await page.evaluate(() => ({
         kind: state.campaignMission?.rule?.kind,
@@ -84,11 +88,13 @@ try {
         !configured.steps.includes('4 marked followers') || !configured.paused) {
         throw new Error('Configured objective was not explained before play: ' + JSON.stringify(configured));
     }
-    await page.locator('#story-close').click();
+    phase = 'starting play with the configured objective';
+    await page.locator('#story-close').click({ noWaitAfter: true });
     if (!await page.locator('#campaign-objective-summary').isVisible() ||
         !await page.locator('#campaign-objective').isVisible()) {
         throw new Error('Configured goal and progress are missing from the gameplay HUD');
     }
+    phase = 'editing and saving the live objective';
     await page.evaluate(() => {
         if (!state.isPaused) togglePause();
         toggleMatchSettings();
@@ -126,6 +132,7 @@ try {
     });
     console.log('PASS Match Settings updates live objectives, HUD, story, save/load and reset');
 
+    phase = 'loading campaign level 5';
     await startLevel(5);
     await page.evaluate(() => { closeStoryOverlay(); if (state.isPaused) togglePause(); });
     await page.evaluate(() => {
@@ -170,6 +177,7 @@ try {
     await page.setViewportSize({ width: 1280, height: 800 });
     console.log('PASS Campaign journal remains usable on a phone-sized viewport');
 
+    phase = 'loading campaign level 12';
     await startLevel(12);
     await page.evaluate(() => {
         closeStoryOverlay();
@@ -217,6 +225,13 @@ try {
     console.log('PASS Ending remains usable on a phone-sized viewport');
     if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
     console.log('PASS Campaign story has no browser runtime errors');
+} catch (error) {
+    const detail = `${phase}: ${String(error)}`;
+    if (process.env.GITHUB_ACTIONS === 'true') {
+        const escaped = detail.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+        console.log(`::error title=Campaign story::${escaped}`);
+    }
+    throw error;
 } finally {
     await browser.close();
 }

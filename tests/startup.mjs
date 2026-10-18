@@ -40,8 +40,8 @@ try{
             if(result.story!=='flex')throw new Error('Campaign welcome screen is missing');
             // Starting the simulation can schedule navigation (for example after a quick defeat).
             // Observe the resulting UI state instead of letting the input action wait for navigation.
-            if(name.startsWith('mobile'))await page.locator('#story-overlay button').tap({noWaitAfter:true});
-            else await page.locator('#story-overlay button').click({noWaitAfter:true});
+            if(name.startsWith('mobile'))await page.locator('#story-close').tap({noWaitAfter:true});
+            else await page.locator('#story-close').click({noWaitAfter:true});
             await page.waitForFunction(()=>!state.isPaused&&
                 document.querySelector('#help-overlay')?.style.display==='none'&&
                 document.querySelector('#story-overlay')?.style.display==='none',null,{timeout:10000});
