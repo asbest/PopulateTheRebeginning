@@ -304,6 +304,19 @@
         #campaign-ending:not([hidden]) { display: flex; }
         #campaign-ending-choices[hidden], #campaign-ending-finished[hidden] { display: none; }
         #story-objective, #story-discovery { max-width: 760px; line-height: 1.45; color: #f3dfad; }
+        #story-objective { width:min(680px,calc(100vw - 40px)); padding:14px 18px; box-sizing:border-box; border:1px solid rgba(243,215,139,.45); border-radius:10px; background:rgba(19,28,26,.72); text-align:left; }
+        #story-objective strong { display:block; color:#fff2bf; text-transform:uppercase; letter-spacing:.08em; font-size:13px; }
+        #story-objective-brief { margin:7px 0 8px; color:#fff; }
+        #story-objective-list { margin:0; padding-left:22px; }
+        #story-objective-list li { margin:4px 0; }
+        #story-objective-hint { margin:9px 0 0; color:#cfe6dc; font-size:13px; }
+        .objective-settings-card { width:min(520px,calc(100vw - 32px)); padding:16px; box-sizing:border-box; border:1px solid #7f806d; border-radius:10px; background:rgba(20,29,27,.88); }
+        .objective-settings-card select { width:100%; min-height:42px; margin:7px 0 12px; padding:7px; color:#17201e; font:inherit; }
+        #objective-settings-summary { margin:0 0 12px; color:#f3dfad; line-height:1.4; }
+        #objective-settings-fields { display:grid; gap:9px; }
+        .objective-setting-row { display:grid; grid-template-columns:1fr 100px; align-items:center; gap:12px; }
+        .objective-setting-row input { width:100%; min-height:38px; box-sizing:border-box; padding:6px; color:#17201e; font:inherit; }
+        .objective-settings-note { margin:12px 0 0; color:#bdd1c9; font-size:12px; line-height:1.4; }
         #story-discovery { border-top: 1px solid rgba(243, 223, 173, .4); padding-top: 15px; }
         #game-dialog {
             position: fixed; inset: 0; z-index: 1010;
@@ -443,7 +456,12 @@
     <div id="story-overlay" role="dialog" aria-modal="true" aria-labelledby="story-title" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); flex-direction:column; align-items:center; justify-content:center; z-index:300; color:white; pointer-events:auto; text-align:center; padding: 20px; box-sizing: border-box;">
         <h1 id="story-title" style="color:gold; margin-bottom:20px; text-shadow: 2px 2px 0 #000; max-width: 800px;"></h1>
         <div id="story-text" style="margin-bottom:20px; font-size: 18px; line-height: 1.5; max-width: 800px; text-shadow: 1px 1px 0 #000;"></div>
-        <p id="story-objective"></p>
+        <section id="story-objective" aria-labelledby="story-objective-heading">
+            <strong id="story-objective-heading">Mission objectives</strong>
+            <p id="story-objective-brief"></p>
+            <ol id="story-objective-list"></ol>
+            <p id="story-objective-hint"></p>
+        </section>
         <p id="story-discovery" hidden></p>
         <button id="story-close" class="menu-btn" style="font-size: 20px; padding: 10px 20px; width: auto;" onclick="closeStoryOverlay()">Begin</button>
     </div>
@@ -562,6 +580,20 @@
             <hr style="width: 100%; border-color: #555;">
             <label><input type="checkbox" id="mutator-winter" onchange="state.matchSettings.winter = this.checked"> Winter Biome</label>
         </div>
+        <section class="objective-settings-card" aria-labelledby="objective-settings-heading">
+            <strong id="objective-settings-heading">Campaign objectives</strong>
+            <label for="objective-level-select" style="display:block; margin-top:8px;">Level to configure</label>
+            <select id="objective-level-select" onchange="renderObjectiveSettings()"></select>
+            <label for="objective-kind-select" style="display:block;">Victory condition</label>
+            <select id="objective-kind-select" onchange="setObjectiveKind(this.value)"></select>
+            <p id="objective-settings-summary"></p>
+            <div id="objective-settings-fields"></div>
+            <p class="objective-settings-note">Changes are saved automatically and apply the next time this level starts.</p>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+                <button class="menu-btn" style="width:auto; margin:0;" onclick="resetSelectedObjectiveSettings()">Reset level</button>
+                <button class="menu-btn" style="width:auto; margin:0;" onclick="resetAllObjectiveSettings()">Reset all</button>
+            </div>
+        </section>
         <button class="menu-btn" onclick="toggleMatchSettings()">Back</button>
     </div>
 
@@ -1125,6 +1157,7 @@ const CONFIG = {
         SANDBOX_START: 'rebeginning_sandbox_start',
         SAVE_DATA: 'populous_save',
         MUSIC_ENABLED: 'musicEnabled',
+        OBJECTIVE_SETTINGS: 'rebeginning_campaign_objectives',
     },
     UI: {
         UNIT_LIST_TOP: 70,
@@ -1299,6 +1332,118 @@ const UNIT_ICONS = CONFIG.UNIT_ICONS;
 for (const key of Object.keys(CONFIG.ACTIONS)) CONFIG.ACTIONS[key].icon = icon(key);
 for (const key of Object.keys(UNIT_ICONS)) UNIT_ICONS[key] = icon(key);
 
+const CAMPAIGN_OBJECTIVE_FIELDS = Object.freeze({
+    settlement: [{ key:'huts', label:'Completed huts', min:1, max:10, step:1 }],
+    defense: [
+        { key:'buildings', label:'Completed shelters', min:1, max:10, step:1 },
+        { key:'seconds', label:'Defense duration (seconds)', min:30, max:600, step:15 }
+    ],
+    breach: [{ key:'radius', label:'Marker reach radius (metres)', min:4, max:30, step:1 }],
+    assassination: [],
+    capture: [
+        { key:'required', label:'Conduits to secure', min:1, max:5, step:1 },
+        { key:'seconds', label:'Hold time per conduit (seconds)', min:3, max:60, step:1 }
+    ],
+    stronghold: [
+        { key:'required', label:'Conduits to secure', min:1, max:1, step:1 },
+        { key:'seconds', label:'Hold time (seconds)', min:3, max:60, step:1 }
+    ],
+    escort: [
+        { key:'followers', label:'Followers to escort', min:1, max:6, step:1 },
+        { key:'radius', label:'Gate arrival radius (metres)', min:4, max:20, step:1 }
+    ]
+});
+
+const CAMPAIGN_OBJECTIVE_KINDS = Object.freeze({
+    settlement: 'Build a settlement and defeat the rival tribe',
+    defense: 'Build shelters and survive an attack',
+    breach: 'Reach a passage and defeat the enemy shaman',
+    assassination: 'Defeat every enemy shaman',
+    capture: 'Secure mana conduits',
+    stronghold: 'Secure a fortress conduit and defeat its shaman',
+    escort: 'Escort followers safely to a gate'
+});
+const CAMPAIGN_KIND_DEFAULTS = Object.freeze({
+    settlement: { kind:'settlement', huts:2 },
+    defense: { kind:'defense', seconds:120, buildings:1 },
+    breach: { kind:'breach', radius:16 },
+    assassination: { kind:'assassination' },
+    capture: { kind:'capture', required:2, seconds:12 },
+    stronghold: { kind:'stronghold', required:1, seconds:15 },
+    escort: { kind:'escort', followers:2, radius:9 }
+});
+const CAMPAIGN_LEVEL_RIVALS = Object.freeze({ 1:1, 2:2, 3:1, 4:1, 5:3, 6:1, 7:1, 8:3, 9:1, 10:1, 11:5, 12:1 });
+
+function campaignObjectiveFieldMax(level, rule, field) {
+    if (field.key === 'required' && rule?.kind === 'capture') return CAMPAIGN_LEVEL_RIVALS[level] || 1;
+    return field.max;
+}
+
+function sanitizeCampaignObjectives(value) {
+    const source = value && typeof value === 'object' ? value : {};
+    const clean = {};
+    for (let level = 1; level <= 12; level++) {
+        const base = CAMPAIGN_MISSIONS[level];
+        const candidate = source[level] || source[String(level)];
+        if (!candidate || typeof candidate !== 'object') continue;
+        const kind = CAMPAIGN_OBJECTIVE_KINDS[candidate.kind] ? candidate.kind : base?.kind;
+        const fields = CAMPAIGN_OBJECTIVE_FIELDS[kind] || [];
+        const entry = kind !== base?.kind ? { kind } : {};
+        const rule = CAMPAIGN_KIND_DEFAULTS[kind] || base;
+        for (const field of fields) {
+            const fallback = kind !== base?.kind ? rule[field.key] : NaN;
+            const numeric = Number(candidate[field.key] ?? fallback);
+            if (!Number.isFinite(numeric)) continue;
+            const clamped = Math.max(field.min, Math.min(campaignObjectiveFieldMax(level, rule, field), numeric));
+            entry[field.key] = field.step >= 1 ? Math.round(clamped) : clamped;
+        }
+        if (Object.keys(entry).length) clean[level] = entry;
+    }
+    return clean;
+}
+
+function storedCampaignObjectives() {
+    try {
+        return sanitizeCampaignObjectives(JSON.parse(localStorage.getItem(CONFIG.SAVED_KEYS.OBJECTIVE_SETTINGS) || '{}'));
+    } catch (_) {
+        return {};
+    }
+}
+
+function normalizeMatchSettings(settings = {}) {
+    const supplied = settings && typeof settings === 'object' ? settings : {};
+    return {
+        noFlyers: false, infiniteMana: false, doubleSpeed: false, suddenDeath: false,
+        winter: false, biome: 'normal', ...supplied,
+        campaignObjectives: sanitizeCampaignObjectives(supplied.campaignObjectives || storedCampaignObjectives())
+    };
+}
+
+function getCampaignMissionRule(level) {
+    const base = CAMPAIGN_MISSIONS[level];
+    if (!base) return null;
+    const override = state.matchSettings?.campaignObjectives?.[level] || {};
+    const kind = CAMPAIGN_OBJECTIVE_KINDS[override.kind] ? override.kind : base.kind;
+    return { ...CAMPAIGN_KIND_DEFAULTS[kind], ...(kind === base.kind ? base : {}), ...override, kind };
+}
+
+function getActiveCampaignRule(level = state.campaignLevel) {
+    if (state.campaignMission?.level === level && state.campaignMission.rule) return state.campaignMission.rule;
+    return getCampaignMissionRule(level);
+}
+
+function campaignObjectiveSteps(rule) {
+    if (!rule) return [];
+    if (rule.kind === 'settlement') return [`Complete ${rule.huts} ${rule.huts === 1 ? 'hut' : 'huts'} for your tribe.`, 'Defeat every unit of the rival tribe.'];
+    if (rule.kind === 'defense') return [`Complete ${rule.buildings} ${rule.buildings === 1 ? 'shelter' : 'shelters'}.`, `Keep the settlement alive for ${rule.seconds} seconds. Defeating all attackers ends the defense early.`];
+    if (rule.kind === 'breach') return [`Move your shaman into the blue passage marker (within ${rule.radius} m).`, 'Defeat the enemy shaman. Both tasks are required.'];
+    if (rule.kind === 'assassination') return ['Find and defeat every enemy shaman while your tribe survives.'];
+    if (rule.kind === 'capture') return [`Secure ${rule.required} ${rule.required === 1 ? 'mana conduit' : 'mana conduits'}.`, `Hold an allied ground unit alone in each marked circle for ${rule.seconds} seconds.`];
+    if (rule.kind === 'stronghold') return [`Secure ${rule.required} fortress ${rule.required === 1 ? 'conduit' : 'conduits'} by holding each for ${rule.seconds} seconds.`, 'Defeat the fortress shaman.'];
+    if (rule.kind === 'escort') return [`Escort all ${rule.followers} marked ${rule.followers === 1 ? 'follower' : 'followers'} into the gate (within ${rule.radius} m).`, 'The mission is lost if a follower dies before reaching the gate.'];
+    return [];
+}
+
 
 // --- js/state.js ---
 
@@ -1324,7 +1469,7 @@ const state = {
     treeBurns: new Map(),
     terrainMods: new Map(),
     units: [],
-    matchSettings: { noFlyers: false, infiniteMana: false, doubleSpeed: false, suddenDeath: false, winter: false, biome: 'normal' },
+    matchSettings: normalizeMatchSettings(),
 
     particles: [],
     projectiles: [],
@@ -1743,7 +1888,7 @@ const NetworkManager = {
         }
 
         if (data.mana !== undefined) state.mana = data.mana;
-        if (data.matchSettings !== undefined) state.matchSettings = data.matchSettings;
+        if (data.matchSettings !== undefined) state.matchSettings = normalizeMatchSettings(data.matchSettings);
         if (data.isPaused !== undefined) state.isPaused = data.isPaused;
         if (Number.isFinite(data.treeTime) && Array.isArray(data.treeBurns)) {
             state.treeTime=Math.max(0,data.treeTime);
@@ -1782,6 +1927,92 @@ window.openMultiplayer = () => {
     document.getElementById('pause-menu').style.display = 'none';
 };
 
+function persistCampaignObjectives() {
+    state.matchSettings.campaignObjectives = sanitizeCampaignObjectives(state.matchSettings.campaignObjectives);
+    localStorage.setItem(CONFIG.SAVED_KEYS.OBJECTIVE_SETTINGS, JSON.stringify(state.matchSettings.campaignObjectives));
+}
+
+window.renderObjectiveSettings = function() {
+    const select = document.getElementById('objective-level-select');
+    const kindSelect = document.getElementById('objective-kind-select');
+    const fieldsHost = document.getElementById('objective-settings-fields');
+    const summary = document.getElementById('objective-settings-summary');
+    if (!select || !kindSelect || !fieldsHost || !summary) return;
+    if (!select.options.length) {
+        for (let level = 1; level <= 12; level++) {
+            const option = document.createElement('option');
+            option.value = String(level);
+            option.textContent = `Level ${level}: ${CAMPAIGN_STORIES[level]?.title || ''}`;
+            select.appendChild(option);
+        }
+    }
+    const level = Math.max(1, Math.min(12, Number(select.value) || state.campaignLevel || 1));
+    select.value = String(level);
+    const rule = getCampaignMissionRule(level);
+    if (!kindSelect.options.length) {
+        for (const [kind, label] of Object.entries(CAMPAIGN_OBJECTIVE_KINDS)) {
+            const option = document.createElement('option');
+            option.value = kind; option.textContent = label;
+            kindSelect.appendChild(option);
+        }
+    }
+    kindSelect.value = rule.kind;
+    const schema = CAMPAIGN_OBJECTIVE_FIELDS[rule.kind] || [];
+    summary.textContent = campaignObjectiveSteps(rule).join(' ');
+    fieldsHost.replaceChildren();
+    if (!schema.length) {
+        const fixed = document.createElement('p');
+        fixed.className = 'objective-settings-note';
+        fixed.textContent = 'This mission has one fixed target: defeat every enemy shaman.';
+        fieldsHost.appendChild(fixed);
+        return;
+    }
+    for (const field of schema) {
+        const maximum = campaignObjectiveFieldMax(level, rule, field);
+        const row = document.createElement('label');
+        row.className = 'objective-setting-row';
+        row.append(document.createTextNode(field.label));
+        const input = document.createElement('input');
+        input.type = 'number'; input.min = String(field.min); input.max = String(maximum);
+        input.step = String(field.step); input.value = String(rule[field.key]);
+        input.dataset.objectiveField = field.key;
+        input.addEventListener('change', () => {
+            const numeric = Math.max(field.min, Math.min(maximum, Number(input.value) || rule[field.key]));
+            input.value = String(field.step >= 1 ? Math.round(numeric) : numeric);
+            state.matchSettings.campaignObjectives[level] ||= {};
+            state.matchSettings.campaignObjectives[level][field.key] = Number(input.value);
+            persistCampaignObjectives();
+            renderObjectiveSettings();
+        });
+        row.appendChild(input);
+        fieldsHost.appendChild(row);
+    }
+};
+
+window.setObjectiveKind = function(kind) {
+    if (!CAMPAIGN_OBJECTIVE_KINDS[kind]) return;
+    const level = Number(document.getElementById('objective-level-select')?.value) || 1;
+    const base = CAMPAIGN_MISSIONS[level];
+    state.matchSettings.campaignObjectives[level] = kind === base.kind ? {} : { kind };
+    persistCampaignObjectives();
+    renderObjectiveSettings();
+};
+
+window.resetSelectedObjectiveSettings = function() {
+    const level = Number(document.getElementById('objective-level-select')?.value) || 1;
+    delete state.matchSettings.campaignObjectives[level];
+    persistCampaignObjectives();
+    renderObjectiveSettings();
+    showGameMessage(`Level ${level} objectives restored.`);
+};
+
+window.resetAllObjectiveSettings = function() {
+    state.matchSettings.campaignObjectives = {};
+    persistCampaignObjectives();
+    renderObjectiveSettings();
+    showGameMessage('All campaign objectives restored.');
+};
+
 window.toggleMatchSettings = function() {
     const menu = document.getElementById('match-settings-menu');
     const pauseMenu = document.getElementById('pause-menu');
@@ -1791,6 +2022,9 @@ window.toggleMatchSettings = function() {
         document.getElementById('mutator-doublespeed').checked = state.matchSettings.doubleSpeed;
         document.getElementById('mutator-suddendeath').checked = state.matchSettings.suddenDeath;
         document.getElementById('mutator-winter').checked = state.matchSettings.winter;
+        const objectiveLevel = document.getElementById('objective-level-select');
+        if (objectiveLevel) objectiveLevel.value = String(state.isCampaign ? state.campaignLevel : 1);
+        renderObjectiveSettings();
 
         pauseMenu.style.display = 'none';
         menu.style.display = 'flex';
@@ -8945,7 +9179,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -9266,11 +9500,12 @@ function campaignCompletedBuildings(type = null) {
 function ensureCampaignMission() {
     if (!state.isCampaign || !CAMPAIGN_MISSIONS[state.campaignLevel] || !state.shaman) return;
     if (state.campaignMission?.level === state.campaignLevel) {
+        state.campaignMission.rule ||= getCampaignMissionRule(state.campaignLevel);
         if (!campaignMarkersReady) buildCampaignMarkers();
         return;
     }
-    const rule = CAMPAIGN_MISSIONS[state.campaignLevel];
-    const mission = { level: state.campaignLevel, elapsed: 0, reached: false, pivotal: false, sites: [] };
+    const rule = getCampaignMissionRule(state.campaignLevel);
+    const mission = { level: state.campaignLevel, rule: { ...rule }, elapsed: 0, reached: false, pivotal: false, sites: [] };
     const origin = state.shaman.mesh.position;
     if (rule.kind === 'capture' || rule.kind === 'stronghold') {
         const rivals = rule.kind === 'stronghold' ? window.enemyAIs.slice(0, 1) : window.enemyAIs;
@@ -9308,7 +9543,7 @@ function ensureCampaignMission() {
 
 function campaignMissionComplete() {
     const mission = state.campaignMission;
-    const rule = CAMPAIGN_MISSIONS[state.campaignLevel];
+    const rule = getActiveCampaignRule();
     if (!state.isCampaign || !mission || !rule || mission.level !== state.campaignLevel) return false;
     if (rule.kind === 'settlement') return campaignCompletedBuildings('hut') >= rule.huts && !campaignEnemyAlive();
     if (rule.kind === 'defense') return campaignCompletedBuildings('hut') >= rule.buildings &&
@@ -9325,7 +9560,7 @@ function updateCampaignObjective() {
     const label = document.getElementById('campaign-objective');
     if (!label) return;
     const mission = state.campaignMission;
-    const rule = CAMPAIGN_MISSIONS[state.campaignLevel];
+    const rule = getActiveCampaignRule();
     label.style.display = state.isCampaign && mission && rule ? 'block' : 'none';
     if (!mission || !rule) return;
     let detail = '';
@@ -9346,7 +9581,7 @@ function updateCampaignMission(dt) {
     if (!state.isCampaign || state.isPaused || window.gameWonAlertShown || window.gameOverAlertShown) return;
     ensureCampaignMission();
     const mission = state.campaignMission;
-    const rule = CAMPAIGN_MISSIONS[state.campaignLevel];
+    const rule = getActiveCampaignRule();
     if (!mission || !rule) return;
     mission.elapsed += dt;
     if (Math.floor(mission.elapsed) !== Math.floor(mission.elapsed - dt)) {
@@ -9419,12 +9654,21 @@ function renderCampaignStory(level) {
     ensureCampaignMission();
     document.getElementById('story-title').textContent = story.title;
     document.getElementById('story-text').textContent = story.text;
-    const rule = CAMPAIGN_MISSIONS[level];
+    const rule = getActiveCampaignRule(level);
     const hint = rule?.kind === 'capture' || rule?.kind === 'stronghold'
         ? ' Hold an allied ground unit in a marked circle without nearby enemies until it turns green.'
-        : rule?.kind === 'escort' ? ' Blue rings mark the two followers and the gate.'
+        : rule?.kind === 'escort' ? ` Blue rings mark the ${rule.followers === 1 ? 'follower' : `${rule.followers} followers`} and the gate.`
         : rule?.kind === 'breach' ? ' The blue beam marks the passage.' : '';
-    document.getElementById('story-objective').textContent = 'Objective: ' + story.objective + hint;
+    const customized = !!state.matchSettings?.campaignObjectives?.[level];
+    document.getElementById('story-objective-brief').textContent = customized
+        ? 'Configured mission goals:' : 'Objective: ' + story.objective;
+    const objectiveList = document.getElementById('story-objective-list');
+    objectiveList.replaceChildren(...campaignObjectiveSteps(rule).map(step => {
+        const item = document.createElement('li');
+        item.textContent = step;
+        return item;
+    }));
+    document.getElementById('story-objective-hint').textContent = hint.trim();
     const discovery = document.getElementById('story-discovery');
     discovery.hidden = !state.campaignNarrative?.beatShown;
     discovery.textContent = state.campaignNarrative?.beatShown ? 'Discovered: ' + story.beat : '';
@@ -9685,7 +9929,10 @@ window.loadGame = function() {
         state.campaignNarrative = null;
         state.campaignMission = null;
         clearCampaignMarkers();
-        if (data.matchSettings) state.matchSettings = data.matchSettings;
+        if (data.matchSettings) {
+            state.matchSettings = normalizeMatchSettings(data.matchSettings);
+            persistCampaignObjectives();
+        }
 
         state.mana = data.mana;
         updateUI();

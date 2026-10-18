@@ -41,6 +41,46 @@ try {
         opening.visible !== 'flex' || !opening.paused) throw new Error('Opening chapter failed: ' + JSON.stringify(opening));
     console.log('PASS Campaign opens with the new premise and a playable objective');
 
+    const editor = await page.evaluate(() => {
+        toggleMatchSettings();
+        const select = document.getElementById('objective-level-select');
+        select.value = '1';
+        renderObjectiveSettings();
+        const kind = document.getElementById('objective-kind-select');
+        kind.value = 'escort';
+        kind.dispatchEvent(new Event('change'));
+        const input = document.querySelector('[data-objective-field="followers"]');
+        input.value = '4';
+        input.dispatchEvent(new Event('change'));
+        return {
+            levels: select.options.length,
+            kinds: kind.options.length,
+            summary: document.getElementById('objective-settings-summary').textContent,
+            stored: JSON.parse(localStorage.getItem('rebeginning_campaign_objectives')),
+            fields: document.querySelectorAll('#objective-settings-fields input').length
+        };
+    });
+    if (editor.levels !== 12 || editor.kinds !== 7 || editor.fields !== 2 ||
+        editor.stored?.['1']?.kind !== 'escort' || editor.stored?.['1']?.followers !== 4 ||
+        !editor.summary.includes('4 marked followers')) throw new Error('Objective editor failed: ' + JSON.stringify(editor));
+    await startLevel(1);
+    const configured = await page.evaluate(() => ({
+        kind: state.campaignMission?.rule?.kind,
+        followers: state.campaignMission?.rule?.followers,
+        escorts: state.campaignMission?.escortIds?.length,
+        steps: document.getElementById('story-objective-list').textContent,
+        paused: state.isPaused
+    }));
+    if (configured.kind !== 'escort' || configured.followers !== 4 || configured.escorts !== 4 ||
+        !configured.steps.includes('4 marked followers') || !configured.paused) {
+        throw new Error('Configured objective was not explained before play: ' + JSON.stringify(configured));
+    }
+    await page.evaluate(() => {
+        resetAllObjectiveSettings();
+        if (localStorage.getItem('rebeginning_campaign_objectives') !== '{}') throw new Error('Objective reset was not persisted');
+    });
+    console.log('PASS Match Settings edits, persists and explains every level objective before play');
+
     await startLevel(5);
     await page.evaluate(() => { closeStoryOverlay(); if (state.isPaused) togglePause(); });
     await page.evaluate(() => {
