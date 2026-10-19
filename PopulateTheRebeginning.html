@@ -428,6 +428,7 @@
                 <p>Your Shaman is your most powerful spiritual leader:</p>
                 <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
                     <li><strong>Mana:</strong> Mana is your primary resource, automatically generated over time. Use it to cast spells, build structures, and upgrade units.</li>
+                    <li><strong>Ancient Totems:</strong> Allied units standing beside a stone circle's totem slowly regain health. While your Shaman stands beside one, Mana regenerates twice as fast.</li>
                     <li><strong>Respawn:</strong> If your Shaman dies in battle, they will respawn near your followers after a delay, unless <em>Sudden Death</em> is active in Match Settings.</li>
                 </ul>
             </div>
@@ -1051,6 +1052,11 @@ const CONFIG = {
         SHAMAN_RESPAWN_SEARCH_STEP: 2,
         DEATH_CLEANUP_TIME: 100,
         FPS_UPDATE_INTERVAL: 1000,
+    },
+    TOTEM_AURA: {
+        RADIUS: 3.5,
+        HEAL_FRACTION_PER_SECOND: 0.01,
+        MANA_RATE_MULTIPLIER: 2,
     },
     ANIMATION: {
         WALK_SPEED: 10,
@@ -4870,6 +4876,26 @@ function createRitualSite(grp,cx,cz) {
     const crown=new THREE.Mesh(ritualAssets.crown,ritualAssets.crownMat);
     crown.position.y=2.62;site.add(crown);
     grp.add(site);grp.userData.ritualSite={mesh:site,ring,stones,x,z};
+}
+
+function applyTotemAura(dt,manaRate) {
+    const sites=Object.values(state.chunks).map(chunk=>chunk.userData?.ritualSite).filter(Boolean);
+    if(!sites.length)return manaRate;
+    const radiusSq=CONFIG.TOTEM_AURA.RADIUS**2;
+    const isNear=position=>sites.some(site=>{
+        const dx=position.x-site.x,dz=position.z-site.z;
+        return dx*dx+dz*dz<=radiusSq;
+    });
+    if(state.network.role!=='client') {
+        for(const unit of state.units) {
+            if(unit.faction!==0||unit.state==='dead'||unit.state==='transported'||unit.hp>=unit.maxHp||!isNear(unit.mesh.position))continue;
+            unit.hp=Math.min(unit.maxHp,unit.hp+unit.maxHp*CONFIG.TOTEM_AURA.HEAL_FRACTION_PER_SECOND*dt);
+            unit.hpBar.scale.x=unit.hp/unit.maxHp;
+        }
+    }
+    const shaman=state.shaman;
+    return shaman&&shaman.state!=='dead'&&shaman.state!=='transported'&&isNear(shaman.mesh.position)
+        ? manaRate*CONFIG.TOTEM_AURA.MANA_RATE_MULTIPLIER : manaRate;
 }
 
 function createGroundCover(grp,cx,cz) {
@@ -9459,7 +9485,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -11008,6 +11034,7 @@ function animate() {
         // Global Shaman Aura
         manaRate *= CONFIG.CAMPAGIN.MANA_RATE_LEVEL_11_MULT;
     }
+    manaRate=applyTotemAura(dt,manaRate);
 
     if (isNaN(state.mana)) state.mana = 0;
     if(state.mana < CONFIG.CAMPAGIN.MANA_CAP) { state.mana += dt * manaRate; if(isNaN(state.mana)) state.mana = 0; updateUI(); }
