@@ -53,8 +53,8 @@ try {
         const origin=state.shaman.mesh.position;
         for(let x=origin.x-24;x<origin.x+24&&!slope;x+=1.5)for(let z=origin.z-24;z<origin.z+24;z+=1.5){
             const h=getHeight(x,z),east=getHeight(x+1.2,z),west=getHeight(x-1.2,z);
-            if(h<waterLevel+2||east<waterLevel+2||west<waterLevel+2||
-                east-west<.45||isBlocked(x,z)||isBlocked(x+.6,z)||isBlocked(x-.6,z))continue;
+            if(h<gameTestAPI.aiDryHeight()+2.5||east<waterLevel+2||west<waterLevel+2||
+                east-h<.48||isBlocked(x,z)||isBlocked(x+.6,z)||isBlocked(x-.6,z))continue;
             slope={x,z};break;
         }
         if(!slope)throw new Error('No dry slope found');
@@ -65,8 +65,9 @@ try {
         climber.rigidBody.setLinvel({x:0,y:0,z:0},true);
         climber.manualMove(new THREE.Vector3(-1,0,0),.1);
         const downhill=Math.abs(climber.rigidBody.linvel().x);
-        if(uphill>=downhill*.9)throw new Error(`Uphill movement was not slower: ${uphill}, ${downhill}`);
-        return {radius,closest,pathPoints:path.length,uphill,downhill};
+        if(uphill>=downhill*.5)throw new Error(`Uphill movement was too fast: ${uphill}, ${downhill}`);
+        return {radius,closest,pathPoints:path.length,slopeHeight:getHeight(slope.x,slope.z),
+            rise:getHeight(slope.x+1.2,slope.z)-getHeight(slope.x,slope.z),uphill,downhill};
     });
     if(errors.length)throw new Error(errors.join('\n'));
     console.log('PASS tree collision, route avoidance and slope-aware walking',result);

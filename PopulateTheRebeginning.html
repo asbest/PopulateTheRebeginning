@@ -3051,8 +3051,13 @@ function terrainSpeedFactor(x,z,dirX,dirZ) {
     const length=Math.hypot(dirX,dirZ);
     if(length<.001)return 1;
     const distance=1.2;
-    const rise=(getHeight(x+dirX/length*distance,z+dirZ/length*distance)-getHeight(x,z))/distance;
-    if(rise>0)return Math.max(.5,1/(1+rise*.65));
+    const height=getHeight(x,z);
+    const rise=(getHeight(x+dirX/length*distance,z+dirZ/length*distance)-height)/distance;
+    if(rise>0){
+        // Keep shoreline climbs passable; higher slopes require slower, deliberate steps.
+        if(height<aiDryHeight()+2)return Math.max(.5,1/(1+rise*.65));
+        return Math.max(.25,1/(1+rise*4+rise*rise*4));
+    }
     const descent=-rise;
     return Math.max(.72,Math.min(1.08,1+Math.min(descent,.5)*.16-Math.max(0,descent-.5)*.35));
 }
@@ -6954,6 +6959,7 @@ window.Humanoid = class Humanoid {
         this.lastPainAt = -Infinity;
         this.path = []; this.pathIndex = 0; this.pathTimer = 0;
         this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
+        this.lastMoveSpeed = this.moveSpeed;
         this.stuckThreshold = CONFIG.ANIMATION.STUCK_THRESHOLD_BASE + Math.random();
         this.updateTicker = Math.floor(Math.random() * 60);
         this.deathTimer = 0;
@@ -7901,7 +7907,7 @@ window.Humanoid = class Humanoid {
             // Stuck Detection
             const movedDist = this.mesh.position.distanceTo(this.lastPos);
             if(dt > 0.001) {
-                if(movedDist < this.moveSpeed * dt * 0.2) {
+                if(movedDist < this.lastMoveSpeed * dt * 0.2) {
                     this.stuckTimer += dt;
                     if(this.stuckTimer > this.stuckThreshold && this.finalDest) {
                         this.stuckTimer = 0;
@@ -7989,6 +7995,7 @@ window.Humanoid = class Humanoid {
                     if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                         speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
                     }
+                    this.lastMoveSpeed = speed;
                     const push = this.getSeparationVector();
                     if(this.faction!==0 && !this.aiWaterEscape && state.waterState!=='frozen' &&
                         getHeight(this.mesh.position.x+(dir.x+push.x),this.mesh.position.z+(dir.z+push.z))<safeH)push.set(0,0,0);
