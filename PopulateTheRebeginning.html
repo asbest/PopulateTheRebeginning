@@ -16,6 +16,7 @@
             width: 200px; height: 10px; background: #333; margin: 0 auto; border: 1px solid white; border-radius: 5px; overflow: hidden;
         }
         #mana-fill { width: 100%; height: 100%; background: #00BFFF; transition: width 0.2s; }
+        #faith-display { color: #ffe3a2; }
         #campaign-objective { display:none; max-width:min(640px,calc(100vw - 110px)); margin:4px auto 0; color:#fff0bb; font-size:11px; line-height:1.2; text-shadow:0 1px 3px #000; }
         #campaign-objective-summary { display:none; max-width:min(640px,calc(100vw - 110px)); margin:5px auto 0; color:#fff; font-size:12px; line-height:1.25; font-weight:600; text-shadow:0 1px 3px #000; }
 
@@ -429,6 +430,7 @@
                 <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
                     <li><strong>Mana:</strong> Mana is your primary resource, automatically generated over time. Use it to cast spells, build structures, and upgrade units.</li>
                     <li><strong>Ancient Totems:</strong> Allied units standing beside a stone circle's totem slowly regain health. While your Shaman stands beside one, Mana regenerates twice as fast.</li>
+                    <li><strong>Faith:</strong> Idle followers near their own Shaman kneel and worship. Worship and healing raise your tribe's faith; deaths lower it. Faith changes Mana regeneration by up to 25%.</li>
                     <li><strong>Respawn:</strong> If your Shaman dies in battle, they will respawn near your followers after a delay, unless <em>Sudden Death</em> is active in Match Settings.</li>
                 </ul>
             </div>
@@ -649,6 +651,7 @@
     <div id="top-bar">
         <div id="mana-bar"><div id="mana-fill"></div></div>
         <p>Mana: <span id="mana-text">100</span></p>
+        <p id="faith-display">Faith: <span id="faith-text">50</span> · Mana <span id="faith-bonus">100%</span></p>
         <p id="campaign-objective-summary" role="status" aria-live="polite"></p>
         <p id="campaign-objective" role="status" aria-live="off"></p>
     </div>
@@ -1057,6 +1060,17 @@ const CONFIG = {
         RADIUS: 3.5,
         HEAL_FRACTION_PER_SECOND: 0.01,
         MANA_RATE_MULTIPLIER: 2,
+    },
+    FAITH: {
+        START: 50,
+        WORSHIP_RADIUS: 7,
+        WORSHIP_GAIN_PER_SECOND: 0.035,
+        MAX_WORSHIPPERS: 5,
+        HEAL_GAIN: 2,
+        DEATH_LOSS: 4,
+        SHAMAN_DEATH_LOSS: 10,
+        MIN_MANA_MULTIPLIER: 0.75,
+        MAX_MANA_MULTIPLIER: 1.25,
     },
     ANIMATION: {
         WALK_SPEED: 10,
@@ -1517,6 +1531,7 @@ const state = {
     viewScale: CONFIG.CAMERA.INITIAL_VIEW_SCALE,
     currentAction: 'select',
     mana: 100,
+    faith: CONFIG.FAITH.START,
     campaignNarrative: null,
     campaignMission: null,
 
@@ -1809,6 +1824,7 @@ const NetworkManager = {
                 constructionTimer: b.constructionTimer
             })),
             mana: state.mana,
+            faith: state.faith,
             matchSettings: state.matchSettings,
             treeTime: state.treeTime,
             treeBurns: Array.from(state.treeBurns.entries()),
@@ -1918,6 +1934,7 @@ const NetworkManager = {
         }
 
         if (data.mana !== undefined) state.mana = data.mana;
+        if (Number.isFinite(data.faith)) state.faith = THREE.MathUtils.clamp(data.faith,0,100);
         if (data.matchSettings !== undefined) state.matchSettings = normalizeMatchSettings(data.matchSettings);
         if (data.isPaused !== undefined) state.isPaused = data.isPaused;
         if (Number.isFinite(data.treeTime) && Array.isArray(data.treeBurns)) {
@@ -6363,16 +6380,19 @@ function executeSpell(type, x, z, caster) {
     else if (type === 'heal') {
         SoundManager.playSound('heal');
 
+        let healedFollowers=0;
         SpatialHash.query(x, z, 8).forEach(u => {
             if(u.faction === caster.faction && u.state !== 'dead') {
                 const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
                 if(dist < 8) {
+                    if(u.hp<u.maxHp && !u.isPhantom) healedFollowers++;
                     u.hp = u.maxHp;
                     u.hpBar.scale.x = 1.0;
                     spawnHealing(u.mesh.position.x, u.mesh.position.y + 2, u.mesh.position.z);
                 }
             }
         });
+        if(caster.faction===0 && healedFollowers) changeFaith(Math.min(healedFollowers,4)*CONFIG.FAITH.HEAL_GAIN);
     }
     else if (type === 'create') {
         SoundManager.playSound('create');
@@ -6610,6 +6630,49 @@ window.castLandbridge = castLandbridge;
 
 
 // --- js/humanoid.js ---
+
+function findWorshipShaman(unit) {
+    if(unit.isShaman || unit.isVehicle || unit.isPhantom || unit.state !== 'idle' ||
+       !unit.isGrounded || unit.isSwimming || unit.attackTarget ||
+       Math.hypot(unit.velocity.x,unit.velocity.z) > 0.35) return null;
+    const radiusSquared=CONFIG.FAITH.WORSHIP_RADIUS**2;
+    let closest=null,closestDistance=radiusSquared;
+    for(const shaman of state.units) {
+        if(shaman.faction!==unit.faction || !shaman.isShaman || shaman.state==='dead' || shaman.state==='transported') continue;
+        const dx=shaman.mesh.position.x-unit.mesh.position.x;
+        const dz=shaman.mesh.position.z-unit.mesh.position.z;
+        const distance=dx*dx+dz*dz;
+        if(distance<closestDistance && distance>0.64) { closest=shaman; closestDistance=distance; }
+    }
+    return closest;
+}
+
+function updateWorship(unit,dt) {
+    const shaman=findWorshipShaman(unit);
+    unit.worshipTarget=shaman;
+    unit.isWorshipping=!!shaman;
+    if(shaman) Locomotion.turn(unit,Math.atan2(shaman.mesh.position.x-unit.mesh.position.x,
+        shaman.mesh.position.z-unit.mesh.position.z),dt);
+}
+
+function changeFaith(amount) {
+    if(state.network.role==='client') return;
+    const previous=Math.round(state.faith);
+    const previousBonus=Math.round(faithManaMultiplier()*100);
+    state.faith=THREE.MathUtils.clamp(state.faith+amount,0,100);
+    if(Math.round(state.faith)!==previous || Math.round(faithManaMultiplier()*100)!==previousBonus) updateUI();
+}
+
+function updateFaith(dt) {
+    if(state.network.role==='client') return;
+    const worshippers=state.units.filter(u=>u.faction===0 && u.isWorshipping && u.state==='idle').length;
+    if(worshippers) changeFaith(Math.min(worshippers,CONFIG.FAITH.MAX_WORSHIPPERS)*CONFIG.FAITH.WORSHIP_GAIN_PER_SECOND*dt);
+}
+
+function faithManaMultiplier() {
+    return CONFIG.FAITH.MIN_MANA_MULTIPLIER+
+        (CONFIG.FAITH.MAX_MANA_MULTIPLIER-CONFIG.FAITH.MIN_MANA_MULTIPLIER)*state.faith/100;
+}
 
 window.Humanoid = class Humanoid {
     getSeparationVector() {
@@ -6873,6 +6936,9 @@ window.Humanoid = class Humanoid {
     }
 
     die() {
+        if(this.state==='dead') return;
+        if(this.faction===0 && !this.isPhantom && !this.isVehicle) changeFaith(-(this.isShaman?CONFIG.FAITH.SHAMAN_DEATH_LOSS:CONFIG.FAITH.DEATH_LOSS));
+        this.isWorshipping=false;
         this.state = 'dead'; this.hpGroup.visible = false; if(this.marker) this.marker.visible = false; this.velocity.set(0, 0, 0);
         if (state.physicsWorld && this.rigidBody) {
             state.physicsWorld.removeRigidBody(this.rigidBody);
@@ -7280,6 +7346,7 @@ window.Humanoid = class Humanoid {
                 this.mesh.position.lerp(this.networkTarget,1-Math.exp(-14*dt));
                 Locomotion.turn(this,this.networkHeading,dt);
                 this.isGrounded=!this.isVehicle;
+                updateWorship(this,dt);
                 Locomotion.animate(this,dt,getSurfaceHeight);
             }
             return;
@@ -7800,6 +7867,7 @@ window.Humanoid = class Humanoid {
             if(Math.abs(this.mesh.rotation.z) < 0.01) this.mesh.rotation.z = 0;
         }
 
+        updateWorship(this,dt);
         if(this.poseTick !== this.updateTicker) Locomotion.animate(this, dt, getSurfaceHeight);
 
         if(this.type === 'firewarrior' && this.state !== 'dead') {
@@ -8502,6 +8570,10 @@ function updateUI() {
         const width=(Math.round(state.mana*10)/10)+'%';
         if(manaFill._shownWidth!==width){manaFill.style.width=width;manaFill._shownWidth=width;}
     }
+    const faithText=document.getElementById('faith-text');
+    const faithBonus=document.getElementById('faith-bonus');
+    if(faithText) faithText.textContent=String(Math.round(state.faith));
+    if(faithBonus) faithBonus.textContent=`${Math.round(faithManaMultiplier()*100)}%`;
 
     const visitDisplay = document.getElementById('visit-count-display');
     if (visitDisplay) {
@@ -9485,7 +9557,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -10170,6 +10242,7 @@ window.saveGame = function() {
         campaignMission: state.isCampaign ? state.campaignMission : null,
         matchSettings: state.matchSettings,
         mana: state.mana,
+        faith: state.faith,
         terrainMods: Array.from(state.terrainMods.entries()),
         treeTime: state.treeTime,
         treeBurns: Array.from(state.treeBurns.entries()),
@@ -10297,6 +10370,7 @@ window.loadGame = function() {
         }
 
         state.mana = data.mana;
+        state.faith = Number.isFinite(data.faith) ? THREE.MathUtils.clamp(data.faith,0,100) : CONFIG.FAITH.START;
         updateUI();
 
         state.cameraLookAt.set(data.cameraLookAt.x, data.cameraLookAt.y, data.cameraLookAt.z);
@@ -11035,6 +11109,8 @@ function animate() {
         manaRate *= CONFIG.CAMPAGIN.MANA_RATE_LEVEL_11_MULT;
     }
     manaRate=applyTotemAura(dt,manaRate);
+    updateFaith(dt);
+    manaRate*=faithManaMultiplier();
 
     if (isNaN(state.mana)) state.mana = 0;
     if(state.mana < CONFIG.CAMPAGIN.MANA_CAP) { state.mana += dt * manaRate; if(isNaN(state.mana)) state.mana = 0; updateUI(); }

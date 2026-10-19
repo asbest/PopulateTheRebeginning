@@ -52,6 +52,9 @@ jobs:
       - name: Totem healing and mana regeneration
         if: always()
         run: node tests/totem-aura.mjs
+      - name: Faith and shaman worship
+        if: always()
+        run: node tests/faith-worship.mjs
       - name: Locomotion and terrain physics
         if: always()
         run: node tests/locomotion.mjs

@@ -176,6 +176,25 @@ export function createLocomotion(T) {
         u.torso.rotation.z=smooth(u.torso.rotation.z,-sway*.8,12,dt);
         u.head.rotation.y=smooth(u.head.rotation.y,clamp(wrap((u.turnTarget??yaw)-yaw),-.2,.2)*.35-u.torso.rotation.y*.5,10,dt);
         u.head.rotation.x=smooth(u.head.rotation.x,breath*.9-.02*run,8,dt);
+        // A kneeling ritual pose blends over the normal idle rig. The physical
+        // capsule stays upright, so worship never changes collision or movement.
+        u.worshipBlend=smooth(u.worshipBlend||0,u.worshipTarget&&u.state==='idle'&&!moving?1:0,7,dt);
+        if(u.worshipBlend>.001){
+            const blend=u.worshipBlend;
+            const pose=(part,axis,target)=>{part[axis]+=(target-part[axis])*blend;};
+            pose(u.torso.position,'y',.72+Math.sin(u.animTime*2)*.008);
+            pose(u.torso.rotation,'x',.14);
+            pose(u.head.rotation,'x',-.1);
+            for(const leg of [u.legL,u.legR]){
+                pose(leg.position,'y',.47);
+                pose(leg.rotation,'x',-1.12);
+                pose(leg.userData.lower.rotation,'x',1.75);
+            }
+            pose(u.armL.rotation,'x',-1.05);pose(u.armR.rotation,'x',-1.05);
+            pose(u.armL.rotation,'z',-.52);pose(u.armR.rotation,'z',.52);
+            pose(u.armL.userData.lower.rotation,'x',-.55);
+            pose(u.armR.userData.lower.rotation,'x',-.55);
+        }
         const cape=u.torso.getObjectByName(u.isShaman?'CeremonialCape':'SpyCloak');
         if(cape){
             cape.rotation.x=smooth(cape.rotation.x,-.14-.08*weight+Math.sin(g.phase*Math.PI*2)*.02*weight,8,dt);
