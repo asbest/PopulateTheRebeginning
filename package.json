@@ -10,7 +10,7 @@
     "benchmark:group-impact": "node tools/benchmark-group-impact.mjs",
     "benchmark:hut-destruction": "node tools/benchmark-hut-destruction.mjs",
     "benchmark:firestorm": "node tools/benchmark-firestorm.mjs",
-    "test": "node tests/startup.mjs && node tests/campaign-story.mjs && node tests/campaign-levels.mjs && node tests/browser.mjs && node tests/blender-assets.mjs && node tests/ktx2.mjs && node tests/environment.mjs && node tests/terrain-variety.mjs && node tests/totem-aura.mjs && node tests/faith-worship.mjs && node tests/locomotion.mjs && node tests/spells.mjs && node tools/benchmark-group-impact.mjs && node tools/benchmark-hut-destruction.mjs && node tests/trees.mjs && node tests/sfx-assets.mjs && node tests/music.mjs && node tests/audio.mjs && node tests/strategy.mjs && node tests/ai-stutter.mjs && node tests/pathfinder-worker.mjs && node tests/materials.mjs && node tests/strategy-long.mjs && node tests/live-gameplay.mjs"
+    "test": "node tests/startup.mjs && node tests/campaign-story.mjs && node tests/campaign-levels.mjs && node tests/browser.mjs && node tests/blender-assets.mjs && node tests/ktx2.mjs && node tests/environment.mjs && node tests/terrain-variety.mjs && node tests/totem-aura.mjs && node tests/faith-worship.mjs && node tests/locomotion.mjs && node tests/spells.mjs && node tools/benchmark-group-impact.mjs && node tools/benchmark-hut-destruction.mjs && node tests/trees.mjs && node tests/tree-navigation.mjs && node tests/sfx-assets.mjs && node tests/music.mjs && node tests/audio.mjs && node tests/strategy.mjs && node tests/ai-stutter.mjs && node tests/pathfinder-worker.mjs && node tests/materials.mjs && node tests/strategy-long.mjs && node tests/live-gameplay.mjs"
   },
   "devDependencies": {
     "ktx2-encoder": "0.5.4",

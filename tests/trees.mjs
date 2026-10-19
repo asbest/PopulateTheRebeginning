@@ -85,13 +85,17 @@ try{
         const find=()=>Object.values(state.chunks).flatMap(chunk=>chunk.userData?.trees||[]).find(tree=>tree.id===id);
         if(!find()?.burned||Math.abs(state.treeBurns.get(id)-state.treeTime-before)>1)
             throw new Error(`Saved tree burn or regrowth timer was lost: ${JSON.stringify({burned:find()?.burned,expiry:state.treeBurns.get(id),time:state.treeTime,before})}`);
+        const x=find().mesh.position.x,z=find().mesh.position.z;
+        if(!isBlocked(x,z))throw new Error('Loaded tree did not block movement after save/load');
         const chunkKey=id.split(':')[0],look=state.cameraLookAt.clone();
         state.cameraLookAt.x+=500;state.cameraLookAt.z+=500;
         gameTestAPI.updateChunks();
         if(state.chunks[chunkKey])throw new Error('Test tree chunk did not unload');
+        if(isBlocked(x,z))throw new Error('Unloaded tree still blocks movement');
         state.cameraLookAt.copy(look);
         for(let i=0;i<80&&!state.chunks[chunkKey];i++)gameTestAPI.updateChunks();
         if(!find()?.burned)throw new Error('Tree lost its charred state after chunk streaming');
+        if(!isBlocked(x,z))throw new Error('Reloaded tree no longer blocks movement');
         return {remaining:state.treeBurns.get(id)-state.treeTime};
     },saved);
     console.log(`PASS Burned tree and remaining ${persist.remaining.toFixed(1)}s survive save/load and chunk streaming`);

@@ -2969,7 +2969,94 @@ function getSurfaceHeight(x,z) {
 }
 window.getSurfaceHeight=getSurfaceHeight;
 
-function isBlocked(x, z) {
+const TREE_OBSTACLE_CELL_SIZE=8;
+const treeObstacleCells=new Map();
+function treeObstacleCellKey(x,z) {
+    return `${Math.floor(x/TREE_OBSTACLE_CELL_SIZE)},${Math.floor(z/TREE_OBSTACLE_CELL_SIZE)}`;
+}
+function indexChunkTreeObstacles(chunk) {
+    for(const tree of chunk.userData?.trees||[]) {
+        const x=tree.mesh.position.x,z=tree.mesh.position.z;
+        const obstacle={x,z,radius:.4+.29*tree.mesh.scale.x,tree};
+        const key=treeObstacleCellKey(x,z);
+        let cell=treeObstacleCells.get(key);
+        if(!cell){cell=new Set();treeObstacleCells.set(key,cell);}
+        cell.add(obstacle);tree.obstacle=obstacle;tree.obstacleCellKey=key;
+    }
+}
+function removeChunkTreeObstacles(chunk) {
+    for(const tree of chunk.userData?.trees||[]) {
+        if(!tree.obstacle)continue;
+        const cell=treeObstacleCells.get(tree.obstacleCellKey);
+        cell?.delete(tree.obstacle);
+        if(cell?.size===0)treeObstacleCells.delete(tree.obstacleCellKey);
+        tree.obstacle=null;
+    }
+}
+function nearbyTreeObstacles(x,z,visit) {
+    const cx=Math.floor(x/TREE_OBSTACLE_CELL_SIZE),cz=Math.floor(z/TREE_OBSTACLE_CELL_SIZE);
+    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++) {
+        const cell=treeObstacleCells.get(`${cx+dx},${cz+dz}`);
+        if(cell)for(const obstacle of cell)if(obstacle.tree.mesh.visible && visit(obstacle))return true;
+    }
+    return false;
+}
+function isTreeBlocked(x,z) {
+    const cx=Math.floor(x/TREE_OBSTACLE_CELL_SIZE),cz=Math.floor(z/TREE_OBSTACLE_CELL_SIZE);
+    for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++) {
+        const cell=treeObstacleCells.get(`${cx+dx},${cz+dz}`);
+        if(cell)for(const tree of cell) {
+            if(!tree.tree.mesh.visible)continue;
+            const offsetX=x-tree.x,offsetZ=z-tree.z;
+            if(offsetX*offsetX+offsetZ*offsetZ<tree.radius*tree.radius)return true;
+        }
+    }
+    return false;
+}
+function treeBlocksSegment(ax,az,bx,bz) {
+    const length=Math.hypot(bx-ax,bz-az),steps=Math.max(2,Math.ceil(length/.5));
+    for(let i=1;i<=steps;i++) {
+        const t=i/steps;
+        if(isTreeBlocked(ax+(bx-ax)*t,az+(bz-az)*t))return true;
+    }
+    return false;
+}
+function resolveTreeCollision(unit) {
+    if(unit.isVehicle||unit.isPhantom||unit.state==='dead'||unit.state==='transported')return;
+    let changed=false;
+    for(let pass=0;pass<2;pass++) {
+        let pushed=false;
+        nearbyTreeObstacles(unit.mesh.position.x,unit.mesh.position.z,tree=>{
+            let dx=unit.mesh.position.x-tree.x,dz=unit.mesh.position.z-tree.z;
+            let distance=Math.hypot(dx,dz);
+            if(distance>=tree.radius)return false;
+            if(distance<.001){dx=1;dz=0;distance=1;}
+            const nx=dx/distance,nz=dz/distance;
+            unit.mesh.position.x=tree.x+nx*(tree.radius+.015);
+            unit.mesh.position.z=tree.z+nz*(tree.radius+.015);
+            const inward=unit.velocity.x*nx+unit.velocity.z*nz;
+            if(inward<0){unit.velocity.x-=inward*nx;unit.velocity.z-=inward*nz;}
+            changed=pushed=true;
+            return false;
+        });
+        if(!pushed)break;
+    }
+    if(changed&&unit.rigidBody) {
+        const body=unit.rigidBody.translation(),v=unit.rigidBody.linvel();
+        unit.rigidBody.setTranslation({x:unit.mesh.position.x,y:body.y,z:unit.mesh.position.z},true);
+        unit.rigidBody.setLinvel({x:unit.velocity.x,y:v.y,z:unit.velocity.z},true);
+    }
+}
+function terrainSpeedFactor(x,z,dirX,dirZ) {
+    const length=Math.hypot(dirX,dirZ);
+    if(length<.001)return 1;
+    const distance=1.2;
+    const rise=(getHeight(x+dirX/length*distance,z+dirZ/length*distance)-getHeight(x,z))/distance;
+    if(rise>0)return Math.max(.5,1/(1+rise*.65));
+    const descent=-rise;
+    return Math.max(.72,Math.min(1.08,1+Math.min(descent,.5)*.16-Math.max(0,descent-.5)*.35));
+}
+function isBuildingBlocked(x,z) {
     const candidates = BuildingSpatialHash.query(x, z);
     if (!candidates) return false;
     for(let b of candidates) {
@@ -2979,6 +3066,7 @@ function isBlocked(x, z) {
     }
     return false;
 }
+function isBlocked(x,z) { return isTreeBlocked(x,z)||isBuildingBlocked(x,z); }
 window.isBlocked = isBlocked;
 
 function isBraveNearby(faction, x, z, radius) {
@@ -4285,6 +4373,7 @@ for(let x=-RENDER_DISTANCE;x<=RENDER_DISTANCE;x++)for(let z=-RENDER_DISTANCE;z<=
 CHUNK_OFFSETS.sort((a,b)=>(a.x*a.x+a.z*a.z)-(b.x*b.x+b.z*b.z));
 
 function disposeChunkGeometry(chunk) {
+    removeChunkTreeObstacles(chunk);
     for(const tree of chunk.userData?.trees||[])restoreTree(tree);
     const owned=[chunk.children[0],chunk.children[1]];
     const cover=chunk.userData?.groundCover;
@@ -4339,6 +4428,7 @@ function updateChunks(force = false, specificChunks = null) {
                         disposeChunkGeometry(state.chunks[key]);
                     }
                     state.chunks[key] = createChunk(cx+x, cz+z);
+                    indexChunkTreeObstacles(state.chunks[key]);
                     state.scene.add(state.chunks[key]);
                     createdCount++;
                     state.lastTerrainBuildAt=performance.now();
@@ -5494,7 +5584,8 @@ const Pathfinder = {
 
                     // Allow entry if close to target (within 3 units / ~1.5 grid cells) to handle large buildings
                     const distToTarget = Math.sqrt((nx - endNode.x)**2 + (ny - endNode.y)**2);
-                    if(!isFlying && distToTarget > CONFIG.PATHFINDER.TARGET_PROXIMITY && isBlocked(wx, wz)) {
+                    if(!isFlying && isTreeBlocked(wx,wz))continue;
+                    if(!isFlying && distToTarget > CONFIG.PATHFINDER.TARGET_PROXIMITY && isBuildingBlocked(wx, wz)) {
                         // Units may start inside a school or a newly placed building.
                         // Allow them to leave that footprint, but never enter another one.
                         const canExit = startBlocked && BuildingSpatialHash.query(wx,wz).every(b => {
@@ -5510,6 +5601,8 @@ const Pathfinder = {
                 // edge every time, including when its endpoint is already open.
                 if(dryRoute && !isFlying &&
                     getHeight((currentNode.x+nx)*this.GRID_SIZE*.5,(currentNode.y+ny)*this.GRID_SIZE*.5)<safeH)continue;
+                if(!isFlying && isTreeBlocked((currentNode.x+nx)*this.GRID_SIZE*.5,
+                    (currentNode.y+ny)*this.GRID_SIZE*.5))continue;
 
                 // Diagonal corner cutting check
                 if (Math.abs(offset.x) === 1 && Math.abs(offset.y) === 1) {
@@ -5604,7 +5697,7 @@ const PathWorker = {
 function isWalkableLine(start, end, isFlying, unitHeight = 1.5, avoidWater = false) {
     const dist = start.distanceTo(end);
     const steps = Math.ceil(dist / (avoidWater ? 0.25 : 1.0));
-    if (steps <= 1) return true;
+    if (steps <= 1) return isFlying || !treeBlocksSegment(start.x,start.z,end.x,end.z);
 
     const dir = end.clone().sub(start).normalize();
     const checkPos = start.clone();
@@ -7146,7 +7239,8 @@ window.Humanoid = class Humanoid {
         this.aiWaterEscape=false;
         this.waterOriginalDest=null;
         this.finalDest=null;
-        const speed = this.moveSpeed;
+        const speed = this.moveSpeed * (this.type==='airship'?1:
+            terrainSpeedFactor(this.mesh.position.x,this.mesh.position.z,vec.x,vec.z));
 
         // Check collision and water
         let allowed = true;
@@ -7520,6 +7614,8 @@ window.Humanoid = class Humanoid {
             }
         }
 
+        resolveTreeCollision(this);
+
         Locomotion.ground(this, getSurfaceHeight, dt);
         const groundH = getSurfaceHeight(this.mesh.position.x, this.mesh.position.z);
 
@@ -7751,7 +7847,6 @@ window.Humanoid = class Humanoid {
                 // Slope check
                 const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
                 const currentH = groundH;
-                const dh = nextH - currentH;
 
                 let canMove = true;
                 const safeH = this.faction !== 0 && !this.aiWaterEscape && state.waterState !== 'frozen'
@@ -7759,8 +7854,8 @@ window.Humanoid = class Humanoid {
                 if (this.type !== 'airship' && nextH < safeH && currentH >= safeH) canMove = false;
 
                 if(canMove) {
-                    const slopeFactor = dh > 0 ? Math.max(.65,1.0 / (1.0 + dh * .35)) : 1.0;
-                    let speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
+                    let speed = this.moveSpeed * (this.type === 'airship' ? 1.0 :
+                        terrainSpeedFactor(this.mesh.position.x,this.mesh.position.z,dir.x,dir.z));
                     if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                         speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
                     }
@@ -7877,7 +7972,6 @@ window.Humanoid = class Humanoid {
 
                 // Slope check
                 const nextH = getHeight(this.mesh.position.x + dir.x, this.mesh.position.z + dir.z);
-                const dh = nextH - groundH;
 
                 let canMove = true;
                 const safeH = this.faction !== 0 && !this.aiWaterEscape && state.waterState !== 'frozen'
@@ -7890,8 +7984,8 @@ window.Humanoid = class Humanoid {
                 }
 
                 if(canMove) {
-                    const slopeFactor = dh > 0 ? Math.max(.65,1.0 / (1.0 + dh * .35)) : 1.0;
-                    let speed = this.moveSpeed * (this.type === 'airship' ? 1.0 : slopeFactor);
+                    let speed = this.moveSpeed * (this.type === 'airship' ? 1.0 :
+                        terrainSpeedFactor(this.mesh.position.x,this.mesh.position.z,dir.x,dir.z));
                     if (this.type === 'airship' && this.rocketActiveTimer && this.rocketActiveTimer > 0) {
                         speed *= 3.0; // Make airship 200% faster (+200% = 3x total)
                     }
@@ -8515,7 +8609,18 @@ class EnemyAI {
                 target&&this.distance(current,requested)>4){
                 this.issuePath(u,current,role,target);return;
             }
-            u.goto(current.x,current.z,workerFailed?undefined:workerPath);
+            let treeConflict=false;
+            if(!workerFailed&&workerPath&&u.type!=='airship') {
+                let ax=u.mesh.position.x,az=u.mesh.position.z;
+                for(const [bx,bz] of workerPath) {
+                    if(treeBlocksSegment(ax,az,bx,bz)){treeConflict=true;break;}
+                    ax=bx;az=bz;
+                }
+                if(!treeConflict)treeConflict=treeBlocksSegment(ax,az,current.x,current.z);
+            }
+            // The worker plans terrain/buildings; replan locally only if a tree
+            // intersects its route, keeping the worker as the common fast path.
+            u.goto(current.x,current.z,workerFailed||treeConflict?undefined:workerPath);
             if(u.state!=='move'){
                 u.aiFailedPath={role,origin:{x:u.mesh.position.x,z:u.mesh.position.z},
                     destination:{x:current.x,z:current.z},navigationVersion:state.navigationVersion,
