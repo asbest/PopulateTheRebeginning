@@ -13,19 +13,44 @@ try{
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&
         Object.values(state.chunks).some(chunk=>chunk.userData?.trees?.length),null,{timeout:60000});
     const vegetationBudget=await page.evaluate(()=>{
-        const tree=Object.values(state.chunks).flatMap(chunk=>chunk.userData?.trees||[])[0];
-        const crown=tree.mesh.children[1].geometry;
         const palm=Object.values(state.chunks).map(chunk=>chunk.userData?.palms?.mesh).find(Boolean);
         if(!palm)throw new Error('No coastal palm geometry loaded');
-        return {crownVertices:crown.attributes.position.count,
-            crownColors:crown.attributes.color.count,
+        const styles=['broadleaf','umbrella','conifer'].map(style=>{
+            const tree=Art.tree(style);tree.updateMatrixWorld(true);
+            const crown=tree.children[1].geometry;
+            const trunkBox=new THREE.Box3().setFromObject(tree.children[0]);
+            const crownBox=new THREE.Box3().setFromObject(tree.children[1]);
+            const branches=tree.children.slice(2,6).every(branch=>{
+                const box=new THREE.Box3().setFromObject(branch);
+                return box.intersectsBox(trunkBox)&&box.intersectsBox(crownBox);
+            });
+            const positions=crown.getAttribute('position'),indices=crown.index;
+            const parent=new Map();
+            const key=i=>[positions.getX(i),positions.getY(i),positions.getZ(i)]
+                .map(value=>value.toFixed(4)).join(',');
+            const root=k=>{while(parent.get(k)!==k)k=parent.get(k);return k;};
+            const join=(a,b)=>{a=root(a);b=root(b);if(a!==b)parent.set(a,b);};
+            for(let i=0;i<positions.count;i++){const k=key(i);if(!parent.has(k))parent.set(k,k);}
+            for(let i=0;i<indices.count;i+=3){const a=key(indices.getX(i)),b=key(indices.getX(i+1)),c=key(indices.getX(i+2));join(a,b);join(a,c);}
+            return {style,vertices:positions.count,triangles:indices.count/3,
+                components:new Set([...parent.keys()].map(root)).size,
+                connectedToTrunk:trunkBox.intersectsBox(crownBox)&&branches};
+        });
+        const palmPositions=palm.geometry.getAttribute('position');
+        const palmRoots=Array.from({length:11},(_,i)=>{
+            const x=palmPositions.getX(35+i*14)-.10,z=palmPositions.getZ(35+i*14);
+            return Math.hypot(x,z);
+        });
+        return {styles,
             palmVertices:palm.geometry.attributes.position.count,
-            palmTriangles:palm.geometry.index.count/3};
+            palmTriangles:palm.geometry.index.count/3,
+            farthestPalmRoot:Math.max(...palmRoots)};
     });
-    if(vegetationBudget.crownVertices!==5760||vegetationBudget.crownColors!==5760||
-        vegetationBudget.palmVertices!==189||vegetationBudget.palmTriangles!==188)
-        throw new Error('Vegetation geometry budget increased: '+JSON.stringify(vegetationBudget));
-    console.log('PASS Tree and palm detail fit the original geometry budget',vegetationBudget);
+    if(vegetationBudget.styles.some(tree=>tree.vertices>5760||tree.triangles>1920||
+        tree.components!==1||!tree.connectedToTrunk)||vegetationBudget.palmVertices!==189||
+        vegetationBudget.palmTriangles!==188||vegetationBudget.farthestPalmRoot>.085)
+        throw new Error('Vegetation parts disconnected or geometry budget increased: '+JSON.stringify(vegetationBudget));
+    console.log('PASS Tree crowns, branches and palm fronds connect within the original geometry budget',vegetationBudget);
     const first=await page.evaluate(()=>{
         window.closeHelp();window.closeStoryOverlay();
         document.getElementById('pause-menu').style.display='none';

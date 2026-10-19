@@ -4025,12 +4025,20 @@ function initTerrainResources() {
 
             vec2 d1=normalize(vec2(1.0,.32)),d2=normalize(vec2(-.28,1.0));
             vec2 d3=normalize(vec2(.58,-.82)),d4=normalize(vec2(-.91,-.41));
-            float p1=dot(worldPosition.xz,d1)*.22+time*.72;
-            float p2=dot(worldPosition.xz,d2)*.34+time*.93;
-            float p3=dot(worldPosition.xz,d3)*.71+time*1.37;
-            float p4=dot(worldPosition.xz,d4)*1.31+time*1.91;
+            // A slow, continuous bend breaks ruler-straight wave fronts across chunks.
+            vec2 warpDir=vec2(.11,-.09);
+            float warpPhase=dot(worldPosition.xz,warpDir)+time*.19;
+            float warp=sin(warpPhase);
+            vec2 warpSlope=cos(warpPhase)*warpDir;
+            float p1=dot(worldPosition.xz,d1)*.22+time*.72+warp*.75;
+            float p2=dot(worldPosition.xz,d2)*.34+time*.93-warp*.6;
+            float p3=dot(worldPosition.xz,d3)*.71+time*1.37+warp*.35;
+            float p4=dot(worldPosition.xz,d4)*1.31+time*1.91-warp*.25;
             float height=(sin(p1)*.22+sin(p2)*.13+sin(p3)*.055+sin(p4)*.022)*waveStrength;
-            vec2 gradient=(d1*cos(p1)*.0484+d2*cos(p2)*.0442+d3*cos(p3)*.03905+d4*cos(p4)*.02882)*waveStrength;
+            vec2 gradient=(cos(p1)*.22*(d1*.22+warpSlope*.75)
+                +cos(p2)*.13*(d2*.34-warpSlope*.6)
+                +cos(p3)*.055*(d3*.71+warpSlope*.35)
+                +cos(p4)*.022*(d4*1.31-warpSlope*.25))*waveStrength;
             vec2 horizontal=(d1*cos(p1)*.065+d2*cos(p2)*.033+d3*cos(p3)*.009)*waveStrength;
             pos.xz+=horizontal;
             pos.y+=height;
@@ -4055,8 +4063,11 @@ function initTerrainResources() {
         float waterHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
         float waterNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(waterHash(i),waterHash(i+vec2(1,0)),f.x),mix(waterHash(i+vec2(0,1)),waterHash(i+vec2(1,1)),f.x),f.y);}
         void main() {
-            float swell = sin(vWorldXZ.x * 0.43 + time * 0.7) * cos(vWorldXZ.y * 0.37 - time * 0.56);
-            float detail = sin(vWorldXZ.x * 1.21 - time * 1.3 + sin(vWorldXZ.y * 0.45)) * sin(vWorldXZ.y * 0.86 + time);
+            float noise=waterNoise(vWorldXZ*.72+vec2(time*.16,-time*.11));
+            vec2 brokenXZ=vWorldXZ+vec2(noise-.5,.5-noise)*.8;
+            float swell=sin(dot(brokenXZ,vec2(.39,.19))+time*.7+noise*.7);
+            float detail=sin(dot(brokenXZ,vec2(1.21,-.36))-time*1.3+noise*1.8)
+                *sin(dot(brokenXZ,vec2(.24,.86))+time);
             vec3 deep = color * vec3(0.35,0.69,0.98);
             vec3 lagoon = vec3(0.035,0.64,0.67);
             vec3 viewDir=normalize(cameraPosition-vWorldPosition);
@@ -4069,8 +4080,7 @@ function initTerrainResources() {
             baseColor += vec3(0.016,0.047,0.056) * detail;
             baseColor=mix(baseColor,reflected,.12+fresnel*.58);
             float f = vFoam;
-            float ripples = sin(vWorldXZ.x * 2.4 + time * 1.5) * cos(vWorldXZ.y * 2.1 - time * 1.2) * 0.5 + 0.5;
-            float noise=waterNoise(vWorldXZ*.72+vec2(time*.16,-time*.11));
+            float ripples=smoothstep(.36,.82,noise);
             float breakers=sin(vWorldXZ.x*.53+vWorldXZ.y*.29-time*2.3+noise*2.8)*.5+.5;
             float shoreFoam=smoothstep(.48,.96,f*(.58+.34*breakers)+noise*.12*f);
             float crestFoam=smoothstep(.9,.985,breakers)*smoothstep(.76,1.02,vCrest+noise*.08);
@@ -4792,7 +4802,8 @@ function initCoastalPalm() {
         const a=frond*Math.PI*2/11,dirX=Math.cos(a),dirZ=Math.sin(a),sideX=-dirZ,sideZ=dirX;
         const start=positions.length/3;
         for(let segment=0;segment<7;segment++){
-            const t=segment/6,radius=.12+t*2.1*(.9+(frond%3)*.07);
+            // The frond starts inside the trunk's top ring, so no leaf floats free.
+            const t=segment/6,radius=.04+t*2.18*(.9+(frond%3)*.07);
             const y=3.86+.34*Math.sin(t*Math.PI)-(.65+(frond%3)*.13)*t*t;
             const width=.34*Math.sin(t*Math.PI)*(.85+(frond%3)*.07)*(segment%2?.7:1);
             const sweep=.1*Math.sin(t*Math.PI)*Math.sin(frond*1.9);

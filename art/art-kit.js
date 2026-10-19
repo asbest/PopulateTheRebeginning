@@ -151,54 +151,40 @@ export function createArtKit(T) {
         // First two children remain the trunk and a single crown mesh for burnTreesAt.
         const p=new T.Group();
         cyl(p,[0,1.35,0],0.16,0.29,2.7,palette.wood,'wood',12);
-        const crownGeometry=cachedGeometry('tree-crown-v3-'+style,()=>{
-            const crownGeometry = new T.BufferGeometry();
-            const vertices=[],normals=[],colors=[],uvs=[];
-            const leafGeometry=geometry('IcosahedronGeometry',[0.5,1]);
-            const leaves=style==='conifer'
-                ? [0x294b37,0x315b3c,0x3b6841,0x436e43,0x50784a]
-                : style==='umbrella'
-                    ? [0x496f35,0x628344,0x799348,0x8ca552,0x9aab59]
-                    : [0x315d31,0x3d7237,0x4d8240,0x628e49,0x789d52];
-            for(let i=0;i<24;i++) {
-                const a=i*2.39996,ring=Math.sqrt((i+0.5)/24);
-                const geometryCopy=leafGeometry.clone();
-                const tier=i%6;
-                const height=style==='conifer'?1.88+tier*.42+Math.sin(i*2.1)*.08
-                    : style==='umbrella'?3.05+Math.sin(i*2.1)*.14-ring*.12
-                    : 3.25-ring*ring*.62+Math.sin(i*2.1)*.13;
-                const radius=style==='conifer'?(4.55-height)*.42*(.55+ring*.55)
-                    : style==='umbrella'?.42+ring*1.35:ring*1.16;
-                const sx=style==='conifer'?.39+(4.55-height)*.12
-                    : style==='umbrella'?.59+(i%5)*.055:.61+(i%5)*.085;
-                const sy=style==='conifer'?.35:style==='umbrella'?.32:.38+(i%4)*.06;
-                geometryCopy.scale(sx,sy,sx*(style==='umbrella'?1:.85));
-                geometryCopy.rotateY(a);geometryCopy.rotateZ(Math.sin(i*1.7)*0.27);
-                geometryCopy.translate(Math.sin(a)*radius,height,Math.cos(a)*radius);
-                const flat=geometryCopy.toNonIndexed();vertices.push(...flat.attributes.position.array);normals.push(...flat.attributes.normal.array);uvs.push(...flat.attributes.uv.array);
-                const tone=new T.Color(leaves[i%leaves.length]);
-                for(let k=0;k<flat.attributes.position.count;k++){
-                    const light=.83+.19*Math.max(0,flat.attributes.normal.getY(k));
-                    colors.push(tone.r*light,tone.g*light,tone.b*light);
-                }
-                geometryCopy.dispose();flat.dispose();
+        const crownGeometry=cachedGeometry('tree-crown-v4-'+style,()=>{
+            // One continuous canopy replaces detached leaf clusters. It intersects
+            // the trunk and all four branches without adding meshes or draw calls.
+            const canopy=new T.SphereGeometry(1,24,14);
+            const positions=canopy.getAttribute('position'),colors=[];
+            const base=new T.Color(style==='conifer'?0x4c7848:style==='umbrella'?0x8aa559:0x6c9850);
+            const center=style==='conifer'?2.75:style==='umbrella'?3.02:2.95;
+            const height=style==='conifer'?1.72:style==='umbrella'?.49:.88;
+            const radius=style==='conifer'?1.25:style==='umbrella'?1.91:1.66;
+            for(let i=0;i<positions.count;i++){
+                const x=positions.getX(i),y=positions.getY(i),z=positions.getZ(i);
+                const angle=Math.atan2(z,x);
+                const lobes=1+.14*Math.sin(angle*5+y*3)+.065*Math.sin(angle*9-y*4);
+                const taper=style==='conifer'?1.08-.43*y:1;
+                const spread=radius*lobes*taper;
+                positions.setXYZ(i,x*spread,center+y*height+.045*Math.sin(angle*3+y*5)*(1-y*y),z*spread);
             }
-            crownGeometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));crownGeometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));
-            crownGeometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));
-            crownGeometry.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));
-            return crownGeometry;
+            canopy.computeVertexNormals();
+            const normals=canopy.getAttribute('normal');
+            for(let i=0;i<positions.count;i++){
+                const light=.85+.16*Math.max(0,normals.getY(i))+.06*(positions.getY(i)-center)/height;
+                colors.push(base.r*light,base.g*light,base.b*light);
+            }
+            canopy.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+            return canopy;
         });
         // A full shadow pass over all 24 leaf clusters turns the canopy into
         // detached black circles at the normal RTS camera distance.
         const crown=new T.Mesh(crownGeometry,crownMaterial);crown.castShadow=false;crown.receiveShadow=true;p.add(crown);
         for(let i=0;i<4;i++) {
             const a=i*Math.PI/2+0.4;
-            beam(p,[0,1.65,0],[Math.sin(a)*0.83,2.55,Math.cos(a)*0.83],0.065,0x5c4932);
+            beam(p,[0,1.65,0],[Math.sin(a)*0.83,2.78,Math.cos(a)*0.83],0.065,0x5c4932);
         }
         blender.attach(p.children[0],'tree/trunk');
-        // The authored crown fits the broadleaf silhouette; other species keep
-        // the lighter shared procedural mesh at strategy distance and close up.
-        if(style==='broadleaf')blender.attach(crown,'tree/crown');
         return p;
     }
     function dress(unit) {

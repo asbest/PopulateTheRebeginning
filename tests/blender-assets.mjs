@@ -38,7 +38,8 @@ try {
         const roles=['wild','warrior','shaman','firewarrior','spy','airship'].map(type=>{const u={mesh:new THREE.Group(),type};Characters.build(u,0x387bb7);return {type,details:count(u.mesh)};});
         if(roles.some(r=>r.details<2))throw new Error('Character detail was not attached');
         const tree=Art.tree();
-        if(count(tree.children[0])<1||count(tree.children[1])<1)throw new Error('Tree detail was not attached to burnable trunk/crown');
+        if(count(tree.children[0])<1||count(tree.children[1])!==0)
+            throw new Error('Tree trunk detail or the continuous burnable crown is missing');
         const birdWing=state.scene.getObjectByName('Blender detail LOD critter/bird/wingL');
         if(!birdWing||birdWing.parent.parent.children[0].visible)throw new Error('Animated bird wing did not replace the old flat plane');
         const wildlife=gameTestAPI.CritterManager;
