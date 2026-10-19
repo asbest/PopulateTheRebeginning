@@ -12,6 +12,20 @@ try{
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&
         Object.values(state.chunks).some(chunk=>chunk.userData?.trees?.length),null,{timeout:60000});
+    const vegetationBudget=await page.evaluate(()=>{
+        const tree=Object.values(state.chunks).flatMap(chunk=>chunk.userData?.trees||[])[0];
+        const crown=tree.mesh.children[1].geometry;
+        const palm=Object.values(state.chunks).map(chunk=>chunk.userData?.palms?.mesh).find(Boolean);
+        if(!palm)throw new Error('No coastal palm geometry loaded');
+        return {crownVertices:crown.attributes.position.count,
+            crownColors:crown.attributes.color.count,
+            palmVertices:palm.geometry.attributes.position.count,
+            palmTriangles:palm.geometry.index.count/3};
+    });
+    if(vegetationBudget.crownVertices!==5760||vegetationBudget.crownColors!==5760||
+        vegetationBudget.palmVertices!==189||vegetationBudget.palmTriangles!==188)
+        throw new Error('Vegetation geometry budget increased: '+JSON.stringify(vegetationBudget));
+    console.log('PASS Tree and palm detail fit the original geometry budget',vegetationBudget);
     const first=await page.evaluate(()=>{
         window.closeHelp();window.closeStoryOverlay();
         document.getElementById('pause-menu').style.display='none';

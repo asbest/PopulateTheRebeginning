@@ -165,19 +165,22 @@ export function createArtKit(T) {
                 const geometryCopy=leafGeometry.clone();
                 const tier=i%6;
                 const height=style==='conifer'?1.88+tier*.42+Math.sin(i*2.1)*.08
-                    : style==='umbrella'?3.03+Math.sin(i*2.1)*.18
-                    : 2.75+Math.sin(i*2.1)*.26-ring*.15;
+                    : style==='umbrella'?3.05+Math.sin(i*2.1)*.14-ring*.12
+                    : 3.25-ring*ring*.62+Math.sin(i*2.1)*.13;
                 const radius=style==='conifer'?(4.55-height)*.42*(.55+ring*.55)
-                    : style==='umbrella'?.42+ring*1.35:ring*1.12;
+                    : style==='umbrella'?.42+ring*1.35:ring*1.16;
                 const sx=style==='conifer'?.39+(4.55-height)*.12
-                    : style==='umbrella'?.59+(i%5)*.055:.72+(i%5)*.085;
-                const sy=style==='conifer'?.35:style==='umbrella'?.32:.45+(i%4)*.06;
+                    : style==='umbrella'?.59+(i%5)*.055:.61+(i%5)*.085;
+                const sy=style==='conifer'?.35:style==='umbrella'?.32:.38+(i%4)*.06;
                 geometryCopy.scale(sx,sy,sx*(style==='umbrella'?1:.85));
                 geometryCopy.rotateY(a);geometryCopy.rotateZ(Math.sin(i*1.7)*0.27);
                 geometryCopy.translate(Math.sin(a)*radius,height,Math.cos(a)*radius);
                 const flat=geometryCopy.toNonIndexed();vertices.push(...flat.attributes.position.array);normals.push(...flat.attributes.normal.array);uvs.push(...flat.attributes.uv.array);
                 const tone=new T.Color(leaves[i%leaves.length]);
-                for(let k=0;k<flat.attributes.position.count;k++)colors.push(tone.r,tone.g,tone.b);
+                for(let k=0;k<flat.attributes.position.count;k++){
+                    const light=.83+.19*Math.max(0,flat.attributes.normal.getY(k));
+                    colors.push(tone.r*light,tone.g*light,tone.b*light);
+                }
                 geometryCopy.dispose();flat.dispose();
             }
             crownGeometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));crownGeometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));

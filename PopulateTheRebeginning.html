@@ -4777,10 +4777,10 @@ function initCoastalPalm() {
     const positions=[],colors=[],indices=[];
     const vertex=(x,y,z,r,g,b)=>{positions.push(x,y,z);colors.push(r,g,b);return positions.length/3-1;};
     for(let ring=0;ring<5;ring++){
-        const t=ring/4,y=t*3.9,radius=.16-t*.075;
+        const t=ring/4,y=t*3.9,radius=.17-t*.085;
         for(let side=0;side<7;side++){
-            const a=side*Math.PI*2/7,b=.42+t*.08;
-            vertex(Math.cos(a)*radius+.09*t*t,y,Math.sin(a)*radius,b,.24+t*.035,.11);
+            const a=side*Math.PI*2/7,b=.43+t*.04+(ring%2)*.035;
+            vertex(Math.cos(a)*radius+.10*t*t,y,Math.sin(a)*radius,b,.25+t*.025,.11);
             if(ring) {
                 const prev=(ring-1)*7+side,next=(ring-1)*7+(side+1)%7;
                 const now=ring*7+side,following=ring*7+(side+1)%7;
@@ -4792,12 +4792,13 @@ function initCoastalPalm() {
         const a=frond*Math.PI*2/11,dirX=Math.cos(a),dirZ=Math.sin(a),sideX=-dirZ,sideZ=dirX;
         const start=positions.length/3;
         for(let segment=0;segment<7;segment++){
-            const t=segment/6,radius=.12+t*2.1;
-            const y=3.86+.42*Math.sin(t*Math.PI)-.84*t*t;
-            const width=.3*Math.sin(t*Math.PI)*(.83+(frond%3)*.08);
-            const green=.27+.055*(frond%3)+.09*t;
-            for(const sign of [-1,1])vertex(.09+dirX*radius+sideX*width*sign,y,
-                dirZ*radius+sideZ*width*sign,.12+.045*t,green,.055+.02*(frond%3));
+            const t=segment/6,radius=.12+t*2.1*(.9+(frond%3)*.07);
+            const y=3.86+.34*Math.sin(t*Math.PI)-(.65+(frond%3)*.13)*t*t;
+            const width=.34*Math.sin(t*Math.PI)*(.85+(frond%3)*.07)*(segment%2?.7:1);
+            const sweep=.1*Math.sin(t*Math.PI)*Math.sin(frond*1.9);
+            const green=.24+.045*(frond%3)+.075*t;
+            for(const sign of [-1,1])vertex(.10+dirX*radius+sideX*(sweep+width*sign),y,
+                dirZ*radius+sideZ*(sweep+width*sign),.11+.04*t,green*(sign<0?.9:1.05),.05+.018*(frond%3));
             if(segment<6){const v=start+segment*2;indices.push(v,v+1,v+2,v+1,v+3,v+2);}
         }
     }
