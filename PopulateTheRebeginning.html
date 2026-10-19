@@ -17,8 +17,6 @@
         }
         #mana-fill { width: 100%; height: 100%; background: #00BFFF; transition: width 0.2s; }
         #faith-display { color: #ffe3a2; }
-        #campaign-objective { display:none; max-width:min(640px,calc(100vw - 110px)); margin:4px auto 0; color:#fff0bb; font-size:11px; line-height:1.2; text-shadow:0 1px 3px #000; }
-        #campaign-objective-summary { display:none; max-width:min(640px,calc(100vw - 110px)); margin:5px auto 0; color:#fff; font-size:12px; line-height:1.25; font-weight:600; text-shadow:0 1px 3px #000; }
 
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -312,6 +310,9 @@
         #story-objective-list { margin:0; padding-left:22px; }
         #story-objective-list li { margin:4px 0; }
         #story-objective-hint { margin:9px 0 0; color:#cfe6dc; font-size:13px; }
+        #story-objective-progress { margin-top:12px; padding-top:10px; border-top:1px solid rgba(243,215,139,.3); }
+        #campaign-objective-summary { margin:7px 0 0; color:#fff; font-size:14px; line-height:1.4; font-weight:600; }
+        #campaign-objective { margin:5px 0 0; color:#fff0bb; font-size:13px; line-height:1.4; }
         .objective-settings-card { width:min(520px,calc(100vw - 32px)); padding:16px; box-sizing:border-box; border:1px solid #7f806d; border-radius:10px; background:rgba(20,29,27,.88); }
         .objective-settings-card select { width:100%; min-height:42px; margin:7px 0 12px; padding:7px; color:#17201e; font:inherit; }
         #objective-settings-summary { margin:0 0 12px; color:#f3dfad; line-height:1.4; }
@@ -468,6 +469,11 @@
             <p id="story-objective-brief"></p>
             <ol id="story-objective-list"></ol>
             <p id="story-objective-hint"></p>
+            <div id="story-objective-progress">
+                <strong>Current progress</strong>
+                <p id="campaign-objective-summary" role="status" aria-live="polite"></p>
+                <p id="campaign-objective" role="status" aria-live="off"></p>
+            </div>
         </section>
         <p id="story-discovery" hidden></p>
         <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:12px;">
@@ -652,8 +658,6 @@
         <div id="mana-bar"><div id="mana-fill"></div></div>
         <p>Mana: <span id="mana-text">100</span></p>
         <p id="faith-display">Faith: <span id="faith-text">50</span> · Mana <span id="faith-bonus">100%</span></p>
-        <p id="campaign-objective-summary" role="status" aria-live="polite"></p>
-        <p id="campaign-objective" role="status" aria-live="off"></p>
     </div>
 
     <!-- Right Side Action Menu -->
@@ -10129,9 +10133,11 @@ function updateCampaignObjective() {
     if (!label) return;
     const mission = state.campaignMission;
     const rule = getActiveCampaignRule();
-    label.style.display = state.isCampaign && mission && rule ? 'block' : 'none';
-    if (summary) summary.style.display = state.isCampaign && mission && rule ? 'block' : 'none';
-    if (!mission || !rule) return;
+    if (!state.isCampaign || !mission || !rule) {
+        label.textContent = '';
+        if (summary) summary.textContent = '';
+        return;
+    }
     if (summary) summary.textContent = `Level ${state.campaignLevel} goal: ${campaignObjectiveSummary(rule)}`;
     let detail = '';
     if (rule.kind === 'settlement') detail = `Huts ${campaignCompletedBuildings('hut')}/${rule.huts} · Rival ${campaignEnemyAlive() ? 'active' : 'defeated'}`;
@@ -10222,6 +10228,7 @@ function renderCampaignStory(level) {
     const story = CAMPAIGN_STORIES[level];
     if (!story) return;
     ensureCampaignMission();
+    updateCampaignObjective();
     document.getElementById('story-title').textContent = story.title;
     document.getElementById('story-text').textContent = story.text;
     const rule = getActiveCampaignRule(level);

@@ -63,12 +63,12 @@ try {
             fields: document.querySelectorAll('#objective-settings-fields input').length,
             liveRule: state.campaignMission?.rule,
             liveEscorts: state.campaignMission?.escortIds?.length,
-            liveHud: document.getElementById('campaign-objective-summary').textContent
+            liveJournal: document.getElementById('campaign-objective-summary').textContent
         };
     });
     if (editor.levels !== 12 || editor.kinds !== 7 || editor.fields !== 2 ||
         editor.stored?.['1']?.kind !== 'escort' || editor.stored?.['1']?.followers !== 4 ||
-        editor.liveRule?.followers !== 4 || editor.liveEscorts !== 4 || !editor.liveHud.includes('Escort 4 followers') ||
+        editor.liveRule?.followers !== 4 || editor.liveEscorts !== 4 || !editor.liveJournal.includes('Escort 4 followers') ||
         !editor.summary.includes('4 marked followers')) throw new Error('Objective editor failed: ' + JSON.stringify(editor));
     phase = 'returning from Match Settings to the story';
     await page.locator('#match-settings-menu button').last().click({ noWaitAfter: true });
@@ -90,10 +90,18 @@ try {
     }
     phase = 'starting play with the configured objective';
     await page.locator('#story-close').evaluate(button => button.click());
-    if (!await page.locator('#campaign-objective-summary').isVisible() ||
-        !await page.locator('#campaign-objective').isVisible()) {
-        throw new Error('Configured goal and progress are missing from the gameplay HUD');
+    if (await page.locator('#campaign-objective-summary').isVisible() ||
+        await page.locator('#campaign-objective').isVisible() ||
+        await page.locator('#top-bar').locator('#campaign-objective').count()) {
+        throw new Error('Level information is still visible in the gameplay HUD');
     }
+    await page.evaluate(() => { togglePause(); showCampaignJournal(); });
+    if (!await page.locator('#campaign-objective-summary').isVisible() ||
+        !await page.locator('#campaign-objective').isVisible() ||
+        !await page.locator('#campaign-objective-summary').textContent().then(text => text.includes('Escort 4 followers'))) {
+        throw new Error('Configured goal and progress are missing from the journal');
+    }
+    await page.evaluate(() => { closeStoryOverlay(); togglePause(); });
     phase = 'editing and saving the live objective';
     await page.evaluate(() => {
         if (!state.isPaused) togglePause();
@@ -108,7 +116,7 @@ try {
             previousEscorts.some(id => state.units.some(unit => unit.id === id)) ||
             !document.getElementById('campaign-objective-summary').textContent.includes('Build 4 huts') ||
             !document.getElementById('campaign-objective').textContent.includes('Huts 0/4')) {
-            throw new Error('Edited goal did not change the running level and HUD');
+            throw new Error('Edited goal did not change the running level and journal');
         }
         saveGame();
         loadGame();
@@ -130,7 +138,7 @@ try {
             throw new Error('Objective reset did not update the running level');
         }
     });
-    console.log('PASS Match Settings updates live objectives, HUD, story, save/load and reset');
+    console.log('PASS Match Settings updates live objectives, journal, story, save/load and reset');
 
     phase = 'loading campaign level 5';
     await startLevel(5);
