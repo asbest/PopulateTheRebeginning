@@ -190,10 +190,12 @@ export function createLocomotion(T) {
                 pose(leg.rotation,'x',-1.12);
                 pose(leg.userData.lower.rotation,'x',1.75);
             }
-            pose(u.armL.rotation,'x',-1.05);pose(u.armR.rotation,'x',-1.05);
-            pose(u.armL.rotation,'z',-.52);pose(u.armR.rotation,'z',.52);
-            pose(u.armL.userData.lower.rotation,'x',-.55);
-            pose(u.armR.userData.lower.rotation,'x',-.55);
+            // Raise and lower both extended hands together throughout the ritual.
+            const raisedArms=-1.1-.36*Math.sin(u.animTime*2.8);
+            pose(u.armL.rotation,'x',raisedArms);pose(u.armR.rotation,'x',raisedArms);
+            pose(u.armL.rotation,'z',-.32);pose(u.armR.rotation,'z',.32);
+            pose(u.armL.userData.lower.rotation,'x',-.06);
+            pose(u.armR.userData.lower.rotation,'x',-.06);
         }
         const cape=u.torso.getObjectByName(u.isShaman?'CeremonialCape':'SpyCloak');
         if(cape){

@@ -28,6 +28,17 @@ try {
             knee:follower.legL.userData.lower.rotation.x,arm:follower.armL.rotation.x,
             facing:Math.atan2(Math.sin(follower.mesh.rotation.y-Math.atan2(p.x-follower.mesh.position.x,p.z-follower.mesh.position.z)),
                 Math.cos(follower.mesh.rotation.y-Math.atan2(p.x-follower.mesh.position.x,p.z-follower.mesh.position.z)))};
+        let lowestArm=Infinity,highestArm=-Infinity,maxArmDifference=0,maxElbowBend=0;
+        for(let i=0;i<150;i++){
+            follower.animTime+=1/60;
+            api.Locomotion.animate(follower,1/60,api.getSurfaceHeight);
+            lowestArm=Math.min(lowestArm,follower.armL.rotation.x);
+            highestArm=Math.max(highestArm,follower.armL.rotation.x);
+            maxArmDifference=Math.max(maxArmDifference,Math.abs(follower.armL.rotation.x-follower.armR.rotation.x));
+            maxElbowBend=Math.max(maxElbowBend,Math.abs(follower.armL.userData.lower.rotation.x),
+                Math.abs(follower.armR.userData.lower.rotation.x));
+        }
+        const armMotion={range:highestArm-lowestArm,maxArmDifference,maxElbowBend};
         state.faith=50;
         api.updateFaith(10);
         const worshipFaith=state.faith;
@@ -43,12 +54,13 @@ try {
         api.changeFaith(-1000);const floorFaith=state.faith;
         state.faith=75;api.updateUI();window.saveGame();
         const saved=JSON.parse(localStorage.getItem(CONFIG.SAVED_KEYS.SAVE_DATA)).faith;
-        return {ownShaman,kneeling,worshipFaith,moving,farWorship,deathFaith,cappedFaith,floorFaith,
+        return {ownShaman,kneeling,armMotion,worshipFaith,moving,farWorship,deathFaith,cappedFaith,floorFaith,
             saved,ui:document.getElementById('faith-text').textContent,
             bonus:document.getElementById('faith-bonus').textContent,multiplier:api.faithManaMultiplier()};
     });
     if(!result.ownShaman||result.kneeling.blend<.95||result.kneeling.torsoY>.78||
         result.kneeling.knee<1||result.kneeling.arm>-.7||Math.abs(result.kneeling.facing)>.1||
+        result.armMotion.range<.65||result.armMotion.maxArmDifference>.01||result.armMotion.maxElbowBend>.12||
         Math.abs(result.worshipFaith-50.35)>.001||result.moving.worship||result.moving.blend>.05||
         result.farWorship||Math.abs(result.deathFaith-46.35)>.001||
         result.cappedFaith!==100||result.floorFaith!==0||result.saved!==75||result.ui!=='75'||
