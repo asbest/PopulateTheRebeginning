@@ -25,6 +25,9 @@ jobs:
       - name: Large-army path scheduling
         if: always()
         run: node tests/ai-stutter.mjs
+      - name: Worker pathfinding and fallback
+        if: always()
+        run: node tests/pathfinder-worker.mjs
       - name: Welcome screen starts the game on desktop and mobile
         if: always()
         run: node tests/startup.mjs

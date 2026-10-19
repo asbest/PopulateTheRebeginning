@@ -4282,7 +4282,7 @@ function disposeChunkGeometry(chunk) {
 }
 
 function updateChunks(force = false, specificChunks = null) {
-    if(force)state.heightCache.clear();
+    if(force){state.heightCache.clear();state.navigationVersion++;}
     if (!chunkTerrainMat) initTerrainResources();
 
     const cx = Math.round(state.cameraLookAt.x / CHUNK_SIZE);
@@ -5524,6 +5524,66 @@ const Pathfinder = {
     }
 };
 window.Pathfinder = Pathfinder;
+
+const PathWorker = {
+    worker:null,disabled:false,nextId:1,snapshotKey:null,pending:new Map(),fallbackQueue:[],
+    canAccept(){return this.disabled || this.pending.size<12;},
+    start(){
+        if(this.disabled||this.worker)return !!this.worker;
+        if(typeof Worker==='undefined'){this.disabled=true;return false;}
+        try{
+            this.worker=new Worker('./pathfinder-worker.js');
+            this.worker.onmessage=event=>{
+                const data=event.data;
+                if(data.type==='ready')return;
+                const job=this.pending.get(data.id);
+                if(!job)return;
+                this.pending.delete(data.id);clearTimeout(job.timeout);
+                if(data.type==='error'){this.fallbackQueue.push(job.callback);this.disable();return;}
+                job.callback(data.path,false,data.version);
+            };
+            this.worker.onerror=()=>this.disable();
+            this.worker.onmessageerror=()=>this.disable();
+            return true;
+        }catch{this.disable();return false;}
+    },
+    disable(){
+        this.disabled=true;
+        this.worker?.terminate();this.worker=null;this.snapshotKey=null;
+        for(const job of this.pending.values()){
+            clearTimeout(job.timeout);this.fallbackQueue.push(job.callback);
+        }
+        this.pending.clear();
+    },
+    update(){
+        for(let i=0;i<3&&this.fallbackQueue.length;i++)this.fallbackQueue.shift()(undefined,true);
+    },
+    request(start,end,isFlying,avoidWater,waterExit,callback){
+        if(!this.start())return false;
+        const biome=state.matchSettings?.biome||'normal';
+        const key=`${state.navigationVersion}:${state.waterState}:${biome}`;
+        let queued=false;
+        try{
+            if(this.snapshotKey!==key){
+                this.worker.postMessage({type:'sync',version:key,biome,waterState:state.waterState,
+                    terrain:CONFIG.TERRAIN,pathfinder:CONFIG.PATHFINDER,waterLevel:WATER_LEVEL,
+                    visualWaterLevel:VISUAL_WATER_LEVEL,noiseScale:NOISE_SCALE,
+                    heightMultiplier:HEIGHT_MULTIPLIER,bridgeHeight:BRIDGE_HEIGHT,bridgeWidth:BRIDGE_WIDTH,
+                    mods:Array.from(state.terrainMods.entries()),
+                    buildings:state.buildings.filter(b=>!b.dead&&!b.underConstruction)
+                        .map(b=>({x:b.mesh.position.x,z:b.mesh.position.z}))});
+                this.snapshotKey=key;
+            }
+            const id=this.nextId++;
+            const timeout=setTimeout(()=>this.disable(),8000);
+            this.pending.set(id,{callback,timeout});
+            queued=true;
+            this.worker.postMessage({type:'path',id,version:key,
+                start:{x:start.x,z:start.z},end:{x:end.x,z:end.z},isFlying,avoidWater,waterExit});
+            return true;
+        }catch{this.disable();return queued;}
+    }
+};
 
 function isWalkableLine(start, end, isFlying, unitHeight = 1.5, avoidWater = false) {
     const dist = start.distanceTo(end);
@@ -7155,13 +7215,15 @@ window.Humanoid = class Humanoid {
         }
     }
 
-    goto(x, z) {
+    goto(x, z, workerPath = undefined) {
         if(this.state === 'stunned' || this.state === 'dead') return;
         const end = new THREE.Vector3(x, 0, z);
         this.finalDest = end.clone();
         const isFlying = (this.type === 'airship');
         const avoidWater = this.faction !== 0 && !isFlying && !this.aiWaterEscape;
-        const rawPath = Pathfinder.findPath(this.mesh.position, end, isFlying, this.height, avoidWater, !!this.aiWaterEscape);
+        const rawPath = workerPath === undefined
+            ? Pathfinder.findPath(this.mesh.position, end, isFlying, this.height, avoidWater, !!this.aiWaterEscape)
+            : workerPath?.map(([px,pz])=>new THREE.Vector3(px,0,pz)) ?? null;
 
         if (rawPath) {
             this.path = smoothPath(rawPath, isFlying, this.height, avoidWater);
@@ -8407,6 +8469,8 @@ class EnemyAI {
     }
     issuePath(u,p,role,target=null) {
         if(this.pathFailed(u,p,role)) return false;
+        const pending=u.aiPathRequest;
+        if(pending&&pending.role===role&&pending.target===target&&this.distance(pending.destination,p)<2)return true;
         if(state.units.length>=32) {
             this.pathQueue.set(u.id,{unit:u,destination:{x:p.x,z:p.z},role,target});
             return true;
@@ -8419,25 +8483,46 @@ class EnemyAI {
             target && (target.state==='dead'||target.dead)) return false;
         const destination=target?target.mesh.position:p;
         if(this.pathFailed(u,destination,role)) return false;
-        u.goto(destination.x,destination.z);
-        if(u.state!=='move') {
-            u.aiFailedPath={role,origin:{x:u.mesh.position.x,z:u.mesh.position.z},
-                destination:{x:destination.x,z:destination.z},navigationVersion:state.navigationVersion,
-                waterState:state.waterState};
-            return false;
-        }
-        u.aiFailedPath=null;
-        if(target){
-            u.attackTarget=target;u.state='combat';
-            u.lastCombatTargetId=target.id;
-            u.lastCombatPathTarget=target.mesh.position.clone();
-            u.pathTimer=0;
-        }
-        return true;
+        const requested={x:destination.x,z:destination.z};
+        const requestedStart={x:u.mesh.position.x,z:u.mesh.position.z};
+        const navigationVersion=state.navigationVersion,waterState=state.waterState;
+        const token=u.aiPathToken=(u.aiPathToken||0)+1;
+        u.aiPathRequest={role,target,destination:requested};
+        const finish=(workerPath,workerFailed=false)=>{
+            if(u.aiPathToken!==token)return;
+            u.aiPathRequest=null;
+            if(u.faction!==this.faction||u.aiRole!==role||['dead','stunned','getting_up','transported'].includes(u.state)||
+                target&&(target.state==='dead'||target.dead))return;
+            const current=target?target.mesh.position:p;
+            if(navigationVersion!==state.navigationVersion||waterState!==state.waterState||
+                this.distance(requestedStart,u.mesh.position)>3||
+                target&&this.distance(current,requested)>4){
+                this.issuePath(u,current,role,target);return;
+            }
+            u.goto(current.x,current.z,workerFailed?undefined:workerPath);
+            if(u.state!=='move'){
+                u.aiFailedPath={role,origin:{x:u.mesh.position.x,z:u.mesh.position.z},
+                    destination:{x:current.x,z:current.z},navigationVersion:state.navigationVersion,
+                    waterState:state.waterState};
+                return;
+            }
+            u.aiFailedPath=null;
+            if(target){
+                u.attackTarget=target;u.state='combat';
+                u.lastCombatTargetId=target.id;
+                u.lastCombatPathTarget=target.mesh.position.clone();
+                u.pathTimer=0;
+            }
+        };
+        if(state.units.length>=32 && PathWorker.request(u.mesh.position,requested,u.type==='airship',
+            u.faction!==0&&u.type!=='airship'&&!u.aiWaterEscape,!!u.aiWaterEscape,finish))return true;
+        finish(undefined,true);
+        return u.state==='move'||u.state==='combat';
     }
     flushPathQueue() {
         let processed=0;
         for(const [id,order] of this.pathQueue) {
+            if(!PathWorker.canAccept())break;
             this.pathQueue.delete(id);
             this.resolvePath(order);
             if(++processed>=3) break;
@@ -8452,6 +8537,8 @@ class EnemyAI {
         if(u.state==='move'&&u.finalDest&&this.distance(u.finalDest,p)<2)return true;
         const queued=this.pathQueue.get(u.id);
         if(queued&&queued.role===role&&this.distance(queued.destination,p)<2)return true;
+        const pending=u.aiPathRequest;
+        if(pending&&pending.role===role&&!pending.target&&this.distance(pending.destination,p)<2)return true;
         return this.issuePath(u,p,role);
     }
     engage(u,target,role) {
@@ -9621,7 +9708,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -11259,6 +11346,7 @@ function animate() {
 
     if(!state.isPaused) {
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
+    PathWorker.update();
 
     // Music Logic
     if (Math.floor(state.clock.elapsedTime * 60) % CONFIG.AUDIO.MUSIC_CHECK_INTERVAL === 0) {

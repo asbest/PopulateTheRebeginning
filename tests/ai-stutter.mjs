@@ -11,6 +11,8 @@ try {
     await page.waitForFunction(()=>window.gameTestAPI&&window.enemyAIs?.length,null,{timeout:90000});
     const result=await page.evaluate(()=>{
         state.isPaused=true;
+        // Exercise the synchronous fallback when a browser cannot run workers.
+        gameTestAPI.PathWorker.disable();
         const ai=window.enemyAIs[0],originalLength=state.units.length;
         const p=ai.myShaman.mesh.position;
         const probes=Array.from({length:10},(_,i)=>({
