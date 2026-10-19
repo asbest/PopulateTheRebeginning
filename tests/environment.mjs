@@ -29,9 +29,15 @@ try{
   const coverData=kind=>covers.flatMap(c=>c[kind]?.data||[]);
   const grassData=coverData('grass'),bushData=coverData('bushes'),stoneData=coverData('stones');
   const meanOpening=data=>data.reduce((sum,d)=>sum+(d.opening||0),0)/Math.max(1,data.length);
+  let hasTreeClearing=false;
+  for(let cx=-5;cx<=5;cx++)for(let cz=-5;cz<=5;cz++){
+   let count=0;gameTestAPI.forEachTreeSite(cx,cz,()=>count++);
+   if(count===0)hasTreeClearing=true;
+  }
   const landscape={grassOpening:meanOpening(grassData),bushOpening:meanOpening(bushData),
    grassVarieties:new Set(grassData.map(d=>d.variety)).size,
-   landmarks:stoneData.filter(d=>d.landmark).length,treeCounts:chunks.map(c=>c.userData.trees?.length||0)};
+   landmarks:stoneData.filter(d=>d.landmark).length,treeCounts:chunks.map(c=>c.userData.trees?.length||0),
+   hasTreeClearing};
   const grassMesh=covers.find(c=>c.grass?.mesh)?.grass.mesh,grassGeo=grassMesh.geometry,bases=grassGeo.attributes.aBasePos;
   const stoneMesh=covers.find(c=>c.stones?.mesh)?.stones.mesh;
   const bushMesh=covers.find(c=>c.bushes?.mesh)?.bushes.mesh;
@@ -86,7 +92,7 @@ try{
  });
  if(errors.length||result.grass<100||result.stones<10||result.bushes<10||
     result.landscape.grassOpening<=result.landscape.bushOpening+.02||
-    Math.max(...result.landscape.treeCounts)<2||!result.landscape.treeCounts.includes(0)||result.landscape.grassVarieties!==4||
+    Math.max(...result.landscape.treeCounts)<2||!result.landscape.hasTreeClearing||result.landscape.grassVarieties!==4||
     result.flowerStyle.count<30||result.flowerStyle.colors<4||result.flowerStyle.petalCounts.length<4||
     !result.flowerStyle.daisy||!result.flowerStyle.tulip||result.flowerStyle.maxMeshes>4||!result.flowerVisibility.culled||
     result.flowerVisibility.inside<1||result.basePositions<1||result.contacts<2||
