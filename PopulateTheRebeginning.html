@@ -1512,6 +1512,7 @@ const state = {
     treeTime: 0,
     treeBurns: new Map(),
     terrainMods: new Map(),
+    navigationVersion: 0,
     units: [],
     matchSettings: normalizeMatchSettings(),
 
@@ -1620,7 +1621,7 @@ const BuildingSpatialHash = {
     cells: new Map(),
     dirty: true,
 
-    markDirty: function() { this.dirty = true; },
+    markDirty: function() { this.dirty = true; state.navigationVersion++; },
 
     update: function() {
         if (!this.dirty) return;
@@ -4204,6 +4205,7 @@ function syncTreeAppearance() {
 }
 
 function modifyTerrain(centerX, centerZ, radius, amount) {
+    state.navigationVersion++;
     const rSq = radius * radius;
     const modifiedChunks = new Set();
     for(let x = Math.floor(centerX - radius); x <= Math.ceil(centerX + radius); x++) {
@@ -6631,14 +6633,27 @@ window.castLandbridge = castLandbridge;
 
 // --- js/humanoid.js ---
 
+const worshipShamanCache={frame:-1,units:null,length:-1,byFaction:new Map()};
 function findWorshipShaman(unit) {
     if(unit.isShaman || unit.isVehicle || unit.isPhantom || unit.state !== 'idle' ||
        !unit.isGrounded || unit.isSwimming || unit.attackTarget ||
        Math.hypot(unit.velocity.x,unit.velocity.z) > 0.35) return null;
     const radiusSquared=CONFIG.FAITH.WORSHIP_RADIUS**2;
     let closest=null,closestDistance=radiusSquared;
-    for(const shaman of state.units) {
-        if(shaman.faction!==unit.faction || !shaman.isShaman || shaman.state==='dead' || shaman.state==='transported') continue;
+    if(worshipShamanCache.frame!==state.manualInputFrame || worshipShamanCache.units!==state.units ||
+        worshipShamanCache.length!==state.units.length) {
+        worshipShamanCache.frame=state.manualInputFrame;
+        worshipShamanCache.units=state.units;
+        worshipShamanCache.length=state.units.length;
+        worshipShamanCache.byFaction.clear();
+        for(const candidate of state.units) if(candidate.isShaman) {
+            let shamans=worshipShamanCache.byFaction.get(candidate.faction);
+            if(!shamans){shamans=[];worshipShamanCache.byFaction.set(candidate.faction,shamans);}
+            shamans.push(candidate);
+        }
+    }
+    for(const shaman of worshipShamanCache.byFaction.get(unit.faction)||[]) {
+        if(shaman.faction!==unit.faction || shaman.state==='dead' || shaman.state==='transported') continue;
         const dx=shaman.mesh.position.x-unit.mesh.position.x;
         const dz=shaman.mesh.position.z-unit.mesh.position.z;
         const distance=dx*dx+dz*dz;
@@ -8353,6 +8368,7 @@ class EnemyAI {
         this.knownUnitCounts = { warrior: 0, firewarrior: 0, spy: 0, airship: 0 };
         this.lossQueue = [];
         this.blockedBuildSites = [];
+        this.pathQueue = new Map();
     }
 
     init(x, z) {
@@ -8377,10 +8393,55 @@ class EnemyAI {
         this.bridgeCooldown=Math.max(0,(this.bridgeCooldown||0)-dt);
         this.timer+=dt;
         if(this.timer>=Math.min(2,CONFIG.AI.THINK_INTERVAL)){this.timer=0;this.think();}
+        this.flushPathQueue();
     }
     distance(a,b){return Math.hypot(a.x-b.x,a.z-b.z);}
     rescueFromWater(u) {
         return u.seekShore();
+    }
+    pathFailed(u,p,role) {
+        const failed=u.aiFailedPath;
+        return !!failed && failed.role===role && failed.navigationVersion===state.navigationVersion &&
+            failed.waterState===state.waterState &&
+            this.distance(failed.destination,p)<2 && this.distance(failed.origin,u.mesh.position)<2;
+    }
+    issuePath(u,p,role,target=null) {
+        if(this.pathFailed(u,p,role)) return false;
+        if(state.units.length>=32) {
+            this.pathQueue.set(u.id,{unit:u,destination:{x:p.x,z:p.z},role,target});
+            return true;
+        }
+        return this.resolvePath({unit:u,destination:p,role,target});
+    }
+    resolvePath(order) {
+        const {unit:u,destination:p,role,target}=order;
+        if(u.faction!==this.faction || ['dead','stunned','getting_up','transported'].includes(u.state) || u.aiRole!==role ||
+            target && (target.state==='dead'||target.dead)) return false;
+        const destination=target?target.mesh.position:p;
+        if(this.pathFailed(u,destination,role)) return false;
+        u.goto(destination.x,destination.z);
+        if(u.state!=='move') {
+            u.aiFailedPath={role,origin:{x:u.mesh.position.x,z:u.mesh.position.z},
+                destination:{x:destination.x,z:destination.z},navigationVersion:state.navigationVersion,
+                waterState:state.waterState};
+            return false;
+        }
+        u.aiFailedPath=null;
+        if(target){
+            u.attackTarget=target;u.state='combat';
+            u.lastCombatTargetId=target.id;
+            u.lastCombatPathTarget=target.mesh.position.clone();
+            u.pathTimer=0;
+        }
+        return true;
+    }
+    flushPathQueue() {
+        let processed=0;
+        for(const [id,order] of this.pathQueue) {
+            this.pathQueue.delete(id);
+            this.resolvePath(order);
+            if(++processed>=3) break;
+        }
     }
     moveUnit(u,p,role) {
         if(['dead','stunned','getting_up','transported'].includes(u.state))return false;
@@ -8389,7 +8450,9 @@ class EnemyAI {
             p=findNearestLand(p.x,p.z,24,aiDryHeight());
         if(this.distance(u.mesh.position,p)<1.5)return true;
         if(u.state==='move'&&u.finalDest&&this.distance(u.finalDest,p)<2)return true;
-        u.goto(p.x,p.z);return u.state==='move';
+        const queued=this.pathQueue.get(u.id);
+        if(queued&&queued.role===role&&this.distance(queued.destination,p)<2)return true;
+        return this.issuePath(u,p,role);
     }
     engage(u,target,role) {
         if(!target||['dead','stunned','getting_up','transported'].includes(u.state))return;
@@ -8405,9 +8468,10 @@ class EnemyAI {
             const kite=u.mesh.position.clone().addScaledVector(away,5);
             if(getHeight(kite.x,kite.z)>WATER_LEVEL&&!isBlocked(kite.x,kite.z)){this.moveUnit(u,kite,role);return;}
         }
-        if(u.attackTarget===target&&u.state==='combat')return;
-        u.goto(target.mesh.position.x,target.mesh.position.z);
-        if(u.state==='move'||this.distance(u.mesh.position,target.mesh.position)<=u.range){u.attackTarget=target;u.state='combat';}
+        if(u.attackTarget===target && (u.state==='combat' ||
+            u.state==='move' && u.finalDest && this.distance(u.finalDest,target.mesh.position)<4)) return;
+        if(this.distance(u.mesh.position,target.mesh.position)<=u.range){u.attackTarget=target;u.state='combat';return;}
+        this.issuePath(u,target.mesh.position,role,target);
     }
     cast(type,p) {
         if(!this.myShaman||this.spellCooldown>0||['dead','stunned','getting_up','transported'].includes(this.myShaman.state))return false;
