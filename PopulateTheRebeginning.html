@@ -142,6 +142,7 @@
             flex-shrink: 0;
         }
         .action-btn.active { border-color: #FFD700; transform: scale(1.1); box-shadow: 0 0 10px #FFD700; background: #444; z-index: 5; }
+        .action-btn.disabled { opacity: 0.45; filter: grayscale(1); cursor: not-allowed; }
         .action-btn:active { transform: scale(0.95); }
         /* JOYSTICK */
         #joystick-area {
@@ -1228,12 +1229,12 @@ const CONFIG = {
         BOX_DRAG_THRESHOLD: 10,
     },
     BUILDING: {
-        HUT_HP: 100,
-        TOWER_HP: 150,
-        WAREIOR_HP: 250,
-        FIRE_HP: 300,
-        SPY_HP: 200,
-        SHIPYARD_HP: 350,
+        HUT_HP: 600,
+        TOWER_HP: 700,
+        WAREIOR_HP: 800,
+        FIRE_HP: 900,
+        SPY_HP: 700,
+        SHIPYARD_HP: 1000,
         HEAL_RATE: 200,
         HP_BAR_Y_OFFSET: 5,
         HP_BAR_WIDTH: 2.0,
@@ -1597,7 +1598,22 @@ function peaceTimeRemaining() {
     return Math.max(0,(state.matchSettings?.peaceTimeMinutes||0)*60-(state.matchElapsed||0));
 }
 function isPeaceTime() { return peaceTimeRemaining()>0; }
-const PEACE_OFFENSIVE_SPELLS=new Set(['blast','lightning','hypnotise','swamp','swarm','tornado','firestorm','volcano']);
+const PEACE_BLOCKED_ACTIONS=new Set([
+    'blast','lightning','hypnotise','swamp','swarm','tornado','firestorm','volcano',
+    'raise','lower','flatten','landbridge','airship_rocket'
+]);
+function isPeaceBlockedAction(action) { return isPeaceTime()&&PEACE_BLOCKED_ACTIONS.has(action); }
+function cancelOffensiveEffectsDuringPeace() {
+    if(!isPeaceTime())return;
+    for(const projectile of state.projectiles) {
+        state.scene.remove(projectile.mesh);
+        projectile.light?.dispose();
+        projectile.active=false;
+    }
+    state.projectiles.length=0;
+    for(const effect of state.activeEffects)effect.dispose?.();
+    state.activeEffects.length=0;
+}
 
 // SpatialHash
 const SpatialHash = {
@@ -1905,6 +1921,7 @@ const NetworkManager = {
     },
 
     applySync: function(data) {
+        const wasPeace=isPeaceTime();
         const unitIds = new Set(data.units.map(u => u.id));
 
         data.units.forEach(uData => {
@@ -1989,6 +2006,11 @@ const NetworkManager = {
                 state.heightCache.clear();
                 updateChunks(true);
             }
+        }
+        if(wasPeace!==isPeaceTime()) {
+            if(isPeaceBlockedAction(state.currentAction))state.currentAction='move';
+            cancelOffensiveEffectsDuringPeace();
+            updateContextMenus();
         }
         updateUI();
     }
@@ -2098,6 +2120,9 @@ window.setPeaceTimeMinutes = function(value) {
     localStorage.setItem(CONFIG.SAVED_KEYS.PEACE_MINUTES,String(minutes));
     const input=document.getElementById('peace-time-minutes');
     if(input)input.value=String(minutes);
+    if(isPeaceBlockedAction(state.currentAction))state.currentAction='move';
+    cancelOffensiveEffectsDuringPeace();
+    updateContextMenus();
     updateUI();
 };
 
@@ -5904,6 +5929,7 @@ class Fireball {
         state.scene.remove(this.mesh);
         if(this.light)this.light.dispose();
         this.active = false;
+        if(isPeaceTime())return;
         SurfaceMarks.add(this.mesh.position.x,this.mesh.position.z,this.unitShot
             ? {kind:'ember',radius:1.6,life:18,opacity:.56} : {radius:2.8,life:120,opacity:.76});
         spawnExplosion(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z, 0xFF4500,
@@ -6599,7 +6625,7 @@ function castLandbridge(caster, x, z) {
 
 function executeSpell(type, x, z, caster) {
     if (!caster || !caster.mesh) return;
-    if(isPeaceTime()&&PEACE_OFFENSIVE_SPELLS.has(type))return;
+    if(isPeaceBlockedAction(type))return;
 
     if (caster.faction === 1 && caster.isShaman) {
         if(window.showEnemySpellIcon) window.showEnemySpellIcon(type);
@@ -8774,7 +8800,7 @@ class EnemyAI {
         this.issuePath(u,target.mesh.position,role,target);
     }
     cast(type,p) {
-        if(isPeaceTime()&&PEACE_OFFENSIVE_SPELLS.has(type))return false;
+        if(isPeaceBlockedAction(type))return false;
         if(!this.myShaman||this.spellCooldown>0||['dead','stunned','getting_up','transported'].includes(this.myShaman.state))return false;
         if(this.distance(this.myShaman.mesh.position,p)>10+this.myShaman.mesh.position.y)return false;
         executeSpell(type,p.x,p.z,this.myShaman);
@@ -8991,6 +9017,10 @@ function showEnemySpellIcon(spellType) {
 window.showEnemySpellIcon = showEnemySpellIcon;
 
 function selectAction(action) {
+    if(isPeaceBlockedAction(action)) {
+        showGameMessage('This action is unavailable during peace time.');
+        return;
+    }
     if (state.currentAction === action && action !== 'move') {
         state.currentAction = 'move';
     } else {
@@ -9254,6 +9284,15 @@ function updateContextMenus() {
          }
          if(state.currentAction === act) btn.classList.add('active');
 
+         if(isPeaceBlockedAction(act)) {
+             btn.classList.add('disabled');
+             btn.setAttribute('aria-disabled','true');
+             btn.title = `${iconName || data.label} · available after peace time`;
+             btn.onclick = e => { e.stopPropagation(); showGameMessage('This action is unavailable during peace time.'); };
+             menu.appendChild(btn);
+             return;
+         }
+
          if (act === 'airship_rocket' && hasAirship) {
              const ship = state.selectedUnits[0];
              if (ship.rocketCooldown && ship.rocketCooldown > 0) {
@@ -9286,15 +9325,15 @@ function updateContextMenus() {
 function performAction(x, z, action = state.currentAction, overrideUnits = null) {
     const actingUnits = overrideUnits || state.selectedUnits;
 
+    if(isPeaceBlockedAction(action)) {
+        showGameMessage('This action is unavailable during peace time.');
+        return;
+    }
+
     if(state.network.role === 'client') {
         const unitIds = actingUnits.map(u => u.id);
         NetworkManager.sendInput({x, z, action, unitIds});
         spawnPulse(x, getHeight(x, z), z, 0x888888);
-        return;
-    }
-
-    if(isPeaceTime()&&PEACE_OFFENSIVE_SPELLS.has(action)) {
-        showGameMessage('Offensive spells are unavailable during peace time.');
         return;
     }
 
@@ -9939,7 +9978,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -10676,6 +10715,7 @@ window.saveGame = function() {
             x: b.mesh.position.x,
             z: b.mesh.position.z,
             hp: b.hp,
+            maxHp: b.maxHp,
             constructionTimer: b.constructionTimer,
             underConstruction: b.underConstruction,
             rallyPoint: b.rallyPoint,
@@ -10691,6 +10731,12 @@ function restoredUnitHealth(unit,saved) {
     const oldMax=Number.isFinite(saved.maxHp) ? saved.maxHp : saved.type==='shaman'
         ? 500*Math.pow(1.1,Math.min(100,saved.upgradeLevel||0)) : unit.maxHp;
     return THREE.MathUtils.clamp((saved.hp||0)*unit.maxHp/Math.max(1,oldMax),0,unit.maxHp);
+}
+function restoredBuildingHealth(building,saved) {
+    const legacyMax={hut:100,tower:150,warrior:250,fire:300,spy:200,shipyard:350};
+    const oldMax=Number.isFinite(saved.maxHp)&&saved.maxHp>0
+        ? saved.maxHp : legacyMax[building.type]||building.maxHp;
+    return THREE.MathUtils.clamp((saved.hp||0)*building.maxHp/oldMax,0,building.maxHp);
 }
 window.loadGame = function() {
     const json = localStorage.getItem(CONFIG.SAVED_KEYS.SAVE_DATA);
@@ -10795,7 +10841,7 @@ window.loadGame = function() {
         data.buildings.forEach(bData => {
              const b = createBuilding(bData.type, bData.x, bData.z, bData.faction, false, true);
              if(b) {
-                 b.hp = bData.hp;
+                 b.hp = restoredBuildingHealth(b,bData);
                  b.constructionTimer = bData.constructionTimer;
                  b.underConstruction = bData.underConstruction;
                  b.hpBar.scale.x = Math.max(0, b.hp / b.maxHp);
@@ -11586,9 +11632,13 @@ function animate() {
     if(state.network.role!=='client') {
         const peaceful=isPeaceTime();
         state.matchElapsed+=dt;
-        if(peaceful&&!isPeaceTime())showGameMessage('Peace time has ended. Attacks are now possible.');
+        if(peaceful&&!isPeaceTime()) {
+            showGameMessage('Peace time has ended. Attacks are now possible.');
+            updateContextMenus();
+        }
     }
     updatePeaceTimer();
+    if(isPeaceTime()&&(state.projectiles.length||state.activeEffects.length))cancelOffensiveEffectsDuringPeace();
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
     PathWorker.update();
 

@@ -34,6 +34,9 @@ jobs:
       - name: Peace time and match settings
         if: always()
         run: node tests/peace-time.mjs
+      - name: Building durability
+        if: always()
+        run: node tests/building-durability.mjs
       - name: Campaign story, clues and endings
         if: always()
         run: node tests/campaign-story.mjs

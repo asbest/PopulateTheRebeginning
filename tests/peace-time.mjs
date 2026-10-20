@@ -31,17 +31,46 @@ try {
         ally.attackTarget=enemy;ally.state='combat';ally.attack();
         if(ally.state==='combat'||ally.attackTarget||enemy.hp!==hp)
             throw new Error('Direct attack was possible during peace');
+        gameTestAPI.updateContextMenus();
+        const blastButton=document.getElementById('btn-blast');
+        if(!blastButton?.classList.contains('disabled')||blastButton.getAttribute('aria-disabled')!=='true')
+            throw new Error('Offensive spell still appears available in the action menu');
+        blastButton.click();
+        window.selectAction('blast');
+        if(state.currentAction==='blast')throw new Error('Offensive spell can still be selected during peace');
         const mana=state.mana,projectiles=state.projectiles.length;
-        gameTestAPI.performAction(enemy.mesh.position.x,enemy.mesh.position.z,'blast');
-        if(state.mana!==mana||state.projectiles.length!==projectiles)
-            throw new Error('Offensive spell consumed mana during peace');
+        const snapshot=()=>({mana:state.mana,projectiles:state.projectiles.length,
+            effects:state.activeEffects.length,terrain:state.terrainMods.size,enemyFaction:enemy.faction});
+        const before=JSON.stringify(snapshot());
+        for(const action of ['blast','lightning','hypnotise','swamp','swarm','tornado',
+            'firestorm','volcano','raise','lower','flatten','landbridge','airship_rocket']) {
+            gameTestAPI.performAction(enemy.mesh.position.x,enemy.mesh.position.z,action);
+            if(JSON.stringify(snapshot())!==before)
+                throw new Error(`${action} changed the match during peace`);
+        }
+        gameTestAPI.executeSpell('blast',enemy.mesh.position.x,enemy.mesh.position.z,state.shaman);
+        if(JSON.stringify(snapshot())!==before)throw new Error('Direct spell execution bypassed peace');
+        const target=enemy.mesh.position.clone();
+        const fireball=new gameTestAPI.Fireball(target.clone().add(new THREE.Vector3(-5,2,0)),target,0);
+        fireball.mesh.position.copy(target);
+        fireball.explode();
+        if(enemy.hp!==hp)throw new Error('A fireball impact caused damage during peace');
+        if(window.enemyAIs[0]?.cast('lightning',enemy.mesh.position)!==false)
+            throw new Error('Enemy AI cast an offensive spell during peace');
         state.matchElapsed=3.5*60;
         gameTestAPI.updateUI();
         if(gameTestAPI.isPeaceTime()||!document.getElementById('peace-timer').hidden||ally.findTarget()!==enemy)
             throw new Error('Combat did not become available when peace ended');
+        gameTestAPI.updateContextMenus();
+        if(document.getElementById('btn-blast')?.classList.contains('disabled'))
+            throw new Error('Offensive spell button stayed disabled after peace');
         gameTestAPI.performAction(enemy.mesh.position.x,enemy.mesh.position.z,'blast');
         if(state.mana>=mana||state.projectiles.length!==projectiles+1)
             throw new Error('Offensive spell remained blocked after peace');
+        window.selectAction('blast');
+        window.setPeaceTimeMinutes(4.5);
+        if(!gameTestAPI.isPeaceTime()||state.currentAction!=='move'||state.projectiles.length)
+            throw new Error('Starting peace again did not cancel an armed or flying fireball');
         input.value='0';input.dispatchEvent(new Event('change',{bubbles:true}));
         if(state.matchSettings.peaceTimeMinutes!==0||gameTestAPI.isPeaceTime())
             throw new Error('Zero-minute setting did not disable peace');
