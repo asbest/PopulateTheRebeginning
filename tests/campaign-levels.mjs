@@ -55,7 +55,7 @@ try {
             if(setup[key]!==value)throw new Error(`Level ${level}: ${key}=${setup[key]}, expected ${value}`);
         }
         if(setup.factions!==want.ai||setup.story!==CAMPAIGN_STORIES[level].title||
-            setup.peaceMinutes!==5||
+            setup.peaceMinutes!==2.5||
             !setup.objective.includes(CAMPAIGN_STORIES[level].objective)||setup.overlay!=='flex'||
             setup.shaman==='dead'||!setup.physics)
             throw new Error(`Level ${level}: incomplete start ${JSON.stringify(setup)}`);

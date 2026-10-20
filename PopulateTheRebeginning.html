@@ -591,7 +591,7 @@
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">MATCH SETTINGS</h1>
         <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; text-align:left; width: 250px;">
             <label for="peace-time-minutes">Peace time (minutes)</label>
-            <input type="number" id="peace-time-minutes" min="0" max="60" step="1" value="5" onchange="setPeaceTimeMinutes(this.value)" style="width:80px; min-height:36px; color:#17201e; font:inherit;">
+            <input type="number" id="peace-time-minutes" min="0" max="60" step="0.5" value="2.5" onchange="setPeaceTimeMinutes(this.value)" style="width:80px; min-height:36px; color:#17201e; font:inherit;">
             <small>Both tribes can build and move. Attacks begin when the timer ends. Set 0 to disable.</small>
             <label><input type="checkbox" id="mutator-noflyers" onchange="state.matchSettings.noFlyers = this.checked"> No Flyers (No Airships)</label>
             <label><input type="checkbox" id="mutator-infinitemana" onchange="state.matchSettings.infiniteMana = this.checked"> Infinite Mana</label>
@@ -1454,12 +1454,12 @@ function storedCampaignObjectives() {
 
 function sanitizePeaceMinutes(value) {
     const numeric = Number(value);
-    return Number.isFinite(numeric) ? Math.max(0,Math.min(60,Math.round(numeric))) : 5;
+    return Number.isFinite(numeric) ? Math.max(0,Math.min(60,Math.round(numeric*2)/2)) : 2.5;
 }
 
 function storedPeaceMinutes() {
     const saved=localStorage.getItem(CONFIG.SAVED_KEYS.PEACE_MINUTES);
-    return saved===null?5:sanitizePeaceMinutes(saved);
+    return saved===null?2.5:sanitizePeaceMinutes(saved);
 }
 
 function normalizeMatchSettings(settings = {}) {

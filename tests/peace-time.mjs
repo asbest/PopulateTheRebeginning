@@ -11,15 +11,17 @@ try {
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:60000});
     const result=await page.evaluate(()=>{
         state.isPaused=true;state.matchElapsed=0;gameTestAPI.updateUI();
-        if(state.matchSettings.peaceTimeMinutes!==5||!gameTestAPI.isPeaceTime()||
-            document.getElementById('peace-timer').textContent!=='Peace time: 05:00')
-            throw new Error('Five-minute default or countdown missing');
+        if(state.matchSettings.peaceTimeMinutes!==2.5||!gameTestAPI.isPeaceTime()||
+            document.getElementById('peace-timer').textContent!=='Peace time: 02:30')
+            throw new Error('Two-and-a-half-minute default or countdown missing');
         const input=document.getElementById('peace-time-minutes');
-        input.value='7';input.dispatchEvent(new Event('change',{bubbles:true}));
-        if(state.matchSettings.peaceTimeMinutes!==7||localStorage.getItem(CONFIG.SAVED_KEYS.PEACE_MINUTES)!=='7')
+        input.value='3.5';input.dispatchEvent(new Event('change',{bubbles:true}));
+        if(state.matchSettings.peaceTimeMinutes!==3.5||localStorage.getItem(CONFIG.SAVED_KEYS.PEACE_MINUTES)!=='3.5')
             throw new Error('Match setting was not saved');
+        if(input.step!=='0.5'||document.getElementById('peace-timer').textContent!=='Peace time: 03:30')
+            throw new Error('Half-minute setting did not update the countdown');
         state.matchElapsed=60;gameTestAPI.updateUI();
-        if(document.getElementById('peace-timer').textContent!=='Peace time: 06:00')
+        if(document.getElementById('peace-timer').textContent!=='Peace time: 02:30')
             throw new Error('Countdown did not use elapsed game time');
         const ally=new Humanoid(0,'warrior',state.shaman.mesh.position.x+1,state.shaman.mesh.position.z);
         const enemy=new Humanoid(1,'warrior',ally.mesh.position.x+2,ally.mesh.position.z);
@@ -33,7 +35,7 @@ try {
         gameTestAPI.performAction(enemy.mesh.position.x,enemy.mesh.position.z,'blast');
         if(state.mana!==mana||state.projectiles.length!==projectiles)
             throw new Error('Offensive spell consumed mana during peace');
-        state.matchElapsed=7*60;
+        state.matchElapsed=3.5*60;
         gameTestAPI.updateUI();
         if(gameTestAPI.isPeaceTime()||!document.getElementById('peace-timer').hidden||ally.findTarget()!==enemy)
             throw new Error('Combat did not become available when peace ended');
@@ -45,14 +47,14 @@ try {
             throw new Error('Zero-minute setting did not disable peace');
         window.saveGame();
         const saved=JSON.parse(localStorage.getItem(CONFIG.SAVED_KEYS.SAVE_DATA));
-        if(saved.matchElapsed!==420||saved.matchSettings.peaceTimeMinutes!==0)
+        if(saved.matchElapsed!==210||saved.matchSettings.peaceTimeMinutes!==0)
             throw new Error('Peace progress was not saved');
-        return {defaultMinutes:5,configuredMinutes:7,remainingAfterOneMinute:360,attackUnlocked:true,saveElapsed:saved.matchElapsed};
+        return {defaultMinutes:2.5,configuredMinutes:3.5,remainingAfterOneMinute:150,attackUnlocked:true,saveElapsed:saved.matchElapsed};
     });
     if(errors.length)throw new Error(errors.join('\n'));
     console.log('PASS peace time, settings, combat lock and save progress',result);
     await page.evaluate(()=>{
-        window.setPeaceTimeMinutes(7);
+        window.setPeaceTimeMinutes(3.5);
         localStorage.setItem(CONFIG.SAVED_KEYS.START_CAMPAIGN,'2');
     });
     await page.reload();
@@ -62,7 +64,7 @@ try {
         return {minutes:state.matchSettings.peaceTimeMinutes,
             input:document.getElementById('peace-time-minutes').value};
     });
-    if(restored.minutes!==7||restored.input!=='7')
+    if(restored.minutes!==3.5||restored.input!=='3.5')
         throw new Error('Peace setting was not restored for the next level: '+JSON.stringify(restored));
     console.log('PASS peace-time Match Setting persists across level reload');
 } finally {
