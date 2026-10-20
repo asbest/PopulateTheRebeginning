@@ -36,12 +36,13 @@ try {
             const factions=[...new Set(state.units.filter(u=>u.state!=='dead'&&u.faction!==0).map(u=>u.faction))];
             const data={level:state.campaignLevel,ai:window.enemyAIs.length,biome:settings.biome||'normal',
                 winter:settings.winter,noFlyers:settings.noFlyers,suddenDeath:settings.suddenDeath,
-                infiniteMana:settings.infiniteMana,doubleSpeed:settings.doubleSpeed,
+                infiniteMana:settings.infiniteMana,doubleSpeed:settings.doubleSpeed,peaceMinutes:settings.peaceTimeMinutes,
                 factions:factions.length,story:document.getElementById('story-title').innerText,
                 objective:document.getElementById('story-objective').textContent,
                 overlay:document.getElementById('story-overlay').style.display,
                 shaman:state.shaman.state,physics:!!state.physicsWorld};
             window.closeHelp();window.closeStoryOverlay();
+            state.matchSettings.peaceTimeMinutes=0;
             if(state.isPaused)window.togglePause();
             window.campaignProbe={updates:0};
             for(const ai of window.enemyAIs){const original=ai.update;ai.update=function(dt){campaignProbe.updates++;return original.call(this,dt);};}
@@ -54,6 +55,7 @@ try {
             if(setup[key]!==value)throw new Error(`Level ${level}: ${key}=${setup[key]}, expected ${value}`);
         }
         if(setup.factions!==want.ai||setup.story!==CAMPAIGN_STORIES[level].title||
+            setup.peaceMinutes!==5||
             !setup.objective.includes(CAMPAIGN_STORIES[level].objective)||setup.overlay!=='flex'||
             setup.shaman==='dead'||!setup.physics)
             throw new Error(`Level ${level}: incomplete start ${JSON.stringify(setup)}`);

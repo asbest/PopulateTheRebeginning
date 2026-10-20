@@ -16,7 +16,7 @@ try {
    await page.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1');
    await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);
    await page.evaluate(({personality,raid})=>{
-    state.isPaused=true;state.isGodMode=false;gameTestAPI.PathWorker.disable();
+    state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;state.isGodMode=false;gameTestAPI.PathWorker.disable();
     state.shaman.hp=1000000;state.shaman.maxHp=1000000;
     for(const ai of enemyAIs)ai.personality=personality;
     window.longRun={time:0,classes:{},attackDistance:0,defended:false,recovered:false,raidUnits:[],raid,peakBuildings:0,peakPopulation:0};

@@ -55,6 +55,7 @@ try{
         window.closeHelp();window.closeStoryOverlay();
         document.getElementById('pause-menu').style.display='none';
         state.isPaused=true;state.campaignLevel=0;state.mana=1000;
+        state.matchSettings.peaceTimeMinutes=0;
         state.cheatUnlimitedRange=true;state.selectedUnits=[state.shaman];
         window.enemyAIs=[];
         const trees=Object.values(state.chunks).flatMap(chunk=>chunk.userData?.trees||[]);

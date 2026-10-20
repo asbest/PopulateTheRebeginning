@@ -80,7 +80,7 @@ try {
   const data=await page.evaluate(()=>({url:location.href,renderer:state.renderer.getContext().getParameter(state.renderer.getContext().VERSION),physics:!!state.physicsWorld,units:state.units.length}));
   if(!data.url.startsWith(url)||!new URL(data.url).searchParams.has('test')||!data.physics||data.units<2)throw new Error(JSON.stringify(data));return data;
  });
- await page.evaluate(()=>{window.closeHelp();window.closeStoryOverlay();if(state.isPaused)window.togglePause();});
+ await page.evaluate(()=>{window.closeHelp();window.closeStoryOverlay();state.matchSettings.peaceTimeMinutes=0;if(state.isPaused)window.togglePause();});
  await page.waitForTimeout(1200);
  await check('First fireball avoids bulk shader compilation',async()=>page.evaluate(()=>{
   if(!state.fireballShadersReady)throw new Error('Fireball shaders were not warmed during loading');
@@ -446,7 +446,7 @@ try {
   try {
    await phone.goto(url+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
    await phone.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
-   await phone.evaluate(()=>{window.closeHelp();window.closeStoryOverlay();document.getElementById('pause-menu').style.display='none';state.mana=500;state.isPaused=true;gameTestAPI.updateUnitList();});
+   await phone.evaluate(()=>{window.closeHelp();window.closeStoryOverlay();document.getElementById('pause-menu').style.display='none';state.matchSettings.peaceTimeMinutes=0;state.mana=500;state.isPaused=true;gameTestAPI.updateUnitList();});
    const unitPoint=await controlCenter(phone,'#unit-list .unit-item');
    await phone.touchscreen.tap(unitPoint.x,unitPoint.y);
    if(await phone.evaluate(()=>state.selectedUnits.length)!==1)throw new Error('Touch unit selection failed');

@@ -51,6 +51,7 @@ try {
         window.closeStoryOverlay();
         document.getElementById('pause-menu').style.display='none';
         state.isPaused=true;
+        state.matchSettings.peaceTimeMinutes=0;
         const sound=gameTestAPI.SoundManager;
         sound.setMusicEnabled(false);
         await sound.ensureContext().suspend();
@@ -262,6 +263,7 @@ try {
             window.closeHelp();window.closeStoryOverlay();
             document.getElementById('pause-menu').style.display='none';
             state.isPaused=true;state.mana=1000;
+            state.matchSettings.peaceTimeMinutes=0;
             gameTestAPI.SoundManager.setMusicEnabled(false);
             await gameTestAPI.SoundManager.ensureContext().suspend();
             gameTestAPI.SoundManager.prepareMediaEffects();

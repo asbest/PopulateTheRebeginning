@@ -17,6 +17,7 @@
         }
         #mana-fill { width: 100%; height: 100%; background: #00BFFF; transition: width 0.2s; }
         #faith-display { color: #ffe3a2; }
+        #peace-timer { color: #f3d78b; font-weight: 700; }
 
         #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -589,6 +590,9 @@
     <div id="match-settings-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); flex-direction:column; align-items:center; justify-content:center; z-index:202; color:white; pointer-events:auto; overflow-y:auto;">
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">MATCH SETTINGS</h1>
         <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px; text-align:left; width: 250px;">
+            <label for="peace-time-minutes">Peace time (minutes)</label>
+            <input type="number" id="peace-time-minutes" min="0" max="60" step="1" value="5" onchange="setPeaceTimeMinutes(this.value)" style="width:80px; min-height:36px; color:#17201e; font:inherit;">
+            <small>Both tribes can build and move. Attacks begin when the timer ends. Set 0 to disable.</small>
             <label><input type="checkbox" id="mutator-noflyers" onchange="state.matchSettings.noFlyers = this.checked"> No Flyers (No Airships)</label>
             <label><input type="checkbox" id="mutator-infinitemana" onchange="state.matchSettings.infiniteMana = this.checked"> Infinite Mana</label>
             <label><input type="checkbox" id="mutator-doublespeed" onchange="state.matchSettings.doubleSpeed = this.checked"> Double Unit Speed</label>
@@ -658,6 +662,7 @@
         <div id="mana-bar"><div id="mana-fill"></div></div>
         <p>Mana: <span id="mana-text">100</span></p>
         <p id="faith-display">Faith: <span id="faith-text">50</span> · Mana <span id="faith-bonus">100%</span></p>
+        <p id="peace-timer" role="status" aria-live="off" hidden></p>
     </div>
 
     <!-- Right Side Action Menu -->
@@ -1194,6 +1199,7 @@ const CONFIG = {
         SAVE_DATA: 'populous_save',
         MUSIC_ENABLED: 'musicEnabled',
         OBJECTIVE_SETTINGS: 'rebeginning_campaign_objectives',
+        PEACE_MINUTES: 'rebeginning_peace_minutes',
     },
     UI: {
         UNIT_LIST_TOP: 70,
@@ -1446,11 +1452,22 @@ function storedCampaignObjectives() {
     }
 }
 
+function sanitizePeaceMinutes(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(0,Math.min(60,Math.round(numeric))) : 5;
+}
+
+function storedPeaceMinutes() {
+    const saved=localStorage.getItem(CONFIG.SAVED_KEYS.PEACE_MINUTES);
+    return saved===null?5:sanitizePeaceMinutes(saved);
+}
+
 function normalizeMatchSettings(settings = {}) {
     const supplied = settings && typeof settings === 'object' ? settings : {};
     return {
         noFlyers: false, infiniteMana: false, doubleSpeed: false, suddenDeath: false,
         winter: false, biome: 'normal', ...supplied,
+        peaceTimeMinutes: sanitizePeaceMinutes(supplied.peaceTimeMinutes ?? storedPeaceMinutes()),
         campaignObjectives: sanitizeCampaignObjectives(supplied.campaignObjectives || storedCampaignObjectives())
     };
 }
@@ -1519,6 +1536,7 @@ const state = {
     navigationVersion: 0,
     units: [],
     matchSettings: normalizeMatchSettings(),
+    matchElapsed: 0,
 
     particles: [],
     projectiles: [],
@@ -1574,6 +1592,12 @@ const state = {
         id: null
     }
 };
+
+function peaceTimeRemaining() {
+    return Math.max(0,(state.matchSettings?.peaceTimeMinutes||0)*60-(state.matchElapsed||0));
+}
+function isPeaceTime() { return peaceTimeRemaining()>0; }
+const PEACE_OFFENSIVE_SPELLS=new Set(['blast','lightning','hypnotise','swamp','swarm','tornado','firestorm','volcano']);
 
 // SpatialHash
 const SpatialHash = {
@@ -1831,6 +1855,7 @@ const NetworkManager = {
             mana: state.mana,
             faith: state.faith,
             matchSettings: state.matchSettings,
+            matchElapsed: state.matchElapsed,
             treeTime: state.treeTime,
             treeBurns: Array.from(state.treeBurns.entries()),
             isPaused: state.isPaused
@@ -1941,6 +1966,7 @@ const NetworkManager = {
         if (data.mana !== undefined) state.mana = data.mana;
         if (Number.isFinite(data.faith)) state.faith = THREE.MathUtils.clamp(data.faith,0,100);
         if (data.matchSettings !== undefined) state.matchSettings = normalizeMatchSettings(data.matchSettings);
+        if (Number.isFinite(data.matchElapsed)) state.matchElapsed=Math.max(0,data.matchElapsed);
         if (data.isPaused !== undefined) state.isPaused = data.isPaused;
         if (Number.isFinite(data.treeTime) && Array.isArray(data.treeBurns)) {
             state.treeTime=Math.max(0,data.treeTime);
@@ -2066,10 +2092,20 @@ window.resetAllObjectiveSettings = function() {
     showGameMessage('All campaign objectives restored.');
 };
 
+window.setPeaceTimeMinutes = function(value) {
+    const minutes=sanitizePeaceMinutes(value);
+    state.matchSettings.peaceTimeMinutes=minutes;
+    localStorage.setItem(CONFIG.SAVED_KEYS.PEACE_MINUTES,String(minutes));
+    const input=document.getElementById('peace-time-minutes');
+    if(input)input.value=String(minutes);
+    updateUI();
+};
+
 window.toggleMatchSettings = function() {
     const menu = document.getElementById('match-settings-menu');
     const pauseMenu = document.getElementById('pause-menu');
     if (menu.style.display === 'none') {
+        document.getElementById('peace-time-minutes').value=String(state.matchSettings.peaceTimeMinutes);
         document.getElementById('mutator-noflyers').checked = state.matchSettings.noFlyers;
         document.getElementById('mutator-infinitemana').checked = state.matchSettings.infiniteMana;
         document.getElementById('mutator-doublespeed').checked = state.matchSettings.doubleSpeed;
@@ -6563,6 +6599,7 @@ function castLandbridge(caster, x, z) {
 
 function executeSpell(type, x, z, caster) {
     if (!caster || !caster.mesh) return;
+    if(isPeaceTime()&&PEACE_OFFENSIVE_SPELLS.has(type))return;
 
     if (caster.faction === 1 && caster.isShaman) {
         if(window.showEnemySpellIcon) window.showEnemySpellIcon(type);
@@ -7404,6 +7441,7 @@ window.Humanoid = class Humanoid {
     }
 
     findTarget() {
+         if(isPeaceTime())return null;
          let minDist = 1000;
          let closest = null;
          const range = CONFIG.AI.AGGRESSION_RANGE;
@@ -7422,6 +7460,7 @@ window.Humanoid = class Humanoid {
     }
 
     attack() {
+        if(isPeaceTime()) { this.state='idle';this.attackTarget=null;return; }
         if(!this.attackTarget || this.attackTarget.state === 'dead' || this.attackTarget.dead) {
              this.state = 'idle'; this.attackTarget = null; return;
         }
@@ -7843,6 +7882,7 @@ window.Humanoid = class Humanoid {
             }
         }
         else if(this.state === 'combat') {
+            if(isPeaceTime()) { this.state='idle';this.attackTarget=null;this.path=[];return; }
             if(!this.attackTarget || this.attackTarget.state === 'dead' || this.attackTarget.dead) {
                 if (this.updateTicker % 5 === 0) {
                     this.attackTarget = this.findTarget();
@@ -8714,6 +8754,7 @@ class EnemyAI {
         return this.issuePath(u,p,role);
     }
     engage(u,target,role) {
+        if(isPeaceTime())return;
         if(!target||['dead','stunned','getting_up','transported'].includes(u.state))return;
         u.aiRole=role;
         if(u.type==='spy'&&(target.isShaman||typeof target.setFaction!=='function')){
@@ -8733,6 +8774,7 @@ class EnemyAI {
         this.issuePath(u,target.mesh.position,role,target);
     }
     cast(type,p) {
+        if(isPeaceTime()&&PEACE_OFFENSIVE_SPELLS.has(type))return false;
         if(!this.myShaman||this.spellCooldown>0||['dead','stunned','getting_up','transported'].includes(this.myShaman.state))return false;
         if(this.distance(this.myShaman.mesh.position,p)>10+this.myShaman.mesh.position.y)return false;
         executeSpell(type,p.x,p.z,this.myShaman);
@@ -8741,7 +8783,7 @@ class EnemyAI {
     think() {
         const units=state.units.filter(u=>u.faction===this.faction&&u.state!=='dead'&&u.state!=='transported'&&!u.isPhantom);
         const buildings=state.buildings.filter(b=>b.faction===this.faction&&!b.dead);
-        const foes=state.units.filter(u=>!window.isAllied(u.faction,this.faction)&&!['dead','transported'].includes(u.state)&&!u.invisible);
+        const foes=isPeaceTime()?[]:state.units.filter(u=>!window.isAllied(u.faction,this.faction)&&!['dead','transported'].includes(u.state)&&!u.invisible);
         for(const u of units) {
             if(u.type==='airship'||state.waterState==='frozen') {u.aiWaterEscape=false;continue;}
             if(['stunned','getting_up'].includes(u.state))continue;
@@ -8807,7 +8849,7 @@ class EnemyAI {
         // A small reserve guards the settlement even while the main force raids.
         const reserve=Math.max(2,Math.ceil(fit.length*.3));
         const enemyBuildings=state.buildings.filter(b=>!b.dead&&!window.isAllied(b.faction,this.faction));
-        const target=nearest(enemyBuildings.length?enemyBuildings:foes,home);
+        const target=isPeaceTime()?null:nearest(enemyBuildings.length?enemyBuildings:foes,home);
         const ready=fit.length>=(['swarmer','hive'].includes(this.personality)?5:7);
         fit.forEach((u,i)=>{
             if(threats.length){this.engage(u,nearest(threats,u.mesh.position),'defend');return;}
@@ -8883,6 +8925,7 @@ class EnemyAI {
 // --- UI FUNCTIONS ---
 
 function updateUI() {
+    updatePeaceTimer();
     const manaText = document.getElementById('mana-text');
     const manaFill = document.getElementById('mana-fill');
     if(manaText) {
@@ -8916,6 +8959,17 @@ function updateUI() {
     const weekDisplay = document.getElementById('visit-week-display');
     if (weekDisplay) {const value=String((state.visitStats.week !== null) ? state.visitStats.week : '...');
         if(weekDisplay._shownValue!==value){weekDisplay.innerText=value;weekDisplay._shownValue=value;}}
+}
+
+function updatePeaceTimer() {
+    const label=document.getElementById('peace-timer');
+    if(!label)return;
+    const seconds=Math.ceil(peaceTimeRemaining());
+    label.hidden=seconds<=0;
+    if(seconds>0) {
+        const value=`Peace time: ${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
+        if(label.textContent!==value)label.textContent=value;
+    }
 }
 
 function showEnemySpellIcon(spellType) {
@@ -9236,6 +9290,11 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
         const unitIds = actingUnits.map(u => u.id);
         NetworkManager.sendInput({x, z, action, unitIds});
         spawnPulse(x, getHeight(x, z), z, 0x888888);
+        return;
+    }
+
+    if(isPeaceTime()&&PEACE_OFFENSIVE_SPELLS.has(action)) {
+        showGameMessage('Offensive spells are unavailable during peace time.');
         return;
     }
 
@@ -9880,7 +9939,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, getSurfaceHeight, updateChunkPhysics, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -10327,7 +10386,7 @@ function updateCampaignMission(dt) {
     const mission = state.campaignMission;
     const rule = getActiveCampaignRule();
     if (!mission || !rule) return;
-    mission.elapsed += dt;
+    mission.elapsed += rule.kind === 'defense' && isPeaceTime() ? 0 : dt;
     if (Math.floor(mission.elapsed) !== Math.floor(mission.elapsed - dt)) {
         campaignMarkers.forEach(marker => {
             if (!marker.userData.escort) marker.position.y = getHeight(marker.position.x, marker.position.z) + .18;
@@ -10567,6 +10626,7 @@ window.saveGame = function() {
         campaignNarrative: state.isCampaign ? state.campaignNarrative : null,
         campaignMission: state.isCampaign ? state.campaignMission : null,
         matchSettings: state.matchSettings,
+        matchElapsed: state.matchElapsed,
         mana: state.mana,
         faith: state.faith,
         terrainMods: Array.from(state.terrainMods.entries()),
@@ -10694,6 +10754,8 @@ window.loadGame = function() {
             state.matchSettings = normalizeMatchSettings(data.matchSettings);
             persistCampaignObjectives();
         }
+        state.matchElapsed=Number.isFinite(data.matchElapsed)
+            ? Math.max(0,data.matchElapsed) : state.matchSettings.peaceTimeMinutes*60;
 
         state.mana = data.mana;
         state.faith = Number.isFinite(data.faith) ? THREE.MathUtils.clamp(data.faith,0,100) : CONFIG.FAITH.START;
@@ -11076,6 +11138,7 @@ function handleTap(x, y, isRightClick, isShift) {
 
              if(hitUnit && hitUnit.faction !== 0 && !window.isAllied(hitUnit.faction, 0)) {
                  if(state.selectedUnits.length > 0) {
+                    if(isPeaceTime()) { showGameMessage('Attacks begin when peace time ends.');return; }
                     state.selectedUnits.forEach(u => {
                         if(!u.isShaman) {
                             u.attackTarget = hitUnit;
@@ -11520,6 +11583,12 @@ function animate() {
     }
 
     if(!state.isPaused) {
+    if(state.network.role!=='client') {
+        const peaceful=isPeaceTime();
+        state.matchElapsed+=dt;
+        if(peaceful&&!isPeaceTime())showGameMessage('Peace time has ended. Attacks are now possible.');
+    }
+    updatePeaceTimer();
     if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
     PathWorker.update();
 

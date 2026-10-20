@@ -19,7 +19,7 @@ page.on('dialog', d => d.accept());
 try {
   await page.goto((process.env.GAME_URL || 'http://127.0.0.1:8765') + '/PopulateTheRebeginning.html?test=1', {waitUntil:'load',timeout:60000});
   await page.waitForFunction(() => window.gameTestAPI&&window.state?.shaman&&window.enemyAIs?.length, null, {timeout:90000});
-  await page.evaluate(() => {closeHelp();closeStoryOverlay();state.isPaused=false;document.getElementById('pause-menu').style.display='none';});
+  await page.evaluate(() => {closeHelp();closeStoryOverlay();state.matchSettings.peaceTimeMinutes=0;state.isPaused=false;document.getElementById('pause-menu').style.display='none';});
 
   // The Shaman's spells must be available without selecting her first.
   if(!await page.locator('#btn-blast').count()) throw new Error('Blast is hidden with no unit selected');
