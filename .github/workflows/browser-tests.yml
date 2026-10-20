@@ -31,6 +31,9 @@ jobs:
       - name: Welcome screen starts the game on desktop and mobile
         if: always()
         run: node tests/startup.mjs
+      - name: Peace time and match settings
+        if: always()
+        run: node tests/peace-time.mjs
       - name: Campaign story, clues and endings
         if: always()
         run: node tests/campaign-story.mjs
