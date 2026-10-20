@@ -19,6 +19,7 @@ try {
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.renderer,null,{timeout:90000});
     const report=await page.evaluate(()=>{
         closeHelp();closeStoryOverlay();state.isPaused=true;
+        state.matchSettings.peaceTimeMinutes=0;
         state.renderer.setPixelRatio(1);
         const building=state.buildings.filter(b=>b.type==='hut'&&!b.dead)
             .sort((a,b)=>a.mesh.position.distanceToSquared(state.camera.position)-

@@ -15,6 +15,7 @@ try {
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.renderer,null,{timeout:90000});
     const report=await page.evaluate(()=>{
         closeHelp();closeStoryOverlay();state.isPaused=true;
+        state.matchSettings.peaceTimeMinutes=0;
         state.renderer.setPixelRatio(1);
         // All measurements run in this synchronous evaluation, so chunk
         // streaming cannot advance between the baseline and impact renders.
