@@ -1642,7 +1642,7 @@ const BuildingSpatialHash = {
     },
 
     add: function(b) {
-        const r = 2.0;
+        const r = b.collisionRadius || 2.0;
         const minX = Math.floor((b.mesh.position.x - r) / this.cellSize);
         const maxX = Math.floor((b.mesh.position.x + r) / this.cellSize);
         const minZ = Math.floor((b.mesh.position.z - r) / this.cellSize);
@@ -3047,6 +3047,45 @@ function resolveTreeCollision(unit) {
         unit.rigidBody.setLinvel({x:unit.velocity.x,y:v.y,z:unit.velocity.z},true);
     }
 }
+function resolveBuildingCollision(unit,startX,startZ) {
+    if(unit.isVehicle||unit.isPhantom||unit.state==='dead'||unit.state==='transported')return;
+    const endX=unit.mesh.position.x,endZ=unit.mesh.position.z;
+    const dx=endX-startX,dz=endZ-startZ,lengthSq=dx*dx+dz*dz;
+    const nearby=BuildingSpatialHash.query(endX,endZ);
+    const halfway=lengthSq>1?BuildingSpatialHash.query((startX+endX)*.5,(startZ+endZ)*.5):null;
+    if(!nearby?.length&&!halfway?.length)return;
+    const candidates=halfway?.length?new Set([...(nearby||[]),...halfway]):nearby;
+    let hit=null,hitTime=Infinity;
+    for(const b of candidates) {
+        if(b.dead)continue;
+        const x=b.mesh.position.x,z=b.mesh.position.z,r=b.collisionRadius||2;
+        const fromX=startX-x,fromZ=startZ-z;
+        const originSq=fromX*fromX+fromZ*fromZ;
+        if(originSq<r*r) {
+            const awayX=endX-x,awayZ=endZ-z,awayLength=Math.hypot(awayX,awayZ)||1;
+            hit={x:x+awayX/awayLength*(r+.015),z:z+awayZ/awayLength*(r+.015),nx:awayX/awayLength,nz:awayZ/awayLength};
+            hitTime=0;break;
+        }
+        if(lengthSq<.000001)continue;
+        const toward=fromX*dx+fromZ*dz;
+        const discriminant=toward*toward-lengthSq*(originSq-r*r);
+        if(discriminant<=0)continue;
+        const entry=(-toward-Math.sqrt(discriminant))/lengthSq;
+        if(entry<0||entry>=hitTime||entry>1)continue;
+        const t=Math.max(0,entry-.015/Math.sqrt(lengthSq));
+        const px=startX+dx*t,pz=startZ+dz*t,nx=px-x,nz=pz-z,norm=Math.hypot(nx,nz)||1;
+        hit={x:px,z:pz,nx:nx/norm,nz:nz/norm};hitTime=entry;
+    }
+    if(!hit)return;
+    unit.mesh.position.x=hit.x;unit.mesh.position.z=hit.z;
+    const inward=unit.velocity.x*hit.nx+unit.velocity.z*hit.nz;
+    if(inward<0){unit.velocity.x-=inward*hit.nx;unit.velocity.z-=inward*hit.nz;}
+    if(unit.rigidBody) {
+        const body=unit.rigidBody.translation(),v=unit.rigidBody.linvel();
+        unit.rigidBody.setTranslation({x:hit.x,y:body.y,z:hit.z},true);
+        unit.rigidBody.setLinvel({x:unit.velocity.x,y:v.y,z:unit.velocity.z},true);
+    }
+}
 function terrainSpeedFactor(x,z,dirX,dirZ) {
     const length=Math.hypot(dirX,dirZ);
     if(length<.001)return 1;
@@ -3067,7 +3106,8 @@ function isBuildingBlocked(x,z) {
     for(let b of candidates) {
          const dx = x - b.mesh.position.x;
          const dz = z - b.mesh.position.z;
-         if (dx*dx + dz*dz < CONFIG.TERRAIN.BUILDING_COLLIDE_DIST) return true;
+         const radius=b.collisionRadius||2;
+         if (dx*dx + dz*dz < radius*radius) return true;
     }
     return false;
 }
@@ -5596,7 +5636,8 @@ const Pathfinder = {
                         const canExit = startBlocked && BuildingSpatialHash.query(wx,wz).every(b => {
                             const originDist=(startPos.x-b.mesh.position.x)**2+(startPos.z-b.mesh.position.z)**2;
                             const nextDist=(wx-b.mesh.position.x)**2+(wz-b.mesh.position.z)**2;
-                            return nextDist>=CONFIG.TERRAIN.BUILDING_COLLIDE_DIST || (originDist<CONFIG.TERRAIN.BUILDING_COLLIDE_DIST && nextDist>=originDist);
+                            const radiusSq=(b.collisionRadius||2)**2;
+                            return nextDist>=radiusSq || (originDist<radiusSq && nextDist>=originDist);
                         });
                         if(!canExit)continue;
                     }
@@ -5685,7 +5726,7 @@ const PathWorker = {
                     heightMultiplier:HEIGHT_MULTIPLIER,bridgeHeight:BRIDGE_HEIGHT,bridgeWidth:BRIDGE_WIDTH,
                     mods:Array.from(state.terrainMods.entries()),
                     buildings:state.buildings.filter(b=>!b.dead&&!b.underConstruction)
-                        .map(b=>({x:b.mesh.position.x,z:b.mesh.position.z}))});
+                        .map(b=>({x:b.mesh.position.x,z:b.mesh.position.z,radius:b.collisionRadius||2}))});
                 this.snapshotKey=key;
             }
             const id=this.nextId++;
@@ -7579,6 +7620,7 @@ window.Humanoid = class Humanoid {
         this.animTime += dt;
         this.hitImpulseCooldown=Math.max(0,(this.hitImpulseCooldown||0)-dt);
 
+        const previousX=this.mesh.position.x,previousZ=this.mesh.position.z;
         if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
             const rbPos = this.rigidBody.translation();
             this.mesh.position.set(rbPos.x, rbPos.y - this.height/2 - (this.groundBodyOffset||0), rbPos.z);
@@ -7621,6 +7663,7 @@ window.Humanoid = class Humanoid {
         }
 
         resolveTreeCollision(this);
+        resolveBuildingCollision(this,previousX,previousZ);
 
         Locomotion.ground(this, getSurfaceHeight, dt);
         const groundH = getSurfaceHeight(this.mesh.position.x, this.mesh.position.z);
@@ -8392,6 +8435,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             hpBar: hpBar,
             hpGroup: hpGroup,
             type: type,
+            collisionRadius: footprint*.75+.3,
             faction: faction,
             hp: maxHp,
             maxHp: maxHp,

@@ -62,10 +62,10 @@ function height(x,z){
     return value;
 }
 function nearbyBuildings(x,z){
-    return buildings.filter(b=>(x-b.x)**2+(z-b.z)**2<terrain.BUILDING_COLLIDE_DIST+16);
+    return buildings.filter(b=>(x-b.x)**2+(z-b.z)**2<(b.radius||2)**2+16);
 }
 function blocked(x,z){
-    return nearbyBuildings(x,z).some(b=>(x-b.x)**2+(z-b.z)**2<terrain.BUILDING_COLLIDE_DIST);
+    return nearbyBuildings(x,z).some(b=>(x-b.x)**2+(z-b.z)**2<(b.radius||2)**2);
 }
 function walkableLine(a,b,avoidWater){
     const dx=b.x-a.x,dz=b.z-a.z,dist=Math.hypot(dx,dz),steps=Math.ceil(dist/(avoidWater?.25:1));
@@ -135,8 +135,9 @@ function findPath(start,end,isFlying,avoidWater,waterExit){
                     const canExit=startBlocked&&nearbyBuildings(wx,wz).every(b=>{
                         const origin=(start.x-b.x)**2+(start.z-b.z)**2;
                         const next=(wx-b.x)**2+(wz-b.z)**2;
-                        return next>=terrain.BUILDING_COLLIDE_DIST||
-                            (origin<terrain.BUILDING_COLLIDE_DIST&&next>=origin);
+                        const radiusSq=(b.radius||2)**2;
+                        return next>=radiusSq||
+                            (origin<radiusSq&&next>=origin);
                     });
                     if(!canExit)continue;
                 }
