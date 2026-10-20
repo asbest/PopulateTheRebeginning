@@ -57,6 +57,7 @@ try {
         const kind = document.getElementById('objective-kind-select');
         return {
             levels: select.options.length,
+            levelLabels: Array.from(select.options, option => option.textContent),
             kinds: kind.options.length,
             summary: document.getElementById('objective-settings-summary').textContent,
             stored: JSON.parse(localStorage.getItem('rebeginning_campaign_objectives')),
@@ -66,7 +67,8 @@ try {
             liveJournal: document.getElementById('campaign-objective-summary').textContent
         };
     });
-    if (editor.levels !== 12 || editor.kinds !== 7 || editor.fields !== 2 ||
+    if (editor.levels !== 12 || editor.levelLabels.some((label, index) =>
+        label !== CAMPAIGN_STORIES[index + 1].title) || editor.kinds !== 7 || editor.fields !== 2 ||
         editor.stored?.['1']?.kind !== 'escort' || editor.stored?.['1']?.followers !== 4 ||
         editor.liveRule?.followers !== 4 || editor.liveEscorts !== 4 || !editor.liveJournal.includes('Escort 4 followers') ||
         !editor.summary.includes('4 marked followers')) throw new Error('Objective editor failed: ' + JSON.stringify(editor));

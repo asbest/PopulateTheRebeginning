@@ -2043,7 +2043,7 @@ window.renderObjectiveSettings = function() {
         for (let level = 1; level <= 12; level++) {
             const option = document.createElement('option');
             option.value = String(level);
-            option.textContent = `Level ${level}: ${CAMPAIGN_STORIES[level]?.title || ''}`;
+            option.textContent = CAMPAIGN_STORIES[level]?.title || `Level ${level}`;
             select.appendChild(option);
         }
     }
