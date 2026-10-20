@@ -26,12 +26,12 @@ try{
    const outward=await page.evaluate(()=>{
     const advance=(targetKey)=>{
      const samples=movementProbes.map(()=>({last:null,pause:0,maxPause:0}));
-     for(let frame=1;frame<=900;frame++){
+     for(let frame=1;frame<=2700;frame++){
       gameTestAPI.SpatialHash.update();state.physicsWorld.timestep=1/60;state.physicsWorld.step();
       movementProbes.forEach(({u})=>{u.nextTargetCheck=Infinity;u.update(1/60);});
       movementProbes.forEach(({u,...probe},i)=>{
        const s=samples[i],p=u.mesh.position,distance=Math.hypot(p.x-probe[targetKey].x,p.z-probe[targetKey].z);
-       if(frame>15&&distance>2&&s.last&&Math.hypot(p.x-s.last.x,p.z-s.last.z)<.003)s.pause++;
+       if(frame>15&&distance>2&&s.last&&Math.hypot(p.x-s.last.x,p.z-s.last.z)<.001)s.pause++;
        else s.pause=0;
        s.maxPause=Math.max(s.maxPause,s.pause);s.last={x:p.x,z:p.z};
       });
@@ -47,12 +47,12 @@ try{
    await page.evaluate(()=>movementProbes.forEach(({u,start})=>u.goto(start.x,start.z)));
    const returnMove=await page.evaluate(()=>{
     const samples=movementProbes.map(()=>({last:null,pause:0,maxPause:0}));
-    for(let frame=1;frame<=900;frame++){
+    for(let frame=1;frame<=2700;frame++){
      gameTestAPI.SpatialHash.update();state.physicsWorld.timestep=1/60;state.physicsWorld.step();
      movementProbes.forEach(({u})=>{u.nextTargetCheck=Infinity;u.update(1/60);});
      movementProbes.forEach(({u,start},i)=>{
       const s=samples[i],p=u.mesh.position,distance=Math.hypot(p.x-start.x,p.z-start.z);
-      if(frame>15&&distance>2&&s.last&&Math.hypot(p.x-s.last.x,p.z-s.last.z)<.003)s.pause++;
+      if(frame>15&&distance>2&&s.last&&Math.hypot(p.x-s.last.x,p.z-s.last.z)<.001)s.pause++;
       else s.pause=0;
       s.maxPause=Math.max(s.maxPause,s.pause);s.last={x:p.x,z:p.z};
      });

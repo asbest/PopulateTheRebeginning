@@ -49,11 +49,11 @@ try {
         building.destroy(false);gameTestAPI.BuildingSpatialHash.update();
         manual.placeOnGround(-12,-12);
         const crossing=new Humanoid(0,'warrior',-7,0);state.units.push(crossing);
-        for(let frame=0;frame<180;frame++){
+        for(let frame=0;frame<540;frame++){
             crossing.manualMove(new THREE.Vector3(1,0,0),1/60);
             state.physicsWorld.timestep=1/60;state.physicsWorld.step();crossing.update(1/60);
         }
-        if(crossing.mesh.position.x<3)throw new Error('Destroyed building still blocks movement');
+        if(crossing.mesh.position.x<3)throw new Error('Destroyed building still blocks movement: '+crossing.mesh.position.x);
         return {radius,nearest,closest,destinationX:routed.mesh.position.x,crossingX:crossing.mesh.position.x};
     });
     if(errors.length)throw new Error(errors.join('\n'));

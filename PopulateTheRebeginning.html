@@ -3156,7 +3156,7 @@ function terrainSpeedFactor(x,z,dirX,dirZ) {
     if(rise>0){
         // Keep shoreline climbs passable; higher slopes require slower, deliberate steps.
         if(height<aiDryHeight()+2)return Math.max(.5,1/(1+rise*.65));
-        return Math.max(.25,1/(1+rise*4+rise*rise*4));
+        return Math.max(.25,1/(1+rise*4+rise*rise*4))/3;
     }
     const descent=-rise;
     return Math.max(.72,Math.min(1.08,1+Math.min(descent,.5)*.16-Math.max(0,descent-.5)*.35));
@@ -7710,10 +7710,11 @@ window.Humanoid = class Humanoid {
             this.brakeManualMotion(dt);
 
         // Physics separation and residual velocity can drift across a shoreline even
-        // when every planned waypoint is dry. Keep the last valid ground position.
+        // when every planned waypoint is dry. Allow tiny terrain dips at the edge so
+        // a slow walker can reach the next dry waypoint without being reset forever.
         if(this.faction!==0 && this.type!=='airship' && !this.aiWaterEscape &&
             state.waterState!=='frozen' && !['dead','stunned','getting_up'].includes(this.state)) {
-            if(getHeight(this.mesh.position.x,this.mesh.position.z)<aiDryHeight() && this.lastDryPosition) {
+            if(getHeight(this.mesh.position.x,this.mesh.position.z)<aiDryHeight()-.05 && this.lastDryPosition) {
                 this.mesh.position.x=this.lastDryPosition.x;this.mesh.position.z=this.lastDryPosition.z;
                 this.velocity.x=0;this.velocity.z=0;
                 if(this.rigidBody) {
@@ -7721,7 +7722,7 @@ window.Humanoid = class Humanoid {
                     this.rigidBody.setTranslation({x:this.mesh.position.x,y:p.y,z:this.mesh.position.z},true);
                     const v=this.rigidBody.linvel();this.rigidBody.setLinvel({x:0,y:v.y,z:0},true);
                 }
-            } else if(getHeight(this.mesh.position.x,this.mesh.position.z)>=aiDryHeight()) {
+            } else if(getHeight(this.mesh.position.x,this.mesh.position.z)>=aiDryHeight()-.05) {
                 if(!this.lastDryPosition)this.lastDryPosition=this.mesh.position.clone();
                 else this.lastDryPosition.copy(this.mesh.position);
             }
@@ -9978,7 +9979,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
