@@ -5861,6 +5861,61 @@ const FIREBALL_TRAIL_GEO = new THREE.SphereGeometry(.3,6,5);
 const FIREBALL_CORE_MAT = new THREE.MeshBasicMaterial({color:0xffda84});
 const FIREBALL_CORONA_MAT = new THREE.MeshBasicMaterial({color:COLORS.fireBody,transparent:true,opacity:.45,
     blending:THREE.AdditiveBlending,depthWrite:false});
+const FIREWARRIOR_FLAME_COLORS=[0xff5810,0xffa227,0xff6a16,0xffd052];
+// Arm flames for every firewarrior share one draw call and follow the animated forearms.
+const FirewarriorFlames={
+    mesh:null,dummy:new THREE.Object3D(),point:new THREE.Vector3(),tint:new THREE.Color(),capacity:1024,
+    init(){
+        if(this.mesh)return;
+        const geometry=new THREE.ConeGeometry(.105,.42,5);
+        const material=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.88,
+            depthWrite:false});
+        this.mesh=new THREE.InstancedMesh(geometry,material,this.capacity);
+        this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.mesh.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(this.capacity*3),3);
+        this.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
+        this.mesh.frustumCulled=false;this.mesh.count=0;this.mesh.visible=false;
+        state.scene.add(this.mesh);
+    },
+    update(){
+        if(!this.mesh)return;
+        let count=0;
+        for(const unit of state.units){
+            if(unit.type!=='firewarrior'||unit.state==='dead'||unit.state==='transported'||
+               !unit.mesh.visible||unit.invisible||
+               unit.mesh.position.distanceToSquared(state.camera.position)>6400)continue;
+            for(let side=0;side<2;side++){
+                const arm=side===0?unit.armL:unit.armR;
+                const forearm=arm?.userData.lower;
+                if(!forearm)continue;
+                arm.updateWorldMatrix(true,false);forearm.updateWorldMatrix(true,false);
+                for(let i=0;i<4;i++){
+                    if(count>=this.capacity)break;
+                    const phase=unit.animTime*12+i*2.7+side*1.9;
+                    const sway=Math.sin(phase)*.035;
+                    const segment=i<2?arm:forearm;
+                    this.point.set(side===0?.055:-.055,i%2===0?-.07:-.19,.07+sway)
+                        .applyMatrix4(segment.matrixWorld);
+                    this.dummy.position.copy(this.point);this.dummy.position.y+=.14;
+                    this.dummy.rotation.set(0,0,sway*2);
+                    this.dummy.scale.set(.8+(i%2)*.18,.75+Math.sin(phase*.83)*.18,.8);
+                    this.dummy.updateMatrix();
+                    this.mesh.setMatrixAt(count,this.dummy.matrix);
+                    this.mesh.setColorAt(count++,this.tint.setHex(FIREWARRIOR_FLAME_COLORS[i]));
+                }
+            }
+            if(count>=this.capacity)break;
+        }
+        this.mesh.count=count;this.mesh.visible=count>0;
+        if(count){this.mesh.instanceMatrix.needsUpdate=true;this.mesh.instanceColor.needsUpdate=true;}
+    },
+    clear(){if(this.mesh){this.mesh.count=0;this.mesh.visible=false;}},
+    prewarm(){
+        this.init();this.dummy.position.set(0,-999,0);this.dummy.scale.setScalar(.01);this.dummy.updateMatrix();
+        this.mesh.setMatrixAt(0,this.dummy.matrix);this.mesh.setColorAt(0,this.tint.setHex(0xffffff));
+        this.mesh.count=1;this.mesh.visible=true;
+    }
+};
 // One draw call per layer, regardless of how many fireballs share a battlefield.
 const FireballFxManager={
     layers:null,lights:null,flashes:[],dummy:new THREE.Object3D(),tint:new THREE.Color(),
@@ -6097,6 +6152,7 @@ class Fireball {
 function prewarmFireballShaders() {
     if (!state.renderer || !state.scene || !state.shaman) return;
     HitPulseManager.prewarm();
+    FirewarriorFlames.prewarm();
     FireballFxManager.prewarm();
     const existingLights=[];
     state.scene.traverse(node=>{if(node.isPointLight)existingLights.push([node,node.visible]);});
@@ -6140,6 +6196,7 @@ function prewarmFireballShaders() {
         state.fireballShaderWarmMaterials = warmMaterials;
         oldMaterials.forEach(material => material.dispose());
         state.scene.remove(preview.mesh);
+        FirewarriorFlames.clear();
         FireballFxManager.endPrewarm();
         FireballFxManager.lights.forEach(light=>{light.visible=false;});
     }
@@ -8286,20 +8343,6 @@ window.Humanoid = class Humanoid {
         updateWorship(this,dt);
         if(this.poseTick !== this.updateTicker) Locomotion.animate(this, dt, getSurfaceHeight);
 
-        if(this.type === 'firewarrior' && this.state !== 'dead') {
-            if(Math.random() < 0.15) {
-                 const spawnFire = (limb) => {
-                     const pos = new THREE.Vector3();
-                     limb.getWorldPosition(pos);
-                     pos.y -= 0.2;
-                     const p = new Particle(pos.add(new THREE.Vector3((Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2)), 0xFF4500, 0.1, 0.5);
-                     p.vel.set(0, 1, 0);
-                     state.particles.push(p);
-                 };
-                 if(this.armL) spawnFire(this.armL);
-                 if(this.armR) spawnFire(this.armR);
-            }
-        }
     }
     updateWalkAnim(speed, amp, dt = 0.016) {
         if(!['stunned','getting_up'].includes(this.state)){Locomotion.animate(this,dt,getSurfaceHeight);return;}
@@ -10142,7 +10185,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FireballFxManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -10952,6 +10995,7 @@ window.loadGame = function() {
         state.projectiles.length = 0;
         state.particles.forEach(p => state.scene.remove(p.mesh));
         state.particles.length = 0;
+        FirewarriorFlames.clear();
         FireballFxManager.clear();
         state.selectedUnits = [];
         state.selectedBuilding = null;
@@ -12002,6 +12046,7 @@ function animate() {
     for(let i = state.projectiles.length-1; i>=0; i--) { if(!state.projectiles[i].update(dt)) state.projectiles.splice(i, 1); }
     for(let i = state.particles.length-1; i>=0; i--) { if(!state.particles[i].update(dt)) state.particles.splice(i, 1); }
     HitPulseManager.update(dt);
+    FirewarriorFlames.update();
     FireballFxManager.update(dt);
     }
 

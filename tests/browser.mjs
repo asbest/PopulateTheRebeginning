@@ -141,6 +141,26 @@ try {
   for(const kind of ['wild','warrior','firewarrior','spy','shaman','airship']){const u=new Humanoid(0,kind,p.x+3,p.z+3);state.units.push(u);if(!u.mesh||u.hp<=0||(!u.isVehicle&&!u.legL))throw new Error(kind);report.push({kind,hp:u.hp});}
   return report;
  }));
+ await check('Firewarrior arms carry continuous batched flames',async()=>page.evaluate(()=>{
+  const unit=state.units.find(u=>u.type==='firewarrior'&&u.faction===0);
+  const flames=gameTestAPI.FirewarriorFlames,cameraPos=state.camera.position.clone();
+  const oldRotation=unit.armL.rotation.x,oldTime=unit.animTime;
+  try{
+   state.camera.position.copy(unit.mesh.position).add(new THREE.Vector3(0,8,10));
+   flames.update();
+   if(!flames.mesh.isInstancedMesh||flames.mesh.count<8||flames.mesh.count%8)
+    throw new Error('Firewarrior arm flames are missing or unbatched: '+flames.mesh.count);
+   const before=new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array));
+   unit.armL.rotation.x+=.5;unit.animTime+=.15;flames.update();
+   const after=new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array));
+   if(before.distanceTo(after)<.01)throw new Error('Flames do not follow the animated forearm');
+   state.renderer.render(state.scene,state.camera);const withFlames=state.renderer.info.render.calls;
+   flames.mesh.visible=false;state.renderer.render(state.scene,state.camera);
+   const withoutFlames=state.renderer.info.render.calls;flames.mesh.visible=true;
+   if(withFlames-withoutFlames!==1)throw new Error('Arm flames require more than one draw call');
+   return {flames:flames.mesh.count,drawCalls:withFlames-withoutFlames};
+  }finally{unit.armL.rotation.x=oldRotation;unit.animTime=oldTime;state.camera.position.copy(cameraPos);flames.update();}
+ }));
  await check('Replacement character meshes, HD materials, pivots and conversion',async()=>page.evaluate(async()=>{
   await Characters.ready;
   const dimensions=Object.fromEntries(Object.entries(Characters.tiles).map(([k,t])=>[k,[t.image.width,t.image.height]]));
