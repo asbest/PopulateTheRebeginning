@@ -76,6 +76,9 @@ jobs:
       - name: Spells and mana rules
         if: always()
         run: node tests/spells.mjs
+      - name: Preachers, towers, terrain combat and spell counterplay
+        if: always()
+        run: node tests/combat-system.mjs
       - name: Burnable trees and five-minute regrowth
         if: always()
         run: node tests/trees.mjs

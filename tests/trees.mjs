@@ -64,6 +64,7 @@ try{
         window.testTreeId=tree.id;
         const x=tree.mesh.position.x,z=tree.mesh.position.z;
         gameTestAPI.performAction(x,z,'lightning');
+        gameTestAPI.SpellWindup.update(1);
         if(!tree.burned||!state.treeBurns.has(tree.id)||tree.originalParts.length<3)
             throw new Error('Lightning did not char all parts of the tree');
         const remaining=state.treeBurns.get(tree.id)-state.treeTime;
@@ -130,6 +131,7 @@ try{
         if(state.chunks[chunkKey])throw new Error('Off-screen tree chunk did not unload');
         state.mana=1000;
         gameTestAPI.performAction(x,z,'lightning');
+        gameTestAPI.SpellWindup.update(1);
         if(!state.treeBurns.has(id))throw new Error('Off-screen lightning did not mark its tree');
         state.cameraLookAt.copy(look);
         for(let i=0;i<80&&!state.chunks[chunkKey];i++)gameTestAPI.updateChunks();

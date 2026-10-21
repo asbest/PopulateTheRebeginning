@@ -74,10 +74,10 @@ export function createArtKit(T) {
     function building(kind, factionColor=0x4169e1) {
         const p = new T.Group(); p.userData.artVersion=1;
         cyl(p,[0,0.12,0],1.85,2,0.24,palette.stone,'stone');
-        if(kind==='hut'||kind==='spy') {
-            cyl(p,[0,0.9,0],1.22,1.4,1.5,kind==='spy'?palette.dark:0xb9a16e,'stone');
+        if(kind==='hut'||kind==='spy'||kind==='preacher') {
+            cyl(p,[0,0.9,0],1.22,1.4,1.5,kind==='spy'?palette.dark:kind==='preacher'?0xd4c49a:0xb9a16e,'stone');
             for(let i=0;i<12;i++){let a=i*Math.PI/6;beam(p,[Math.sin(a)*1.38,0.2,Math.cos(a)*1.38],[Math.sin(a)*1.22,1.7,Math.cos(a)*1.22],0.055);}
-            cyl(p,[0,2.15,0],0.04,1.8,1.35,kind==='spy'?0x4f6370:palette.straw,'thatch');
+            cyl(p,[0,2.15,0],0.04,1.8,1.35,kind==='spy'?0x4f6370:kind==='preacher'?0xe5d798:palette.straw,'thatch');
             cyl(p,[0,1.54,0],1.63,1.86,0.22,kind==='spy'?0x65727a:0xb8975c,'thatch',32);
             roofTrim(p,1.49,1.83,0x775737);
             roofTrim(p,2.11,1.05,0x846541);
@@ -97,6 +97,10 @@ export function createArtKit(T) {
             }
             box(p,[0,0.17,1.64],[0.96,0.18,0.51],0x9b8970,'stone');
             cyl(p,[0,2.95,0],0.08,0.12,0.3,palette.gold);
+            if(kind==='preacher'){
+                cyl(p,[0,3.16,0],0.17,0.17,0.4,palette.gold);
+                orb(p,[0,3.47,0],[0.22,0.22,0.22],0xffe0a0);
+            }
         } else if(kind==='tower') {
             cyl(p,[0,1.85,0],0.7,1,3.5,palette.stone,'stone');
             cyl(p,[0,3.7,0],1.45,1.2,0.35,palette.wood);

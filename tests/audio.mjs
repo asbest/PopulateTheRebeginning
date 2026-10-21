@@ -96,6 +96,7 @@ try {
         await page.evaluate(spell=>{
             const shaman=state.shaman;
             gameTestAPI.performAction(shaman.mesh.position.x+2,shaman.mesh.position.z,spell);
+            gameTestAPI.SpellWindup.update(1);
         },spell);
         const after=await page.evaluate(()=>state.mana);
         if(after>=before)throw new Error(`${spell} was not cast`);
@@ -219,6 +220,7 @@ try {
         state.mana=1000;
         state.selectedUnits=[state.shaman];
         gameTestAPI.performAction(state.shaman.mesh.position.x+2,state.shaman.mesh.position.z,'firestorm');
+        gameTestAPI.SpellWindup.update(1);
         const effect=state.activeEffects.at(-1),handle=effect?.soundLoop;
         if(effect?.constructor.name!=='Firestorm'||!handle||!sound.activeSustains.has(handle))
             throw new Error('Firestorm did not start its persistent sound');

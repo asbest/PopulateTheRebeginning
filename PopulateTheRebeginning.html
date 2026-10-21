@@ -876,7 +876,7 @@ const CONFIG = {
         0xFF8C00, // 7: Enemy 7 (Orange)
     ],
     COSTS: {
-        BUILDING: { hut: 15, tower: 20, warrior: 30, fire: 40, spy: 40, shipyard: 50 },
+        BUILDING: { hut: 15, tower: 20, warrior: 30, fire: 40, preacher: 40, spy: 40, shipyard: 50 },
         AIRSHIP: 25,
         UPGRADE_UNIT: 80,
         AIRSHIP_ROCKET: 10,
@@ -910,6 +910,7 @@ const CONFIG = {
         'build_tower': { icon: '🗼', label: 'Towr', cost: 20 },
         'build_warrior': { icon: '⚔️', label: 'War', cost: 30 },
         'build_fire': { icon: '🔥', label: 'Fire', cost: 40 },
+        'build_preacher': { icon: '📿', label: 'Prc', cost: 40 },
         'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
         'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
         'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
@@ -922,6 +923,7 @@ const CONFIG = {
         'wild': '👷',
         'warrior': '⚔️',
         'firewarrior': '🔥',
+        'preacher': '📿',
         'shaman': '🧙',
         'spy': '🕵️',
         'airship': '💨',
@@ -930,6 +932,7 @@ const CONFIG = {
         DEFAULT: { maxHp: 100, damage: 5, range: 1, attackSpeed: 1.0, moveSpeed: 6, height: 1.5 },
         warrior: { maxHp: 200, damage: 52.5 },
         firewarrior: { maxHp: 120, damage: 5, range: 12, attackSpeed: 2.0 },
+        preacher: { maxHp: 90, damage: 0, range: 5, attackSpeed: 0.5 },
         spy: { damage: 0 },
         shaman: { maxHp: 600, damage: 30, range: 15, height: 2.2 },
         airship: { maxHp: 500, damage: 0, moveSpeed: 15, capacity: 5, height: 2.0 },
@@ -1235,6 +1238,7 @@ const CONFIG = {
         TOWER_HP: 700,
         WAREIOR_HP: 800,
         FIRE_HP: 900,
+        PREACHER_HP: 750,
         SPY_HP: 700,
         SHIPYARD_HP: 1000,
         HEAL_RATE: 200,
@@ -1604,6 +1608,8 @@ const PEACE_BLOCKED_ACTIONS=new Set([
     'blast','lightning','hypnotise','swamp','swarm','tornado','firestorm','volcano',
     'raise','lower','flatten','landbridge','airship_rocket'
 ]);
+const SPELL_WINDUPS=Object.freeze({lightning:.45,hypnotise:.45,swarm:.5,swamp:.55,
+    tornado:.7,firestorm:.8,volcano:.9});
 function isPeaceBlockedAction(action) { return isPeaceTime()&&PEACE_BLOCKED_ACTIONS.has(action); }
 function cancelOffensiveEffectsDuringPeace() {
     if(!isPeaceTime())return;
@@ -1614,6 +1620,7 @@ function cancelOffensiveEffectsDuringPeace() {
     }
     state.projectiles.length=0;
     FireballFxManager.clear();
+    SpellWindup.clear();
     for(const effect of state.activeEffects)effect.dispose?.();
     state.activeEffects.length=0;
 }
@@ -7074,6 +7081,41 @@ function executeSpell(type, x, z, caster) {
     }
 }
 
+const SpellWindup={
+    pending:[],
+    busy(caster){return this.pending.some(cast=>cast.caster===caster);},
+    queue(type,x,z,caster,cost=0){
+        if(this.busy(caster))return false;
+        this.pending.push({type,x,z,caster,cost,remaining:SPELL_WINDUPS[type],
+            startX:caster.mesh.position.x,startZ:caster.mesh.position.z,
+            damageRevision:caster.damageRevision||0,pulseTimer:0});
+        spawnPulse(x,getHeight(x,z)+.15,z,0xffae47);
+        if(caster.faction!==0)window.showEnemySpellIcon?.(type);
+        return true;
+    },
+    update(dt){
+        for(let i=this.pending.length-1;i>=0;i--){
+            const cast=this.pending[i],caster=cast.caster;
+            const interrupted=isPeaceTime()||!caster||['dead','stunned','getting_up','transported'].includes(caster.state)||
+                (caster.damageRevision||0)!==cast.damageRevision||
+                Math.hypot(caster.mesh.position.x-cast.startX,caster.mesh.position.z-cast.startZ)>1.5;
+            if(interrupted){
+                if(caster?.faction===0&&cast.cost>0){state.mana+=cast.cost*.5;updateUI();}
+                this.pending.splice(i,1);continue;
+            }
+            cast.remaining-=dt;cast.pulseTimer-=dt;
+            if(cast.remaining<=0){
+                this.pending.splice(i,1);executeSpell(cast.type,cast.x,cast.z,caster);continue;
+            }
+            if(cast.pulseTimer<=0){
+                cast.pulseTimer=.28;
+                spawnPulse(cast.x,getHeight(cast.x,cast.z)+.15,cast.z,0xffae47);
+            }
+        }
+    },
+    clear(){this.pending.length=0;}
+};
+
 window.executeSpell = executeSpell;
 window.castLandbridge = castLandbridge;
 
@@ -7136,6 +7178,42 @@ function faithManaMultiplier() {
         (CONFIG.FAITH.MAX_MANA_MULTIPLIER-CONFIG.FAITH.MIN_MANA_MULTIPLIER)*state.faith/100;
 }
 
+function combatRange(unit,target){
+    const rise=unit.mesh.position.y-target.mesh.position.y;
+    return unit.range+THREE.MathUtils.clamp(rise*.55,-2,5)+(unit.garrisonedIn?2:0);
+}
+function combatLineClear(unit,target){
+    const a=unit.mesh.position,b=target.mesh.position;
+    const dx=b.x-a.x,dz=b.z-a.z,distance=Math.hypot(dx,dz);
+    if(distance<2)return true;
+    const startY=a.y+Math.min(unit.height||1.5,1.8)*.8;
+    const endY=b.y+Math.min(target.height||1.5,1.8)*.7;
+    const steps=Math.min(24,Math.ceil(distance/1.5));
+    for(let i=1;i<steps;i++){
+        const t=i/steps,x=a.x+dx*t,z=a.z+dz*t;
+        if(getHeight(x,z)+.35>startY+(endY-startY)*t)return false;
+    }
+    for(const building of state.buildings){
+        if(building.dead||building.underConstruction||building===unit.garrisonedIn||building===target.garrisonedIn)continue;
+        const radius=building.collisionRadius*.75;
+        const bx=building.mesh.position.x-a.x,bz=building.mesh.position.z-a.z;
+        const t=THREE.MathUtils.clamp((bx*dx+bz*dz)/(distance*distance),0,1);
+        if(t<.08||t>.92)continue;
+        if(Math.hypot(a.x+dx*t-building.mesh.position.x,a.z+dz*t-building.mesh.position.z)<radius &&
+           startY+(endY-startY)*t<building.mesh.position.y+(building.type==='tower'?5:3))return false;
+    }
+    return true;
+}
+function cachedCombatLineClear(unit,target){
+    const now=state.clock.getElapsedTime(),a=unit.mesh.position,b=target.mesh.position;
+    const cache=unit.combatSight;
+    if(cache&&cache.target===target&&now<cache.until&&cache.navigationVersion===state.navigationVersion&&
+       Math.hypot(a.x-cache.ax,a.z-cache.az,b.x-cache.bx,b.z-cache.bz)<.75)return cache.clear;
+    const clear=combatLineClear(unit,target);
+    unit.combatSight={target,until:now+.18,navigationVersion:state.navigationVersion,
+        ax:a.x,az:a.z,bx:b.x,bz:b.z,clear};
+    return clear;
+}
 window.Humanoid = class Humanoid {
     getSeparationVector() {
         const push = new THREE.Vector3(0, 0, 0);
@@ -7166,6 +7244,7 @@ window.Humanoid = class Humanoid {
         this.maxHp = s.DEFAULT.maxHp; this.damage = s.DEFAULT.damage; this.range = s.DEFAULT.range; this.attackSpeed = s.DEFAULT.attackSpeed; this.moveSpeed = s.DEFAULT.moveSpeed; this.height = s.DEFAULT.height;
         if(type === 'warrior') { this.maxHp = s.warrior.maxHp; this.damage = s.warrior.damage; }
         if(type === 'firewarrior') { this.maxHp = s.firewarrior.maxHp; this.damage = s.firewarrior.damage; this.range = s.firewarrior.range; this.attackSpeed = s.firewarrior.attackSpeed; }
+        if(type === 'preacher') { this.maxHp = s.preacher.maxHp; this.damage = s.preacher.damage; this.range = s.preacher.range; this.attackSpeed = s.preacher.attackSpeed; }
         if(type === 'spy') { this.damage = s.spy.damage; }
         if(type === 'shaman') { this.maxHp = s.shaman.maxHp; this.damage = s.shaman.damage; this.range = s.shaman.range; this.height = s.shaman.height; }
         if(type === 'airship') { this.maxHp = s.airship.maxHp; this.damage = s.airship.damage; this.moveSpeed = s.airship.moveSpeed; this.isVehicle = true; this.passengers = []; this.capacity = s.airship.capacity; this.height = s.airship.height; }
@@ -7271,6 +7350,7 @@ window.Humanoid = class Humanoid {
 
     setFaction(newFaction) {
         if (this.faction === newFaction) return;
+        if(this.garrisonedIn&&this.garrisonedIn.faction!==newFaction)this.leaveTower();
         this.faction = newFaction;
         this.aiRole=null;
         this.aiTrainingTarget=null;
@@ -7320,6 +7400,7 @@ window.Humanoid = class Humanoid {
             return;
         }
         this.hp -= amount;
+        if(amount>0)this.damageRevision=(this.damageRevision||0)+1;
         this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
         if(impact) SoundManager.playPain(this,amount);
         if (!silent) HitPulseManager.add(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0xFF0000);
@@ -7400,6 +7481,7 @@ window.Humanoid = class Humanoid {
 
     die() {
         if(this.state==='dead') return;
+        if(this.garrisonedIn)this.leaveTower();
         if(this.faction===0 && !this.isPhantom && !this.isVehicle) changeFaith(-(this.isShaman?CONFIG.FAITH.SHAMAN_DEATH_LOSS:CONFIG.FAITH.DEATH_LOSS));
         this.isWorshipping=false;
         this.state = 'dead'; this.hpGroup.visible = false; if(this.marker) this.marker.visible = false; this.velocity.set(0, 0, 0);
@@ -7604,8 +7686,34 @@ window.Humanoid = class Humanoid {
         }
     }
 
+    enterTower(tower) {
+        if(!tower||tower.dead||tower.underConstruction||tower.type!=='tower'||
+            tower.faction!==this.faction||tower.garrison||!['firewarrior','preacher'].includes(this.type))return false;
+        if(this.garrisonedIn)this.leaveTower();
+        tower.garrison=this;this.garrisonedIn=tower;this.state='garrison';
+        this.attackTarget=null;this.path=[];this.target=null;this.finalDest=null;
+        this.velocity.set(0,0,0);
+        if(this.rigidBody)this.rigidBody.setEnabled(false);
+        this.mesh.position.set(tower.mesh.position.x,tower.mesh.position.y+5.25,tower.mesh.position.z);
+        return true;
+    }
+    leaveTower() {
+        const tower=this.garrisonedIn;
+        if(!tower)return;
+        if(tower.garrison===this)tower.garrison=null;
+        this.garrisonedIn=null;this.attackTarget=null;
+        if(this.state!=='dead')this.state='idle';
+        const safe=findNearestLand(tower.mesh.position.x+3,tower.mesh.position.z+2,8);
+        this.mesh.position.set(safe.x,getHeight(safe.x,safe.z),safe.z);
+        if(this.rigidBody){
+            this.rigidBody.setTranslation({x:safe.x,y:this.mesh.position.y+this.height/2+.1,z:safe.z},true);
+            this.rigidBody.setLinvel({x:0,y:0,z:0},true);
+            this.rigidBody.setEnabled(true);
+        }
+    }
     goto(x, z, workerPath = undefined) {
         if(this.state === 'stunned' || this.state === 'dead') return;
+        if(this.garrisonedIn)this.leaveTower();
         const end = new THREE.Vector3(x, 0, z);
         this.finalDest = end.clone();
         const isFlying = (this.type === 'airship');
@@ -7646,8 +7754,11 @@ window.Humanoid = class Humanoid {
              const u = candidates[i];
              if(!window.isAllied(u.faction, this.faction) && u.state !== 'dead' && !u.invisible) {
                  const d = this.mesh.position.distanceTo(u.mesh.position);
-                 if(d < range && d < minDist) {
-                     minDist = d; closest = u;
+                 if(this.type==='preacher'&&(u.isShaman||u.isVehicle||u.isPhantom))continue;
+                 const priority=(this.type==='firewarrior'&&u.type==='preacher')||
+                     (this.type==='warrior'&&u.type==='preacher')?.72:1;
+                 if(d < range && d*priority < minDist) {
+                     minDist = d*priority; closest = u;
                  }
              }
          }
@@ -7656,7 +7767,8 @@ window.Humanoid = class Humanoid {
 
     attack() {
         if(isPeaceTime()) { this.state='idle';this.attackTarget=null;return; }
-        if(!this.attackTarget || this.attackTarget.state === 'dead' || this.attackTarget.dead) {
+        if(!this.attackTarget || this.attackTarget.state === 'dead' || this.attackTarget.dead ||
+           window.isAllied(this.attackTarget.faction,this.faction)) {
              this.state = 'idle'; this.attackTarget = null; return;
         }
 
@@ -7733,6 +7845,11 @@ window.Humanoid = class Humanoid {
                 this.armR.rotation.x = -Math.PI/2 - Math.PI/4 + (p * Math.PI/4); // Return
             }
         }
+        else if (this.type === 'preacher') {
+            const gesture=Math.sin(this.attackPhase*Math.PI);
+            this.armL.rotation.x=-Math.PI/3-gesture*.5;
+            this.armR.rotation.x=-Math.PI/3-gesture*.5;
+        }
         else {
             // Default
             this.armR.rotation.x = -Math.PI/2 + Math.sin(this.attackPhase * Math.PI * 2) * 0.5;
@@ -7748,6 +7865,19 @@ window.Humanoid = class Humanoid {
                  const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
                  state.projectiles.push(new Fireball(startPos, targetPos, this.faction, CONFIG.COMBAT.FIREWARRIOR_BALL_UNIT_DMG, CONFIG.COMBAT.FIREWARRIOR_BULLDING_DMG, false, true));
                  SoundManager.playSound('fireball',.45);
+            } else if (this.type === 'preacher') {
+                const target=this.attackTarget;
+                if(target.type==='preacher')target.takeDamage(32,true);
+                else if(!target.isShaman&&!target.isVehicle&&!target.isPhantom&&
+                        !window.isAllied(target.faction,this.faction)){
+                    target.setFaction(this.faction);
+                    target.originalFaction=null;target.conversionTimer=0;
+                    target.attackTarget=null;target.state='idle';
+                    this.attackTarget=null;this.state=this.garrisonedIn?'garrison':'idle';
+                    spawnPulse(target.mesh.position.x,target.mesh.position.y+1,target.mesh.position.z,
+                        getFactionColor(this.faction));
+                    SoundManager.playSound('magic');
+                }
             } else if (this.type === 'spy') {
                 // Spy Conversion
                 const target = this.attackTarget;
@@ -7853,6 +7983,24 @@ window.Humanoid = class Humanoid {
         if (this.hpGroup.visible && this.updateTicker % 2 === 0) this.hpGroup.lookAt(state.camera.position);
         this.animTime += dt;
         this.hitImpulseCooldown=Math.max(0,(this.hitImpulseCooldown||0)-dt);
+
+        if(this.garrisonedIn){
+            const tower=this.garrisonedIn;
+            if(tower.dead||tower.faction!==this.faction)this.leaveTower();
+            else {
+                this.mesh.position.set(tower.mesh.position.x,tower.mesh.position.y+5.25,tower.mesh.position.z);
+                if(!isPeaceTime()){
+                    if(!this.attackTarget||this.attackTarget.state==='dead'||
+                       window.isAllied(this.attackTarget.faction,this.faction)||
+                       this.mesh.position.distanceTo(this.attackTarget.mesh.position)>combatRange(this,this.attackTarget))
+                        this.attackTarget=this.findTarget();
+                    if(this.attackTarget&&this.mesh.position.distanceTo(this.attackTarget.mesh.position)<=combatRange(this,this.attackTarget)&&
+                       cachedCombatLineClear(this,this.attackTarget))this.attack();
+                    else this.resetAnim();
+                }
+                return;
+            }
+        }
 
         const previousX=this.mesh.position.x,previousZ=this.mesh.position.z;
         if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
@@ -7988,6 +8136,7 @@ window.Humanoid = class Humanoid {
                          let newType = null;
                          if(b.type === 'warrior') newType = 'warrior';
                          if(b.type === 'fire') newType = 'firewarrior';
+                         if(b.type === 'preacher') newType = 'preacher';
                          if(b.type === 'spy') newType = 'spy';
                          if(newType) {
                              this.die();
@@ -8079,7 +8228,8 @@ window.Humanoid = class Humanoid {
         }
         else if(this.state === 'combat') {
             if(isPeaceTime()) { this.state='idle';this.attackTarget=null;this.path=[];return; }
-            if(!this.attackTarget || this.attackTarget.state === 'dead' || this.attackTarget.dead) {
+            if(!this.attackTarget || this.attackTarget.state === 'dead' || this.attackTarget.dead ||
+               window.isAllied(this.attackTarget.faction,this.faction)) {
                 if (this.updateTicker % 5 === 0) {
                     this.attackTarget = this.findTarget();
                     if(!this.attackTarget) { this.state = 'idle'; return; }
@@ -8087,7 +8237,9 @@ window.Humanoid = class Humanoid {
             }
 
             const dist = this.mesh.position.distanceTo(this.attackTarget.mesh.position);
-            if(dist <= this.range) {
+            const ranged=this.type==='firewarrior'||this.type==='preacher';
+            if(dist <= (ranged?combatRange(this,this.attackTarget):this.range) &&
+               (!ranged||cachedCombatLineClear(this,this.attackTarget))) {
                 // In range, attack
                 this.velocity.set(0,0,0);
                 this.attack();
@@ -8583,7 +8735,7 @@ function updateSettlementPath(building) {
     position.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingSphere();
 }
 
-const BUILDING_FOOTPRINTS=Object.freeze({hut:2.9,tower:2.1,warrior:3.4,fire:3.0,spy:2.9,shipyard:3.8});
+const BUILDING_FOOTPRINTS=Object.freeze({hut:2.9,tower:2.1,warrior:3.4,fire:3.0,preacher:2.9,spy:2.9,shipyard:3.8});
 const BUILDING_PASSAGE_WIDTH=3;
 function buildingCollisionRadius(type) {
     return BUILDING_FOOTPRINTS[type]*.75+.3;
@@ -8636,12 +8788,13 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
     else if (type === 'tower') { mesh = buildTower(faction); maxHp = CONFIG.BUILDING.TOWER_HP; }
     else if (type === 'warrior') { mesh = buildBarracks(faction); maxHp = CONFIG.BUILDING.WAREIOR_HP; }
     else if (type === 'fire') { mesh = buildFireTemple(faction); maxHp = CONFIG.BUILDING.FIRE_HP; }
+    else if (type === 'preacher') { mesh = buildPreacherShrine(faction); maxHp = CONFIG.BUILDING.PREACHER_HP; }
     else if (type === 'spy') { mesh = buildSpyHut(faction); maxHp = CONFIG.BUILDING.SPY_HP; }
     else if (type === 'shipyard') { mesh = buildShipyard(faction); maxHp = CONFIG.BUILDING.SHIPYARD_HP; }
 
     if(mesh) {
         const footprint=BUILDING_FOOTPRINTS[type];
-        const structureHeight={hut:3.1,tower:5.7,warrior:3.2,fire:4.1,spy:3.2,shipyard:4.4}[type]||3.5;
+        const structureHeight={hut:3.1,tower:5.7,warrior:3.2,fire:4.1,preacher:3.6,spy:3.2,shipyard:4.4}[type]||3.5;
         group.add(createContactShadow(footprint));
         const pathVisual=createSettlementPath(x,z,baseH,footprint,type);
         if(pathVisual)group.add(pathVisual);
@@ -8717,6 +8870,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             },
             destroy: function(withSound = true) {
                 if(this.dead)return;
+                if(this.garrison)this.garrison.leaveTower();
                 this.dead = true;
                 state.scene.remove(this.mesh);
                 this.pathVisual?.geometry.dispose();
@@ -8776,6 +8930,18 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                     return; // Skip other updates while building
                 }
 
+                if(this.type==='tower'&&!this.garrison){
+                    this.garrisonScanTimer=(this.garrisonScanTimer||0)-dt;
+                    if(this.garrisonScanTimer<=0){
+                        this.garrisonScanTimer=.4;
+                        const recruit=state.units.find(u=>u.faction===this.faction&&
+                            ['firewarrior','preacher'].includes(u.type)&&u.state==='idle'&&
+                            !u.garrisonedIn&&Math.hypot(u.mesh.position.x-this.mesh.position.x,
+                                u.mesh.position.z-this.mesh.position.z)<3.2);
+                        recruit?.enterTower(this);
+                    }
+                }
+
                 // Handle Training Queue
                 if(this.trainingQueue && this.trainingQueue.length > 0) {
                     for(let i = this.trainingQueue.length - 1; i >= 0; i--) {
@@ -8807,6 +8973,7 @@ function buildHut(faction = 0) { return Art.building('hut', getFactionColor(fact
 function buildTower(faction = 0) { return Art.building('tower', getFactionColor(faction)); }
 function buildBarracks(faction = 0) { return Art.building('warrior', getFactionColor(faction)); }
 function buildFireTemple(faction = 0) { return Art.building('fire', getFactionColor(faction)); }
+function buildPreacherShrine(faction = 0) { return Art.building('preacher', getFactionColor(faction)); }
 function buildSpyHut(faction = 0) { return Art.building('spy', getFactionColor(faction)); }
 function buildShipyard(faction = 0) { return Art.building('shipyard', getFactionColor(faction)); }
 
@@ -8828,7 +8995,7 @@ class EnemyAI {
         this.targetHutCount = CONFIG.AI.TARGET_HUT_COUNT_DEFAULT;
         if (this.personality === 'swarmer' || this.personality === 'hive') this.targetHutCount = CONFIG.AI.TARGET_HUT_COUNT_SWARMER;
         if (this.personality === 'primordial') this.targetHutCount = CONFIG.AI.TARGET_HUT_COUNT_PRIMORDIAL;
-        this.knownUnitCounts = { warrior: 0, firewarrior: 0, spy: 0, airship: 0 };
+        this.knownUnitCounts = { warrior: 0, firewarrior: 0, preacher: 0, spy: 0, airship: 0 };
         this.lossQueue = [];
         this.blockedBuildSites = [];
         this.pathQueue = new Map();
@@ -8957,7 +9124,7 @@ class EnemyAI {
         if(isPeaceTime())return;
         if(!target||['dead','stunned','getting_up','transported'].includes(u.state))return;
         u.aiRole=role;
-        if(u.type==='spy'&&(target.isShaman||typeof target.setFaction!=='function')){
+        if(['spy','preacher'].includes(u.type)&&(target.isShaman||target.isVehicle||typeof target.setFaction!=='function')){
             const victims=state.units.filter(v=>!v.isShaman&&!v.isVehicle&&!['dead','transported'].includes(v.state)&&!v.invisible&&!window.isAllied(v.faction,this.faction));
             victims.sort((a,b)=>this.distance(a.mesh.position,u.mesh.position)-this.distance(b.mesh.position,u.mesh.position));
             if(victims.length)target=victims[0];
@@ -8968,6 +9135,17 @@ class EnemyAI {
             const kite=u.mesh.position.clone().addScaledVector(away,5);
             if(getHeight(kite.x,kite.z)>WATER_LEVEL&&!isBlocked(kite.x,kite.z)){this.moveUnit(u,kite,role);return;}
         }
+        if(u.type==='firewarrior'&&!u.garrisonedIn&&this.distance(u.mesh.position,target.mesh.position)<20){
+            const current=getHeight(u.mesh.position.x,u.mesh.position.z);
+            let lookout=null,gain=1.4;
+            for(let i=0;i<8;i++){
+                const angle=i*Math.PI/4,x=u.mesh.position.x+Math.cos(angle)*4,z=u.mesh.position.z+Math.sin(angle)*4;
+                const height=getHeight(x,z),advance=this.distance({x,z},target.mesh.position);
+                if(height<aiDryHeight()||isBlocked(x,z)||advance>u.range+5)continue;
+                if(height-current>gain){gain=height-current;lookout={x,z};}
+            }
+            if(lookout&&this.moveUnit(u,lookout,'high-ground'))return;
+        }
         if(u.attackTarget===target && (u.state==='combat' ||
             u.state==='move' && u.finalDest && this.distance(u.finalDest,target.mesh.position)<4)) return;
         if(this.distance(u.mesh.position,target.mesh.position)<=u.range){u.attackTarget=target;u.state='combat';return;}
@@ -8977,7 +9155,9 @@ class EnemyAI {
         if(isPeaceBlockedAction(type))return false;
         if(!this.myShaman||this.spellCooldown>0||['dead','stunned','getting_up','transported'].includes(this.myShaman.state))return false;
         if(this.distance(this.myShaman.mesh.position,p)>10+this.myShaman.mesh.position.y)return false;
-        executeSpell(type,p.x,p.z,this.myShaman);
+        if(SPELL_WINDUPS[type]){
+            if(!SpellWindup.queue(type,p.x,p.z,this.myShaman))return false;
+        }else executeSpell(type,p.x,p.z,this.myShaman);
         this.spellCooldown=this.personality==='sorcerer'?3:6;return true;
     }
     think() {
@@ -9000,7 +9180,7 @@ class EnemyAI {
         this.myShaman=dryUnits.find(u=>u.isShaman)||null;
         const home=buildings.find(b=>b.type==='hut')?.mesh.position||new THREE.Vector3(this.baseX,0,this.baseZ);
         this.baseX=home.x;this.baseZ=home.z;
-        const workers=dryUnits.filter(u=>u.type==='wild'),army=dryUnits.filter(u=>['warrior','firewarrior','spy'].includes(u.type));
+        const workers=dryUnits.filter(u=>u.type==='wild'),army=dryUnits.filter(u=>['warrior','firewarrior','preacher','spy'].includes(u.type));
         const threats=foes.filter(e=>this.distance(e.mesh.position,home)<25||buildings.some(b=>this.distance(e.mesh.position,b.mesh.position)<16));
         const nearest=(list,p)=>list.slice().sort((a,b)=>this.distance(a.mesh.position,p)-this.distance(b.mesh.position,p))[0];
         const refuge=u=>{
@@ -9010,11 +9190,23 @@ class EnemyAI {
             if(danger&&this.distance(danger.mesh.position,point)<20)point.addScaledVector(point.clone().sub(danger.mesh.position).setY(0).normalize(),5);
             return findNearestLand(point.x,point.z);
         };
-        const counts={hut:0,warrior:0,fire:0,spy:0,tower:0,shipyard:0};buildings.forEach(b=>counts[b.type]++);
+        const counts={hut:0,warrior:0,fire:0,preacher:0,spy:0,tower:0,shipyard:0};buildings.forEach(b=>counts[b.type]++);
         this.state=threats.length?'defend':'expand';
         // Retreat orders are explicit moves, so idle auto-aggro cannot cancel them en route.
+        const towerGuards=new Set();
+        for(const tower of buildings){
+            if(tower.type!=='tower'||tower.underConstruction||tower.garrison)continue;
+            const candidate=army.filter(u=>['firewarrior','preacher'].includes(u.type)&&
+                !u.garrisonedIn&&!towerGuards.has(u)&&u.hp/u.maxHp>.5)
+                .sort((a,b)=>this.distance(a.mesh.position,tower.mesh.position)-this.distance(b.mesh.position,tower.mesh.position))[0];
+            if(!candidate)continue;
+            towerGuards.add(candidate);
+            if(this.distance(candidate.mesh.position,tower.mesh.position)<3.2)candidate.enterTower(tower);
+            else this.moveUnit(candidate,tower.mesh.position,'guard-tower');
+        }
         const fit=[];
         for(const u of army){
+            if(u.garrisonedIn||towerGuards.has(u))continue;
             if(u.hp/u.maxHp<.3||(u.aiRole==='retreat'&&u.hp/u.maxHp<.7))this.moveUnit(u,refuge(u),'retreat');
             else fit.push(u);
         }
@@ -9026,17 +9218,22 @@ class EnemyAI {
             }else{
                 shaman.aiRole='support';
                 if(workers.length<3)this.cast('create',home);
-                else if(threats.length){const target=nearest(threats,shaman.mesh.position);this.cast('lightning',target.mesh.position);}
+                else if(threats.length){
+                    const target=nearest(threats.filter(u=>u.type==='preacher'),shaman.mesh.position)||
+                        nearest(threats,shaman.mesh.position);
+                    this.cast(target.type==='preacher'?'swarm':'lightning',target.mesh.position);
+                }
                 else if(this.distance(shaman.mesh.position,home)>12)this.moveUnit(shaman,refuge(shaman),'support');
             }
         }
         // Builders take shelter during raids; never feed the entire economy into training.
         const builders=workers.slice(0,Math.min(2,workers.length));
         builders.forEach(u=>{u.aiTrainingTarget=null;u.aiRole='builder';if(threats.length)this.moveUnit(u,refuge(u),'shelter');});
-        const projected={warrior:0,firewarrior:0,spy:0};army.forEach(u=>projected[u.type]++);
+        const projected={warrior:0,firewarrior:0,preacher:0,spy:0};army.forEach(u=>projected[u.type]++);
         buildings.forEach(b=>(b.trainingQueue||[]).forEach(q=>{if(q.type in projected)projected[q.type]++;}));
-        const weights={warrior:this.personality==='swarmer'?4:3,firewarrior:this.personality==='sorcerer'?4:2,spy:this.personality==='trickster'?2:1};
-        const facilities={warrior:'warrior',firewarrior:'fire',spy:'spy'};
+        const weights={warrior:this.personality==='swarmer'?4:3,firewarrior:this.personality==='sorcerer'?4:2,
+            preacher:2,spy:this.personality==='trickster'?2:1};
+        const facilities={warrior:'warrior',firewarrior:'fire',preacher:'preacher',spy:'spy'};
         for(const u of workers.slice(builders.length)){
             if(threats.length){u.aiTrainingTarget=null;this.moveUnit(u,refuge(u),'shelter');continue;}
             const choices=Object.keys(projected).filter(t=>buildings.some(b=>b.type===facilities[t]&&!b.underConstruction));
@@ -9052,15 +9249,25 @@ class EnemyAI {
         const target=isPeaceTime()?null:nearest(enemyBuildings.length?enemyBuildings:foes,home);
         const ready=fit.length>=(['swarmer','hive'].includes(this.personality)?5:7);
         fit.forEach((u,i)=>{
-            if(threats.length){this.engage(u,nearest(threats,u.mesh.position),'defend');return;}
-            if(ready&&i>=reserve&&target){this.state='attack';this.engage(u,nearest(foes.filter(e=>this.distance(e.mesh.position,u.mesh.position)<12),u.mesh.position)||target,'attack');}
+            if(threats.length){
+                const danger=nearest((u.type==='firewarrior'||u.type==='warrior')?
+                    threats.filter(t=>t.type==='preacher'):[],u.mesh.position)||nearest(threats,u.mesh.position);
+                this.engage(u,danger,'defend');return;
+            }
+            if(ready&&i>=reserve&&target){
+                this.state='attack';
+                const nearby=foes.filter(e=>this.distance(e.mesh.position,u.mesh.position)<12);
+                const priority=['firewarrior','warrior'].includes(u.type)?nearby.filter(e=>e.type==='preacher'):[];
+                this.engage(u,nearest(priority.length?priority:nearby,u.mesh.position)||target,'attack');
+            }
             else this.moveUnit(u,{x:home.x+Math.cos(i*2.4)*7,z:home.z+Math.sin(i*2.4)*7},'guard');
         });
         // Replenish workers after casualties without sacrificing the builders.
         if(this.myShaman&&workers.length<4&&counts.hut>=3)this.cast('create',home);
         if(!threats.length&&builders.length&&buildings.length<24&&buildings.filter(b=>b.underConstruction).length<2){
             const desiredHuts=Math.min(14,Math.max(4,3+Math.ceil(army.length/2)));
-            let type=counts.hut<2?'hut':!counts.warrior?'warrior':!counts.fire?'fire':!counts.spy?'spy':counts.hut<4?'hut':counts.tower<(this.personality==='fortress'?4:2)?'tower':counts.hut<desiredHuts?'hut':null;
+            let type=counts.hut<2?'hut':!counts.warrior?'warrior':!counts.fire?'fire':!counts.spy?'spy':
+                counts.hut<4?'hut':!counts.preacher?'preacher':counts.tower<(this.personality==='fortress'?4:2)?'tower':counts.hut<desiredHuts?'hut':null;
             // Finished settlements continue population growth through hut replacement/expansion.
             if(!type&&workers.length<4&&counts.hut<14)type='hut';
             if(type){
@@ -9362,11 +9569,12 @@ const SPELL_NAMES = Object.freeze({
 });
 const UNIT_TYPE_NAMES = Object.freeze({
     wild:'Brave', warrior:'Warrior', firewarrior:'Fire Warrior',
-    shaman:'Shaman', spy:'Spy', airship:'Airship'
+    preacher:'Preacher', shaman:'Shaman', spy:'Spy', airship:'Airship'
 });
 const ACTION_TYPE_NAMES = Object.freeze({
     build_hut:'Hut', build_tower:'Guard Tower',
     build_warrior:'Warrior Training Hut', build_fire:'Fire Warrior Temple',
+    build_preacher:'Preacher Shrine',
     build_spy:'Spy Training Hut', build_shipyard:'Shipyard',
     build_airship:'Airship', demolish_building:'Demolish Building',
     upgrade_unit:'Upgrade Unit', airship_rocket:'Airship Rocket'
@@ -9435,7 +9643,7 @@ function updateContextMenus() {
     } else if (hasShaman || (!hasSelection && state.shaman && state.shaman.state !== 'dead')) {
         visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom'];
     } else if (hasBrave) {
-        visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy'];
+        visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_preacher', 'build_spy'];
         if (!(state.matchSettings && state.matchSettings.noFlyers)) visibleActions.push('build_shipyard', 'build_airship');
         visibleActions.push('demolish_building');
     } else if (hasSpy) {
@@ -9609,6 +9817,7 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
 
     if (spells.includes(action)) {
         if (!caster || caster.state === 'dead' || caster.state === 'transported') return;
+        if(SPELL_WINDUPS[action]&&SpellWindup.busy(caster))return;
 
         if (!state.cheatUnlimitedRange) {
             let maxRange = 10.0 + caster.mesh.position.y;
@@ -9623,7 +9832,7 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
         swamp: CONFIG.COSTS.SPELLS.swamp, invisibility: CONFIG.COSTS.SPELLS.invisibility, shield: CONFIG.COSTS.SPELLS.shield, hypnotise: CONFIG.COSTS.SPELLS.hypnotise, swarm: CONFIG.COSTS.SPELLS.swarm, tornado: CONFIG.COSTS.SPELLS.tornado, firestorm: CONFIG.COSTS.SPELLS.firestorm, volcano: CONFIG.COSTS.SPELLS.volcano, heal: CONFIG.COSTS.SPELLS.heal, teleport: CONFIG.COSTS.SPELLS.teleport, create: CONFIG.COSTS.SPELLS.create,
         phantom: CONFIG.COSTS.SPELLS.phantom,
         build_hut: CONFIG.COSTS.BUILDING.hut, build_tower: CONFIG.COSTS.BUILDING.tower, build_warrior: CONFIG.COSTS.BUILDING.warrior,
-        build_fire: CONFIG.COSTS.BUILDING.fire, build_spy: CONFIG.COSTS.BUILDING.spy, build_shipyard: CONFIG.COSTS.BUILDING.shipyard, build_airship: CONFIG.COSTS.AIRSHIP
+        build_fire: CONFIG.COSTS.BUILDING.fire, build_preacher: CONFIG.COSTS.BUILDING.preacher, build_spy: CONFIG.COSTS.BUILDING.spy, build_shipyard: CONFIG.COSTS.BUILDING.shipyard, build_airship: CONFIG.COSTS.AIRSHIP
     };
 
     if (state.campaignLevel === 12) {
@@ -9641,7 +9850,8 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     updateUI();
 
     if (spells.includes(action)) {
-        executeSpell(action, x, z, caster);
+        if(SPELL_WINDUPS[action])SpellWindup.queue(action,x,z,caster,cost);
+        else executeSpell(action, x, z, caster);
     }
     else if (action === 'build_airship') {
         // Build Airship
@@ -10185,7 +10395,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -10866,6 +11076,8 @@ function restoreSpellStatus(u, status) {
 }
 
 window.saveGame = function() {
+    const manaAtRest=state.mana+SpellWindup.pending.reduce((refund,cast)=>
+        refund+(cast.caster?.faction===0?cast.cost:0),0);
     const data = {
         isCampaign: state.isCampaign,
         campaignLevel: state.campaignLevel,
@@ -10873,7 +11085,7 @@ window.saveGame = function() {
         campaignMission: state.isCampaign ? state.campaignMission : null,
         matchSettings: state.matchSettings,
         matchElapsed: state.matchElapsed,
-        mana: state.mana,
+        mana: manaAtRest,
         faith: state.faith,
         terrainMods: Array.from(state.terrainMods.entries()),
         treeTime: state.treeTime,
@@ -10910,6 +11122,7 @@ window.saveGame = function() {
             respawnComplete: !!u.respawnComplete,
             conversionTimer: u.conversionTimer,
             originalFaction: u.originalFaction,
+            garrisonBuildingId: u.garrisonedIn?.id||null,
             spellStatus: saveSpellStatus(u),
             passengers: (u.passengers || []).map(p => ({
                 id: p.id, faction: p.faction, type: p.type, hp: p.hp, maxHp: p.maxHp,
@@ -10917,6 +11130,7 @@ window.saveGame = function() {
             }))
         })),
         buildings: state.buildings.map(b => ({
+            id: b.id,
             type: b.type,
             faction: b.faction,
             x: b.mesh.position.x,
@@ -10940,7 +11154,7 @@ function restoredUnitHealth(unit,saved) {
     return THREE.MathUtils.clamp((saved.hp||0)*unit.maxHp/Math.max(1,oldMax),0,unit.maxHp);
 }
 function restoredBuildingHealth(building,saved) {
-    const legacyMax={hut:100,tower:150,warrior:250,fire:300,spy:200,shipyard:350};
+    const legacyMax={hut:100,tower:150,warrior:250,fire:300,preacher:750,spy:200,shipyard:350};
     const oldMax=Number.isFinite(saved.maxHp)&&saved.maxHp>0
         ? saved.maxHp : legacyMax[building.type]||building.maxHp;
     return THREE.MathUtils.clamp((saved.hp||0)*building.maxHp/oldMax,0,building.maxHp);
@@ -10995,6 +11209,7 @@ window.loadGame = function() {
         state.projectiles.length = 0;
         state.particles.forEach(p => state.scene.remove(p.mesh));
         state.particles.length = 0;
+        SpellWindup.clear();
         FirewarriorFlames.clear();
         FireballFxManager.clear();
         state.selectedUnits = [];
@@ -11048,7 +11263,7 @@ window.loadGame = function() {
         }
 
         data.buildings.forEach(bData => {
-             const b = createBuilding(bData.type, bData.x, bData.z, bData.faction, false, true);
+             const b = createBuilding(bData.type, bData.x, bData.z, bData.faction, false, true,bData.id||null);
              if(b) {
                  b.hp = restoredBuildingHealth(b,bData);
                  b.constructionTimer = bData.constructionTimer;
@@ -11073,6 +11288,10 @@ window.loadGame = function() {
             if (uData.conversionTimer !== undefined) u.conversionTimer = uData.conversionTimer;
             if (uData.originalFaction !== undefined) u.originalFaction = uData.originalFaction;
             state.units.push(u);
+            if(uData.garrisonBuildingId){
+                const tower=state.buildings.find(b=>b.id===uData.garrisonBuildingId);
+                if(tower)u.enterTower(tower);
+            }
             if(u.isShaman && u.faction === 0) state.shaman = u;
             if (u.type === 'airship' && Number.isFinite(uData.y)) {
                 u.mesh.position.y = uData.y;
@@ -11874,6 +12093,7 @@ function animate() {
 
     if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = CONFIG.CAMPAGIN.INFINITE_MANA_VALUE;
     state.units.forEach(u => u.update(dt));
+    SpellWindup.update(dt);
     state.buildings.forEach(b => b.update(dt));
     if(state.graphicsQuality?.tier==='high'){
         for(const u of state.units){

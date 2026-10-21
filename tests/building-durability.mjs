@@ -12,7 +12,7 @@ try {
     const report=await page.evaluate(()=>{
         state.isPaused=true;
         state.matchSettings.peaceTimeMinutes=0;
-        const kinds=['hut','tower','warrior','fire','spy','shipyard'];
+        const kinds=['hut','tower','warrior','fire','preacher','spy','shipyard'];
         const tested=[];
         for(const [index,kind] of kinds.entries()) {
             const x=state.shaman.mesh.position.x+25+index*12;

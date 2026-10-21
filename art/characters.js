@@ -105,7 +105,7 @@ export function createCharacters(T,art) {
         mesh(u.torso,loft([[-.27,.14,.095],[-.16,.145,.10],[-.02,chest*.85,.125],[.14,chest,.115],[.23,.13,.08],[.26,.07,.065]]),skin,[0,0,0],[1,1,1],'AnatomicalBody');
         if(role!=='warrior')factionPiece(mesh(u.torso,loft([[-.29,.17,.115],[-.17,.155,.12],[0,.205,.14],[.16,.22,.135],[.24,.10,.09]]),role==='spy'?dark:faction,[0,0,0],[1,1,1],'WovenTunic'));
         // Split robe panels allow the independent knee and hip animation to remain visible.
-        const long=female||role==='firewarrior';
+        const long=female||role==='firewarrior'||role==='preacher';
         for(const side of [-1,1]) {
             const panel=cloth(u.torso,[[side*.02,-.15],[side*.18,-.15],[side*(long?.27:.20),long?-.73:-.45],[side*.015,long?-.69:-.43]],faction,'SplitRobe');
             panel.position.z=.135;factionPiece(panel);
@@ -143,7 +143,7 @@ export function createCharacters(T,art) {
                 band(lower,-.15,r*.75,r*.77,leather,.11);band(lower,-.10,r*.8,r*.81,gold,.027);
                 oval(lower,[0,-len-.031,.006],[.042,.056,.028],skin,'Hand');
                 oval(lower,[side*.038,-len-.021,.02],[.016,.032,.016],skin,'Thumb');
-                if(role==='firewarrior'||role==='spy')factionPiece(mesh(g,loft([[0,r*1.12,r*1.12],[-.20,r*.86,r*.89]]),faction,[0,0,0],[1,1,1],'Sleeve'));
+                if(role==='firewarrior'||role==='spy'||role==='preacher')factionPiece(mesh(g,loft([[0,r*1.12,r*1.12],[-.20,r*.86,r*.89]]),faction,[0,0,0],[1,1,1],'Sleeve'));
             }else{
                 factionPiece(mesh(g,loft([[0,r*1.13,r*1.13],[-.27,r*.85,r*.88]]),faction,[0,0,0],[1,1,1],'Trouser'));
                 const ankle=new T.Group();ankle.name='Sandal';ankle.position.y=-len;lower.add(ankle);
@@ -183,6 +183,11 @@ export function createCharacters(T,art) {
             for(const side of [-1,1])oval(u.head,[side*.045,.025,.128],[.024,.009,.005],eye,'MaskEyeSlit');
             for(let i=-1;i<=1;i++)tube(u.head,[[i*.065,.15,0],[i*.1,.27,-.012],[i*.12,.34,-.05]],.012,bone,'MaskCrown');
             oval(hand,[0,-.28,.025],[.04,.048,.04],gold,'FireFocus');
+        }else if(role==='preacher'){
+            band(u.head,.11,.14,.11,gold,.06);
+            oval(u.torso,[0,.12,.17],[.075,.095,.028],gold,'FaithEmblem');
+            tube(hand,[[0,-.28,.05],[0,.05,.05],[0,.34,.05]],.025,leather,'PreacherStaff');
+            oval(hand,[0,.36,.05],[.09,.11,.055],gold,'PreacherStaffHead');
         }else if(role==='spy'){
             mesh(u.head,geo('hood',()=>new T.SphereGeometry(1,16,12,Math.PI*.30,Math.PI*1.4)),dark,[0,.012,-.035],[.16,.215,.16],'OpenHood');
             const scarf=cloth(u.head,[[-.11,-.025],[.11,-.025],[.075,-.145],[-.075,-.145]],faction,'FaceScarf');scarf.position.z=.116;factionPiece(scarf);

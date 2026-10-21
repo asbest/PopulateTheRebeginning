@@ -92,9 +92,9 @@ try {
   if(after.length-before.length>2)throw new Error(`First fireball compiled ${after.length-before.length} shader programs: ${JSON.stringify({tier:state.graphicsQuality.tier,added:after.filter(key=>!before.includes(key))})}`);
   return {tier:state.graphicsQuality.tier,programsBefore:before.length,programsAfter:after.length};
  }));
- await check('Six detailed faction-colored building meshes',async()=>page.evaluate(()=>{
+ await check('Seven detailed faction-colored building meshes',async()=>page.evaluate(()=>{
   const report=[];
-  for(const kind of ['hut','tower','warrior','fire','spy','shipyard']){const model=Art.building(kind,0xff4500);let meshes=0,banner=false;model.traverse(n=>{if(n.isMesh)meshes++;if(n.userData.isFactionBanner)banner=true;});if(meshes<10||!banner)throw new Error(kind+' incomplete');report.push({kind,meshes});}
+  for(const kind of ['hut','tower','warrior','fire','preacher','spy','shipyard']){const model=Art.building(kind,0xff4500);let meshes=0,banner=false;model.traverse(n=>{if(n.isMesh)meshes++;if(n.userData.isFactionBanner)banner=true;});if(meshes<10||!banner)throw new Error(kind+' incomplete');report.push({kind,meshes});}
   return report;
  }));
  await check('Cinematic camera and instanced coastal scenery remain interactive',async()=>{
@@ -136,9 +136,9 @@ try {
   if(!report.shortcut)throw new Error('Camera shortcut did not restore strategy view: '+JSON.stringify(report));
   return report;
  });
- await check('All six unit types retain animation rig and statistics',async()=>page.evaluate(()=>{
+ await check('All seven unit types retain animation rig and statistics',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position;const report=[];
-  for(const kind of ['wild','warrior','firewarrior','spy','shaman','airship']){const u=new Humanoid(0,kind,p.x+3,p.z+3);state.units.push(u);if(!u.mesh||u.hp<=0||(!u.isVehicle&&!u.legL))throw new Error(kind);report.push({kind,hp:u.hp});}
+  for(const kind of ['wild','warrior','firewarrior','preacher','spy','shaman','airship']){const u=new Humanoid(0,kind,p.x+3,p.z+3);state.units.push(u);if(!u.mesh||u.hp<=0||(!u.isVehicle&&!u.legL))throw new Error(kind);report.push({kind,hp:u.hp});}
   return report;
  }));
  await check('Firewarrior arms carry continuous batched flames',async()=>page.evaluate(()=>{

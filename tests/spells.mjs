@@ -49,6 +49,7 @@ try{
    if(shaman.maxHp!==3*warrior.maxHp)throw new Error(`Wrong endurance: ${shaman.maxHp}/${warrior.maxHp}`);
    gameTestAPI.SpatialHash.update();
    gameTestAPI.performAction(x,z,'swamp');
+   gameTestAPI.SpellWindup.update(1);
    const swamp=state.activeEffects.at(-1),beforeSwamp=shaman.hp;
    swamp.update(.5);
    const swampLoss=beforeSwamp-shaman.hp;
@@ -59,6 +60,7 @@ try{
    if(Math.abs((beforeSwamp-shaman.hp)-swampLoss)>.01)
     throw new Error('Swamp damage depends on frame rate');
    gameTestAPI.performAction(x,z,'volcano');
+   gameTestAPI.SpellWindup.update(1);
    const volcano=state.activeEffects.at(-1),beforeVolcano=shaman.hp;
    volcano.update(.21);
    const volcanoLoss=beforeVolcano-shaman.hp;
@@ -94,6 +96,7 @@ try{
    gameTestAPI.SpatialHash.update();
    state.campaignLevel=gameTestAPI.CONFIG.CAMPAGIN.CHAIN_LIGHTNING_LEVEL;
    gameTestAPI.performAction(x,z,'lightning');
+   gameTestAPI.SpellWindup.update(1);
    const losses=[enemy,near,edge].map(unit=>1000-unit.hp),chained=chain.map(unit=>1000-unit.hp);
    if(!(losses[0]>losses[1]&&losses[1]>losses[2]&&losses[2]>0)||
       chained.some(loss=>loss<=0||loss>gameTestAPI.CONFIG.COMBAT.LIGHTNING_CHAIN_DAMAGE)||ally.hp!==1000)
@@ -133,6 +136,7 @@ try{
   const castingSounds=[];
   sound.playSound=function(name,volume){castingSounds.push(name);return playSound.call(this,name,volume);};
   gameTestAPI.performAction(x,z,spell);
+  if(gameTestAPI.SpellWindup.pending.length)gameTestAPI.SpellWindup.update(1);
   sound.playSound=playSound;
   expect(state.mana===1000-cost,'Mana '+state.mana);
   const expectedSound={blast:'fireball',lightning:'lightning',raise:'raise',lower:'lower',flatten:'flatten',
@@ -180,6 +184,7 @@ try{
    const {x,z}=fixture;
    state.units=[fixture.caster];gameTestAPI.SpatialHash.update();
    gameTestAPI.performAction(x,z,'swarm');
+   gameTestAPI.SpellWindup.update(1);
    const swarm=state.activeEffects.at(-1),count=CONFIG.EFFECTS.SWARM_PARTICLE_COUNT;
    if(!swarm?.bodies?.isInstancedMesh||!swarm.heads?.isInstancedMesh||!swarm.wings?.isInstancedMesh||
       swarm.bodies.count!==count||swarm.heads.count!==count||swarm.wings.count!==count*2||swarm.mesh.children.length!==3)
@@ -206,7 +211,9 @@ try{
    state.units=[caster];gameTestAPI.SpatialHash.update();
    const x=caster.mesh.position.x,z=caster.mesh.position.z;
    gameTestAPI.performAction(x+2,z,'swamp');
+   gameTestAPI.SpellWindup.update(1);
    gameTestAPI.performAction(x+5,z,'tornado');
+   gameTestAPI.SpellWindup.update(1);
    const [swamp,tornado]=state.activeEffects.slice(-2);
    if(swamp?.constructor.name!=='Swamp'||tornado?.constructor.name!=='Tornado')throw new Error('Missing hazard visuals');
    if(!swamp.surface?.geometry?.index?.count||!swamp.ripples?.isInstancedMesh||!swamp.bubbles?.isInstancedMesh||
@@ -235,7 +242,9 @@ try{
   await fresh();return p.evaluate(()=>{
    const {x,z}=fixture;
    gameTestAPI.performAction(x,z,'swamp');
+   gameTestAPI.SpellWindup.update(1);
    gameTestAPI.performAction(x,z,'tornado');
+   gameTestAPI.SpellWindup.update(1);
    const [swamp,tornado]=state.activeEffects.slice(-2);
    let disposals=0;
    swamp.surface.geometry.addEventListener('dispose',()=>disposals++);
@@ -250,6 +259,7 @@ try{
   await fresh();return p.evaluate(()=>{
    const {x,z}=fixture;
    gameTestAPI.performAction(x,z,'firestorm');
+   gameTestAPI.SpellWindup.update(1);
    const storm=state.activeEffects.at(-1),light=storm.light;
    saveGame();loadGame();
    if(state.activeEffects.includes(storm)||light?.parent||storm.light)throw new Error('Firestorm light survived load');
@@ -276,7 +286,7 @@ try{
   await fresh();return p.evaluate(()=>{const {x,z}=fixture;gameTestAPI.performAction(x,z,'phantom');const id=state.units.at(-1).id;let u=state.units.at(-1);u.setShield(true);u.phantomTimer=.05;saveGame();loadGame();state.isPaused=true;u=state.units.find(u=>u.id===id);if(!u.isPhantom||u.damage!==0||u.phantomTimer<=0)throw new Error('Phantom save state');u.update(.1);if(u.state!=='dead')throw new Error('Phantom did not expire');});
  });
  await check('Spy hypnotise uses its short range and divine campaign spells remain free',async()=>{
-  await fresh();return p.evaluate(()=>{const {enemy,x,z}=fixture;const spy=new Humanoid(0,'spy',x,z);state.units.push(spy);state.selectedUnits=[spy];gameTestAPI.performAction(x+6,z,'hypnotise');if(state.mana!==1000)throw new Error('Spy ignored range');gameTestAPI.performAction(x,z,'hypnotise');if(enemy.faction!==0||state.mana!==950)throw new Error('Spy cast failed');state.selectedUnits=[state.shaman];state.campaignLevel=12;state.mana=0;const count=state.units.length;gameTestAPI.performAction(x,z,'create');if(state.mana!==0||state.units.length!==count+1)throw new Error('Divine free spell failed');});
+  await fresh();return p.evaluate(()=>{const {enemy,x,z}=fixture;const spy=new Humanoid(0,'spy',x,z);state.units.push(spy);state.selectedUnits=[spy];gameTestAPI.performAction(x+6,z,'hypnotise');if(state.mana!==1000)throw new Error('Spy ignored range');gameTestAPI.performAction(x,z,'hypnotise');gameTestAPI.SpellWindup.update(1);if(enemy.faction!==0||state.mana!==950)throw new Error('Spy cast failed');state.selectedUnits=[state.shaman];state.campaignLevel=12;state.mana=0;const count=state.units.length;gameTestAPI.performAction(x,z,'create');if(state.mana!==0||state.units.length!==count+1)throw new Error('Divine free spell failed');});
  });
  await check('No spell runtime errors',()=>{if(errors.length)throw new Error(errors.join('\n'));});
 }finally{await browser.close();await fs.mkdir(path.join(root,'test-results'),{recursive:true});await fs.writeFile(path.join(root,'test-results/spells-report.json'),JSON.stringify({date:new Date().toISOString(),results,errors},null,2));}
