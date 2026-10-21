@@ -12,7 +12,8 @@ try {
         {waitUntil:'load',timeout:90000});
     await page.waitForFunction(()=>window.gameTestAPI&&state.fireballShadersReady,null,{timeout:90000});
     const result=await page.evaluate(()=>{
-        state.isPaused=true;closeHelp();closeStoryOverlay();setGraphicsQuality('high');
+        state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;
+        closeHelp();closeStoryOverlay();setGraphicsQuality('high');
         state.renderer.setPixelRatio(1);
         const start=state.shaman.mesh.position.clone().add(new THREE.Vector3(0,2,0));
         const gl=state.renderer.getContext();
@@ -28,13 +29,17 @@ try {
         const steadyFrame=render();
         const t1=performance.now();for(const shot of shots)shot.explode();
         const impactMs=performance.now()-t1;
+        gameTestAPI.FireballFxManager.update(0);
         const afterImpact=render();
         for(let i=0;i<32;i++)gameTestAPI.SurfaceMarks.add(start.x,start.z,{kind:'ember',radius:1.6,life:18});
-        return {empty,constructMs,salvoFrame,steadyFrame,impactMs,afterImpact,
-            impactParticles:state.particles.length,lights:shots.filter(shot=>shot.light).length,
+        const effects=Object.fromEntries(Object.entries(gameTestAPI.FireballFxManager.layers)
+            .map(([name,layer])=>[name,layer.items.length]));
+        return {empty,constructMs,salvoFrame,steadyFrame,impactMs,afterImpact,effects,
+            impactParticles:state.particles.length,lights:gameTestAPI.FireballFxManager.lights.filter(light=>light.visible).length,
             emberMarks:gameTestAPI.SurfaceMarks.marks.filter(mark=>mark.kind==='ember').length};
     });
-    if(result.lights||result.impactParticles>80||result.afterImpact.calls-result.empty.calls>90||result.emberMarks>24)
+    if(result.lights>2||result.impactParticles>80||result.afterImpact.calls-result.empty.calls>24||
+        result.effects.flash!==8||result.effects.ring!==8||result.emberMarks>24)
         throw new Error('Firewarrior volley exceeded the light or effect budget: '+JSON.stringify(result));
     console.log(JSON.stringify(result));
 }finally{await browser.close();}

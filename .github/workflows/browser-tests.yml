@@ -110,6 +110,9 @@ jobs:
           exit 1
       - name: Group attack rendering budget
         run: node tools/benchmark-group-impact.mjs
+      - name: Firewarrior volley rendering budget
+        if: always()
+        run: node tools/benchmark-firewarriors.mjs
       - name: Hut destruction rendering budget
         if: always()
         run: node tools/benchmark-hut-destruction.mjs

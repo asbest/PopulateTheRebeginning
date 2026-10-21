@@ -186,15 +186,33 @@ try {
  }));
  await check('Fireballs reuse geometry and bound trail draw calls',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position,start=new THREE.Vector3(p.x,p.y+2,p.z),end=start.clone().add(new THREE.Vector3(30,0,0));
-  const a=new gameTestAPI.Fireball(start,end,0),b=new gameTestAPI.Fireball(start,end,0),before=state.particles.length;
+  const fx=gameTestAPI.FireballFxManager;
+  const a=new gameTestAPI.Fireball(start,end,0),b=new gameTestAPI.Fireball(start,end,0),before=fx.layers.glow.items.length;
   if(a.mesh.geometry!==b.mesh.geometry||a.corona.geometry!==b.corona.geometry)throw new Error('Projectile geometry duplicated');
   const cameraPos=state.camera.position.clone();state.camera.position.copy(start).add(new THREE.Vector3(0,10,10));
   for(let i=0;i<28;i++){a.update(1/60);b.update(1/60);}
   state.camera.position.copy(cameraPos);
-  const trails=state.particles.slice(before).filter(e=>e.mesh.userData.sharedGeometry);
-  if(trails.length>14||trails.length<2||new Set(trails.map(e=>e.mesh.geometry)).size!==1)throw new Error('Excessive or unshared trails: '+trails.length);
+  const trails=fx.layers.glow.items.length-before;
+  fx.update(0);
+  if(trails>14||trails<2||!fx.layers.glow.mesh.isInstancedMesh||fx.layers.glow.mesh.count<2)
+    throw new Error('Excessive or unbatched trails: '+trails);
   state.scene.remove(a.mesh);state.scene.remove(b.mesh);a.light?.dispose();b.light?.dispose();a.active=b.active=false;
-  return {trails:trails.length,shared:true};
+  return {trails,batched:true};
+ }));
+ await check('Fireball lights stay capped during volleys',async()=>page.evaluate(()=>{
+  const fx=gameTestAPI.FireballFxManager,p=state.shaman.mesh.position;
+  const shots=Array.from({length:6},(_,i)=>new gameTestAPI.Fireball(
+    p.clone().add(new THREE.Vector3(i,3,0)),p.clone().add(new THREE.Vector3(i+12,3,0)),0));
+  try{
+   state.projectiles.push(...shots);fx.update(0);
+   const visible=fx.lights.filter(light=>light.visible).length;
+   const expected=['high','ultra'].includes(state.graphicsQuality.tier)?2:0;
+   if(visible!==expected||fx.lights.length!==2)throw new Error(JSON.stringify({visible,expected,pool:fx.lights.length}));
+   return {projectiles:shots.length,lights:visible};
+  }finally{
+   for(const shot of shots){const index=state.projectiles.indexOf(shot);if(index>=0)state.projectiles.splice(index,1);state.scene.remove(shot.mesh);shot.active=false;}
+   fx.update(0);
+  }
  }));
  await check('Wheel zoom responds to gesture acceleration',async()=>page.evaluate(()=>{
   const event={deltaY:120,deltaMode:0,preventDefault(){}};state.viewScale=35;state.wheelSpeed=0;state.lastWheelAt=0;
