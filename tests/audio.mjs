@@ -342,6 +342,7 @@ try {
             return {x:(point.x+1)*innerWidth/2,y:(1-point.y)*innerHeight/2};
         });
         await phone.touchscreen.tap(stormTarget.x,stormTarget.y);
+        await phone.evaluate(()=>gameTestAPI.SpellWindup.update(1));
         await phone.waitForFunction(()=>state.activeEffects.some(effect=>effect.soundLoop?.name==='firestorm_loop'),
             null,{timeout:10000});
         await phone.waitForFunction(()=>[...gameTestAPI.SoundManager.activeSustains]
