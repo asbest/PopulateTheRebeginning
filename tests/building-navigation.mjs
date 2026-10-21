@@ -54,7 +54,50 @@ try {
             state.physicsWorld.timestep=1/60;state.physicsWorld.step();crossing.update(1/60);
         }
         if(crossing.mesh.position.x<3)throw new Error('Destroyed building still blocks movement: '+crossing.mesh.position.x);
-        return {radius,nearest,closest,destinationX:routed.mesh.position.x,crossingX:crossing.mesh.position.x};
+        const first=gameTestAPI.createBuilding('hut',0,10,0,false);
+        if(!first)throw new Error('Could not build first hut');
+        if(gameTestAPI.createBuilding('hut',6,10,0,false))throw new Error('Direct construction accepted a blocked passage');
+        const brave=new Humanoid(0,'wild',4,16);state.units.push(brave);
+        state.mana=100;
+        const before=state.buildings.filter(b=>!b.dead).length;
+        gameTestAPI.performAction(6,10,'build_hut');
+        if(state.mana!==100||state.buildings.filter(b=>!b.dead).length!==before)
+            throw new Error('Rejected construction consumed mana or created a building');
+        gameTestAPI.performAction(8.5,10,'build_hut');
+        const second=state.buildings.at(-1);
+        if(second===first||second.type!=='hut'||state.mana!==85)throw new Error('Valid spaced construction failed');
+        const gap=8.5-first.collisionRadius-second.collisionRadius;
+        if(gap<3)throw new Error('Passage between buildings is too narrow: '+gap);
+        const route=Pathfinder.findPath(new THREE.Vector3(4.25,0,5),new THREE.Vector3(4.25,0,14));
+        if(!route?.some(point=>point.z>=9&&point.z<=11&&point.x>first.collisionRadius&&point.x<8.5-second.collisionRadius))
+            throw new Error('Pathfinder did not route through the passage');
+        const walker=new Humanoid(0,'warrior',4.25,5);state.units.push(walker);
+        for(let frame=0;frame<480&&walker.mesh.position.z<14;frame++){
+            walker.manualMove(new THREE.Vector3(0,0,1),1/60);
+            state.physicsWorld.timestep=1/60;state.physicsWorld.step();walker.update(1/60);
+            if(walker.mesh.position.z>8&&walker.mesh.position.z<12&&
+                (Math.hypot(walker.mesh.position.x,walker.mesh.position.z-10)<first.collisionRadius||
+                 Math.hypot(walker.mesh.position.x-8.5,walker.mesh.position.z-10)<second.collisionRadius))
+                throw new Error('Walker entered a building footprint');
+        }
+        if(walker.mesh.position.z<14)throw new Error('Walker could not pass between buildings: '+walker.mesh.position.z);
+        state.selectedUnits=[brave];state.selectedBuilding=null;gameTestAPI.updateContextMenus();
+        const buildMenuDemolish=document.getElementById('btn-demolish_building');
+        if(!buildMenuDemolish)throw new Error('Build menu has no demolition action');
+        buildMenuDemolish.click();
+        if(state.currentAction!=='demolish_building')throw new Error('Demolition targeting did not activate');
+        state.camera.position.set(4.25,25,25);state.camera.lookAt(4.25,6,10);
+        state.camera.updateMatrixWorld(true);state.scene.updateMatrixWorld(true);
+        const target=first.mesh.position.clone().add(new THREE.Vector3(0,.5,0)).project(state.camera);
+        gameTestAPI.handleTap((target.x+1)*innerWidth/2,(1-target.y)*innerHeight/2,false,false);
+        if(!first.dead||state.currentAction!=='select')throw new Error('Targeted demolition did not remove the house');
+        state.selectedUnits=[];state.selectedBuilding=second;gameTestAPI.updateContextMenus();
+        const selectedDemolish=document.getElementById('btn-demolish_building');
+        if(!selectedDemolish)throw new Error('Selected building has no demolition action');
+        selectedDemolish.click();
+        if(!second.dead||state.selectedBuilding)throw new Error('Selected building demolition failed');
+        if(!gameTestAPI.createBuilding('hut',0,10,0,false))throw new Error('Demolished site stayed blocked');
+        return {radius,nearest,closest,destinationX:routed.mesh.position.x,crossingX:crossing.mesh.position.x,gap,passageZ:walker.mesh.position.z};
     });
     if(errors.length)throw new Error(errors.join('\n'));
     console.log('PASS building collision and route avoidance',result);

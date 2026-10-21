@@ -410,7 +410,8 @@
                     <li><strong>1. Select a Brave:</strong> Only <strong>Brave</strong> units (not Shamans) can build structures. Select one or more Braves.</li>
                     <li><strong>2. Open Build Menu:</strong> When a Brave is selected, building icons will appear in the action/spell bar (Hut, Tower, Warrior, Fire, Spy, etc.).</li>
                     <li><strong>3. Choose Structure:</strong> Click the desired building icon, or press its corresponding number hotkey.</li>
-                    <li><strong>4. Place on Terrain:</strong> Click a location on <strong>dry land</strong> (above water level) that is <strong>close to your selected Brave</strong>. Your Brave will then walk over and build the structure!</li>
+                    <li><strong>4. Place on Terrain:</strong> Click a location on <strong>dry land</strong> (above water level) that is <strong>close to your selected Brave</strong>. Leave enough space between buildings for people to pass. Your Brave will then walk over and build the structure!</li>
+                    <li><strong>Demolish:</strong> Choose Demolish in the build menu and click one of your buildings, or select the building and use its action menu.</li>
                     <li><em>Note: Each building has a specific Mana cost and unlocks new units and abilities (e.g., training Warriors, Firewarriors, Spies, or Airships).</em></li>
                 </ul>
             </div>
@@ -912,6 +913,7 @@ const CONFIG = {
         'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
         'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
         'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
+        'demolish_building': { icon: '🗑️', label: 'Demolish', cost: 0 },
         'upgrade_unit': { icon: '⭐', label: 'Upgr', cost: 80 },
         'airship_rocket': { icon: '🚀', label: 'Rckt', cost: 10 },
         'phantom': { icon: '👥', label: 'Phnt', cost: 30 },
@@ -1899,7 +1901,10 @@ const NetworkManager = {
                  if(d.unitIds) {
                      units = state.units.filter(u => d.unitIds.includes(u.id));
                  }
-                 performAction(d.x, d.z, d.action, units);
+                 if(d.action==='demolish_building') {
+                     const building=state.buildings.find(b=>b.id===d.buildingId&&b.faction===0&&!b.dead);
+                     building?.destroy(false);
+                 } else performAction(d.x, d.z, d.action, units);
              } else if (data.type === 'terrain_update') {
                  data.mods.forEach(([key, val]) => {
                      state.terrainMods.set(key, val);
@@ -8428,8 +8433,26 @@ function updateSettlementPath(building) {
     position.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingSphere();
 }
 
+const BUILDING_FOOTPRINTS=Object.freeze({hut:2.9,tower:2.1,warrior:3.4,fire:3.0,spy:2.9,shipyard:3.8});
+const BUILDING_PASSAGE_WIDTH=3;
+function buildingCollisionRadius(type) {
+    return BUILDING_FOOTPRINTS[type]*.75+.3;
+}
+function buildingPlacementIssue(type,x,z) {
+    if(!Object.hasOwn(BUILDING_FOOTPRINTS,type))return 'Unknown building type.';
+    if(getHeight(x,z)<WATER_LEVEL)return 'Build on dry land.';
+    const radius=buildingCollisionRadius(type);
+    for(const other of state.buildings) {
+        if(other.dead)continue;
+        const gap=radius+(other.collisionRadius||buildingCollisionRadius(other.type))+BUILDING_PASSAGE_WIDTH;
+        if(Math.hypot(x-other.mesh.position.x,z-other.mesh.position.z)<gap)
+            return 'Leave enough room for people to walk between buildings.';
+    }
+    return null;
+}
+
 function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = false, id = null) {
-    if(!isLoading && getHeight(x, z) < WATER_LEVEL) return null;
+    if(!isLoading && buildingPlacementIssue(type,x,z)) return null;
 
     if(!isLoading) SoundManager.playSound('construct');
     const baseH = getHeight(x, z);
@@ -8467,7 +8490,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
     else if (type === 'shipyard') { mesh = buildShipyard(faction); maxHp = CONFIG.BUILDING.SHIPYARD_HP; }
 
     if(mesh) {
-        const footprint={hut:2.9,tower:2.1,warrior:3.4,fire:3.0,spy:2.9,shipyard:3.8}[type]||2.5;
+        const footprint=BUILDING_FOOTPRINTS[type];
         const structureHeight={hut:3.1,tower:5.7,warrior:3.2,fire:4.1,spy:3.2,shipyard:4.4}[type]||3.5;
         group.add(createContactShadow(footprint));
         const pathVisual=createSettlementPath(x,z,baseH,footprint,type);
@@ -8502,7 +8525,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             hpBar: hpBar,
             hpGroup: hpGroup,
             type: type,
-            collisionRadius: footprint*.75+.3,
+            collisionRadius: buildingCollisionRadius(type),
             faction: faction,
             hp: maxHp,
             maxHp: maxHp,
@@ -8910,7 +8933,7 @@ class EnemyAI {
                         const radius=8+Math.floor(i/24)*4,angle=i*2.399963+this.faction;
                         const x=home.x+Math.cos(angle)*radius,z=home.z+Math.sin(angle)*radius;
                         const h=getHeight(x,z);
-                        if(h<aiDryHeight()+.15||state.buildings.some(b=>!b.dead&&this.distance(b.mesh.position,{x,z})<7)||
+                        if(h<aiDryHeight()+.15||buildingPlacementIssue(type,x,z)||
                             this.blockedBuildSites.some(p=>this.distance(p,{x,z})<4))continue;
                         if([[3,0],[-3,0],[0,3],[0,-3]].some(([dx,dz])=>getHeight(x+dx,z+dz)<WATER_LEVEL||Math.abs(getHeight(x+dx,z+dz)-h)>4))continue;
                         routeChecks++;
@@ -8918,6 +8941,9 @@ class EnemyAI {
                         pending={type,x,z,bestDistance:Infinity,stalledFor:0};break;
                     }
                     this.pendingBuild=pending;
+                }
+                if(pending&&buildingPlacementIssue(type,pending.x,pending.z)){
+                    this.pendingBuild=null;pending=null;
                 }
                 if(pending){
                     const builder=nearest(builders.filter(u=>buildRoute(u,pending.x,pending.z)),pending);
@@ -9192,7 +9218,8 @@ const ACTION_TYPE_NAMES = Object.freeze({
     build_hut:'Hut', build_tower:'Guard Tower',
     build_warrior:'Warrior Training Hut', build_fire:'Fire Warrior Temple',
     build_spy:'Spy Training Hut', build_shipyard:'Shipyard',
-    build_airship:'Airship', upgrade_unit:'Upgrade Unit', airship_rocket:'Airship Rocket'
+    build_airship:'Airship', demolish_building:'Demolish Building',
+    upgrade_unit:'Upgrade Unit', airship_rocket:'Airship Rocket'
 });
 let iconNameTimer = null;
 function hideIconNameTooltip() {
@@ -9225,6 +9252,16 @@ window.addEventListener('pointerup', hideIconNameTooltip);
 window.addEventListener('pointercancel', hideIconNameTooltip);
 window.addEventListener('blur', hideIconNameTooltip);
 
+function demolishBuilding(building) {
+    if(!building||building.dead||building.faction!==0)return;
+    state.currentAction='select';
+    if(state.network.role==='client') {
+        NetworkManager.sendInput({action:'demolish_building',buildingId:building.id});
+        return;
+    }
+    building.destroy(false);
+}
+
 function updateContextMenus() {
     const menu = document.getElementById('right-menu');
     hideIconNameTooltip();
@@ -9243,11 +9280,14 @@ function updateContextMenus() {
     let visibleActions = [];
 
     // Spells belong to the living Shaman, even when no unit is selected.
-    if (hasShaman || (!hasSelection && state.shaman && state.shaman.state !== 'dead')) {
+    if (state.selectedBuilding && !state.selectedBuilding.dead && state.selectedBuilding.faction===0) {
+        visibleActions = ['demolish_building'];
+    } else if (hasShaman || (!hasSelection && state.shaman && state.shaman.state !== 'dead')) {
         visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom'];
     } else if (hasBrave) {
         visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_spy'];
         if (!(state.matchSettings && state.matchSettings.noFlyers)) visibleActions.push('build_shipyard', 'build_airship');
+        visibleActions.push('demolish_building');
     } else if (hasSpy) {
         visibleActions = ['hypnotise'];
     }
@@ -9284,6 +9324,18 @@ function updateContextMenus() {
              btn.addEventListener('contextmenu',e=>e.preventDefault());
          }
          if(state.currentAction === act) btn.classList.add('active');
+
+         if(act==='demolish_building') {
+             btn.setAttribute('aria-label',iconName);
+             btn.title=iconName;
+             btn.onclick=e=>{
+                 e.stopPropagation();
+                 if(state.selectedBuilding)demolishBuilding(state.selectedBuilding);
+                 else selectAction(act);
+             };
+             menu.appendChild(btn);
+             return;
+         }
 
          if(isPeaceBlockedAction(act)) {
              btn.classList.add('disabled');
@@ -9386,8 +9438,12 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     // Validate prerequisites before charging construction mana.
     if(action==='build_airship'&&!state.buildings.some(b=>b.type==='shipyard'&&b.faction===0&&!b.dead&&!b.underConstruction&&Math.hypot(b.mesh.position.x-x,b.mesh.position.z-z)<50))return;
 
-    // Prevent building on water
-    if (action.startsWith('build_') && getHeight(x, z) < WATER_LEVEL) return;
+    // Check the whole footprint before charging mana or changing the terrain.
+    if (action.startsWith('build_') && action!=='build_airship') {
+        const issue=buildingPlacementIssue(action.slice(6),x,z);
+        if(issue){showGameMessage(issue);return;}
+    }
+    if(action==='build_airship'&&getHeight(x,z)<WATER_LEVEL)return;
 
     // Prevent building if no brave nearby
     if (action.startsWith('build_') && !isBraveNearby(0, x, z, 10)) return;
@@ -9979,7 +10035,7 @@ async function init() {
         if(loadingEl) loadingEl.style.display = 'none';
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, Fireball, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -11108,6 +11164,7 @@ function handleTap(x, y, isRightClick, isShift) {
     const buildingMeshes = [];
     const meshToBuilding = new Map();
     state.buildings.forEach(b => {
+        if(b.dead)return;
         b.mesh.traverse(c => {
             if(c.isMesh) {
                 buildingMeshes.push(c);
@@ -11119,6 +11176,12 @@ function handleTap(x, y, isRightClick, isShift) {
 
     let action = state.currentAction;
     if(isRightClick) action = 'move';
+
+    if(action==='demolish_building') {
+        const building=buildingHits.length?meshToBuilding.get(buildingHits[0].object):null;
+        if(building&&building.faction===0)demolishBuilding(building);
+        return;
+    }
 
     if (action === 'select') {
         if (unitHits.length > 0) {

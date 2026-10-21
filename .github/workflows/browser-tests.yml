@@ -37,6 +37,9 @@ jobs:
       - name: Building durability
         if: always()
         run: node tests/building-durability.mjs
+      - name: Building demolition and walkable spacing
+        if: always()
+        run: node tests/building-navigation.mjs
       - name: Campaign story, clues and endings
         if: always()
         run: node tests/campaign-story.mjs
