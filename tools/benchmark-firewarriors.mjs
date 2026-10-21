@@ -38,8 +38,8 @@ try {
             impactParticles:state.particles.length,lights:gameTestAPI.FireballFxManager.lights.filter(light=>light.visible).length,
             emberMarks:gameTestAPI.SurfaceMarks.marks.filter(mark=>mark.kind==='ember').length};
     });
-    if(result.lights>2||result.impactParticles>80||result.afterImpact.calls-result.empty.calls>24||
-        result.effects.flash!==8||result.effects.ring!==8||result.emberMarks>24)
+    if(result.lights>2||result.impactParticles>80||result.afterImpact.calls-result.empty.calls>20||
+        result.effects.glow<8||result.effects.smoke!==8||'ring' in result.effects||'flash' in result.effects||result.emberMarks>24)
         throw new Error('Firewarrior volley exceeded the light or effect budget: '+JSON.stringify(result));
     console.log(JSON.stringify(result));
 }finally{await browser.close();}
