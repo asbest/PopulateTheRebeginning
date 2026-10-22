@@ -9,6 +9,40 @@ export function createLocomotion(T) {
     }
     const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
     const ease=x=>{x=clamp(x,0,1);return x*x*(3-2*x);};
+    // Phase 0.5 is contact/release. The same pose is used by combat, manual input
+    // and network playback so walking cannot overwrite the weapon's swing.
+    const combatPoses={
+        warrior:[
+            [0,-.55,0,-.08,-.8,.025,-.08,0,-.7,.25,-.9],
+            [.28,-2.45,-.22,-.24,-.85,-.07,-.38,-.06,-.85,.30,-.9],
+            [.5,-1.4,.10,.08,-.08,.12,.30,.07,-.8,.25,-.9],
+            [.64,-.80,.24,.18,-.20,.14,.34,.07,-.75,.28,-.95],
+            [1,-.55,0,-.08,-.8,.025,-.08,0,-.7,.25,-.9]
+        ],
+        firewarrior:[
+            [0,-.55,0,-.08,-.75,.02,0,0,-.55,.18,-.65],
+            [.28,-2.0,-.18,-.18,-.95,-.06,-.28,-.04,-.8,.25,-.7],
+            [.5,-1.45,.08,.05,-.08,.10,.25,.03,-.65,.22,-.65],
+            [.64,-1.3,.15,.10,-.12,.09,.28,.03,-.6,.20,-.65],
+            [1,-.55,0,-.08,-.75,.02,0,0,-.55,.18,-.65]
+        ]
+    };
+    const combatValue=(a,b,t,index)=>a[index]+(b[index]-a[index])*t;
+    function animateCombat(u,phase){
+        const keys=combatPoses[u.type];
+        if(!keys||!u.armR)return;
+        const p=clamp(phase,0,1);
+        let i=1;while(i<keys.length-1&&p>keys[i][0])i++;
+        const a=keys[i-1],b=keys[i],t=ease((p-a[0])/(b[0]-a[0]));
+        u.armR.rotation.set(combatValue(a,b,t,1),combatValue(a,b,t,2),combatValue(a,b,t,3));
+        u.armR.userData.lower.rotation.set(combatValue(a,b,t,4),0,0);
+        u.torso.rotation.set(combatValue(a,b,t,5),combatValue(a,b,t,6),combatValue(a,b,t,7));
+        u.armL.rotation.set(combatValue(a,b,t,8),.10,combatValue(a,b,t,9));
+        u.armL.userData.lower.rotation.set(combatValue(a,b,t,10),0,0);
+        u.torso.position.z=.04*Math.sin(p*Math.PI);
+        u.head.rotation.y=-u.torso.rotation.y*.6;
+        if(u.shieldGrip)u.shieldGrip.rotation.x=-u.armL.rotation.x-u.armL.userData.lower.rotation.x-u.torso.rotation.x+.12;
+    }
     function animateFall(u,dt,phase='airborne'){
         if(!u.legL)return;
         u.poseTick=u.updateTicker;
@@ -165,7 +199,9 @@ export function createLocomotion(T) {
             f.z=s*wx+c*wz;f.x=c*wx-s*wz;f.y=(y-p.y)/scale;
             pelvis=Math.min(pelvis,f.y+Math.sqrt(Math.max(.01,.597**2-f.z**2-(f.x-hipX)**2)));
         }
-        pelvis=Math.max(.52,pelvis);
+        const networkAttack=u.networkTarget&&(u.networkManualAttack||u.state==='combat'&&g.speed<.2);
+        const attacking=networkAttack||u.manualAttack||u.combatPoseTick===u.updateTicker||u.state==='combat'&&u.attackTarget&&Math.hypot(u.attackTarget.mesh.position.x-p.x,u.attackTarget.mesh.position.z-p.z)<=u.range;
+        pelvis=Math.max(.52,pelvis-(attacking&&u.type==='warrior'?.035+.015*Math.sin((u.attackPhase||0)*Math.PI):0));
         // Keep the pelvis connected to both hips; the old independent hip drops looked like squatting.
         g.pelvis=smooth(g.pelvis,pelvis,24,dt);g.pelvis=Math.min(g.pelvis,pelvis+.006);
         for(let i=0;i<2;i++){
@@ -181,8 +217,6 @@ export function createLocomotion(T) {
                 ankle.quaternion.copy(leg.quaternion).multiply(leg.userData.lower.quaternion).invert().multiply(desired);
             }
         }
-        const networkAttack=u.networkTarget&&u.state==='combat'&&g.speed<.2;
-        const attacking=networkAttack||u.state==='combat'&&u.attackTarget&&Math.hypot(u.attackTarget.mesh.position.x-p.x,u.attackTarget.mesh.position.z-p.z)<=u.range;
         const strike=attacking?Math.sin((u.attackPhase||0)*Math.PI):0;
         if(!attacking){
             for(const [arm,foot,side] of [[u.armL,g.feet[1],1],[u.armR,g.feet[0],-1]]){
@@ -190,8 +224,10 @@ export function createLocomotion(T) {
                 const swing=-Math.atan2(foot.z,.55)*(.72+.28*run)*weight;
                 arm.rotation.x=smooth(arm.rotation.x,(u.isShaman?swing*.25:swing)-.04,16,dt);
                 arm.rotation.z=smooth(arm.rotation.z,side*.065,12,dt);
+                arm.rotation.y=smooth(arm.rotation.y,0,12,dt);
                 arm.userData.lower.rotation.x=smooth(arm.userData.lower.rotation.x,-.16-.55*run,12,dt);
             }
+            if(u.shieldGrip)u.shieldGrip.rotation.x=smooth(u.shieldGrip.rotation.x,0,12,dt);
         }else{
             if(networkAttack){u.armR.rotation.x=-Math.PI/2-strike*Math.PI/2;u.armL.rotation.x=-.4-strike*.4;}
             u.armR.userData.lower.rotation.x=-.16-strike*.4;u.armL.userData.lower.rotation.x=-.16-strike*.25;
@@ -225,6 +261,7 @@ export function createLocomotion(T) {
             pose(u.armL.userData.lower.rotation,'x',-.06);
             pose(u.armR.userData.lower.rotation,'x',-.06);
         }
+        if(attacking)animateCombat(u,u.attackPhase||0);
         const cape=u.torso.getObjectByName(u.isShaman?'CeremonialCape':'SpyCloak');
         if(cape){
             cape.rotation.x=smooth(cape.rotation.x,-.14-.08*weight+Math.sin(g.phase*Math.PI*2)*.02*weight,8,dt);
@@ -273,5 +310,5 @@ export function createLocomotion(T) {
             }
         }else u.isGrounded=false;
     }
-    return {turn,animate,animateFall,ground};
+    return {turn,animate,animateFall,animateCombat,ground};
 }

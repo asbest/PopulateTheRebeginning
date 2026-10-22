@@ -90,7 +90,54 @@ try{
                 throw new Error('Manual ground shot or projectile scale is wrong');
             const automatic=new gameTestAPI.Fireball(fighter.mesh.position.clone(),fighter.mesh.position.clone(),0,1,1,false,true);
             if(automatic.mesh.scale.x!==spell.mesh.scale.x*.5)throw new Error('Automatic unit shot is not half size');
+            fighter.armR.userData.lower.updateWorldMatrix(true,false);
+            const hand=fighter.armR.userData.lower.localToWorld(new THREE.Vector3(0,-.28,.025));
+            if(shot.start.distanceTo(hand)>.001)throw new Error('Fireball did not leave the throwing hand');
             return {unitScale:shot.mesh.scale.x,spellScale:spell.mesh.scale.x};
+        });
+    });
+    await check('Warrior club contacts at the damage frame with a guarded full-body swing at 30/60/120 FPS',async()=>{
+        await fresh();return page.evaluate(()=>{
+            const x=state.shaman.mesh.position.x,z=state.shaman.mesh.position.z;
+            for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
+            for(const b of state.buildings)state.scene.remove(b.mesh);state.buildings=[];
+            gameTestAPI.BuildingSpatialHash.markDirty();
+            for(let px=Math.floor(x)-3;px<=Math.ceil(x)+3;px++)for(let pz=Math.floor(z)-3;pz<=Math.ceil(z)+3;pz++)
+                state.terrainMods.set(`${px},${pz}`,6-gameTestAPI.getBaseHeight(px,pz));
+            state.heightCache.clear();gameTestAPI.updateChunks(true);
+            let now=10;state.clock.getElapsedTime=()=>now;
+            const samples=[];
+            for(const fps of [30,60,120]){
+                const u=new Humanoid(0,'warrior',x,z),target=new Humanoid(1,'warrior',x,z+.95);
+                state.units=[u,target];state.selectedUnits=[u];
+                u.placeOnGround(x,z);target.placeOnGround(x,z+.95);target.hp=target.maxHp=1000;
+                u.lastAttackTime=-100;u.nextTargetCheck=Infinity;
+                const start=now;u.beginManualAttack(target.mesh.position.x,target.mesh.position.z);
+                let peak=0,hitAt=null,contact=null,shieldFacing=0,elbowAtHit=0;
+                for(let frame=0;frame<fps+2;frame++){
+                    now+=1/fps;u.update(1/fps);u.mesh.updateMatrixWorld(true);
+                    const tip=u.weaponTip.getWorldPosition(new THREE.Vector3());
+                    peak=Math.max(peak,tip.y-6);
+                    if(hitAt===null&&target.hp<target.maxHp){
+                        hitAt=now-start;contact=tip.clone().sub(target.mesh.position).toArray();
+                        elbowAtHit=u.armR.userData.lower.rotation.x;
+                        shieldFacing=new THREE.Vector3(0,0,1).transformDirection(u.shieldGrip.matrixWorld).z;
+                    }
+                }
+                const detail={fps,peak,hitAt,contact,elbowAtHit,shieldFacing,damage:1000-target.hp};
+                if(!contact||hitAt<.5-.0001||hitAt>.5+1/fps+.001||peak<1.6||
+                   Math.hypot(contact[0],contact[1]-.9,contact[2])>.4||
+                   Math.abs(elbowAtHit)>.16||shieldFacing<.65||detail.damage!==u.damage||
+                   u.weaponGrip.parent!==u.armR.userData.lower)throw new Error(JSON.stringify(detail));
+                samples.push(detail);u.die();target.die();state.scene.remove(u.mesh,target.mesh);
+            }
+            const u=new Humanoid(0,'warrior',x,z),target=new Humanoid(1,'warrior',x,z+.95);
+            state.units=[u,target];state.selectedUnits=[u];u.placeOnGround(x,z);target.placeOnGround(x,z+.95);
+            target.hp=target.maxHp=1000;u.attackTarget=target;u.state='combat';u.lastAttackTime=now;
+            for(let frame=0;frame<30;frame++){now+=1/60;u.update(1/60);}
+            if(u.torso.rotation.y<.25||Math.abs(u.armR.userData.lower.rotation.x)>.15)
+                throw new Error('Walking animation overwrote the automatic weapon swing');
+            return samples;
         });
     });
     await check('Preachers permanently convert ordinary enemies and counter enemy preachers',async()=>{

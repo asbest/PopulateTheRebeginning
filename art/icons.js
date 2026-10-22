@@ -36,7 +36,7 @@ const paths = {
  airship:'<ellipse cx="16" cy="10" rx="10" ry="7"/><path d="M9 15 12 25m11-10-3 10M10 25h12v5H10ZM16 3v14"/>'
 };
 export function icon(key) {
-    if(key==='warrior_attack')key='warrior';
+    if(key==='warrior_attack')return '<svg class="tribal-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><path d="m6 28 12-15 3 2L9 30ZM16 12l1-7 7-3 6 6-3 7-7 1ZM17 5l-3-2m10-1 1-2m5 8 2 1M7 24l4 3"/></svg>';
     if(key==='firewarrior_attack')key='blast';
     const body=paths[key] || paths.blast;
     return `<svg class="tribal-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;

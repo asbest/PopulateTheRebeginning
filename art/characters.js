@@ -172,12 +172,14 @@ export function createCharacters(T,art) {
         }else if(role==='warrior'){
             band(u.head,.095,.134,.11,gold,.065);
             for(const side of [-1,1])oval(u.torso,[side*.23,.11,0],[.11,.07,.13],leather,'ShoulderArmor');
-            tube(hand,[[0,-.27,.05],[0,.08,.07],[0,.30,.07]],.029,leather,'WarClub');
-            oval(hand,[0,.29,.07],[.085,.11,.072],gold,'ClubHead');
-            for(let i=0;i<5;i++){const tooth=mesh(hand,geo('spike',()=>new T.ConeGeometry(.021,.09,6)),bone,[Math.sin(i*1.26)*.08,.29,Math.cos(i*1.26)*.08+.07]);tooth.rotation.z=-Math.PI/2;tooth.rotation.y=i*1.26;}
-            const shield=mesh(u.armL.userData.lower,geo('shield',()=>new T.CylinderGeometry(.18,.18,.045,20)),leather,[.055,-.14,.09]);shield.rotation.x=Math.PI/2;
-            mesh(u.armL.userData.lower,geo('shieldrim',()=>new T.TorusGeometry(.18,.015,6,24)),gold,[.055,-.14,.116]);
-            oval(u.armL.userData.lower,[.055,-.14,.122],[.048,.048,.025],gold,'ShieldBoss');
+            u.weaponGrip=new T.Group();u.weaponGrip.name='WeaponGrip';u.weaponGrip.position.set(0,-.28,.025);hand.add(u.weaponGrip);
+            tube(u.weaponGrip,[[0,.04,0],[0,-.20,0],[0,-.42,0]],.029,leather,'WarClub');
+            u.weaponTip=oval(u.weaponGrip,[0,-.42,0],[.085,.11,.072],gold,'ClubHead');
+            for(let i=0;i<5;i++){const tooth=mesh(u.weaponGrip,geo('spike',()=>new T.ConeGeometry(.021,.09,6)),bone,[Math.sin(i*1.26)*.08,-.42,Math.cos(i*1.26)*.08]);tooth.rotation.z=-Math.PI/2;tooth.rotation.y=i*1.26;}
+            u.shieldGrip=new T.Group();u.shieldGrip.name='ShieldGrip';u.shieldGrip.position.set(.055,-.14,.09);u.armL.userData.lower.add(u.shieldGrip);
+            const shield=mesh(u.shieldGrip,geo('shield',()=>new T.CylinderGeometry(.18,.18,.045,20)),leather,[0,0,0]);shield.rotation.x=Math.PI/2;
+            mesh(u.shieldGrip,geo('shieldrim',()=>new T.TorusGeometry(.18,.015,6,24)),gold,[0,0,.026]);
+            oval(u.shieldGrip,[0,0,.032],[.048,.048,.025],gold,'ShieldBoss');
         }else if(role==='firewarrior'){
             const mask=cloth(u.head,[[-.10,.12],[.10,.12],[.12,-.02],[.055,-.12],[0,-.16],[-.055,-.12],[-.12,-.02]],gold,'RitualMask');mask.position.z=.105;
             for(const side of [-1,1])oval(u.head,[side*.045,.025,.128],[.024,.009,.005],eye,'MaskEyeSlit');

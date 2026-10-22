@@ -890,7 +890,7 @@ const CONFIG = {
     ACTIONS: {
         'move': { icon: '👣', label: 'Walk', cost: 0 },
         'blast': { icon: '🔥', label: 'Blast', cost: 10 },
-        'warrior_attack': { icon: '⚔️', label: 'Sword Strike', cost: 0 },
+        'warrior_attack': { icon: '⚔️', label: 'Club Strike', cost: 0 },
         'firewarrior_attack': { icon: '🔥', label: 'Fireball', cost: 0 },
         'lightning': { icon: '⚡', label: 'Lght', cost: 50 },
         'raise': { icon: '▲', label: 'Rais', cost: 5 },
@@ -1868,6 +1868,7 @@ const NetworkManager = {
                 state: u.state,
                 animTime: u.animTime,
                 attackPhase: u.attackPhase,
+                combatActive: !!u.manualAttack,
                 shielded: !!u.shielded, invisible: !!u.invisible, isPhantom: !!u.isPhantom
             })),
             buildings: state.buildings.map(b => ({
@@ -1955,6 +1956,7 @@ const NetworkManager = {
              u.state = uData.state;
              u.animTime = uData.animTime;
              u.attackPhase = uData.attackPhase||0;
+             u.networkManualAttack=!!uData.combatActive;
              if(!!u.shielded!==!!uData.shielded)u.setShield(!!uData.shielded);
              if(!!u.invisible!==!!uData.invisible)u.setInvisibility(!!uData.invisible);
         });
@@ -7836,19 +7838,10 @@ window.Humanoid = class Humanoid {
             this.lastAttackTime = state.clock.getElapsedTime();
         }
 
-        // Custom animation arcs based on type
-        if (this.type === 'warrior') {
-            // Sword slash and shield block
-            // Sword arm (R) swings down rapidly from 0.0 to 0.5, then slowly returns
-            if (this.attackPhase < 0.5) {
-                const p = this.attackPhase / 0.5;
-                this.armR.rotation.x = -Math.PI/2 - (Math.sin(p * Math.PI/2) * Math.PI/2); // Swing forward/down
-            } else {
-                const p = (this.attackPhase - 0.5) / 0.5;
-                this.armR.rotation.x = -Math.PI/2 - (Math.cos(p * Math.PI/2) * Math.PI/2); // Return
-            }
-            // Shield arm (L) raises to block
-            this.armL.rotation.x = -Math.PI/4 + (Math.sin(this.attackPhase * Math.PI) * Math.PI/4);
+        this.combatPoseTick=this.updateTicker;
+        // Weapon poses share their contact time with the damage/release below.
+        if (this.type === 'warrior'||this.type==='firewarrior') {
+            Locomotion.animateCombat(this,this.attackPhase);
         }
         else if (this.type === 'wild') {
             // Overhead tool swing
@@ -7868,19 +7861,6 @@ window.Humanoid = class Humanoid {
             const thrust = Math.sin(this.attackPhase * Math.PI);
             this.armR.rotation.x = -Math.PI/2 - (thrust * Math.PI/4);
             this.armL.rotation.x = -Math.PI/2 - (thrust * Math.PI/4);
-        }
-        else if (this.type === 'firewarrior') {
-            // Throwing motion
-            if (this.attackPhase < 0.3) {
-                const p = this.attackPhase / 0.3;
-                this.armR.rotation.x = -Math.PI/2 - (p * Math.PI/4); // Wind up
-            } else if (this.attackPhase < 0.5) {
-                const p = (this.attackPhase - 0.3) / 0.2;
-                this.armR.rotation.x = -Math.PI/2 - Math.PI/4 + (p * Math.PI/2); // Throw
-            } else {
-                const p = (this.attackPhase - 0.5) / 0.5;
-                this.armR.rotation.x = -Math.PI/2 + (Math.cos(p * Math.PI/2) * Math.PI/4); // Return
-            }
         }
         else if (this.type === 'spy') {
             // Sneaky stab
@@ -7908,7 +7888,7 @@ window.Humanoid = class Humanoid {
         // Deal damage at the impact point (phase >= 0.5)
         if (this.attackPhase >= 0.5 && !this.attackFired) {
             this.attackFired = true;
-            if(manual&&this.type==='warrior'&&(!target||target.dead||target.state==='dead'||
+            if(this.type==='warrior'&&(!target||target.dead||target.state==='dead'||
                 window.isAllied(target.faction,this.faction)||
                 this.mesh.position.distanceTo(target.mesh.position)>this.range+(target.collisionRadius||0))){
                 SoundManager.playSound('attack');return;
@@ -7916,7 +7896,9 @@ window.Humanoid = class Humanoid {
 
             if(this.type === 'firewarrior') {
                  // Spawn Fireball
-                 const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+                 const hand=this.armR.userData.lower;
+                 hand.updateWorldMatrix(true,false);
+                 const startPos = hand.localToWorld(new THREE.Vector3(0,-.28,.025));
                  const targetPos = point.clone().add(new THREE.Vector3(0, manual&&!target ? 0 : 1, 0));
                  state.projectiles.push(new Fireball(startPos, targetPos, this.faction, CONFIG.COMBAT.FIREWARRIOR_BALL_UNIT_DMG, CONFIG.COMBAT.FIREWARRIOR_BULLDING_DMG, false, true));
                  SoundManager.playSound('fireball',.45);
@@ -8563,6 +8545,7 @@ window.Humanoid = class Humanoid {
             else{
                 const swing=this.manualAttack;
                 swing.elapsed+=dt;
+                if(this.poseTick!==this.updateTicker)Locomotion.animate(this,dt,getSurfaceHeight);
                 this.attack(swing);
                 this.poseTick=this.updateTicker;
                 if(swing.elapsed>=swing.duration)this.manualAttack=null;
@@ -9656,7 +9639,7 @@ const UNIT_TYPE_NAMES = Object.freeze({
     preacher:'Preacher', shaman:'Shaman', spy:'Spy', airship:'Airship'
 });
 const ACTION_TYPE_NAMES = Object.freeze({
-    warrior_attack:'Sword Strike', firewarrior_attack:'Fireball',
+    warrior_attack:'Club Strike', firewarrior_attack:'Fireball',
     build_hut:'Hut', build_tower:'Guard Tower',
     build_warrior:'Warrior Training Hut', build_fire:'Fire Warrior Temple',
     build_preacher:'Preacher Shrine',
