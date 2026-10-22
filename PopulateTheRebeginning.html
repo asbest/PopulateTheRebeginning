@@ -7288,6 +7288,12 @@ window.Humanoid = class Humanoid {
         }
 
         Characters.build(this, getFactionColor(faction));
+        if(type!=='airship'){
+            this.fallRig=new THREE.Group();
+            this.fallRig.name='FallRig';
+            this.mesh.add(this.fallRig);
+            this.fallRig.add(this.torso,this.legL,this.legR);
+        }
         const variantSeed=[...this.id].reduce((sum,ch)=>(sum*33+ch.charCodeAt(0))>>>0,5381);
         if(type!=='airship') {
             const tone=[0xf1d7c4,0xd8b59c,0xbc8d70,0x8f654f][variantSeed%4],skinVariant=new THREE.Color(tone).convertSRGBToLinear();
@@ -7484,6 +7490,7 @@ window.Humanoid = class Humanoid {
 
     die() {
         if(this.state==='dead') return;
+        if(this.fallRig){this.fallRig.rotation.x=0;this.fallRig.position.y=0;}
         if(this.garrisonedIn)this.leaveTower();
         if(this.faction===0 && !this.isPhantom && !this.isVehicle) changeFaith(-(this.isShaman?CONFIG.FAITH.SHAMAN_DEATH_LOSS:CONFIG.FAITH.DEATH_LOSS));
         this.isWorshipping=false;
@@ -7520,7 +7527,7 @@ window.Humanoid = class Humanoid {
         } else {
             this.velocity.add(impulse);
         }
-        this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 0.32; this.target = null;
+        this.isGrounded = false; this.state = 'stunned'; this.recoverTimer = 0.78; this.target = null;
         this.impactLean=Math.max(-0.18,Math.min(0.18,Math.atan2(impulse.z,Math.abs(impulse.x)+1)*0.12));
     }
 
@@ -8217,7 +8224,7 @@ window.Humanoid = class Humanoid {
                 this.recoverTimer -= dt;
                 if(this.recoverTimer <= 0) {
                     this.state = 'getting_up';
-                    this.getUpDuration = 0.38;
+                    this.getUpDuration = 0.7;
                     this.getUpTimer = this.getUpDuration;
                 }
             }
@@ -8233,6 +8240,7 @@ window.Humanoid = class Humanoid {
             if (this.getUpTimer <= 0) {
                  this.state = 'idle';
                  this.mesh.rotation.y = this.heading??this.mesh.rotation.y;
+                 if(this.fallRig){this.fallRig.rotation.x=0;this.fallRig.position.y=0;}
                  if (this.rigidBody) {
                      this.rigidBody.setEnabledRotations(false, false, false, true);
                  }
@@ -8583,6 +8591,7 @@ window.Humanoid = class Humanoid {
     placeOnGround(x, z) {
         const h=getSurfaceHeight(x,z);
         this.mesh.position.set(x,h,z);this.mesh.rotation.x=0;this.mesh.rotation.z=0;
+        if(this.fallRig){this.fallRig.rotation.x=0;this.fallRig.position.y=0;}
         this.velocity.set(0,0,0);this.state='idle';this.isGrounded=true;
         this.target=null;this.finalDest=null;this.attackTarget=null;this.targetBoat=null;
         this.path=[];this.pathIndex=0;this.idleAnchor=null;this.gait=null;this.groundBodyOffset=0;

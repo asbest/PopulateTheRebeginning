@@ -12,7 +12,7 @@ export function createLocomotion(T) {
     function animateFall(u,dt,phase='airborne'){
         if(!u.legL)return;
         u.poseTick=u.updateTicker;
-        const airborne=phase==='airborne',landing=phase==='landing';
+        const airborne=phase==='airborne',landing=phase==='landing',recovering=phase==='recovering';
         const rate=airborne?10:landing?14:9;
         const pose=(part,axis,target)=>{if(part)part[axis]=smooth(part[axis],target,rate,dt);};
         const swirling=airborne&&u.blastAirborne;
@@ -30,22 +30,35 @@ export function createLocomotion(T) {
             u.mesh.rotation.z=0;
             if(u.heading!==undefined)u.mesh.rotation.y=u.heading;
         }
-        // Knees tuck in flight, then bend under the body to absorb the landing.
-        // Blast victims turn and reach for balance while the capsule stays upright.
-        pose(u.torso.rotation,'x',airborne?.12+(u.impactLean||0)+sway*.32:landing?.23:0);
+        if(u.fallRig){
+            if(airborne){
+                u.fallRig.rotation.x=0;
+                u.fallRig.position.y=0;
+            }else if(landing){
+                u.fallRig.rotation.x=smooth(u.fallRig.rotation.x,1.48,18,dt);
+                u.fallRig.position.y=smooth(u.fallRig.position.y,.08,18,dt);
+            }else if(recovering){
+                const progress=1-(u.getUpTimer||0)/(u.getUpDuration||.7);
+                const upright=ease((progress-.15)/.85);
+                u.fallRig.rotation.x=1.48*(1-upright);
+                u.fallRig.position.y=.08*(1-upright);
+            }
+        }
+        // Knees tuck in flight. On impact the whole body lies prone before rising.
+        pose(u.torso.rotation,'x',airborne?.12+(u.impactLean||0)+sway*.32:landing?-.12:recovering?-.08:0);
         pose(u.torso.rotation,'z',airborne?.07+roll*.28:0);
         pose(u.torso.position,'y',airborne?.91:landing?.83:.9);
-        pose(u.legL.rotation,'x',airborne?-.25+sway*.2:landing?.20:0);
-        pose(u.legR.rotation,'x',airborne?-.14-sway*.2:landing?.12:0);
-        pose(u.legL.userData.lower?.rotation,'x',airborne?.55:landing?.42:0);
-        pose(u.legR.userData.lower?.rotation,'x',airborne?.48:landing?.38:0);
-        pose(u.armL.rotation,'x',airborne?-.42+roll*.24:landing?-.32:0);
-        pose(u.armR.rotation,'x',airborne?-.36-roll*.24:landing?-.28:0);
-        pose(u.armL.rotation,'z',airborne?.22:landing?.13:0);
-        pose(u.armR.rotation,'z',airborne?-.22:landing?-.13:0);
-        pose(u.armL.userData.lower?.rotation,'x',airborne?-.55:landing?-.42:0);
-        pose(u.armR.userData.lower?.rotation,'x',airborne?-.55:landing?-.42:0);
-        pose(u.head.rotation,'x',airborne?-.08:landing?-.12:0);
+        pose(u.legL.rotation,'x',airborne?-.25+sway*.2:landing?.16:recovering?.28:0);
+        pose(u.legR.rotation,'x',airborne?-.14-sway*.2:landing?.12:recovering?.22:0);
+        pose(u.legL.userData.lower?.rotation,'x',airborne?.55:landing?.35:recovering?.45:0);
+        pose(u.legR.userData.lower?.rotation,'x',airborne?.48:landing?.32:recovering?.42:0);
+        pose(u.armL.rotation,'x',airborne?-.42+roll*.24:landing?-.6:recovering?-.45:0);
+        pose(u.armR.rotation,'x',airborne?-.36-roll*.24:landing?-.6:recovering?-.45:0);
+        pose(u.armL.rotation,'z',airborne?.22:landing?.24:recovering?.16:0);
+        pose(u.armR.rotation,'z',airborne?-.22:landing?-.24:recovering?-.16:0);
+        pose(u.armL.userData.lower?.rotation,'x',airborne?-.55:landing?-.75:recovering?-.45:0);
+        pose(u.armR.userData.lower?.rotation,'x',airborne?-.55:landing?-.75:recovering?-.45:0);
+        pose(u.head.rotation,'x',airborne?-.08:landing?-.18:recovering?-.1:0);
     }
     function animateSwim(u,dt){
         if(!u.legL)return;

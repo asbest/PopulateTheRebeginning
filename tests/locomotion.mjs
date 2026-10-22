@@ -170,17 +170,21 @@ try{
   for(let i=0;i<8;i++){state.physicsWorld.step();u.update(1/60);}
   if(u.state!=='stunned'||u.mesh.position.y<=before+.1)throw new Error('Knockback suppressed '+JSON.stringify({rise:u.mesh.position.y-before,state:u.state,velocity:u.rigidBody?.linvel(),mass:u.rigidBody?.mass()}));return {rise:u.mesh.position.y-before,state:u.state};
  }));
- await check('Spell impact braces in flight, lands upright and recovers promptly',()=>page.evaluate(()=>{
-  const u=state.units[0];let peak=u.mesh.position.y,airKnee=u.legL.userData.lower.rotation.x,maxTilt=0,groundedAt=-1;
+ await check('Spell impact lands prone, pauses, then gets up',()=>page.evaluate(()=>{
+  const u=state.units[0];let peak=u.mesh.position.y,airKnee=u.legL.userData.lower.rotation.x,maxTilt=0,groundedAt=-1,maxProne=0,proneFrames=0;
   for(let i=0;i<300;i++){
    state.physicsWorld.timestep=1/60;state.physicsWorld.step();u.update(1/60);
    peak=Math.max(peak,u.mesh.position.y);maxTilt=Math.max(maxTilt,Math.abs(u.mesh.rotation.x),Math.abs(u.mesh.rotation.z));
    if(!u.isGrounded)airKnee=Math.max(airKnee,u.legL.userData.lower.rotation.x);
    if(groundedAt<0&&u.isGrounded)groundedAt=i;
-   if(groundedAt>=0&&i-groundedAt>75)break;
+   if(u.isGrounded&&u.state==='stunned'){
+    maxProne=Math.max(maxProne,u.fallRig.rotation.x);
+    if(u.fallRig.rotation.x>1.3)proneFrames++;
+   }
+   if(groundedAt>=0&&i-groundedAt>130)break;
   }
-  const report={peak,airKnee,maxTilt,groundedAt,state:u.state,groundGap:u.mesh.position.y-getSurfaceHeight(u.mesh.position.x,u.mesh.position.z)};
-  if(airKnee<.2||maxTilt>.2||groundedAt<0||u.state==='stunned'||u.state==='getting_up'||Math.abs(report.groundGap)>.3)throw new Error(JSON.stringify(report));
+  const report={peak,airKnee,maxTilt,groundedAt,maxProne,proneFrames,finalProne:u.fallRig.rotation.x,state:u.state,groundGap:u.mesh.position.y-getSurfaceHeight(u.mesh.position.x,u.mesh.position.z)};
+  if(airKnee<.2||maxTilt>.2||groundedAt<0||maxProne<1.35||proneFrames<12||Math.abs(report.finalProne)>.01||u.state==='stunned'||u.state==='getting_up'||Math.abs(report.groundGap)>.3)throw new Error(JSON.stringify(report));
   return report;
  }));
  await check('Saving and rebuilding terrain keeps the physics solver usable',()=>page.evaluate(()=>{
