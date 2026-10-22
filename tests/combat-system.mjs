@@ -26,6 +26,73 @@ async function check(name,run){
     catch(error){results.push({name,pass:false,error:String(error)});console.log('FAIL '+name+' '+error);}
 }
 try{
+    for(const type of ['warrior','firewarrior'])await check(`${type}: select and aim a manual attack without spending mana`,async()=>{
+        await fresh();
+        await page.evaluate(type=>{
+            closeHelp();closeStoryOverlay();
+            const x=state.shaman.mesh.position.x,z=state.shaman.mesh.position.z;
+            for(const u of state.units){u.die();state.scene.remove(u.mesh);}
+            state.units=[];
+            for(const b of state.buildings)state.scene.remove(b.mesh);
+            state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
+            for(let px=Math.floor(x)-10;px<=Math.ceil(x)+10;px++)for(let pz=Math.floor(z)-10;pz<=Math.ceil(z)+10;pz++)
+                state.terrainMods.set(`${px},${pz}`,6-gameTestAPI.getBaseHeight(px,pz));
+            state.heightCache.clear();gameTestAPI.updateChunks(true);
+            const fighter=new Humanoid(0,type,x,z),target=new Humanoid(1,'warrior',x+(type==='warrior'?1:6),z);
+            const ally=new Humanoid(0,'warrior',target.mesh.position.x,target.mesh.position.z+1);
+            state.units.push(fighter,target,ally);
+            for(const u of state.units){u.placeOnGround(u.mesh.position.x,u.mesh.position.z);u.nextTargetCheck=Infinity;u.hp=u.maxHp=1000;}
+            fighter.lastAttackTime=-100;
+            window.manualFixture={fighter,target,ally};window.manualTime=10;
+            state.clock.getElapsedTime=()=>manualTime;
+            state.selectedUnits=[fighter];state.selectedBuilding=null;
+            state.cameraLookAt.copy(target.mesh.position);window.updateCameraPosition();state.camera.updateMatrixWorld(true);
+            gameTestAPI.updateContextMenus();gameTestAPI.SpatialHash.update();
+        },type);
+        await page.locator(`#btn-${type}_attack`).click();
+        return page.evaluate(type=>{
+            const {fighter,target,ally}=manualFixture,action=`${type}_attack`,mana=state.mana;
+            if(state.currentAction!==action||!document.querySelector(`#btn-${action}.active`))throw new Error('Attack selection missing');
+            const screen=target.mesh.position.clone().add(new THREE.Vector3(0,.9,0)).project(state.camera);
+            state.scene.updateMatrixWorld(true);
+            gameTestAPI.handleTap((screen.x+1)*innerWidth/2,(1-screen.y)*innerHeight/2,false,false);
+            if(!fighter.manualAttack)throw new Error('World targeting did not start an attack');
+            gameTestAPI.performAction(target.mesh.position.x,target.mesh.position.z,action);
+            if(state.projectiles.length)throw new Error('Attack skipped its windup');
+            for(let i=0;i<75;i++){
+                manualTime+=1/60;
+                fighter.manualMove(new THREE.Vector3(0,0,.1),1/60);
+                fighter.update(1/60);
+                for(let p=state.projectiles.length-1;p>=0;p--)if(!state.projectiles[p].update(1/60))state.projectiles.splice(p,1);
+            }
+            if(target.hp>=target.maxHp||ally.hp!==ally.maxHp||state.mana!==mana||fighter.manualAttack||fighter.state==='combat')
+                throw new Error(JSON.stringify({hp:target.hp,ally:ally.hp,mana:state.mana,state:fighter.state,pending:!!fighter.manualAttack}));
+            const hp=target.hp;
+            gameTestAPI.performAction(fighter.mesh.position.x+100,fighter.mesh.position.z,action);
+            if(fighter.manualAttack)throw new Error('Out-of-range attack accepted');
+            state.matchSettings.peaceTimeMinutes=100;
+            gameTestAPI.updateContextMenus();
+            gameTestAPI.performAction(target.mesh.position.x,target.mesh.position.z,action);
+            if(fighter.manualAttack||!document.querySelector(`#btn-${action}[aria-disabled="true"]`))throw new Error('Peace time did not block attack');
+            return {damage:target.maxHp-hp,mana};
+        },type);
+    });
+    await check('Fire warrior shots are half the spell size and can target ground',async()=>{
+        await fresh();return page.evaluate(()=>{
+            const x=state.shaman.mesh.position.x,z=state.shaman.mesh.position.z;
+            const fighter=new Humanoid(0,'firewarrior',x,z);state.units.push(fighter);state.selectedUnits=[fighter];
+            fighter.lastAttackTime=-100;
+            gameTestAPI.performAction(x+5,z,'firewarrior_attack');
+            fighter.update(.3);
+            const shot=state.projectiles.at(-1);
+            const spell=new gameTestAPI.Fireball(fighter.mesh.position.clone(),fighter.mesh.position.clone(),0);
+            if(!shot?.unitShot||shot.mesh.scale.x!==spell.mesh.scale.x*.5||shot.target.x!==x+5)
+                throw new Error('Manual ground shot or projectile scale is wrong');
+            const automatic=new gameTestAPI.Fireball(fighter.mesh.position.clone(),fighter.mesh.position.clone(),0,1,1,false,true);
+            if(automatic.mesh.scale.x!==spell.mesh.scale.x*.5)throw new Error('Automatic unit shot is not half size');
+            return {unitScale:shot.mesh.scale.x,spellScale:spell.mesh.scale.x};
+        });
+    });
     await check('Preachers permanently convert ordinary enemies and counter enemy preachers',async()=>{
         await fresh();
         return page.evaluate(()=>{

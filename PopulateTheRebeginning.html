@@ -890,6 +890,8 @@ const CONFIG = {
     ACTIONS: {
         'move': { icon: '👣', label: 'Walk', cost: 0 },
         'blast': { icon: '🔥', label: 'Blast', cost: 10 },
+        'warrior_attack': { icon: '⚔️', label: 'Sword Strike', cost: 0 },
+        'firewarrior_attack': { icon: '🔥', label: 'Fireball', cost: 0 },
         'lightning': { icon: '⚡', label: 'Lght', cost: 50 },
         'raise': { icon: '▲', label: 'Rais', cost: 5 },
         'lower': { icon: '▼', label: 'Lowr', cost: 5 },
@@ -1606,7 +1608,7 @@ function peaceTimeRemaining() {
 function isPeaceTime() { return peaceTimeRemaining()>0; }
 const PEACE_BLOCKED_ACTIONS=new Set([
     'blast','lightning','hypnotise','swamp','swarm','tornado','firestorm','volcano',
-    'raise','lower','flatten','landbridge','airship_rocket'
+    'raise','lower','flatten','landbridge','airship_rocket','warrior_attack','firewarrior_attack'
 ]);
 const SPELL_WINDUPS=Object.freeze({lightning:.45,hypnotise:.45,swarm:.5,swamp:.55,
     tornado:.7,firestorm:.8,volcano:.9});
@@ -5955,7 +5957,7 @@ const FireballFxManager={
         layer.items.push({x,y,z,size,life,age:0,color,vx,vy,vz,phase:Math.random()*6.28});
     },
     trail(position,unitShot){
-        this.add('glow',position.x,position.y,position.z,unitShot?.33:.43,.38,0xff9d38);
+        this.add('glow',position.x,position.y,position.z,unitShot?.215:.43,.38,0xff9d38);
     },
     impact(position,unitShot,stormShot){
         const x=position.x,y=position.y,z=position.z;
@@ -6064,6 +6066,7 @@ class Fireball {
         this.buildingDamage = buildingDamage;
         this.stormShot = stormShot;
         this.unitShot = unitShot;
+        this.mesh.scale.setScalar(unitShot ? .5 : 1);
         this.speed = CONFIG.EFFECTS.FIREBALL_SPEED; this.active = true; this.trailTimer = 0;
         this.travel = 0;
         this.duration = Math.max(0.1, start.distanceTo(end) / this.speed);
@@ -7128,7 +7131,7 @@ window.castLandbridge = castLandbridge;
 const worshipShamanCache={frame:-1,units:null,length:-1,byFaction:new Map()};
 function findWorshipShaman(unit) {
     if(unit.isShaman || unit.isVehicle || unit.isPhantom || unit.state !== 'idle' ||
-       !unit.isGrounded || unit.isSwimming || unit.attackTarget ||
+       !unit.isGrounded || unit.isSwimming || unit.attackTarget || unit.manualAttack ||
        Math.hypot(unit.velocity.x,unit.velocity.z) > 0.35) return null;
     const radiusSquared=CONFIG.FAITH.WORSHIP_RADIUS**2;
     let closest=null,closestDistance=radiusSquared;
@@ -7359,6 +7362,7 @@ window.Humanoid = class Humanoid {
 
     setFaction(newFaction) {
         if (this.faction === newFaction) return;
+        this.manualAttack=null;
         if(this.garrisonedIn&&this.garrisonedIn.faction!==newFaction)this.leaveTower();
         this.faction = newFaction;
         this.aiRole=null;
@@ -7490,6 +7494,7 @@ window.Humanoid = class Humanoid {
 
     die() {
         if(this.state==='dead') return;
+        this.manualAttack=null;
         if(this.fallRig){this.fallRig.rotation.x=0;this.fallRig.position.y=0;}
         if(this.garrisonedIn)this.leaveTower();
         if(this.faction===0 && !this.isPhantom && !this.isVehicle) changeFaith(-(this.isShaman?CONFIG.FAITH.SHAMAN_DEATH_LOSS:CONFIG.FAITH.DEATH_LOSS));
@@ -7506,6 +7511,7 @@ window.Humanoid = class Humanoid {
         if(this.state === 'dead') return;
         if((this.hitImpulseCooldown||0)>0) return;
         this.hitImpulseCooldown = 0.28;
+        this.manualAttack=null;
         if(this.state!=='stunned'||!this.blastAirborne)this.heading=this.mesh.rotation.y;
         this.idleAnchor=null;
         this.gait=null;
@@ -7783,20 +7789,46 @@ window.Humanoid = class Humanoid {
          return closest;
     }
 
-    attack() {
+    beginManualAttack(x,z) {
+        if(!['warrior','firewarrior'].includes(this.type)||this.faction!==0||isPeaceTime()||
+           ['dead','stunned','getting_up','transported'].includes(this.state)||this.manualAttack)return false;
+        const now=state.clock.getElapsedTime(),duration=1/this.attackSpeed;
+        if(now-this.lastAttackTime<duration)return false;
+        const point=new THREE.Vector3(x,getSurfaceHeight(x,z),z);
+        const candidates=[...state.units,...state.buildings].filter(target=>target!==this&&
+            target.mesh&&!target.dead&&!['dead','transported'].includes(target.state)&&
+            !target.invisible&&!window.isAllied(target.faction,this.faction)&&
+            Math.hypot(target.mesh.position.x-x,target.mesh.position.z-z)<(target.collisionRadius||.9)+.7);
+        candidates.sort((a,b)=>a.mesh.position.distanceToSquared(point)-b.mesh.position.distanceToSquared(point));
+        const target=candidates[0]||null;
+        if(target)point.copy(target.mesh.position);
+        const radius=this.type==='warrior'?(target?.collisionRadius||0):0;
+        const range=this.type==='warrior'?this.range:combatRange(this,target||{mesh:{position:point}});
+        if(this.mesh.position.distanceTo(point)>range+radius)return false;
+        this.manualAttack={target,point,elapsed:0,duration};
+        this.isWorshipping=false;
+        this.lastAttackTime=now;this.attackFired=false;
+        this.attackTarget=null;this.target=null;this.finalDest=null;this.path=[];this.gait=null;
+        if(this.state!=='manual')this.state='idle';
+        return true;
+    }
+
+    attack(manual=null) {
         if(isPeaceTime()) { this.state='idle';this.attackTarget=null;return; }
-        if(!this.attackTarget || this.attackTarget.state === 'dead' || this.attackTarget.dead ||
-           window.isAllied(this.attackTarget.faction,this.faction)) {
+        const target=manual?manual.target:this.attackTarget;
+        const point=manual?manual.point:target?.mesh.position;
+        if(!manual&&(!target || target.state === 'dead' || target.dead ||
+           window.isAllied(target.faction,this.faction))) {
              this.state = 'idle'; this.attackTarget = null; return;
         }
 
-        Locomotion.turn(this, Math.atan2(this.attackTarget.mesh.position.x-this.mesh.position.x, this.attackTarget.mesh.position.z-this.mesh.position.z), this.frameDt||.016);
+        Locomotion.turn(this, Math.atan2(point.x-this.mesh.position.x, point.z-this.mesh.position.z), this.frameDt||.016);
 
         const timeSinceLast = state.clock.getElapsedTime() - this.lastAttackTime;
         const interval = 1.0 / this.attackSpeed;
 
         // Phase is between 0.0 and 1.0
-        this.attackPhase = timeSinceLast / interval;
+        this.attackPhase = manual?Math.min(.999,manual.elapsed/manual.duration):timeSinceLast / interval;
 
         if (this.attackPhase >= 1.0) {
             this.attackPhase = 0;
@@ -7876,11 +7908,16 @@ window.Humanoid = class Humanoid {
         // Deal damage at the impact point (phase >= 0.5)
         if (this.attackPhase >= 0.5 && !this.attackFired) {
             this.attackFired = true;
+            if(manual&&this.type==='warrior'&&(!target||target.dead||target.state==='dead'||
+                window.isAllied(target.faction,this.faction)||
+                this.mesh.position.distanceTo(target.mesh.position)>this.range+(target.collisionRadius||0))){
+                SoundManager.playSound('attack');return;
+            }
 
             if(this.type === 'firewarrior') {
                  // Spawn Fireball
                  const startPos = this.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
-                 const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
+                 const targetPos = point.clone().add(new THREE.Vector3(0, manual&&!target ? 0 : 1, 0));
                  state.projectiles.push(new Fireball(startPos, targetPos, this.faction, CONFIG.COMBAT.FIREWARRIOR_BALL_UNIT_DMG, CONFIG.COMBAT.FIREWARRIOR_BULLDING_DMG, false, true));
                  SoundManager.playSound('fireball',.45);
             } else if (this.type === 'preacher') {
@@ -7940,7 +7977,7 @@ window.Humanoid = class Humanoid {
                 createFlash(startPosR);
             } else {
                 // Melee
-                this.attackTarget.takeDamage(this.damage, true);
+                target.takeDamage(this.damage, true);
                 SoundManager.playSound('attack');
             }
         }
@@ -8521,6 +8558,16 @@ window.Humanoid = class Humanoid {
             if(Math.abs(this.mesh.rotation.z) < 0.01) this.mesh.rotation.z = 0;
         }
 
+        if(this.manualAttack){
+            if(isPeaceTime()||['dead','stunned','getting_up','transported'].includes(this.state))this.manualAttack=null;
+            else{
+                const swing=this.manualAttack;
+                swing.elapsed+=dt;
+                this.attack(swing);
+                this.poseTick=this.updateTicker;
+                if(swing.elapsed>=swing.duration)this.manualAttack=null;
+            }
+        }
         updateWorship(this,dt);
         if(this.poseTick !== this.updateTicker) Locomotion.animate(this, dt, getSurfaceHeight);
 
@@ -8589,6 +8636,7 @@ window.Humanoid = class Humanoid {
     }
 
     placeOnGround(x, z) {
+        this.manualAttack=null;
         const h=getSurfaceHeight(x,z);
         this.mesh.position.set(x,h,z);this.mesh.rotation.x=0;this.mesh.rotation.z=0;
         if(this.fallRig){this.fallRig.rotation.x=0;this.fallRig.position.y=0;}
@@ -9608,6 +9656,7 @@ const UNIT_TYPE_NAMES = Object.freeze({
     preacher:'Preacher', shaman:'Shaman', spy:'Spy', airship:'Airship'
 });
 const ACTION_TYPE_NAMES = Object.freeze({
+    warrior_attack:'Sword Strike', firewarrior_attack:'Fireball',
     build_hut:'Hut', build_tower:'Guard Tower',
     build_warrior:'Warrior Training Hut', build_fire:'Fire Warrior Temple',
     build_preacher:'Preacher Shrine',
@@ -9666,6 +9715,8 @@ function updateContextMenus() {
     const hasSpy = state.selectedUnits.some(u => u.type === 'spy');
     const hasSelection = state.selectedUnits.length > 0;
     const hasAirship = state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'airship';
+    const fighter=state.selectedUnits.length===1&&state.selectedUnits[0].faction===0&&
+        state.selectedUnits[0].state!=='dead'?state.selectedUnits[0]:null;
 
     // Unload Button Visibility
     const unloadBtn = document.getElementById('btn-unload');
@@ -9678,6 +9729,8 @@ function updateContextMenus() {
         visibleActions = ['demolish_building'];
     } else if (hasShaman || (!hasSelection && state.shaman && state.shaman.state !== 'dead')) {
         visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom'];
+    } else if (fighter&&['warrior','firewarrior'].includes(fighter.type)) {
+        visibleActions = [`${fighter.type}_attack`];
     } else if (hasBrave) {
         visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_preacher', 'build_spy'];
         if (!(state.matchSettings && state.matchSettings.noFlyers)) visibleActions.push('build_shipyard', 'build_airship');
@@ -9694,6 +9747,8 @@ function updateContextMenus() {
         visibleActions.push('upgrade_unit');
     }
     state.visibleActions = visibleActions;
+    if(['warrior_attack','firewarrior_attack'].includes(state.currentAction)&&!visibleActions.includes(state.currentAction))
+        state.currentAction='move';
 
     visibleActions.forEach((act, index) => {
          const data = ACTIONS[act];
@@ -9708,6 +9763,10 @@ function updateContextMenus() {
          btn.setAttribute('aria-label', `${iconName || data.label}, ${data.cost} mana`);
          const hotkey = index < 9 ? (index + 1) : (index === 9 ? 0 : '');
          btn.title = `${iconName || data.label} (${data.cost} mana)${hotkey !== '' ? ` · ${hotkey}` : ''}`;
+         if(act==='warrior_attack'||act==='firewarrior_attack'){
+             btn.setAttribute('aria-label',iconName);
+             btn.title=`${iconName} · ${hotkey} · no mana`;
+         }
          btn.innerHTML = data.icon;
          btn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); } };
          if(iconName) {
@@ -9781,6 +9840,14 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
         const unitIds = actingUnits.map(u => u.id);
         NetworkManager.sendInput({x, z, action, unitIds});
         spawnPulse(x, getHeight(x, z), z, 0x888888);
+        return;
+    }
+
+    if(action==='warrior_attack'||action==='firewarrior_attack'){
+        const type=action==='warrior_attack'?'warrior':'firewarrior';
+        if(actingUnits.length===1&&actingUnits[0].type===type){
+            if(!actingUnits[0].beginManualAttack(x,z))showGameMessage('Attack unavailable: check range and wait for the next strike.');
+        }
         return;
     }
 
@@ -11584,6 +11651,16 @@ function handleTap(x, y, isRightClick, isShift) {
     let action = state.currentAction;
     if(isRightClick) action = 'move';
 
+    if(action==='warrior_attack'||action==='firewarrior_attack'){
+        const unitHit=unitHits.find(hit=>!window.isAllied(meshToUnit.get(hit.object).faction,0));
+        const buildingHit=buildingHits.find(hit=>!window.isAllied(meshToBuilding.get(hit.object).faction,0));
+        const hit=unitHit&&buildingHit?(unitHit.distance<buildingHit.distance?unitHit:buildingHit):unitHit||buildingHit;
+        const target=hit&&(meshToUnit.get(hit.object)||meshToBuilding.get(hit.object));
+        const point=target?.mesh.position||terrainHits[0]?.point;
+        if(point)performAction(point.x,point.z,action);
+        return;
+    }
+
     if(action==='demolish_building') {
         const building=buildingHits.length?meshToBuilding.get(buildingHits[0].object):null;
         if(building&&building.faction===0)demolishBuilding(building);
@@ -12035,17 +12112,20 @@ function animate() {
     }
 
     let rangeCaster = (state.shaman && state.shaman.state !== 'dead') ? state.shaman : null;
+    const unitAttackAction=state.currentAction==='warrior_attack'||state.currentAction==='firewarrior_attack';
+    if(unitAttackAction)rangeCaster=state.selectedUnits.length===1&&state.selectedUnits[0].state!=='dead'?state.selectedUnits[0]:null;
     const isSpyHypnotise = (state.currentAction === 'hypnotise' && state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'spy');
     if (isSpyHypnotise) rangeCaster = state.selectedUnits[0];
 
     if (rangeCaster) {
         const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create', 'phantom', 'teleport'];
-        if (spells.includes(state.currentAction)) {
+        if (spells.includes(state.currentAction)||unitAttackAction) {
             state.rangeRing.visible = true;
-            if (state.cheatUnlimitedRange) {
+            if (state.cheatUnlimitedRange&&!unitAttackAction) {
                 state.rangeRing.scale.set(1000, 1, 1000);
             } else {
                 let r = 10.0 + rangeCaster.mesh.position.y;
+                if(unitAttackAction)r=rangeCaster.range;
                 if (rangeCaster.type === 'spy') r = 5.0;
                 state.rangeRing.scale.set(r, 60, r);
             }
