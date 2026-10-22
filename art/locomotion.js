@@ -15,13 +15,25 @@ export function createLocomotion(T) {
         const airborne=phase==='airborne',landing=phase==='landing';
         const rate=airborne?10:landing?14:9;
         const pose=(part,axis,target)=>{if(part)part[axis]=smooth(part[axis],target,rate,dt);};
-        const swirling=airborne&&u.blastFloatRemaining>0;
+        const swirling=airborne&&u.blastAirborne;
         const sway=swirling?Math.sin(u.blastSpinPhase||0):0;
         const roll=swirling?Math.cos((u.blastSpinPhase||0)*.87):0;
+        if(swirling){
+            // Tilt the visible character around its upright collision capsule.
+            // Ease the tilt out near the terrain so feet meet the ground cleanly.
+            const tilt=ease((u.blastAirHeight||0)/1.6);
+            u.mesh.rotation.x=tilt*(.36*Math.sin(u.blastSpinPhase*1.13+.4));
+            u.mesh.rotation.z=tilt*(.58*Math.sin(u.blastSpinPhase*.87+.7));
+            u.mesh.rotation.y=(u.heading||0)+tilt*.32*Math.sin(u.blastSpinPhase*.7);
+        }else if(!airborne){
+            u.mesh.rotation.x=0;
+            u.mesh.rotation.z=0;
+            if(u.heading!==undefined)u.mesh.rotation.y=u.heading;
+        }
         // Knees tuck in flight, then bend under the body to absorb the landing.
         // Blast victims turn and reach for balance while the capsule stays upright.
-        pose(u.torso.rotation,'x',airborne?.12+(u.impactLean||0)+sway*.23:landing?.23:0);
-        pose(u.torso.rotation,'z',airborne?.07+roll*.18:0);
+        pose(u.torso.rotation,'x',airborne?.12+(u.impactLean||0)+sway*.32:landing?.23:0);
+        pose(u.torso.rotation,'z',airborne?.07+roll*.28:0);
         pose(u.torso.position,'y',airborne?.91:landing?.83:.9);
         pose(u.legL.rotation,'x',airborne?-.25+sway*.2:landing?.20:0);
         pose(u.legR.rotation,'x',airborne?-.14-sway*.2:landing?.12:0);

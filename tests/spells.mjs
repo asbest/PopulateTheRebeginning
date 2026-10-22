@@ -113,20 +113,47 @@ try{
    gameTestAPI.SpatialHash.update();
    const ball=new gameTestAPI.Fireball(new THREE.Vector3(x-4,y+2,z),new THREE.Vector3(x,y,z),0);
    ball.mesh.position.set(x,y,z);ball.explode();
-   const launch={...enemy.rigidBody.linvel()};let travel=0,rise=0,worldRise=0,airborneFrames=0,swirl=0;
-   for(let i=0;i<180;i++){
+   const launch={...enemy.rigidBody.linvel()};let travel=0,rise=0,worldRise=0,airborneFrames=0,swirl=0,tilt=0;
+   const flight=[];
+   for(let i=0;i<240;i++){
     state.physicsWorld.timestep=1/60;state.physicsWorld.step();enemy.update(1/60);
     travel=Math.max(travel,enemy.mesh.position.x-startX);
     rise=Math.max(rise,enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z));
     worldRise=Math.max(worldRise,enemy.mesh.position.y-startY);
-    if(!enemy.isGrounded){airborneFrames++;swirl=Math.max(swirl,Math.abs(enemy.torso.rotation.z));}
+    if(!enemy.isGrounded){
+     airborneFrames++;swirl=Math.max(swirl,Math.abs(enemy.torso.rotation.z));
+     tilt=Math.max(tilt,Math.abs(enemy.mesh.rotation.z));
+     const v=enemy.rigidBody.linvel();flight.push({y:enemy.mesh.position.y,x:enemy.mesh.position.x,vx:v.x,vy:v.y});
+    }
    }
-   const report={launch,travel,rise,worldRise,airborneFrames,swirl,state:enemy.state,
+   const apex=flight.reduce((best,sample,i)=>sample.y>flight[best].y?i:best,0);
+   const apexVelocity=flight[apex],beforeApex=flight[Math.max(0,apex-8)],afterApex=flight[Math.min(flight.length-1,apex+8)];
+   const report={launch,travel,rise,worldRise,airborneFrames,swirl,tilt,apexVelocity,beforeApex,afterApex,state:enemy.state,
     gravityScale:enemy.rigidBody.gravityScale(),groundGap:enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z)};
-   if(launch.x<8||launch.x>16||launch.y<18||launch.y>23||travel<10||travel>26||
-      rise<8||rise>18||worldRise<6||worldRise>15||airborneFrames<85||swirl<.12||
+   if(launch.x<8||launch.x>16||launch.y<18||launch.y>23||travel<20||travel>40||
+      rise<8||rise>18||worldRise<6||worldRise>15||airborneFrames<85||swirl<.12||tilt<.35||
+      apexVelocity.vx<launch.x*.7||beforeApex.vy<.5||afterApex.vy>-.5||
       enemy.state==='stunned'||enemy.state==='getting_up'||report.gravityScale!==1||Math.abs(report.groundGap)>.35)
     throw new Error('Fireball failed to launch or recover: '+JSON.stringify(report));
+   return report;
+  });
+ });
+ await check('Blast gravity stays constant through a long fall',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const u=fixture.enemy,x=u.mesh.position.x,z=u.mesh.position.z;
+   u.mesh.position.y+=100;
+   u.rigidBody.setTranslation({x,y:u.mesh.position.y+u.height/2,z},true);
+   u.rigidBody.setLinvel({x:0,y:0,z:0},true);
+   u.applyForce(new THREE.Vector3(5,8,0),5,8,.6);
+   let minGravity=Infinity,maxGravity=-Infinity,maxTilt=0;
+   for(let i=0;i<240;i++){
+    state.physicsWorld.timestep=1/60;state.physicsWorld.step();u.update(1/60);
+    const gravity=u.rigidBody.gravityScale();minGravity=Math.min(minGravity,gravity);maxGravity=Math.max(maxGravity,gravity);
+    maxTilt=Math.max(maxTilt,Math.abs(u.mesh.rotation.z));
+   }
+   const report={height:u.mesh.position.y-getSurfaceHeight(u.mesh.position.x,u.mesh.position.z),minGravity,maxGravity,maxTilt,airborne:u.blastAirborne};
+   if(report.height<5||!report.airborne||Math.abs(minGravity-.6)>.001||Math.abs(maxGravity-.6)>.001||maxTilt<.35)
+    throw new Error(JSON.stringify(report));
    return report;
   });
  });

@@ -7499,7 +7499,7 @@ window.Humanoid = class Humanoid {
         if(this.state === 'dead') return;
         if((this.hitImpulseCooldown||0)>0) return;
         this.hitImpulseCooldown = 0.28;
-        this.heading=this.mesh.rotation.y;
+        if(this.state!=='stunned'||!this.blastAirborne)this.heading=this.mesh.rotation.y;
         this.idleAnchor=null;
         this.gait=null;
         const impulse = vec.clone();
@@ -7507,10 +7507,12 @@ window.Humanoid = class Humanoid {
         if(horizontal>maxHorizontal) { impulse.x*=maxHorizontal/horizontal; impulse.z*=maxHorizontal/horizontal; }
         impulse.y=Math.max(0,Math.min(maxVertical,impulse.y));
         if(airGravityScale<1){
-            this.blastFloatRemaining=3.5;
+            this.blastAirborne=true;
             this.blastGravityScale=airGravityScale;
             this.blastSpinPhase=0;
             this.rigidBody?.setGravityScale(airGravityScale,true);
+            // Keep sideways momentum through the apex so the path stays an arc.
+            this.rigidBody?.setLinearDamping(0.06);
         }
         if (this.rigidBody && typeof this.rigidBody.applyImpulse === 'function') {
             this.rigidBody.setEnabledRotations(false, false, false, true);
@@ -8130,13 +8132,11 @@ window.Humanoid = class Humanoid {
                 // Landing enters the existing recovery timer; never cancel stun at the apex.
             } else if (this.mesh.position.y > targetY + 0.1) { this.isGrounded = false; }
         }
-        if(this.blastFloatRemaining>0){
-            this.blastFloatRemaining=Math.max(0,this.blastFloatRemaining-dt);
-            if(this.isGrounded||this.blastFloatRemaining===0){
-                this.blastFloatRemaining=0;
-                this.blastGravityScale=1;
-                this.rigidBody?.setGravityScale(1,true);
-            }
+        if(this.blastAirborne&&this.isGrounded){
+            this.blastAirborne=false;
+            this.blastGravityScale=1;
+            this.rigidBody?.setGravityScale(1,true);
+            this.rigidBody?.setLinearDamping(0.5);
         }
 
         this.surviveWater(dt,groundH);
@@ -8208,8 +8208,10 @@ window.Humanoid = class Humanoid {
         }
 
         if(this.state === 'stunned') {
-            if(this.blastFloatRemaining>0&&!this.isGrounded)
-                this.blastSpinPhase=(this.blastSpinPhase||0)+dt*3.2;
+            if(this.blastAirborne&&!this.isGrounded){
+                this.blastSpinPhase=(this.blastSpinPhase||0)+dt*4.2;
+                this.blastAirHeight=Math.max(0,this.mesh.position.y-groundH);
+            }
             Locomotion.animateFall(this,dt,this.isGrounded?'landing':'airborne');
             if(this.isGrounded) {
                 this.recoverTimer -= dt;
@@ -8584,9 +8586,10 @@ window.Humanoid = class Humanoid {
         this.velocity.set(0,0,0);this.state='idle';this.isGrounded=true;
         this.target=null;this.finalDest=null;this.attackTarget=null;this.targetBoat=null;
         this.path=[];this.pathIndex=0;this.idleAnchor=null;this.gait=null;this.groundBodyOffset=0;
-        this.blastFloatRemaining=0;this.blastGravityScale=1;
+        this.blastAirborne=false;this.blastGravityScale=1;
         if(this.rigidBody){
             this.rigidBody.setGravityScale(1,true);
+            this.rigidBody.setLinearDamping(0.5);
             this.rigidBody.setEnabled(true);this.rigidBody.setTranslation({x,y:h+this.height/2,z},true);
             this.rigidBody.setLinvel({x:0,y:0,z:0},true);this.rigidBody.setAngvel({x:0,y:0,z:0},true);
             this.rigidBody.setRotation({x:0,y:0,z:0,w:1},true);
@@ -8598,8 +8601,9 @@ window.Humanoid = class Humanoid {
     loadUnit(u) {
         if(u===this||u.isVehicle||u.state==='dead'||u.state==='transported'||this.passengers.includes(u)||this.passengers.length >= this.capacity) return false;
         this.passengers.push(u);
-        u.blastFloatRemaining=0;u.blastGravityScale=1;
+        u.blastAirborne=false;u.blastGravityScale=1;
         u.rigidBody?.setGravityScale(1,true);
+        u.rigidBody?.setLinearDamping(0.5);
         u.mesh.visible = false;
         u.state = 'transported';
         u.transportedBy = this;
