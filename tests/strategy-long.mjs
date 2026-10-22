@@ -56,8 +56,8 @@ try {
     };
    },{personality,raid});
    for(let elapsed=0;elapsed<minutes*60;elapsed+=60){await page.evaluate(()=>advanceLongRun(60));if(elapsed%300===0)console.log(`${personality}: ${elapsed+60}/${minutes*60} simulated seconds`);}
-   const detail=await page.evaluate(()=>({classes:longRun.classes,attackDistance:longRun.attackDistance,defended:longRun.defended,recovered:longRun.recovered,raidDamage:longRun.raidUnits.some(u=>u.hp<u.maxHp||u.state==='dead'),peakBuildings:longRun.peakBuildings,peakPopulation:longRun.peakPopulation,shamanAlive:state.units.some(u=>u.faction===1&&u.isShaman&&u.state!=='dead'),plan:enemyAIs[0].lastPlan}));
-   const pass=detail.shamanAlive&&detail.peakBuildings>=5&&detail.attackDistance>20&&['warrior','firewarrior','spy'].every(t=>detail.classes[t])&&(!raid||(detail.defended&&detail.raidDamage&&detail.recovered));
+   const detail=await page.evaluate(()=>({classes:longRun.classes,attackDistance:longRun.attackDistance,defended:longRun.defended,recovered:longRun.recovered,raidRepelled:longRun.raidUnits.some(u=>u.hp<u.maxHp||u.state==='dead'||u.faction!==0),raidOutcomes:longRun.raidUnits.map(u=>({faction:u.faction,hp:u.hp,maxHp:u.maxHp,state:u.state})),peakBuildings:longRun.peakBuildings,peakPopulation:longRun.peakPopulation,shamanAlive:state.units.some(u=>u.faction===1&&u.isShaman&&u.state!=='dead'),plan:enemyAIs[0].lastPlan}));
+   const pass=detail.shamanAlive&&detail.peakBuildings>=5&&detail.attackDistance>20&&['warrior','firewarrior','spy'].every(t=>detail.classes[t])&&(!raid||(detail.defended&&detail.raidRepelled&&detail.recovered));
    results.push({name:`${personality}: ${minutes} minutes${raid?' with raid and worker losses':''}`,pass,seed,detail});
    console.log((pass?'PASS ':'FAIL ')+JSON.stringify(results.at(-1)));
   }catch(e){results.push({name:personality,pass:false,error:String(e)});console.log('FAIL '+personality+' '+e);}finally{await page.close();}
