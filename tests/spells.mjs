@@ -113,15 +113,19 @@ try{
    gameTestAPI.SpatialHash.update();
    const ball=new gameTestAPI.Fireball(new THREE.Vector3(x-4,y+2,z),new THREE.Vector3(x,y,z),0);
    ball.mesh.position.set(x,y,z);ball.explode();
-   const launch={...enemy.rigidBody.linvel()};let travel=0,rise=0,worldRise=0;
+   const launch={...enemy.rigidBody.linvel()};let travel=0,rise=0,worldRise=0,airborneFrames=0,swirl=0;
    for(let i=0;i<180;i++){
     state.physicsWorld.timestep=1/60;state.physicsWorld.step();enemy.update(1/60);
     travel=Math.max(travel,enemy.mesh.position.x-startX);
     rise=Math.max(rise,enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z));
     worldRise=Math.max(worldRise,enemy.mesh.position.y-startY);
+    if(!enemy.isGrounded){airborneFrames++;swirl=Math.max(swirl,Math.abs(enemy.torso.rotation.z));}
    }
-   const report={launch,travel,rise,worldRise,state:enemy.state,groundGap:enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z)};
-   if(launch.x<12||launch.x>20||launch.y<11||launch.y>17.5||travel<7||travel>25||rise<1.5||worldRise<2||worldRise>6||enemy.state==='stunned'||enemy.state==='getting_up'||Math.abs(report.groundGap)>.35)
+   const report={launch,travel,rise,worldRise,airborneFrames,swirl,state:enemy.state,
+    gravityScale:enemy.rigidBody.gravityScale(),groundGap:enemy.mesh.position.y-getSurfaceHeight(enemy.mesh.position.x,enemy.mesh.position.z)};
+   if(launch.x<8||launch.x>16||launch.y<18||launch.y>23||travel<10||travel>26||
+      rise<8||rise>18||worldRise<6||worldRise>15||airborneFrames<85||swirl<.12||
+      enemy.state==='stunned'||enemy.state==='getting_up'||report.gravityScale!==1||Math.abs(report.groundGap)>.35)
     throw new Error('Fireball failed to launch or recover: '+JSON.stringify(report));
    return report;
   });

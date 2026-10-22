@@ -6137,9 +6137,12 @@ class Fireball {
             // travel instead; a vertical firestorm impact uses a fixed direction.
             const nx = horizontal > .05 ? dx / horizontal : incomingLength > .05 ? incomingX / incomingLength : 1;
             const nz = horizontal > .05 ? dz / horizontal : incomingLength > .05 ? incomingZ / incomingLength : 0;
-            const shove = (this.unitShot ? 5.2 : 8) * falloff;
-            const lift = (this.unitShot ? 5.2 : 7.2) * falloff;
-            u.applyForce(new THREE.Vector3(nx * shove, lift, nz * shove), this.unitShot ? 5.5 : 8);
+            const vehicle=u.isVehicle;
+            const shove = (vehicle ? (this.unitShot ? 5.2 : 8) : (this.unitShot ? 4.2 : 5.4)) * falloff;
+            const lift = (vehicle ? (this.unitShot ? 5.2 : 7.2) : (this.unitShot ? 6.8 : 9.2)) * falloff;
+            u.applyForce(new THREE.Vector3(nx * shove, lift, nz * shove),
+                vehicle ? (this.unitShot ? 5.5 : 8) : (this.unitShot ? 4.5 : 5.5),
+                vehicle ? 6 : 8, vehicle ? 1 : (this.unitShot ? .7 : .6));
             u.takeDamage(this.unitDamage*radialDamageFactor(distance,radius));
             u.burnTimer = Math.max(u.burnTimer||0,3*falloff);
         });
@@ -7492,7 +7495,7 @@ window.Humanoid = class Humanoid {
         }
     }
 
-    applyForce(vec, maxHorizontal = 5) {
+    applyForce(vec, maxHorizontal = 5, maxVertical = 6, airGravityScale = 1) {
         if(this.state === 'dead') return;
         if((this.hitImpulseCooldown||0)>0) return;
         this.hitImpulseCooldown = 0.28;
@@ -7502,7 +7505,13 @@ window.Humanoid = class Humanoid {
         const impulse = vec.clone();
         const horizontal = Math.hypot(impulse.x,impulse.z);
         if(horizontal>maxHorizontal) { impulse.x*=maxHorizontal/horizontal; impulse.z*=maxHorizontal/horizontal; }
-        impulse.y=Math.max(0,Math.min(6,impulse.y));
+        impulse.y=Math.max(0,Math.min(maxVertical,impulse.y));
+        if(airGravityScale<1){
+            this.blastFloatRemaining=3.5;
+            this.blastGravityScale=airGravityScale;
+            this.blastSpinPhase=0;
+            this.rigidBody?.setGravityScale(airGravityScale,true);
+        }
         if (this.rigidBody && typeof this.rigidBody.applyImpulse === 'function') {
             this.rigidBody.setEnabledRotations(false, false, false, true);
             this.rigidBody.applyImpulse({ x: impulse.x, y: impulse.y, z: impulse.z }, true);
@@ -8015,7 +8024,7 @@ window.Humanoid = class Humanoid {
             const linvel = this.rigidBody.linvel();
             this.velocity.set(linvel.x, linvel.y, linvel.z);
         } else {
-            if(!this.isGrounded) this.velocity.y -= 30 * dt;
+            if(!this.isGrounded) this.velocity.y -= 30 * (this.blastGravityScale||1) * dt;
             else {
                 // High friction when manual logic is active
                 this.velocity.x *= 0.8;
@@ -8121,6 +8130,14 @@ window.Humanoid = class Humanoid {
                 // Landing enters the existing recovery timer; never cancel stun at the apex.
             } else if (this.mesh.position.y > targetY + 0.1) { this.isGrounded = false; }
         }
+        if(this.blastFloatRemaining>0){
+            this.blastFloatRemaining=Math.max(0,this.blastFloatRemaining-dt);
+            if(this.isGrounded||this.blastFloatRemaining===0){
+                this.blastFloatRemaining=0;
+                this.blastGravityScale=1;
+                this.rigidBody?.setGravityScale(1,true);
+            }
+        }
 
         this.surviveWater(dt,groundH);
 
@@ -8191,6 +8208,8 @@ window.Humanoid = class Humanoid {
         }
 
         if(this.state === 'stunned') {
+            if(this.blastFloatRemaining>0&&!this.isGrounded)
+                this.blastSpinPhase=(this.blastSpinPhase||0)+dt*3.2;
             Locomotion.animateFall(this,dt,this.isGrounded?'landing':'airborne');
             if(this.isGrounded) {
                 this.recoverTimer -= dt;
@@ -8565,7 +8584,9 @@ window.Humanoid = class Humanoid {
         this.velocity.set(0,0,0);this.state='idle';this.isGrounded=true;
         this.target=null;this.finalDest=null;this.attackTarget=null;this.targetBoat=null;
         this.path=[];this.pathIndex=0;this.idleAnchor=null;this.gait=null;this.groundBodyOffset=0;
+        this.blastFloatRemaining=0;this.blastGravityScale=1;
         if(this.rigidBody){
+            this.rigidBody.setGravityScale(1,true);
             this.rigidBody.setEnabled(true);this.rigidBody.setTranslation({x,y:h+this.height/2,z},true);
             this.rigidBody.setLinvel({x:0,y:0,z:0},true);this.rigidBody.setAngvel({x:0,y:0,z:0},true);
             this.rigidBody.setRotation({x:0,y:0,z:0,w:1},true);
@@ -8577,6 +8598,8 @@ window.Humanoid = class Humanoid {
     loadUnit(u) {
         if(u===this||u.isVehicle||u.state==='dead'||u.state==='transported'||this.passengers.includes(u)||this.passengers.length >= this.capacity) return false;
         this.passengers.push(u);
+        u.blastFloatRemaining=0;u.blastGravityScale=1;
+        u.rigidBody?.setGravityScale(1,true);
         u.mesh.visible = false;
         u.state = 'transported';
         u.transportedBy = this;

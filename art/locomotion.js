@@ -15,17 +15,20 @@ export function createLocomotion(T) {
         const airborne=phase==='airborne',landing=phase==='landing';
         const rate=airborne?10:landing?14:9;
         const pose=(part,axis,target)=>{if(part)part[axis]=smooth(part[axis],target,rate,dt);};
+        const swirling=airborne&&u.blastFloatRemaining>0;
+        const sway=swirling?Math.sin(u.blastSpinPhase||0):0;
+        const roll=swirling?Math.cos((u.blastSpinPhase||0)*.87):0;
         // Knees tuck in flight, then bend under the body to absorb the landing.
-        // Arms guard the head instead of cycling through the walking animation.
-        pose(u.torso.rotation,'x',airborne?.12+(u.impactLean||0):landing?.23:0);
-        pose(u.torso.rotation,'z',airborne?.07:0);
+        // Blast victims turn and reach for balance while the capsule stays upright.
+        pose(u.torso.rotation,'x',airborne?.12+(u.impactLean||0)+sway*.23:landing?.23:0);
+        pose(u.torso.rotation,'z',airborne?.07+roll*.18:0);
         pose(u.torso.position,'y',airborne?.91:landing?.83:.9);
-        pose(u.legL.rotation,'x',airborne?-.25:landing?.20:0);
-        pose(u.legR.rotation,'x',airborne?-.14:landing?.12:0);
+        pose(u.legL.rotation,'x',airborne?-.25+sway*.2:landing?.20:0);
+        pose(u.legR.rotation,'x',airborne?-.14-sway*.2:landing?.12:0);
         pose(u.legL.userData.lower?.rotation,'x',airborne?.55:landing?.42:0);
         pose(u.legR.userData.lower?.rotation,'x',airborne?.48:landing?.38:0);
-        pose(u.armL.rotation,'x',airborne?-.42:landing?-.32:0);
-        pose(u.armR.rotation,'x',airborne?-.36:landing?-.28:0);
+        pose(u.armL.rotation,'x',airborne?-.42+roll*.24:landing?-.32:0);
+        pose(u.armR.rotation,'x',airborne?-.36-roll*.24:landing?-.28:0);
         pose(u.armL.rotation,'z',airborne?.22:landing?.13:0);
         pose(u.armR.rotation,'z',airborne?-.22:landing?-.13:0);
         pose(u.armL.userData.lower?.rotation,'x',airborne?-.55:landing?-.42:0);
