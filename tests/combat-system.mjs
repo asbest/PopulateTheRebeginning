@@ -37,6 +37,28 @@ async function clickAttack(selector){
     await page.mouse.click(point.x,point.y);
 }
 try{
+    await check('Death immediately deselects units and exits control of a fallen fighter',async()=>{
+        await fresh();return page.evaluate(()=>{
+            const p=state.shaman.mesh.position;
+            const fighter=new Humanoid(0,'warrior',p.x+2,p.z),ally=new Humanoid(0,'warrior',p.x+4,p.z);
+            state.units.push(fighter,ally);
+            state.selectedUnits=[fighter,ally];
+            fighter.die();
+            if(state.selectedUnits.length!==1||state.selectedUnits[0]!==ally)
+                throw new Error('Group selection did not retain only the survivor');
+            state.currentAction='warrior_attack';gameTestAPI.updateContextMenus();
+            state.isFPV=true;state.camera=state.perspectiveCamera;
+            window.updateCameraPosition();
+            ally.takeDamage(ally.maxHp*10,true);
+            if(ally.state!=='dead'||state.selectedUnits.length||state.isFPV||state.camera===state.perspectiveCamera||!ally.head.visible)
+                throw new Error('Fallen fighter remained selected or controlled');
+            if(state.currentAction!=='move'||document.getElementById('btn-warrior_attack')||document.getElementById('btn-upgrade_unit'))
+                throw new Error('Dead unit actions remained in the sidebar');
+            ally.die();
+            if(state.selectedUnits.length)throw new Error('Repeated death changed selection');
+            return {survivorPreserved:true,firstPersonExited:true};
+        });
+    });
     for(const type of ['warrior','firewarrior'])await check(`${type}: select and aim a manual attack without spending mana`,async()=>{
         await fresh();
         await page.evaluate(type=>{

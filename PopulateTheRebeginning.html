@@ -7503,6 +7503,17 @@ window.Humanoid = class Humanoid {
             this.rigidBody = null;
             state.rigidBodies.delete(this.id);
         }
+        if(state.selectedUnits.includes(this)) {
+            const wasControlled=state.isFPV&&state.selectedUnits[0]===this;
+            state.selectedUnits=state.selectedUnits.filter(unit=>unit!==this);
+            if(wasControlled) {
+                state.isFPV=false;
+                state.camera=strategyCamera();
+                updateCameraPosition();
+            }
+            updateUnitListSelection();
+            updateContextMenus();
+        }
     }
 
     applyForce(vec, maxHorizontal = 5, maxVertical = 6, airGravityScale = 1) {
