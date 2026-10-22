@@ -215,11 +215,11 @@ try{
    u.die();
   }
   const traveler=new Humanoid(0,'warrior',419.9,419.9);state.units.push(traveler);traveler.placeOnGround(419.9,419.9);
-  state.selectedUnits=[traveler];state.cameraLookAt.set(0,6,0);state.isFPV=true;state.fpvYaw=-Math.PI/4;state.fpvPitch=-.2;
+  state.selectedUnits=[traveler];state.cameraLookAt.set(0,6,0);state.isFPV=true;state.camera=state.perspectiveCamera;state.fpvYaw=-Math.PI/4;state.fpvPitch=-.2;
   window.updateCameraPosition();gameTestAPI.updateChunks();
   const ownKey=`${Math.round(traveler.mesh.position.x/40)},${Math.round(traveler.mesh.position.z/40)}`;
   const cameraKey=`${Math.round(state.camera.position.x/40)},${Math.round(state.camera.position.z/40)}`;
-  if(!state.chunks[ownKey]||!state.chunks[cameraKey])throw new Error('First-person ground chunk was not loaded at the controlled unit');
+  if(!state.chunks[ownKey]||!state.chunks[cameraKey])throw new Error('First-person ground chunk was not loaded at the controlled unit: '+JSON.stringify({ownKey,cameraKey,unit:traveler.mesh.position,camera:state.camera.position,isFPV:state.isFPV}));
   state.isFPV=false;window.updateCameraPosition();
   return {samples,minGap,ownKey,cameraKey};
  }));
