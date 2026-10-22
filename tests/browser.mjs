@@ -184,7 +184,10 @@ try {
   victim.hp=victim.maxHp=1000;const clock=state.clock.getElapsedTime;state.clock.getElapsedTime=()=>100;
   const report=[];
   try{for(const type of ['wild','warrior','shaman','firewarrior','spy']){
-   const u=state.units.find(u=>u.type===type&&u.faction===0);u.attackTarget=victim;u.lastAttackTime=100-.6/u.attackSpeed;u.attackFired=false;
+   const u=state.units.find(u=>u.type===type&&u.faction===0);
+   // Each role starts elsewhere; put its opponent within actual melee reach.
+   victim.mesh.position.copy(u.mesh.position).add(new THREE.Vector3(0,0,.9));
+   u.attackTarget=victim;u.lastAttackTime=100-.6/u.attackSpeed;u.attackFired=false;
    const hp=victim.hp,projectiles=state.projectiles.length;u.attack();
    if(!u.attackFired||!Number.isFinite(u.armR.rotation.x))throw new Error(type+' animation/impact missing');
    if(['wild','warrior','shaman'].includes(type)&&victim.hp>=hp)throw new Error(type+' damage missing');

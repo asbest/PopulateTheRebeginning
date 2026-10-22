@@ -25,6 +25,17 @@ async function check(name,run){
     try{const detail=await run();results.push({name,pass:true,detail});console.log('PASS '+name);}
     catch(error){results.push({name,pass:false,error:String(error)});console.log('FAIL '+name+' '+error);}
 }
+async function clickAttack(selector){
+    // Check visibility and occlusion explicitly before a real pointer click.
+    const point=await page.locator(selector).evaluate(button=>{
+        button.scrollIntoView({block:'nearest',inline:'nearest'});
+        const rect=button.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2;
+        if(rect.width<1||rect.height<1||!button.contains(document.elementFromPoint(x,y)))
+            throw new Error('Attack button is hidden or covered: '+button.id);
+        return {x,y};
+    });
+    await page.mouse.click(point.x,point.y);
+}
 try{
     for(const type of ['warrior','firewarrior'])await check(`${type}: select and aim a manual attack without spending mana`,async()=>{
         await fresh();
@@ -49,7 +60,7 @@ try{
             state.cameraLookAt.copy(target.mesh.position);window.updateCameraPosition();state.camera.updateMatrixWorld(true);
             gameTestAPI.updateContextMenus();gameTestAPI.SpatialHash.update();
         },type);
-        await page.locator(`#btn-${type}_attack`).click();
+        await clickAttack(`#btn-${type}_attack`);
         return page.evaluate(type=>{
             const {fighter,target,ally}=manualFixture,action=`${type}_attack`,mana=state.mana;
             if(state.currentAction!==action||!document.querySelector(`#btn-${action}.active`))throw new Error('Attack selection missing');
@@ -116,7 +127,7 @@ try{
             window.updateCameraPosition();state.camera.updateMatrixWorld(true);state.scene.updateMatrixWorld(true);
             gameTestAPI.updateContextMenus();
         });
-        await page.locator('#btn-warrior_attack').click();
+        await clickAttack('#btn-warrior_attack');
         const viewport=page.viewportSize();await page.mouse.click(viewport.width/2,viewport.height/2);
         return page.evaluate(()=>{
             const {u,target}=firstPersonFixture;
