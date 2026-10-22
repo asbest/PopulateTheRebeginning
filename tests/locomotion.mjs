@@ -196,6 +196,33 @@ try{
   for(let i=0;i<480;i++){state.physicsWorld.timestep=1/60;state.physicsWorld.step();for(const u of state.units){u.nextTargetCheck=Infinity;u.update(1/60);}}
   return {seconds:8,bodies:state.rigidBodies.size,colliders:state.terrainColliders.size};
  }));
+ await check('First-person camera and near plane stay above steep terrain and stream the controlled unit',()=>page.evaluate(()=>{
+  state.isFPV=false;
+  for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
+  for(const b of state.buildings)state.scene.remove(b.mesh);state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
+  for(let x=-5;x<=5;x++)for(let z=-5;z<=5;z++)
+   state.terrainMods.set(`${x},${z}`,6+12*Math.max(0,Math.min(1,x))-gameTestAPI.getBaseHeight(x,z));
+  state.cameraLookAt.set(0,6,0);state.heightCache.clear();gameTestAPI.updateChunks(true);
+  let samples=0,minGap=Infinity;
+  for(const type of ['warrior','firewarrior','shaman']){
+   const u=new Humanoid(0,type,-.2,0);state.units.push(u);state.selectedUnits=[u];state.isFPV=true;state.camera=state.perspectiveCamera;
+   state.camera.aspect=2.2;state.camera.updateProjectionMatrix();state.fpvYaw=-Math.PI/2;
+   for(const pitch of [-.9,0,.9])for(const drop of [0,3]){
+    u.placeOnGround(-.2,0);u.mesh.position.y-=drop;state.fpvPitch=pitch;window.updateCameraPosition();state.camera.updateMatrixWorld(true);
+    const points=[state.camera.position.clone(),...[-1,0,1].flatMap(x=>[-1,0,1].map(y=>new THREE.Vector3(x,y,-1).unproject(state.camera)))];
+    for(const point of points){const gap=point.y-getSurfaceHeight(point.x,point.z);minGap=Math.min(minGap,gap);samples++;if(gap<.03)throw new Error('First-person view penetrates terrain: '+JSON.stringify({type,pitch,drop,gap,point}));}
+   }
+   u.die();
+  }
+  const traveler=new Humanoid(0,'warrior',419.9,419.9);state.units.push(traveler);traveler.placeOnGround(419.9,419.9);
+  state.selectedUnits=[traveler];state.cameraLookAt.set(0,6,0);state.isFPV=true;state.fpvYaw=-Math.PI/4;state.fpvPitch=-.2;
+  window.updateCameraPosition();gameTestAPI.updateChunks();
+  const ownKey=`${Math.round(traveler.mesh.position.x/40)},${Math.round(traveler.mesh.position.z/40)}`;
+  const cameraKey=`${Math.round(state.camera.position.x/40)},${Math.round(state.camera.position.z/40)}`;
+  if(!state.chunks[ownKey]||!state.chunks[cameraKey])throw new Error('First-person ground chunk was not loaded at the controlled unit');
+  state.isFPV=false;window.updateCameraPosition();
+  return {samples,minGap,ownKey,cameraKey};
+ }));
  await check('No movement runtime errors',async()=>{if(errors.length)throw new Error(errors.join('\n'));});
 }finally{await browser.close();await fs.writeFile(path.join(root,'test-results','locomotion-report.json'),JSON.stringify({results,errors},null,2));}
 process.exitCode=results.some(r=>!r.pass)?1:0;

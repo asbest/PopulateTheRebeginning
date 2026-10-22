@@ -29,7 +29,7 @@ try{
     for(const type of ['warrior','firewarrior'])await check(`${type}: select and aim a manual attack without spending mana`,async()=>{
         await fresh();
         await page.evaluate(type=>{
-            closeHelp();closeStoryOverlay();
+            closeHelp();closeStoryOverlay();state.isPaused=true;
             const x=state.shaman.mesh.position.x,z=state.shaman.mesh.position.z;
             for(const u of state.units){u.die();state.scene.remove(u.mesh);}
             state.units=[];
@@ -99,7 +99,7 @@ try{
     await check('First-person club swings from a view click and only hits enemies within forward reach',async()=>{
         await fresh();
         await page.evaluate(()=>{
-            closeHelp();closeStoryOverlay();
+            closeHelp();closeStoryOverlay();state.isPaused=true;
             const x=state.shaman.mesh.position.x,z=state.shaman.mesh.position.z;
             for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
             for(const b of state.buildings)state.scene.remove(b.mesh);state.buildings=[];
@@ -129,7 +129,7 @@ try{
             u.mesh.updateMatrixWorld(true);
             const tip=u.weaponTip.getWorldPosition(new THREE.Vector3()).project(state.camera);
             if(Math.abs(tip.x)>1||Math.abs(tip.y)>1||tip.z< -1||tip.z>1||u.head.visible)
-                throw new Error('First-person club is outside the view or the head blocks it: '+JSON.stringify(tip));
+                throw new Error('First-person club is outside the view or the head blocks it: '+JSON.stringify({tip,camera:state.camera.position,unit:u.mesh.position,torso:u.torso.position,fov:state.camera.fov,phase:u.attackPhase,ground:getSurfaceHeight(state.camera.position.x,state.camera.position.z)}));
             for(const offset of [-.9,4]){
                 u.manualAttack=null;u.lastAttackTime=-100;target.placeOnGround(u.mesh.position.x,u.mesh.position.z+offset);
                 const hp=target.hp;

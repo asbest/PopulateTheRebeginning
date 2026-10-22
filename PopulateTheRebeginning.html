@@ -4429,10 +4429,19 @@ function syncTreeAppearance() {
     }
 }
 
+function terrainChunksInBounds(minX,minZ,maxX,maxZ,chunks=new Set()) {
+    const half=CHUNK_SIZE/2;
+    // Include both owners of an edge vertex, plus the interpolation support.
+    for(let cx=Math.ceil((minX-half)/CHUNK_SIZE);cx<=Math.floor((maxX+half)/CHUNK_SIZE);cx++)
+        for(let cz=Math.ceil((minZ-half)/CHUNK_SIZE);cz<=Math.floor((maxZ+half)/CHUNK_SIZE);cz++)
+            chunks.add(`${cx},${cz}`);
+    return chunks;
+}
+
 function modifyTerrain(centerX, centerZ, radius, amount) {
     state.navigationVersion++;
     const rSq = radius * radius;
-    const modifiedChunks = new Set();
+    const modifiedChunks = terrainChunksInBounds(centerX-radius-1,centerZ-radius-1,centerX+radius+1,centerZ+radius+1);
     for(let x = Math.floor(centerX - radius); x <= Math.ceil(centerX + radius); x++) {
         for(let z = Math.floor(centerZ - radius); z <= Math.ceil(centerZ + radius); z++) {
             const distSq = (x - centerX)**2 + (z - centerZ)**2;
@@ -4441,9 +4450,6 @@ function modifyTerrain(centerX, centerZ, radius, amount) {
                 const key = `${x},${z}`;
                 const currentMod = state.terrainMods.get(key) || 0;
                 state.terrainMods.set(key, currentMod + (amount * falloff));
-                const cx = Math.round(x / CHUNK_SIZE);
-                const cz = Math.round(z / CHUNK_SIZE);
-                modifiedChunks.add(`${cx},${cz}`);
             }
         }
     }
@@ -4511,8 +4517,10 @@ function updateChunks(force = false, specificChunks = null) {
     if(force){state.heightCache.clear();state.navigationVersion++;}
     if (!chunkTerrainMat) initTerrainResources();
 
-    const cx = Math.round(state.cameraLookAt.x / CHUNK_SIZE);
-    const cz = Math.round(state.cameraLookAt.z / CHUNK_SIZE);
+    const focus=state.isFPV&&state.selectedUnits[0]?.state!=='dead'&&state.selectedUnits[0]?.mesh
+        ?state.selectedUnits[0].mesh.position:state.cameraLookAt;
+    const cx = Math.round(focus.x / CHUNK_SIZE);
+    const cz = Math.round(focus.z / CHUNK_SIZE);
 
     if (!force && !specificChunks && cx === lastChunkX && cz === lastChunkZ && !chunksLoadingPending) return;
     lastChunkX = cx;
@@ -4524,38 +4532,29 @@ function updateChunks(force = false, specificChunks = null) {
     const MAX_CHUNKS_PER_FRAME = CONFIG.TERRAIN.MAX_CHUNKS_PER_FRAME;
     const streamStart=performance.now();
 
+    // Refresh affected loaded chunks even when construction is outside the view.
+    if(force)for(const [key,chunk] of Object.entries(state.chunks)){
+        if(specificChunks&&!specificChunks.has(key))continue;
+        const [chunkX,chunkZ]=key.split(',').map(Number);
+        if(chunk.children[0])updateChunkGeometry(chunk.children[0],chunkX,chunkZ);
+        if(chunk.children[1])updateChunkWater(chunk.children[1],chunkX,chunkZ);
+        updateChunkDecorations(chunk,chunkX,chunkZ);
+        updateChunkPhysics(chunkX,chunkZ);
+    }
+
     for(const {x,z} of CHUNK_OFFSETS) {
             const key = (cx+x) + "," + (cz+z);
             activeKeys.add(key);
-            if(!state.chunks[key] || (force && (!specificChunks || specificChunks.has(key)))) {
-
-                if(state.chunks[key] && force) {
-                    // Reuse existing chunk geometry
-                    if(state.chunks[key].children[0]) {
-                        updateChunkGeometry(state.chunks[key].children[0], cx+x, cz+z);
-                    }
-                    if(state.chunks[key].children[1]) {
-                        updateChunkWater(state.chunks[key].children[1], cx+x, cz+z);
-                    }
-                    updateChunkDecorations(state.chunks[key], cx+x, cz+z);
-                    updateChunkPhysics(cx+x, cz+z);
-                } else {
-                    if (!state.chunks[key] && (createdCount >= MAX_CHUNKS_PER_FRAME ||
-                        createdCount > 0 && performance.now()-streamStart > 8)) {
-                        chunksLoadingPending = true;
-                        continue;
-                    }
-
-                    if(state.chunks[key]) {
-                        state.scene.remove(state.chunks[key]);
-                        disposeChunkGeometry(state.chunks[key]);
-                    }
-                    state.chunks[key] = createChunk(cx+x, cz+z);
-                    indexChunkTreeObstacles(state.chunks[key]);
-                    state.scene.add(state.chunks[key]);
-                    createdCount++;
-                    state.lastTerrainBuildAt=performance.now();
+            if(!state.chunks[key]) {
+                if (createdCount >= MAX_CHUNKS_PER_FRAME || createdCount > 0 && performance.now()-streamStart > 8) {
+                    chunksLoadingPending = true;
+                    continue;
                 }
+                state.chunks[key] = createChunk(cx+x, cz+z);
+                indexChunkTreeObstacles(state.chunks[key]);
+                state.scene.add(state.chunks[key]);
+                createdCount++;
+                state.lastTerrainBuildAt=performance.now();
             }
     }
     if(!force) {
@@ -4756,6 +4755,8 @@ function updateChunkGeometry(mesh, cx, cz) {
     }
     normal.needsUpdate = true;
     patternAttr.needsUpdate = true;
+    geo.computeBoundingBox();
+    geo.computeBoundingSphere();
 }
 
 function updateChunkDecorations(chunk, cx, cz) {
@@ -6785,9 +6786,7 @@ function castLandbridge(caster, x, z) {
                     const key = `${ix},${iz}`;
                     const base = getBaseHeight(ix, iz);
                     state.terrainMods.set(key, targetH - base);
-                    const cx = Math.round(ix / CHUNK_SIZE);
-                    const cz = Math.round(iz / CHUNK_SIZE);
-                    allMods.add(`${cx},${cz}`);
+                    terrainChunksInBounds(ix-1,iz-1,ix+1,iz+1,allMods);
                 }
             }
         }
@@ -6972,7 +6971,7 @@ function executeSpell(type, x, z, caster) {
         }
         if(count > 0) {
             const avg = totalH / count;
-            const modifiedChunks = new Set();
+            const modifiedChunks = terrainChunksInBounds(x-r-1,z-r-1,x+r+1,z+r+1);
             for(let ix = Math.floor(x - r); ix <= Math.ceil(x + r); ix++) {
                 for(let iz = Math.floor(z - r); iz <= Math.ceil(z + r); iz++) {
                      if((ix-x)**2 + (iz-z)**2 <= r*r) {
@@ -6980,9 +6979,6 @@ function executeSpell(type, x, z, caster) {
                         const key = `${ix},${iz}`;
                         const mod = state.terrainMods.get(key) || 0;
                         state.terrainMods.set(key, mod + (avg - current));
-                        const cx = Math.round(ix / CHUNK_SIZE);
-                        const cz = Math.round(iz / CHUNK_SIZE);
-                        modifiedChunks.add(`${cx},${cz}`);
                      }
                 }
             }
@@ -8838,7 +8834,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
     // Auto-Leveling
     if(!isLoading) {
-        const modifiedChunks = new Set();
+        const modifiedChunks = terrainChunksInBounds(x-radius-1,z-radius-1,x+radius+1,z+radius+1);
         for(let ix = Math.floor(x - radius); ix <= Math.ceil(x + radius); ix++) {
             for(let iz = Math.floor(z - radius); iz <= Math.ceil(z + radius); iz++) {
                 const dist = Math.sqrt((ix-x)**2 + (iz-z)**2);
@@ -8847,12 +8843,10 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                     const naturalH = getBaseHeight(ix, iz);
                     const targetMod = baseH - naturalH;
                     state.terrainMods.set(key, targetMod);
-                    const cx = Math.round(ix / CHUNK_SIZE);
-                    const cz = Math.round(iz / CHUNK_SIZE);
-                    modifiedChunks.add(`${cx},${cz}`);
                 }
             }
         }
+        state.heightCache.clear();
         if(autoUpdate) updateChunks(true, modifiedChunks);
     }
 
@@ -11836,6 +11830,32 @@ window.toggleCameraView = function() {
 };
 
 window.updateCameraPosition = updateCameraPosition;
+const _fpvForward=new THREE.Vector3(),_fpvRight=new THREE.Vector3(),_fpvUp=new THREE.Vector3();
+function ensureFirstPersonGround(x,z) {
+    const cx=Math.round(x/CHUNK_SIZE),cz=Math.round(z/CHUNK_SIZE),key=`${cx},${cz}`;
+    if(state.chunks[key])return;
+    const chunk=createChunk(cx,cz);
+    state.chunks[key]=chunk;indexChunkTreeObstacles(chunk);state.scene.add(chunk);
+    state.lastTerrainBuildAt=performance.now();
+}
+function firstPersonTerrainFloor(camera) {
+    const p=camera.position,near=camera.near;
+    _fpvForward.set(0,0,-1).applyQuaternion(camera.quaternion);
+    _fpvRight.set(1,0,0).applyQuaternion(camera.quaternion);
+    _fpvUp.set(0,1,0).applyQuaternion(camera.quaternion);
+    const halfHeight=Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*near,halfWidth=halfHeight*camera.aspect;
+    ensureFirstPersonGround(p.x,p.z);
+    let floor=getSurfaceHeight(p.x,p.z)+.2;
+    // Protect the actual clipping-plane corners, not only the camera origin.
+    for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++){
+        const dx=_fpvForward.x*near+_fpvRight.x*halfWidth*x+_fpvUp.x*halfHeight*y;
+        const dy=_fpvForward.y*near+_fpvRight.y*halfWidth*x+_fpvUp.y*halfHeight*y;
+        const dz=_fpvForward.z*near+_fpvRight.z*halfWidth*x+_fpvUp.z*halfHeight*y;
+        ensureFirstPersonGround(p.x+dx,p.z+dz);
+        floor=Math.max(floor,getSurfaceHeight(p.x+dx,p.z+dz)+.1-dy);
+    }
+    return floor;
+}
 function updateCameraPosition() {
     const firstPersonWarrior=state.isFPV&&state.selectedUnits[0]?.type==='warrior'&&state.selectedUnits[0].state!=='dead'
         ?state.selectedUnits[0]:null;
@@ -11856,15 +11876,24 @@ function updateCameraPosition() {
              state.isFPV = false; state.camera = strategyCamera();
          } else {
              const u = state.selectedUnits[0];
+             state.cameraLookAt.copy(u.mesh.position);
+             ensureFirstPersonGround(u.mesh.position.x,u.mesh.position.z);
              const headH = firstPersonWarrior?1.32+(u.torso.position.y-.9):(u.isShaman ? 2.1 : 1.4);
              const pos = u.mesh.position.clone().add(new THREE.Vector3(0, headH, 0));
 
              const offsetDist = firstPersonWarrior?.08:CONFIG.CAMERA.FPV_OFFSET_DIST;
-             pos.x -= Math.sin(state.fpvYaw) * offsetDist;
-             pos.z -= Math.cos(state.fpvYaw) * offsetDist;
-
-             state.perspectiveCamera.position.copy(pos);
              state.perspectiveCamera.rotation.set(state.fpvPitch, state.fpvYaw, 0, 'YXZ');
+             // Pull the small eye offset back before lifting the camera on a bank.
+             // This keeps a steep hillside from moving the view through the ground.
+             for(let attempt=0;attempt<3;attempt++){
+                 const offset=attempt===0?offsetDist:attempt===1?offsetDist*.5:0;
+                 state.perspectiveCamera.position.copy(pos);
+                 state.perspectiveCamera.position.x-=Math.sin(state.fpvYaw)*offset;
+                 state.perspectiveCamera.position.z-=Math.cos(state.fpvYaw)*offset;
+                 const floor=firstPersonTerrainFloor(state.perspectiveCamera);
+                 if(pos.y>=floor)break;
+                 if(attempt===2)state.perspectiveCamera.position.y=floor;
+             }
          }
     }
 
@@ -11935,9 +11964,7 @@ function forceLandConnection(x1, z1, x2, z2) {
 
                     if(currentH < targetH) {
                         state.terrainMods.set(key, targetH - base);
-                        const cx = Math.round(ix / CHUNK_SIZE);
-                        const cz = Math.round(iz / CHUNK_SIZE);
-                        allMods.add(`${cx},${cz}`);
+                        terrainChunksInBounds(ix-1,iz-1,ix+1,iz+1,allMods);
                     }
                 }
             }
@@ -12245,7 +12272,7 @@ function animate() {
 
     _inputVector.copy(state.joystickVector).add(state.keyboardVector).clampLength(0, 1);
     const inputVector = _inputVector;
-    if(inputVector.lengthSq() > 0.001 && state.selectedUnits.length > 0) {
+    if(inputVector.lengthSq() > 0.001 && state.selectedUnits.length > 0 && !state.isFPV) {
         const center = new THREE.Vector3();
         state.selectedUnits.forEach(u => center.add(u.mesh.position));
         center.divideScalar(state.selectedUnits.length);

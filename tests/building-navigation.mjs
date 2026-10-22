@@ -99,8 +99,50 @@ try {
         if(!gameTestAPI.createBuilding('hut',0,10,0,false))throw new Error('Demolished site stayed blocked');
         return {radius,nearest,closest,destinationX:routed.mesh.position.x,crossingX:crossing.mesh.position.x,gap,passageZ:walker.mesh.position.z};
     });
+    const terrainIntegrity=await page.evaluate(()=>{
+        for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
+        for(const b of state.buildings)state.scene.remove(b.mesh);state.buildings=[];
+        gameTestAPI.BuildingSpatialHash.markDirty();
+        for(let x=10;x<=30;x++)for(let z=10;z<=30;z++)
+            state.terrainMods.set(`${x},${z}`,6+(x-20)*.5+(z-20)*.2-gameTestAPI.getBaseHeight(x,z));
+        state.cameraLookAt.set(20,8,20);state.heightCache.clear();gameTestAPI.updateChunks(true);
+        for(let i=0;i<10;i++)gameTestAPI.updateChunks();
+        const keys=['0,0','1,0','0,1','1,1'],res=gameTestAPI.CONFIG.TERRAIN.CHUNK_RES,stride=res+1;
+        for(const key of keys){const geo=state.chunks[key].children[0].geometry;geo.computeBoundingSphere();geo.computeBoundingBox();}
+        state.cameraLookAt.set(400,6,400);
+        const house=gameTestAPI.createBuilding('hut',23,23);
+        if(!house)throw new Error('Seam construction failed');
+        const edge=state.chunks['0,1'].children[0].geometry.attributes.position;
+        const other=state.chunks['1,1'].children[0].geometry.attributes.position;
+        let maxSeam=0;
+        for(let row=0;row<=res;row++)maxSeam=Math.max(maxSeam,Math.abs(edge.getY(row*stride+res)-other.getY(row*stride)));
+        if(maxSeam>.001)throw new Error('Building opened the shared terrain edge: '+maxSeam);
+        const mods=gameTestAPI.modifyTerrain(23,23,4,80);gameTestAPI.updateChunks(true,mods);
+        let vertices=0;
+        for(const key of keys){
+            const geo=state.chunks[key].children[0].geometry,p=geo.attributes.position;
+            if(geo.index.count!==res*res*6)throw new Error('Terrain triangles disappeared');
+            for(let i=0;i<p.count;i++){
+                const vertex=new THREE.Vector3().fromBufferAttribute(p,i);
+                if(!geo.boundingBox.containsPoint(vertex)||vertex.distanceTo(geo.boundingSphere.center)>geo.boundingSphere.radius+.001)
+                    throw new Error('Deformed terrain lies outside its culling bounds');
+                vertices++;
+            }
+        }
+        state.scene.updateMatrixWorld(true);
+        for(const x of [19.9,20,20.1,22,23,24])for(const z of [20,22,23,24]){
+            const h=getSurfaceHeight(x,z),ray=new THREE.Raycaster(new THREE.Vector3(x,h+100,z),new THREE.Vector3(0,-1,0),0,200);
+            const hits=ray.intersectObjects(keys.map(key=>state.chunks[key].children[0]));
+            if(!hits.length||Math.abs(hits[0].point.y-h)>.01)throw new Error('Visible terrain has a hole or seam at '+x+','+z);
+            const cx=Math.round(x/40),cz=Math.round(z/40),collider=state.terrainColliders.get(`${cx},${cz}`);
+            const hit=collider.castRay(new RAPIER.Ray({x,y:h+100,z},{x:0,y:-1,z:0}),200,true);
+            if(hit<0||Math.abs(hit-100)>.03)throw new Error('Building terrain collider differs from the surface');
+        }
+        return {maxSeam,vertices};
+    });
     if(errors.length)throw new Error(errors.join('\n'));
     console.log('PASS building collision and route avoidance',result);
+    console.log('PASS building terrain stays joined with complete triangles, bounds and matching colliders',terrainIntegrity);
 } finally {
     await browser.close();
 }
