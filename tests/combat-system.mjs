@@ -96,6 +96,53 @@ try{
             return {unitScale:shot.mesh.scale.x,spellScale:spell.mesh.scale.x};
         });
     });
+    await check('First-person club swings from a view click and only hits enemies within forward reach',async()=>{
+        await fresh();
+        await page.evaluate(()=>{
+            closeHelp();closeStoryOverlay();
+            const x=state.shaman.mesh.position.x,z=state.shaman.mesh.position.z;
+            for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
+            for(const b of state.buildings)state.scene.remove(b.mesh);state.buildings=[];
+            gameTestAPI.BuildingSpatialHash.markDirty();
+            for(let px=Math.floor(x)-5;px<=Math.ceil(x)+5;px++)for(let pz=Math.floor(z)-5;pz<=Math.ceil(z)+5;pz++)
+                state.terrainMods.set(`${px},${pz}`,6-gameTestAPI.getBaseHeight(px,pz));
+            state.heightCache.clear();gameTestAPI.updateChunks(true);
+            const u=new Humanoid(0,'warrior',x,z),target=new Humanoid(1,'warrior',x+.08,z+.9);
+            state.units=[u,target];state.selectedUnits=[u];state.selectedBuilding=null;
+            u.placeOnGround(x,z);target.placeOnGround(x+.08,z+.9);target.hp=target.maxHp=1000;
+            u.lastAttackTime=-100;u.nextTargetCheck=target.nextTargetCheck=Infinity;
+            window.firstPersonFixture={u,target};window.firstPersonTime=10;state.clock.getElapsedTime=()=>firstPersonTime;
+            state.isFPV=true;state.camera=state.perspectiveCamera;state.fpvYaw=Math.PI;state.fpvPitch=.45;
+            window.updateCameraPosition();state.camera.updateMatrixWorld(true);state.scene.updateMatrixWorld(true);
+            gameTestAPI.updateContextMenus();
+        });
+        await page.locator('#btn-warrior_attack').click();
+        const viewport=page.viewportSize();await page.mouse.click(viewport.width/2,viewport.height/2);
+        return page.evaluate(()=>{
+            const {u,target}=firstPersonFixture;
+            if(!u.manualAttack)throw new Error('First-person view click failed to swing without an exact mesh/terrain hit');
+            state.fpvPitch=0;window.updateCameraPosition();state.camera.updateMatrixWorld(true);
+            for(let i=0;i<30;i++){firstPersonTime+=1/60;u.update(1/60);}
+            if(target.hp===target.maxHp){firstPersonTime+=1/60;u.update(1/60);}
+            if(target.hp!==1000-u.damage)throw new Error('Close forward enemy was not struck');
+            window.updateCameraPosition();state.camera.updateMatrixWorld(true);
+            u.mesh.updateMatrixWorld(true);
+            const tip=u.weaponTip.getWorldPosition(new THREE.Vector3()).project(state.camera);
+            if(Math.abs(tip.x)>1||Math.abs(tip.y)>1||tip.z< -1||tip.z>1||u.head.visible)
+                throw new Error('First-person club is outside the view or the head blocks it: '+JSON.stringify(tip));
+            for(const offset of [-.9,4]){
+                u.manualAttack=null;u.lastAttackTime=-100;target.placeOnGround(u.mesh.position.x,u.mesh.position.z+offset);
+                const hp=target.hp;
+                gameTestAPI.handleTap(innerWidth/2,innerHeight/2,false,false);
+                if(!u.manualAttack)throw new Error('Empty swing was blocked');
+                for(let i=0;i<65;i++){firstPersonTime+=1/60;u.update(1/60);}
+                if(target.hp!==hp)throw new Error('Club damaged an enemy behind or beyond reach');
+            }
+            state.isFPV=false;window.updateCameraPosition();
+            if(!u.head.visible)throw new Error('Head stayed hidden after leaving first person');
+            return {damage:u.damage,weaponInView:true};
+        });
+    });
     await check('Warrior club contacts at the damage frame with a guarded full-body swing at 30/60/120 FPS',async()=>{
         await fresh();return page.evaluate(()=>{
             const x=state.shaman.mesh.position.x,z=state.shaman.mesh.position.z;

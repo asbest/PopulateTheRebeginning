@@ -7791,15 +7791,26 @@ window.Humanoid = class Humanoid {
          return closest;
     }
 
+    canMeleeHit(target,direction=null) {
+        if(!target?.mesh||target.dead||['dead','transported'].includes(target.state)||
+           target.invisible||window.isAllied(target.faction,this.faction))return false;
+        const dx=target.mesh.position.x-this.mesh.position.x,dz=target.mesh.position.z-this.mesh.position.z;
+        const dy=target.mesh.position.y-this.mesh.position.y;
+        return Math.hypot(dx,dy,dz)<=this.range+(target.collisionRadius||0)&&
+            (!direction||dx*direction.x+dz*direction.z>=Math.hypot(dx,dz)*.55);
+    }
+
     beginManualAttack(x,z) {
         if(!['warrior','firewarrior'].includes(this.type)||this.faction!==0||isPeaceTime()||
            ['dead','stunned','getting_up','transported'].includes(this.state)||this.manualAttack)return false;
         const now=state.clock.getElapsedTime(),duration=1/this.attackSpeed;
         if(now-this.lastAttackTime<duration)return false;
         const point=new THREE.Vector3(x,getSurfaceHeight(x,z),z);
+        const direction=point.clone().sub(this.mesh.position).setY(0).normalize();
         const candidates=[...state.units,...state.buildings].filter(target=>target!==this&&
             target.mesh&&!target.dead&&!['dead','transported'].includes(target.state)&&
             !target.invisible&&!window.isAllied(target.faction,this.faction)&&
+            (this.type!=='warrior'||this.canMeleeHit(target,direction))&&
             Math.hypot(target.mesh.position.x-x,target.mesh.position.z-z)<(target.collisionRadius||.9)+.7);
         candidates.sort((a,b)=>a.mesh.position.distanceToSquared(point)-b.mesh.position.distanceToSquared(point));
         const target=candidates[0]||null;
@@ -7807,7 +7818,7 @@ window.Humanoid = class Humanoid {
         const radius=this.type==='warrior'?(target?.collisionRadius||0):0;
         const range=this.type==='warrior'?this.range:combatRange(this,target||{mesh:{position:point}});
         if(this.mesh.position.distanceTo(point)>range+radius)return false;
-        this.manualAttack={target,point,elapsed:0,duration};
+        this.manualAttack={target,point,direction,elapsed:0,duration};
         this.isWorshipping=false;
         this.lastAttackTime=now;this.attackFired=false;
         this.attackTarget=null;this.target=null;this.finalDest=null;this.path=[];this.gait=null;
@@ -7888,9 +7899,7 @@ window.Humanoid = class Humanoid {
         // Deal damage at the impact point (phase >= 0.5)
         if (this.attackPhase >= 0.5 && !this.attackFired) {
             this.attackFired = true;
-            if(this.type==='warrior'&&(!target||target.dead||target.state==='dead'||
-                window.isAllied(target.faction,this.faction)||
-                this.mesh.position.distanceTo(target.mesh.position)>this.range+(target.collisionRadius||0))){
+            if(this.type==='warrior'&&!this.canMeleeHit(target,manual?.direction)){
                 SoundManager.playSound('attack');return;
             }
 
@@ -11596,6 +11605,18 @@ function handleTap(x, y, isRightClick, isShift) {
     const mouse = new THREE.Vector2((x/window.innerWidth)*2-1, -(y/window.innerHeight)*2+1);
     state.raycaster.setFromCamera(mouse, state.camera);
 
+    if(state.isFPV&&!isRightClick&&state.currentAction==='warrior_attack'&&
+       state.selectedUnits.length===1&&state.selectedUnits[0].type==='warrior'){
+        // A first-person melee swing follows the view ray, even across empty sky.
+        // Target acquisition and contact still enforce reach and the forward cone.
+        const unit=state.selectedUnits[0],direction=state.raycaster.ray.direction.clone().setY(0);
+        if(direction.lengthSq()<.0001)direction.set(-Math.sin(state.fpvYaw),0,-Math.cos(state.fpvYaw));
+        direction.normalize();
+        const aim=unit.mesh.position.clone().addScaledVector(direction,unit.range*.95);
+        performAction(aim.x,aim.z,'warrior_attack');
+        return;
+    }
+
     const meshes = [];
     for(let k in state.chunks) {
         if (state.chunks[k] && state.chunks[k].children[0]) {
@@ -11816,15 +11837,29 @@ window.toggleCameraView = function() {
 
 window.updateCameraPosition = updateCameraPosition;
 function updateCameraPosition() {
+    const firstPersonWarrior=state.isFPV&&state.selectedUnits[0]?.type==='warrior'&&state.selectedUnits[0].state!=='dead'
+        ?state.selectedUnits[0]:null;
+    if(state.fpvHiddenHead&&state.fpvHiddenHead!==firstPersonWarrior?.head){
+        state.fpvHiddenHead.visible=true;state.fpvHiddenHead=null;
+    }
+    if(firstPersonWarrior){
+        state.fpvHiddenHead=firstPersonWarrior.head;
+        firstPersonWarrior.head.visible=false;
+    }
+    const firstPersonFov=firstPersonWarrior?70:60;
+    if(state.perspectiveCamera.fov!==firstPersonFov){
+        state.perspectiveCamera.fov=firstPersonFov;
+        state.perspectiveCamera.updateProjectionMatrix();
+    }
     if(state.isFPV) {
          if(state.selectedUnits.length === 0 || state.selectedUnits[0].state === 'dead') {
              state.isFPV = false; state.camera = strategyCamera();
          } else {
              const u = state.selectedUnits[0];
-             const headH = (u.isShaman ? 2.1 : 1.4);
+             const headH = firstPersonWarrior?1.32+(u.torso.position.y-.9):(u.isShaman ? 2.1 : 1.4);
              const pos = u.mesh.position.clone().add(new THREE.Vector3(0, headH, 0));
 
-             const offsetDist = 0.5;
+             const offsetDist = firstPersonWarrior?.08:CONFIG.CAMERA.FPV_OFFSET_DIST;
              pos.x -= Math.sin(state.fpvYaw) * offsetDist;
              pos.z -= Math.cos(state.fpvYaw) * offsetDist;
 
