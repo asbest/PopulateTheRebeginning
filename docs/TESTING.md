@@ -47,6 +47,11 @@ lookups or spell preparation when the assertion depends on them. Gameplay and
 rendering budget assertions remain active; missing UI is never treated as a
 successful disabled-button check.
 
+Entering first person as a warrior equips the club. A primary view click starts
+a swing instead of a movement/chase command, including while walking. The combat
+suite checks entry through the real zoom gesture, the visible weapon at contact,
+damage, peace-time blocking and ignored pointer releases without a canvas gesture.
+
 The firestorm gate disables peace time, completes spell preparation and directs
 impacts at a loaded tree. It checks the current batched effects and rejects shader
 compilation during impacts. Burned-tree materials retain the original wind shader

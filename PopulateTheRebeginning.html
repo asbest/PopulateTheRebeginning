@@ -9497,7 +9497,8 @@ function selectAction(action) {
         showGameMessage('This action is unavailable during peace time.');
         return;
     }
-    if (state.currentAction === action && action !== 'move') {
+    const equippedClub=state.isFPV&&action==='warrior_attack'&&state.selectedUnits.length===1&&state.selectedUnits[0].type==='warrior';
+    if (state.currentAction === action && action !== 'move'&&!equippedClub) {
         state.currentAction = 'move';
     } else {
         state.currentAction = action;
@@ -9725,6 +9726,8 @@ function updateContextMenus() {
     const hasAirship = state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'airship';
     const fighter=state.selectedUnits.length===1&&state.selectedUnits[0].faction===0&&
         state.selectedUnits[0].state!=='dead'?state.selectedUnits[0]:null;
+    if(state.isFPV&&fighter?.type==='warrior'&&['move','select'].includes(state.currentAction)&&!isPeaceTime())
+        state.currentAction='warrior_attack';
 
     // Unload Button Visibility
     const unloadBtn = document.getElementById('btn-unload');
@@ -11581,6 +11584,7 @@ function onTouchMove(e) {
                 if (state.viewScale <= MIN_ZOOM && state.selectedUnits.length > 0) {
                      state.isFPV = true; state.camera = state.perspectiveCamera;
                      state.fpvYaw = state.cameraRotation + Math.PI; state.fpvPitch = -0.2;
+                     updateContextMenus();
                 }
             }
         }
@@ -11600,11 +11604,13 @@ function onTouchMove(e) {
 
 function onPointerUp(e) {
     if (e.type === 'touchend' && e.target !== state.renderer.domElement && e.target !== document.body) return;
+    const hadPointerGesture=state.isDragging;
     state.isDragging = false;
     state.dragSpeed = 0;
     state.lastDragAt = 0;
     state.pinchSpeed = 0;
     state.pinchStartDist = 0;
+    if(!hadPointerGesture){state.selectionStart=null;return;}
     let x = e.clientX || (e.changedTouches ? e.changedTouches[0].clientX : 0);
     let y = e.clientY || (e.changedTouches ? e.changedTouches[0].clientY : 0);
 const box = document.getElementById('selection-box');
@@ -11622,14 +11628,15 @@ function handleTap(x, y, isRightClick, isShift) {
     const mouse = new THREE.Vector2((x/window.innerWidth)*2-1, -(y/window.innerHeight)*2+1);
     state.raycaster.setFromCamera(mouse, state.camera);
 
-    if(state.isFPV&&!isRightClick&&state.currentAction==='warrior_attack'&&
-       state.selectedUnits.length===1&&state.selectedUnits[0].type==='warrior'){
+    if(state.isFPV&&!isRightClick&&['warrior_attack','move','select'].includes(state.currentAction)&&
+       state.selectedUnits.length===1&&state.selectedUnits[0].type==='warrior'&&state.selectedUnits[0].faction===0){
         // A first-person melee swing follows the view ray, even across empty sky.
         // Target acquisition and contact still enforce reach and the forward cone.
         const unit=state.selectedUnits[0],direction=state.raycaster.ray.direction.clone().setY(0);
         if(direction.lengthSq()<.0001)direction.set(-Math.sin(state.fpvYaw),0,-Math.cos(state.fpvYaw));
         direction.normalize();
         const aim=unit.mesh.position.clone().addScaledVector(direction,unit.range*.95);
+        if(state.currentAction!=='warrior_attack'&&!isPeaceTime())selectAction('warrior_attack');
         performAction(aim.x,aim.z,'warrior_attack');
         return;
     }
@@ -11810,6 +11817,7 @@ function onWheel(e) {
              state.camera = state.perspectiveCamera;
              state.fpvYaw = state.cameraRotation + Math.PI;
              state.fpvPitch = -0.2;
+             updateContextMenus();
              updateCameraPosition();
         } else {
             const distanceScale=THREE.MathUtils.clamp(state.viewScale/35,.5,1.5);

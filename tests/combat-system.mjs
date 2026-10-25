@@ -189,6 +189,55 @@ try{
             return {damage:u.damage,weaponInView:true};
         });
     });
+    await check('Entering first person equips the club and a real view click strikes while walking',async()=>{
+        await fresh();
+        await page.evaluate(()=>{
+            closeHelp();closeStoryOverlay();state.isPaused=true;
+            for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
+            for(const b of state.buildings)state.scene.remove(b.mesh);state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
+            for(let x=-8;x<=8;x++)for(let z=-8;z<=8;z++)state.terrainMods.set(`${x},${z}`,6-gameTestAPI.getBaseHeight(x,z));
+            state.heightCache.clear();state.cameraLookAt.set(0,6,0);gameTestAPI.updateChunks(true);
+            const u=new Humanoid(0,'warrior',0,0),enemy=new Humanoid(1,'warrior',0,.95);
+            state.units=[u,enemy];u.placeOnGround(0,0);enemy.placeOnGround(0,.95);
+            enemy.rigidBody.setBodyType(RAPIER.RigidBodyType.Fixed,true);enemy.hp=enemy.maxHp=1000;
+            u.nextTargetCheck=enemy.nextTargetCheck=Infinity;u.lastAttackTime=-100;
+            window.walkingAttack={u,enemy};window.walkingAttackTime=10;state.clock.getElapsedTime=()=>walkingAttackTime;
+            state.selectedUnits=[u];state.selectedBuilding=null;state.currentAction='move';state.isFPV=false;
+            u.state='combat';u.attackTarget=enemy;u.finalDest=new THREE.Vector3(0,0,6);
+            state.cameraRotation=0;state.viewScale=CONFIG.CAMERA.MIN_ZOOM;
+            gameTestAPI.updateContextMenus();gameTestAPI.updateCameraZoom();window.updateCameraPosition();
+        });
+        const viewport=page.viewportSize();await page.mouse.move(viewport.width/2,viewport.height/2);await page.mouse.wheel(0,-120);
+        await page.waitForFunction(()=>state.isFPV);
+        await page.mouse.click(viewport.width/2,viewport.height/2);
+        return page.evaluate(()=>{
+            const {u,enemy}=walkingAttack;
+            if(!u.manualAttack||u.finalDest||u.attackTarget||state.currentAction!=='warrior_attack'||!document.querySelector('#btn-warrior_attack.active'))
+                throw new Error('First-person click moved/chased instead of swinging: '+JSON.stringify({action:state.currentAction,state:u.state,swing:!!u.manualAttack,destination:u.finalDest,target:!!u.attackTarget}));
+            let minArm=Infinity,maxArm=-Infinity,moved=0,visibleContact=false;
+            for(let frame=0;frame<75;frame++){
+                walkingAttackTime+=1/60;state.manualInputFrame++;u.manualMove(new THREE.Vector3(0,0,1),1/60);
+                state.physicsWorld.timestep=1/60;state.physicsWorld.step();u.update(1/60);enemy.update(1/60);
+                window.updateCameraPosition();state.camera.updateMatrixWorld(true);u.mesh.updateMatrixWorld(true);
+                if(enemy.hp<1000&&!visibleContact){
+                    const tip=u.weaponTip.getWorldPosition(new THREE.Vector3()).project(state.camera);
+                    if(Math.abs(tip.x)>1||Math.abs(tip.y)>1||tip.z< -1||tip.z>1)
+                        throw new Error('Walking strike was outside the first-person view: '+JSON.stringify({tip,phase:u.attackPhase}));
+                    visibleContact=true;
+                }
+                minArm=Math.min(minArm,u.armR.rotation.x);maxArm=Math.max(maxArm,u.armR.rotation.x);moved=Math.max(moved,u.mesh.position.z);
+            }
+            if(enemy.hp!==1000-u.damage||maxArm-minArm<1||moved<.05||u.manualAttack||!visibleContact)
+                throw new Error('Walking suppressed the club pose or contact: '+JSON.stringify({hp:enemy.hp,armRange:maxArm-minArm,moved,pending:!!u.manualAttack}));
+            u.lastAttackTime=-100;state.isDragging=false;state.tapStart={x:innerWidth/2,y:innerHeight/2};
+            window.dispatchEvent(new MouseEvent('mouseup',{clientX:innerWidth/2,clientY:innerHeight/2,button:0}));
+            if(u.manualAttack||u.finalDest)throw new Error('An unmatched pointer release triggered a swing or movement');
+            state.matchSettings.peaceTimeMinutes=100;state.currentAction='move';gameTestAPI.updateContextMenus();
+            gameTestAPI.handleTap(innerWidth/2,innerHeight/2,false,false);
+            if(u.manualAttack||u.finalDest||u.attackTarget)throw new Error('First-person click bypassed peace time or became a movement order');
+            return {damage:1000-enemy.hp,armRange:maxArm-minArm,moved};
+        });
+    });
     await check('Warrior club contacts at the damage frame with a guarded full-body swing at 30/60/120 FPS',async()=>{
         await fresh();return page.evaluate(()=>{
             const x=state.shaman.mesh.position.x,z=state.shaman.mesh.position.z;
