@@ -58,7 +58,7 @@ try{
             if(request.url().endsWith('.ktx2'))ktxRequests.push(request.url());
         });
         if(missingGrass)await page.route('**/art/materials/grass.ktx2',route=>route.fulfill({status:404,body:''}));
-        await page.goto(`http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1${query}`,{timeout:90000});
+        await page.goto(`${process.env.GAME_URL||'http://127.0.0.1:8765'}/PopulateTheRebeginning.html?test=1${query}`,{timeout:90000});
         try{
             await page.waitForFunction(()=>window.gameTestAPI&&Art.textureStatus.pending===0,null,{timeout:30000});
         }catch(error){
@@ -141,7 +141,7 @@ try{
             await route.continue().catch(()=>{});
         });
         try{
-            await page.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1',
+            await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
                 {waitUntil:'domcontentloaded',timeout:90000});
             await page.waitForFunction(()=>window.gameTestAPI&&
                 document.querySelector('#loading')?.style.display==='none'&&
