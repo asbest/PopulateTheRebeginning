@@ -39,6 +39,11 @@ lookups or spell preparation when the assertion depends on them. Gameplay and
 rendering budget assertions remain active; missing UI is never treated as a
 successful disabled-button check.
 
+The firestorm gate disables peace time, completes spell preparation and directs
+impacts at a loaded tree. It checks the current batched effects and rejects shader
+compilation during impacts. Burned-tree materials retain the original wind shader
+and its cache key; `trees.mjs` checks this alongside burning and regrowth.
+
 ## Network checks
 
 The default network suite connects two real browser WebRTC data channels using

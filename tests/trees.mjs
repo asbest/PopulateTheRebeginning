@@ -67,6 +67,12 @@ try{
         gameTestAPI.SpellWindup.update(1);
         if(!tree.burned||!state.treeBurns.has(tree.id)||tree.originalParts.length<3)
             throw new Error('Lightning did not char all parts of the tree');
+        for(const part of tree.originalParts){
+            const originals=[part.material].flat(),burned=[part.mesh.material].flat();
+            if(burned.some((material,index)=>material.onBeforeCompile!==originals[index].onBeforeCompile||
+                material.customProgramCacheKey()!==originals[index].customProgramCacheKey()))
+                throw new Error('Burning changed the tree shader or discarded wind animation');
+        }
         const remaining=state.treeBurns.get(tree.id)-state.treeTime;
         if(Math.abs(remaining-300)>.01)throw new Error(`Wrong regrowth time: ${remaining}`);
         return {id:tree.id,parts:tree.originalParts.length,remaining};

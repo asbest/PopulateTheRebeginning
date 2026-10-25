@@ -4360,6 +4360,9 @@ function charTree(tree) {
             const key=`${material.uuid}:${inCrown?'crown':'wood'}`;
             if(clonedMaterials.has(key))return clonedMaterials.get(key);
             const copy=material.clone();
+            // Material.clone does not retain custom wind shaders or their cache key.
+            copy.onBeforeCompile=material.onBeforeCompile;
+            copy.customProgramCacheKey=material.customProgramCacheKey;
             copy.color?.setHex(inCrown?0x504033:0x49362b);
             copy.emissive?.setHex(0x000000);
             if('roughness' in copy)copy.roughness=1;

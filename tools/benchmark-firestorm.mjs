@@ -15,7 +15,7 @@ try {
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.renderer,null,{timeout:90000});
     if(process.argv.includes('--live')){
         const live=await page.evaluate(async ({noCast,settle})=>{
-            closeHelp();closeStoryOverlay();state.isPaused=false;
+            closeHelp();closeStoryOverlay();state.matchSettings.peaceTimeMinutes=0;state.selectedUnits=[state.shaman];state.isPaused=false;
             if(settle)await new Promise(resolve=>setTimeout(resolve,1000));
             const p=state.shaman.mesh.position;state.mana=1000;
             if(!noCast)gameTestAPI.performAction(p.x+3,p.z,'firestorm');
@@ -42,27 +42,39 @@ try {
         console.log(JSON.stringify(live));
     } else {
     const result=await page.evaluate(()=>{
-        closeHelp();closeStoryOverlay();state.isPaused=true;window.enemyAIs=[];
+        closeHelp();closeStoryOverlay();state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;state.selectedUnits=[state.shaman];window.enemyAIs=[];
         for(const particle of state.particles)state.scene.remove(particle.mesh);
         state.particles.length=0;
         const renderer=state.renderer;
+        let baselineKeys;
         const render=label=>{
+            gameTestAPI.FireballFxManager.update(0);
             const before=performance.now();renderer.render(state.scene,state.camera);renderer.getContext().finish();
             let lights=0;state.scene.traverse(object=>{if(object.isPointLight)lights++;});
             return {label,ms:performance.now()-before,programs:renderer.info.programs.length,lights,
-                projectiles:state.projectiles.length,particles:state.particles.length};
+                projectiles:state.projectiles.length,particles:state.particles.length,
+                addedPrograms:baselineKeys?renderer.info.programs.filter(program=>!baselineKeys.has(program.cacheKey)).map(program=>program.cacheKey):[]};
         };
         const report=[render('before')];
+        baselineKeys=new Set(renderer.info.programs.map(program=>program.cacheKey));
         const p=state.shaman.mesh.position;
+        const tree=Object.values(state.chunks).flatMap(chunk=>chunk.userData?.trees||[])
+            .filter(tree=>tree.mesh.visible).sort((a,b)=>a.mesh.position.distanceToSquared(p)-b.mesh.position.distanceToSquared(p))[0];
+        if(!tree)throw new Error('No tree available for the firestorm impact check');
         state.mana=1000;
-        gameTestAPI.performAction(p.x+3,p.z,'firestorm');
+        state.cheatUnlimitedRange=true;
+        gameTestAPI.performAction(tree.mesh.position.x,tree.mesh.position.z,'firestorm');
+        gameTestAPI.SpellWindup.update(1);
         report.push(render('cast'));
         const storm=state.activeEffects.at(-1);
+        if(storm?.constructor.name!=='Firestorm')throw new Error('Firestorm fixture did not complete its cast');
         for(let i=0;i<4;i++){
-            storm.update(1.01);
+            const random=Math.random;
+            try{Math.random=()=>.5;storm.update(1.01);}finally{Math.random=random;}
             report.push(render(`fall-${i+1}`));
             const projectile=state.projectiles.shift();
             projectile.update(projectile.duration);
+            if(!tree.burned)throw new Error('Firestorm impact did not exercise the burned-tree material');
             report.push(render(`impact-${i+1}`));
             for(let j=state.particles.length-1;j>=0;j--){
                 if(!state.particles[j].update(.6))state.particles.splice(j,1);
