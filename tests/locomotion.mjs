@@ -187,6 +187,69 @@ try{
   if(airKnee<.2||maxTilt>.2||groundedAt<0||maxProne<1.35||proneFrames<12||Math.abs(report.finalProne)>.01||u.state==='stunned'||u.state==='getting_up'||Math.abs(report.groundGap)>.3)throw new Error(JSON.stringify(report));
   return report;
  }));
+ await check('Fireball survivors finish falling and standing up despite movement input at 30/60/120 FPS, with and without Rapier',()=>page.evaluate(()=>{
+  for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];state.selectedUnits=[];
+  for(const b of state.buildings)state.scene.remove(b.mesh);state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
+  state.matchSettings.peaceTimeMinutes=0;state.isGodMode=false;
+  for(let x=-100;x<=100;x++)for(let z=-100;z<=100;z++)state.terrainMods.set(`${x},${z}`,6-gameTestAPI.getBaseHeight(x,z));
+  state.heightCache.clear();state.cameraLookAt.set(0,6,0);gameTestAPI.updateChunks(true);
+  const report=[],direction=new THREE.Vector3(0,0,1);
+  for(const physics of [true,false])for(const fps of [30,60,120])for(const type of ['wild','warrior','firewarrior','preacher','spy','shaman'])for(const unitShot of [false,true]){
+   const u=new Humanoid(0,type,0,0);state.units=[u];u.placeOnGround(0,0);u.hp=u.maxHp=10000;u.nextTargetCheck=Infinity;
+   if(!physics){state.physicsWorld.removeRigidBody(u.rigidBody);state.rigidBodies.delete(u.id);u.rigidBody=null;}
+   gameTestAPI.SpatialHash.update();
+   const end=u.mesh.position.clone().add(new THREE.Vector3(0,1,0));
+   const shot=new gameTestAPI.Fireball(end.clone().add(new THREE.Vector3(-5,0,0)),end,1,1,1,false,unitShot);
+   shot.mesh.position.copy(end);shot.explode();
+   const dt=1/fps,initialY=u.mesh.position.y,phases=new Set();let peak=initialY,tilt=0,prone=0,groundedTime=0,riseTime=0,finished=false,hitAgain=false;
+   for(let frame=0;frame<fps*8;frame++){
+    const before=u.state;
+    if(['stunned','getting_up'].includes(before)){
+     u.manualMove(direction,dt);u.goto(u.mesh.position.x,u.mesh.position.z+2);
+     if(u.state!==before)throw new Error('Movement interrupted recovery: '+JSON.stringify({physics,fps,type,unitShot,before,after:u.state,fall:u.fallRig.rotation.x}));
+    }
+    if(unitShot&&!hitAgain&&u.state==='getting_up'&&riseTime>.1){u.applyForce(new THREE.Vector3(0,2,0),1,2,.7);hitAgain=true;}
+    if(physics){state.physicsWorld.timestep=dt;state.physicsWorld.step();}
+    u.update(dt);phases.add(u.state);peak=Math.max(peak,u.mesh.position.y);
+    tilt=Math.max(tilt,Math.abs(u.mesh.rotation.x),Math.abs(u.mesh.rotation.z));
+    if(u.isGrounded&&u.state==='stunned'){groundedTime+=dt;prone=Math.max(prone,u.fallRig.rotation.x);}
+    if(u.state==='getting_up')riseTime+=dt;
+    if(u.state==='idle'){finished=true;break;}
+   }
+   const sample={physics,fps,type,unitShot,hitAgain,rise:peak-initialY,tilt,prone,groundedTime,riseTime,state:u.state,fall:u.fallRig.rotation.x,finished,phases:[...phases],blastAirborne:!!u.blastAirborne,gravity:u.blastGravityScale};
+   if(!finished||!phases.has('getting_up')||sample.rise<.15||tilt<.05||prone<1.35||groundedTime<.65||riseTime<.6||Math.abs(sample.fall)>.001||u.blastAirborne||u.blastGravityScale!==1)
+    throw new Error('Incomplete fall/recovery: '+JSON.stringify(sample));
+   for(let frame=0;frame<fps/2;frame++){if(physics){state.physicsWorld.timestep=dt;state.physicsWorld.step();}u.update(dt);}
+   if(u.state!=='idle'||Math.abs(u.fallRig.rotation.x)>.001||Math.abs(u.mesh.position.y-getSurfaceHeight(u.mesh.position.x,u.mesh.position.z))>.1)
+    throw new Error('Survivor did not settle upright on the ground: '+JSON.stringify(sample));
+   state.manualInputFrame++;u.manualMove(direction,dt);
+   if(u.state!=='manual')throw new Error('Survivor cannot move after recovery: '+JSON.stringify(sample));
+   report.push(sample);u.die();state.scene.remove(u.mesh);
+  }
+  state.shaman=new Humanoid(0,'shaman',0,0);state.units=[state.shaman];state.shaman.placeOnGround(0,0);return report;
+ }));
+ await check('Knockback over water keeps its flight arc and resets gravity after splashdown',()=>page.evaluate(()=>{
+  for(let x=180;x<=220;x++)for(let z=-20;z<=20;z++)state.terrainMods.set(`${x},${z}`,-3-gameTestAPI.getBaseHeight(x,z));
+  state.heightCache.clear();state.cameraLookAt.set(200,0,0);gameTestAPI.updateChunks(true);
+  const report=[];
+  for(const physics of [true,false]){
+   const u=new Humanoid(0,'warrior',200,0);state.units.push(u);u.placeOnGround(200,0);u.mesh.position.y=10;u.hp=u.maxHp=10000;u.nextTargetCheck=Infinity;
+   if(physics)u.rigidBody.setTranslation({x:200,y:10+u.height/2,z:0},true);
+   else{state.physicsWorld.removeRigidBody(u.rigidBody);state.rigidBodies.delete(u.id);u.rigidBody=null;}
+   u.applyForce(new THREE.Vector3(0,2,0),1,2,.6);
+   let splash=false,recovered=false,lastY=10;
+   for(let frame=0;frame<600;frame++){
+    if(physics){state.physicsWorld.timestep=1/60;state.physicsWorld.step();}u.update(1/60);
+    if(lastY>2&&Math.abs(u.mesh.position.y-lastY)>1)throw new Error('Flight snapped to water: '+JSON.stringify({physics,frame,lastY,y:u.mesh.position.y}));
+    if(u.isSwimming&&u.isGrounded)splash=true;
+    if(splash&&u.state==='idle'){recovered=true;break;}lastY=u.mesh.position.y;
+   }
+   if(!splash||!recovered||u.blastAirborne||u.blastGravityScale!==1||Math.abs(u.fallRig.rotation.x)>.001)
+    throw new Error('Water recovery did not finish: '+JSON.stringify({physics,splash,recovered,state:u.state,gravity:u.blastGravityScale,airborne:u.blastAirborne}));
+   report.push({physics,splash,recovered});u.die();state.scene.remove(u.mesh);state.units=state.units.filter(unit=>unit!==u);
+  }
+  return report;
+ }));
  await check('Saving and rebuilding terrain keeps the physics solver usable',()=>page.evaluate(()=>{
   const retired=[...state.units];gameTestAPI.SpatialHash.update();
   window.saveGame();window.loadGame();state.isPaused=true;

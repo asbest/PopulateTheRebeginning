@@ -7582,6 +7582,12 @@ window.Humanoid = class Humanoid {
             }
             return;
         }
+        // Enter swimming only on contact with the surface, not while flying over it.
+        const swimSurfaceY=Math.max(groundH,VISUAL_WATER_LEVEL-.65);
+        if(!this.isGrounded&&(this.velocity.y>0||this.mesh.position.y>swimSurfaceY+.1)) {
+            this.isSwimming=false;
+            return;
+        }
         if(!manualSwim) {
             if(!this.aiWaterEscape)this.waterOriginalDest=this.finalDest?.clone()||null;
             this.aiWaterEscape=true;
@@ -7620,7 +7626,7 @@ window.Humanoid = class Humanoid {
     }
 
     manualMove(vec, dt = 0.016) {
-        if(this.state === 'dead' || this.state === 'stunned') return;
+        if(['dead','stunned','getting_up','transported'].includes(this.state)) return;
         this.manualInputFrame=state.manualInputFrame||0;
         this.manualStopOrigin=null;
         if(!this.lastManualControlledPosition)this.lastManualControlledPosition=this.mesh.position.clone();
@@ -7745,7 +7751,7 @@ window.Humanoid = class Humanoid {
         }
     }
     goto(x, z, workerPath = undefined) {
-        if(this.state === 'stunned' || this.state === 'dead') return;
+        if(['dead','stunned','getting_up','transported'].includes(this.state)) return;
         if(this.garrisonedIn)this.leaveTower();
         const end = new THREE.Vector3(x, 0, z);
         this.finalDest = end.clone();
@@ -8174,14 +8180,14 @@ window.Humanoid = class Humanoid {
                 // Landing enters the existing recovery timer; never cancel stun at the apex.
             } else if (this.mesh.position.y > targetY + 0.1) { this.isGrounded = false; }
         }
+        this.surviveWater(dt,groundH);
+
         if(this.blastAirborne&&this.isGrounded){
             this.blastAirborne=false;
             this.blastGravityScale=1;
             this.rigidBody?.setGravityScale(1,true);
             this.rigidBody?.setLinearDamping(0.5);
         }
-
-        this.surviveWater(dt,groundH);
 
         // Building Entry Check for Training - Every 10 frames
         if(this.type === 'wild' && this.state !== 'dead' && this.updateTicker % 10 === 0) {
