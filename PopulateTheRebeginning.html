@@ -698,6 +698,8 @@ import { createLocomotion } from './art/locomotion.js';
 import { icon } from './art/icons.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
+import { createBrowserStorage } from './art/browser-storage.js';
+const localStorage=createBrowserStorage();
 const Art = createArtKit(THREE);
 const Characters = createCharacters(THREE,Art);
 const Locomotion = createLocomotion(THREE);
@@ -11253,8 +11255,8 @@ window.saveGame = function() {
             trainingQueue: b.trainingQueue
         }))
     };
-    localStorage.setItem(CONFIG.SAVED_KEYS.SAVE_DATA, JSON.stringify(data));
-    showGameMessage('Game saved!');
+    const persisted=localStorage.setItem(CONFIG.SAVED_KEYS.SAVE_DATA, JSON.stringify(data));
+    showGameMessage(persisted?'Game saved!':'Browser storage is unavailable. This save lasts only until you reload or close the game.',persisted?'info':'error');
 }
 
 function restoredUnitHealth(unit,saved) {

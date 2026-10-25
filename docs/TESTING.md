@@ -21,6 +21,14 @@ npm test -- --group=audio
 `GAME_URL` selects an already running game server. `--playwright=/absolute/path/to/index.mjs`
 selects an external Playwright installation when local dependencies are unavailable.
 
+The startup suite also checks blocked local storage and exhausted storage quotas,
+including session-only save/load and its visible persistence notice. To run these
+checks in a separately installed Brave browser:
+
+```sh
+node tests/startup.mjs --browser=/absolute/path/to/brave
+```
+
 ## Coverage reviewed on 2026-10-25
 
 | Group | Suites and current behavior |

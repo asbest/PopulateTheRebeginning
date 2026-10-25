@@ -4,7 +4,8 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 
 const modulePath=process.argv.find(arg=>arg.startsWith('--playwright='))?.slice(13);
 const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createRequire(import.meta.url)('playwright');
-const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
+const executablePath=process.argv.find(arg=>arg.startsWith('--browser='))?.slice(10);
+const browser=await chromium.launch({headless:true,...(executablePath?{executablePath}:process.platform==='win32'?{channel:'chrome'}:{})});
 const base=process.env.GAME_URL||'http://127.0.0.1:8765';
 let failures=0;
 const results=[];
@@ -16,7 +17,9 @@ try{
             userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'},
             `${base}/PopulateTheRebeginning.html`],
         ['mobile PNG fallback',{viewport:{width:390,height:844},isMobile:true,hasTouch:true},
-            `${base}/PopulateTheRebeginning.html?textures=png`]
+            `${base}/PopulateTheRebeginning.html?textures=png`],
+        ['blocked browser storage',{},`${base}/PopulateTheRebeginning.html`],
+        ['full browser storage',{},`${base}/PopulateTheRebeginning.html`]
     ]){
         const page=await browser.newPage(options),errors=[],missing=[];
         page.on('pageerror',error=>errors.push(String(error)));
@@ -24,6 +27,12 @@ try{
         page.on('response',response=>{if(response.status()>=400&&response.url().startsWith(base))missing.push(`${response.status()} ${response.url()}`);});
         page.on('dialog',dialog=>dialog.accept());
         try{
+            if(name==='blocked browser storage')await page.addInitScript(()=>{
+                Object.defineProperty(window,'localStorage',{get(){throw new DOMException('Storage blocked','SecurityError');}});
+            });
+            if(name==='full browser storage')await page.addInitScript(()=>{
+                Storage.prototype.setItem=function(){throw new DOMException('Storage quota exceeded','QuotaExceededError');};
+            });
             await page.goto(url,{waitUntil:'domcontentloaded',timeout:90000});
             await page.waitForFunction(()=>document.querySelector('#loading')?.style.display==='none'&&
                 !!window.state?.renderer&&!!window.state?.shaman,null,{timeout:120000,polling:250});
@@ -50,6 +59,15 @@ try{
             await page.waitForFunction(()=>!state.isPaused&&
                 document.querySelector('#help-overlay')?.style.display==='none'&&
                 document.querySelector('#story-overlay')?.style.display==='none',null,{timeout:10000});
+            if(name.endsWith('browser storage')){
+                await page.evaluate(()=>{
+                    state.isPaused=true;state.mana=777;window.saveGame();
+                    if(!document.getElementById('game-toast').textContent.includes('only until'))
+                        throw new Error('Session-only save was reported as permanent');
+                    state.mana=1;window.loadGame();state.isPaused=true;
+                    if(state.mana!==777)throw new Error('Session fallback did not restore the save');
+                });
+            }
             if(errors.length||missing.length)throw new Error(JSON.stringify({result,errors,missing}));
             console.log(`PASS ${name} starts without test mode`,result);
             results.push({name,pass:true,result});
