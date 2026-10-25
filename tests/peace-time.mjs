@@ -31,6 +31,7 @@ try {
         ally.attackTarget=enemy;ally.state='combat';ally.attack();
         if(ally.state==='combat'||ally.attackTarget||enemy.hp!==hp)
             throw new Error('Direct attack was possible during peace');
+        state.selectedUnits=[state.shaman];state.selectedBuilding=null;
         gameTestAPI.updateContextMenus();
         const blastButton=document.getElementById('btn-blast');
         if(!blastButton?.classList.contains('disabled')||blastButton.getAttribute('aria-disabled')!=='true')
@@ -62,7 +63,7 @@ try {
         if(gameTestAPI.isPeaceTime()||!document.getElementById('peace-timer').hidden||ally.findTarget()!==enemy)
             throw new Error('Combat did not become available when peace ended');
         gameTestAPI.updateContextMenus();
-        if(document.getElementById('btn-blast')?.classList.contains('disabled'))
+        if(!document.getElementById('btn-blast')||document.getElementById('btn-blast').classList.contains('disabled'))
             throw new Error('Offensive spell button stayed disabled after peace');
         gameTestAPI.performAction(enemy.mesh.position.x,enemy.mesh.position.z,'blast');
         if(state.mana>=mana||state.projectiles.length!==projectiles+1)

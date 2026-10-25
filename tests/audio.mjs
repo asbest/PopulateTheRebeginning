@@ -250,6 +250,8 @@ try {
         throw new Error(`Expired firestorm did not release its sound immediately: ${JSON.stringify(stoppedSustain)}`);
     console.log('PASS Firestorm bed plays through its lifetime, pauses and stops on expiry');
 
+    // Release the desktop world and WebGL context before loading the mobile world.
+    await page.close();
     checkpoint='Android startup';
     const mobile=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,
         userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'});

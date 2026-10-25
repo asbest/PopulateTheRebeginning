@@ -1,8 +1,13 @@
 name: Browser playability
 on: [push, pull_request, workflow_dispatch]
 jobs:
-  browser:
+  tests:
+    name: ${{ matrix.group }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [interface, simulation, rendering, audio, performance, strategy-long]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -10,160 +15,10 @@ jobs:
           node-version: '22'
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
-      - name: Start game server
-        run: |
-          nohup node tools/serve.mjs > /tmp/populate-server.log 2>&1 &
-          for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8765/ >/dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat /tmp/populate-server.log
-          exit 1
-      - name: Enemy strategy
-        if: always()
-        run: node tests/strategy.mjs
-      - name: Large-army path scheduling
-        if: always()
-        run: node tests/ai-stutter.mjs
-      - name: Worker pathfinding and fallback
-        if: always()
-        run: node tests/pathfinder-worker.mjs
-      - name: Welcome screen starts the game on desktop and mobile
-        if: always()
-        run: node tests/startup.mjs
-      - name: Peace time and match settings
-        if: always()
-        run: node tests/peace-time.mjs
-      - name: Building durability
-        if: always()
-        run: node tests/building-durability.mjs
-      - name: Building demolition and walkable spacing
-        if: always()
-        run: node tests/building-navigation.mjs
-      - name: Campaign story, clues and endings
-        if: always()
-        run: node tests/campaign-story.mjs
-      - name: Campaign levels, progression and defeat
-        if: always()
-        run: node tests/campaign-levels.mjs
-      - name: Live gameplay integration
-        if: always()
-        run: node tests/live-gameplay.mjs
-      - name: Browser and campaign playability
-        if: always()
-        run: node tests/browser.mjs
-      - name: Blender assets and PBR materials
-        if: always()
-        run: node tests/blender-assets.mjs
-      - name: GPU texture compression and PNG fallback
-        if: always()
-        run: node tests/ktx2.mjs
-      - name: Environment rendering
-        if: always()
-        run: node tests/environment.mjs
-      - name: Procedural terrain variety
-        if: always()
-        run: node tests/terrain-variety.mjs
-      - name: Totem healing and mana regeneration
-        if: always()
-        run: node tests/totem-aura.mjs
-      - name: Faith and shaman worship
-        if: always()
-        run: node tests/faith-worship.mjs
-      - name: Locomotion and terrain physics
-        if: always()
-        run: node tests/locomotion.mjs
-      - name: Spells and mana rules
-        if: always()
-        run: node tests/spells.mjs
-      - name: Preachers, towers, terrain combat and spell counterplay
-        if: always()
-        run: node tests/combat-system.mjs
-      - name: Burnable trees and five-minute regrowth
-        if: always()
-        run: node tests/trees.mjs
-      - name: Spell sound assets
-        if: always()
-        run: node tests/sfx-assets.mjs
-      - name: Materials and terrain transitions
-        if: always()
-        run: node tests/materials.mjs
+      - name: Run ${{ matrix.group }} tests
+        run: node tools/run-tests.mjs --group=${{ matrix.group }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-test-report
+          name: test-report-${{ matrix.group }}
           path: test-results/
-  performance:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --ignore-scripts --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
-      - name: Start game server
-        run: |
-          nohup node tools/serve.mjs > /tmp/populate-server.log 2>&1 &
-          for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8765/ >/dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat /tmp/populate-server.log
-          exit 1
-      - name: Group attack rendering budget
-        run: node tools/benchmark-group-impact.mjs
-      - name: Firewarrior volley rendering budget
-        if: always()
-        run: node tools/benchmark-firewarriors.mjs
-      - name: Hut destruction rendering budget
-        if: always()
-        run: node tools/benchmark-hut-destruction.mjs
-  audio:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --ignore-scripts --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
-      - name: Start game server
-        run: |
-          nohup node tools/serve.mjs > /tmp/populate-server.log 2>&1 &
-          for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8765/ >/dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat /tmp/populate-server.log
-          exit 1
-      - name: Gameplay music rotation
-        run: node tests/music.mjs
-      - name: Spell audio
-        if: always()
-        run: node tests/audio.mjs
-  strategy-long:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --ignore-scripts --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
-      - name: Start game server
-        run: |
-          nohup node tools/serve.mjs > /tmp/populate-server.log 2>&1 &
-          for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8765/ >/dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat /tmp/populate-server.log
-          exit 1
-      - name: Long-running enemy strategy
-        run: node tests/strategy-long.mjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: strategy-long-report
-          path: test-results/strategy-long-report.json
