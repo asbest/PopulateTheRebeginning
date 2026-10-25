@@ -57,6 +57,12 @@ and its cache key; `trees.mjs` checks this alongside burning and regrowth.
 The default network suite connects two real browser WebRTC data channels using
 local SDP exchange and exercises production state synchronization and command
 handlers. It does not require the availability of a public signaling server.
+Both pages complete normal startup at low graphics quality in a small viewport.
+After that first frame, idle WebGL redraws are disabled in this test so the host
+does not compete with the client's startup on software-rendered CI. Game state,
+WebRTC, command processing and the synchronized shield mesh remain checked.
+Startup timing is recorded for each page; failures include the last checkpoint,
+loading state, texture progress and browser errors.
 
 `npm run test:network-live` additionally exercises the PeerJS public signaling
 path. This separate integration check requires external network access and an
