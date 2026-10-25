@@ -212,6 +212,6 @@ export function createCharacters(T,art) {
         for(const x of [-.8,.8])for(const z of [-1.1,1.1])tube(root,[[x,.6,z],[x*1.7,3.9,z*1.8]],.028,leather,'Rigging');
         for(const z of [-1.65,0,1.65])mesh(root,geo('hoop',()=>new T.TorusGeometry(1,.025,6,32)),gold,[0,4.5,z],[1.83,1.46,1],'BalloonHoop');
     }
-    function setFaction(u,color){u.mesh.traverse(n=>{if(n.userData.characterFaction)n.material=mat('cloth',color);});}
+    function setFaction(u,color){blender.updatePendingFaction(u.mesh,color);u.mesh.traverse(n=>{if(n.userData.characterFaction)n.material=mat('cloth',color);});}
     return {build,setFaction,get ready(){return ready;},configureTextures,atlas:null,tiles};
 }

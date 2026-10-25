@@ -11,7 +11,7 @@ try {
  page.on('pageerror',e=>errors.push(String(e)));
  page.on('console',m=>{if(m.type()==='error'&&/shader|webgl|texture/i.test(m.text()))errors.push(m.text());});
  page.on('requestfailed',r=>errors.push(`${r.url()}: ${r.failure()?.errorText}`));
- await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{timeout:90000});
+ await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1&assets=full',{timeout:90000});
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,{},{timeout:90000});
  const detail=await page.evaluate(()=>{
   closeHelp();closeStoryOverlay();state.isPaused=true;

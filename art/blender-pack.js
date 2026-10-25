@@ -1,11 +1,13 @@
 // Browser bridge for the editable Blender source in ./blender/Overhaul.blend.
 // Static meshes share BufferGeometry and PBR textures across every instance.
+import {MODEL_GROUPS,MODEL_FILES} from './startup-manifest.js';
+import {assetURL} from './asset-urls.js';
 let sharedPack;
 
 export function createBlenderPack(T,loadTexture) {
     if (sharedPack) return sharedPack;
     const geometries=new Map(), materials=new Map();
-    let models=null;
+    const models=Object.create(null),loads=new Map(),pendingParents=new WeakMap(),attached=new WeakMap();
     const surfaces=new Map();
     const definitions={
         stone:{color:0xe7d6b5,map:'stone',metalness:0,normalScale:.48},
@@ -77,7 +79,19 @@ export function createBlenderPack(T,loadTexture) {
     }
     function attach(parent,key,factionColor=0x387bb7) {
         const model=models?.[key];
-        if(!model)return false;
+        if(!model){
+            if(!MODEL_GROUPS[key])return false;
+            let requests=pendingParents.get(parent);
+            if(!requests){requests=new Map();pendingParents.set(parent,requests);}
+            if(!requests.has(key)){
+                const request={color:factionColor};requests.set(key,request);
+                ensure(key).then(loaded=>{requests.delete(key);if(loaded)attach(parent,key,request.color);});
+            }
+            return false;
+        }
+        if(attached.get(parent)?.has(key))return true;
+        if(!attached.has(parent))attached.set(parent,new Set());
+        attached.get(parent).add(key);
         const near=new T.Group();
         for(const [kind,data] of Object.entries(model)) {
             const part=new T.Mesh(geometry(key,kind,data),material(kind,factionColor));
@@ -103,10 +117,36 @@ export function createBlenderPack(T,loadTexture) {
         const data=models?.[key]?.[kind];
         return data?geometry(key,kind,data):null;
     }
-    const ready=fetch(new URL('./blender/mesh-pack.json',import.meta.url))
-        .then(response=>{if(!response.ok)throw new Error(`HTTP ${response.status}`);return response.json();})
-        .then(data=>{if(data.version!==1&&data.version!==2)throw new Error('Unsupported Blender asset version');models=data.models;})
+    async function readPack(file){
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+        try{
+            const response=await fetch(assetURL(file),{signal:controller.signal});
+            if(!response.ok)throw new Error(`HTTP ${response.status}`);
+            const data=await response.json();
+            if(![1,2].includes(data.version)||!data.models)throw new Error('Unsupported Blender asset version');
+            Object.assign(models,data.models);
+        }finally{clearTimeout(timer);}
+    }
+    function loadGroup(group){
+        if(!loads.has(group))loads.set(group,readPack(MODEL_FILES[group]).catch(error=>{loads.delete(group);throw error;}));
+        return loads.get(group);
+    }
+    function loadAll(){
+        if(!loads.has('full'))loads.set('full',readPack('art/blender/mesh-pack.json').catch(error=>{loads.delete('full');throw error;}));
+        return loads.get('full');
+    }
+    async function ensure(key){
+        if(models[key])return true;
+        if(!MODEL_GROUPS[key])return false;
+        try{await loadGroup(MODEL_GROUPS[key]);return !!models[key];}
+        catch(error){console.warn('Model detail unavailable; using base mesh',key,error);return false;}
+    }
+    function updatePendingFaction(root,color){
+        root.traverse(node=>{for(const request of pendingParents.get(node)?.values()||[])request.color=color;});
+    }
+    const full=new URLSearchParams(location.search).get('assets')==='full';
+    const ready=(full?loadAll():loadGroup('startup').catch(()=>loadAll()))
         .catch(error=>{console.warn('Blender detail pack unavailable; using base meshes',error);});
-    sharedPack={ready,attach,getGeometry,texture,get models(){return models;},geometries,materials};
+    sharedPack={ready,attach,getGeometry,texture,ensure,loadAll,updatePendingFaction,get models(){return models;},geometries,materials};
     return sharedPack;
 }

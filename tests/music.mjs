@@ -9,6 +9,7 @@ try{
     const base=process.env.GAME_URL||'http://127.0.0.1:8765';
     await page.goto(`${base}/PopulateTheRebeginning.html?test=1`,{waitUntil:'domcontentloaded'});
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
+    await page.keyboard.press('q');
     const result=await page.evaluate(async()=>{
         const sound=gameTestAPI.SoundManager;
         sound.init();

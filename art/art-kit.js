@@ -278,5 +278,7 @@ export function createArtKit(T) {
     }
     return {building,tree,dress,terrainDetail,textures,palette,uniforms,ready:blender.ready,blender,
         configureTextures,textureStatus:pipeline.status,loadTexture:pipeline.load,
-        textureReady:pipeline.whenReady,texturesReady:pipeline.waitForPending};
+        textureReady:pipeline.whenReady,texturesReady:pipeline.waitForPending,promoteTextures:pipeline.promoteAll,
+        streamTextures:(scene,focus,radius)=>pipeline.streamVisible(scene,focus,radius,
+            [...Object.values(textures),blender.texture('grass','normal'),blender.texture('dirt','normal')])};
 }

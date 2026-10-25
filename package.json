@@ -5,6 +5,8 @@
   "scripts": {
     "start": "node tools/serve.mjs",
     "build:ktx2": "node tools/build-ktx2.mjs",
+    "build:startup": "node tools/build-startup-assets.mjs",
+    "build:asset-manifest": "node tools/build-startup-assets.mjs --manifest-only",
     "benchmark:fps": "node tools/benchmark-fps.mjs",
     "benchmark:first-fireball": "node tools/benchmark-first-fireball.mjs",
     "benchmark:group-impact": "node tools/benchmark-group-impact.mjs",

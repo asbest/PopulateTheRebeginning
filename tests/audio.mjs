@@ -45,7 +45,7 @@ try {
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:60000});
     if(await page.evaluate(()=>gameTestAPI.SoundManager.ctx!==null))
         throw new Error('AudioContext was created before the first user gesture');
-    console.log('PASS Sound assets preload without opening a blocked AudioContext');
+    console.log('PASS Startup leaves the playback AudioContext unopened');
     await page.evaluate(async()=>{
         window.closeHelp();
         window.closeStoryOverlay();
@@ -228,7 +228,7 @@ try {
         window.testSustainEffect=effect;
         return {duration:effect.timer,loop:handle.audio.loop,src:handle.audio.currentSrc};
     });
-    if(sustain.duration<9||!sustain.loop||!sustain.src.endsWith('/sfx/firestorm_loop.wav'))
+    if(sustain.duration<9||!sustain.loop||!new URL(sustain.src).pathname.endsWith('/sfx/firestorm_loop.wav'))
         throw new Error(`Wrong firestorm sustain: ${JSON.stringify(sustain)}`);
     await page.waitForFunction(()=>testSustainHandle.audio.currentTime>.1||
         (testSustainHandle.usingWebAudio&&testSustainHandle.webSource&&
@@ -369,6 +369,7 @@ try {
             throw new Error(`Android firestorm kept its sound after expiry: ${JSON.stringify(stoppedPhoneStorm)}`);
         console.log('PASS Android touch firestorm sustains, pauses and stops with the spell');
         checkpoint='Android stalled sustained media fallback';
+        await phone.evaluate(()=>gameTestAPI.SoundManager.preloadEffects(['tornado_loop']));
         await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('tornado_loop'));
         const resumePoint=await clickControl(phone,'#unit-list .unit-item');
         await phone.touchscreen.tap(resumePoint.x,resumePoint.y);
@@ -402,6 +403,7 @@ try {
         });
         if(stalledPeak<.015)throw new Error(`Stalled Android loop had no audible fallback: ${stalledPeak}`);
         console.log(`PASS Stalled Android sustain switches to audible Web Audio (peak ${stalledPeak.toFixed(3)})`);
+        await phone.evaluate(()=>gameTestAPI.SoundManager.preloadEffects(['heal','swamp_loop']));
         await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('heal')&&
             gameTestAPI.SoundManager.effectBuffers.has('swamp_loop'));
         checkpoint='Android blocked-media fallback';

@@ -25,8 +25,8 @@ body {font-family:'Segoe UI',system-ui,sans-serif;background:#183d49;color:#e3e6
 #joystick-knob {background:#8fc8c7aa!important;border:1px solid #e0d1a0!important;}
 #selection-box {border-color:#a3ded5!important;background:#79bfc522!important;}
 #pause-menu, #help-menu, #match-settings-menu, #campaign-menu, #multiplayer-menu {background:#061a24ed!important;backdrop-filter:blur(12px);}
-#loading {background:linear-gradient(#071c2970,#071c29c9),url('key-art.png') center/cover!important;letter-spacing:.05em;color:#eee0b2!important;text-shadow:0 2px 8px #0009;}
-#story-overlay {background:linear-gradient(#061a2499,#061a24ed),url('key-art.png') center/cover!important;}
+#loading {background:linear-gradient(#071c2970,#071c29c9),url('key-art-startup.webp') center/cover!important;letter-spacing:.05em;color:#eee0b2!important;text-shadow:0 2px 8px #0009;}
+#story-overlay {background:linear-gradient(#061a2499,#061a24ed),url('key-art-startup.webp') center/cover!important;}
 #story-title {color:var(--gold)!important;font-weight:650;letter-spacing:.025em;}
 #story-text {color:#e8e5d6;text-shadow:0 2px 8px #0009!important;}
 @media(max-width:700px){#right-menu{right:4px!important;}#unit-list{left:4px!important;}#enemy-spell-queue{left:52px!important;}}

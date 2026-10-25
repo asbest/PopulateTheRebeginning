@@ -55,10 +55,10 @@ try{
             if(message.type()==='error'&&/shader|webgl|texture/i.test(message.text()))errors.push(message.text());
         });
         page.on('request',request=>{
-            if(request.url().endsWith('.ktx2'))ktxRequests.push(request.url());
+            if(new URL(request.url()).pathname.endsWith('.ktx2'))ktxRequests.push(request.url());
         });
-        if(missingGrass)await page.route('**/art/materials/grass.ktx2',route=>route.fulfill({status:404,body:''}));
-        await page.goto(`${process.env.GAME_URL||'http://127.0.0.1:8765'}/PopulateTheRebeginning.html?test=1${query}`,{timeout:90000});
+        if(missingGrass)await page.route('**/art/materials/grass.ktx2*',route=>route.fulfill({status:404,body:''}));
+        await page.goto(`${process.env.GAME_URL||'http://127.0.0.1:8765'}/PopulateTheRebeginning.html?test=1&assets=full${query}`,{timeout:90000});
         try{
             await page.waitForFunction(()=>window.gameTestAPI&&Art.textureStatus.pending===0,null,{timeout:30000});
         }catch(error){
@@ -135,13 +135,13 @@ try{
         const blocked=new Promise(resolve=>{releaseRequest=resolve;});
         let requestBlocked=false;
         page.on('pageerror',error=>errors.push(String(error)));
-        await page.route('**/art/materials/grass.ktx2',async route=>{
+        await page.route('**/art/materials/grass.ktx2*',async route=>{
             requestBlocked=true;
             await blocked;
             await route.continue().catch(()=>{});
         });
         try{
-            await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
+            await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1&assets=full',
                 {waitUntil:'domcontentloaded',timeout:90000});
             await page.waitForFunction(()=>window.gameTestAPI&&
                 document.querySelector('#loading')?.style.display==='none'&&
@@ -152,7 +152,7 @@ try{
             assert(state.status.fallbacks>=1&&!state.grassCompressed,'Stalled texture did not switch to PNG');
             assert(errors.length===0,`Browser errors: ${errors.join('; ')}`);
             const lateResponse=page.waitForResponse(response=>
-                response.url().endsWith('/art/materials/grass.ktx2'),{timeout:30000});
+                new URL(response.url()).pathname.endsWith('/art/materials/grass.ktx2'),{timeout:30000});
             releaseRequest();
             await lateResponse;
             assert(!await page.evaluate(()=>Art.textures.grass?.isCompressedTexture),

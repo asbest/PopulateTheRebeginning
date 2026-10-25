@@ -699,7 +699,10 @@ import { icon } from './art/icons.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
 import { createBrowserStorage } from './art/browser-storage.js';
+import {assetURL} from './art/asset-urls.js';
+import {installAssetCache,cacheCurrentAssets} from './art/asset-cache.js';
 const localStorage=createBrowserStorage();
+installAssetCache();
 const Art = createArtKit(THREE);
 const Characters = createCharacters(THREE,Art);
 const Locomotion = createLocomotion(THREE);
@@ -2339,8 +2342,8 @@ const SoundManager = {
     init: function() {
         if (!this.explorationTracks.length) {
             this.explorationTracks = CONFIG.AUDIO.EXPLORATION_TRACKS.map(src => {
-                const audio = new Audio(src);
-                audio.preload = 'metadata';
+                const audio = new Audio();
+                audio.preload = 'none';audio.src=assetURL(src);
                 audio.volume = CONFIG.AUDIO.EXPLORATION_VOLUME;
                 audio.addEventListener('ended', () => {
                     if (this.explorationMusic === audio && this.musicEnabled && this.musicMode === 'exploration')
@@ -2350,12 +2353,12 @@ const SoundManager = {
             });
         }
         if (!this.combatMusic) {
-            this.combatMusic = new Audio(CONFIG.AUDIO.COMBAT_MUSIC);
+            this.combatMusic = new Audio();
+            this.combatMusic.preload='none';this.combatMusic.src=assetURL(CONFIG.AUDIO.COMBAT_MUSIC);
             this.combatMusic.loop = true;
             this.combatMusic.volume = CONFIG.AUDIO.COMBAT_VOLUME;
         }
         this.prepareMediaEffects();
-        this.preloadEffects();
     },
     prepareMediaEffects: function() {
         if (this.mediaEffects.size) return;
@@ -2363,25 +2366,26 @@ const SoundManager = {
         for (const name of names) {
             const voices=[];
             for (let i=0;i<(SUSTAIN_ASSETS.includes(name)?3:2);i++) {
-                const audio=new Audio(`sfx/${name}.wav`);
-                audio.preload=i===0?'auto':'metadata';
+                const audio=new Audio();
+                audio.preload='none';audio.src=assetURL(`sfx/${name}.wav`);
                 audio.volume=SOUND_LEVELS[name] || .5;
                 voices.push(audio);
             }
             this.mediaEffects.set(name,voices);
         }
     },
-    preloadEffects: function() {
-        if (this.effectLoads.size) return;
+    preloadEffects: function(names=[]) {
         // Offline decoding prepares the WAVs without creating a suspended playback
         // context before the browser has received a user gesture.
         let decoder=null;
         try {
             const OfflineContext=window.OfflineAudioContext || window.webkitOfflineAudioContext;
-            if (OfflineContext) decoder=new OfflineContext(1,1,32000);
+            if (OfflineContext&&names.some(name=>!this.effectLoads.has(name)))
+                decoder=this.effectDecoder||(this.effectDecoder=new OfflineContext(1,1,32000));
         } catch (error) { console.warn('Offline sound decoding unavailable:',error); }
-        for (const name of [...SOUND_ASSETS,...SUSTAIN_ASSETS]) {
-            const loading=fetch(`sfx/${name}.wav`)
+        for (const name of names) {
+            if(this.effectLoads.has(name))continue;
+            const loading=fetch(assetURL(`sfx/${name}.wav`),{signal:AbortSignal.timeout(12000)})
                 .then(response => { if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`); return response.arrayBuffer(); })
                 .then(async bytes => {
                     if (decoder) {
@@ -2398,6 +2402,7 @@ const SoundManager = {
                 .catch(error => { console.warn(`Sound effect ${name} unavailable:`,error); return null; });
             this.effectLoads.set(name,loading);
         }
+        return Promise.all(names.map(name=>this.effectLoads.get(name)));
     },
     decodePendingEffects: function(ctx) {
         for (const [name,bytes] of this.undecodedEffects) {
@@ -2437,6 +2442,7 @@ const SoundManager = {
     },
     unlockFromGesture: function() {
         this.hasUserGesture=true;
+        this.preloadEffects(['fireball','explosion','attack','hurt','hurt_heavy']);
         return this.unlock();
     },
     installUnlockHandlers: function() {
@@ -2450,7 +2456,9 @@ const SoundManager = {
         const now = performance.now();
         const pending = this.pendingSounds.splice(0);
         for (const sound of pending) {
-            if (now - sound.queuedAt < 2000) this.emitSound(sound.name,sound.volume);
+            if (now - sound.queuedAt < 2000) this.preloadEffects([sound.name]).then(()=>{
+                if(this.ctx?.state==='running')this.emitSound(sound.name,sound.volume);
+            });
         }
     },
     duckMusic: function() {
@@ -2528,6 +2536,7 @@ const SoundManager = {
         }
     },
     playWebSound: function(name,volume=1) {
+        const loaded=this.preloadEffects([name]);
         const ctx=this.ensureContext();
         if (!ctx) return Promise.resolve(false);
         if (ctx.state !== 'running') {
@@ -2535,8 +2544,10 @@ const SoundManager = {
             if (this.pendingSounds.length > 8) this.pendingSounds.shift();
             return this.unlock();
         }
-        this.emitSound(name,volume);
-        return Promise.resolve(true);
+        return loaded.then(()=>{
+            if(this.ctx?.state!=='running')return false;
+            this.emitSound(name,volume);return true;
+        });
     },
     playSound: function(name,volume=1) {
         // Create Web Audio only after an actual gesture; early AI effects otherwise
@@ -2677,6 +2688,7 @@ const SoundManager = {
     },
     startSustain: function(name) {
         if (!this.hasUserGesture || !SUSTAIN_ASSETS.includes(name)) return null;
+        this.preloadEffects([name]);
         this.prepareMediaEffects();
         const voices=this.mediaEffects.get(name);
         if (!voices?.length) return null;
@@ -2728,6 +2740,7 @@ const SoundManager = {
         }
     },
     updateMusic: function(enemyInRange) {
+        if(!this.hasUserGesture)return;
         if (!this.musicEnabled) {
             if (this.explorationMusic) this.explorationMusic.pause();
             if (this.combatMusic) this.combatMusic.pause();
@@ -2771,7 +2784,6 @@ const SoundManager = {
         }
     }
 };
-SoundManager.preloadEffects();
 SoundManager.installUnlockHandlers();
 
 
@@ -9497,6 +9509,8 @@ function selectAction(action) {
         showGameMessage('This action is unavailable during peace time.');
         return;
     }
+    const soundAction={blast:'fireball',warrior_attack:'attack',firewarrior_attack:'fireball'}[action]||action;
+    if(SoundManager.hasUserGesture&&SOUND_ASSETS.includes(soundAction))SoundManager.preloadEffects([soundAction]);
     const equippedClub=state.isFPV&&action==='warrior_attack'&&state.selectedUnits.length===1&&state.selectedUnits[0].type==='warrior';
     if (state.currentAction === action && action !== 'move'&&!equippedClub) {
         state.currentAction = 'move';
@@ -10508,6 +10522,7 @@ async function init() {
         prewarmFireballShaders();
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
+        state.assetsReady=true;cacheCurrentAssets();
 
         if (new URLSearchParams(location.search).has('test')) {
             window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
@@ -12464,6 +12479,10 @@ function animate() {
 
     updateUnitListSelection();
     state.renderer.render(state.scene, state.camera);
+    if(state.assetsReady&&(state.isFPV||state.viewScale<=14)&&performance.now()-(state.lastAssetStreamAt||0)>500){
+        state.lastAssetStreamAt=performance.now();
+        Art.streamTextures(state.scene,state.isFPV?state.camera.position:state.cameraLookAt,state.isFPV?18:Math.max(12,state.viewScale*1.5));
+    }
 }
 
 

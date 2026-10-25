@@ -163,6 +163,7 @@ try {
  }));
  await check('Replacement character meshes, HD materials, pivots and conversion',async()=>page.evaluate(async()=>{
   await Characters.ready;
+  await Art.promoteTextures();
   const dimensions=Object.fromEntries(Object.entries(Characters.tiles).map(([k,t])=>[k,[t.image.width,t.image.height]]));
   if(dimensions.skin[0]<1024||dimensions.cloth[0]<1024)throw new Error('HD textures missing');
   const roles=[];

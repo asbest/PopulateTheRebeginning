@@ -1,5 +1,38 @@
 # Art sources
 
+## Progressive downloads
+
+Normal startup uses generated WebP textures (at most 256 pixels) and the initial
+model group: inhabitants, shaman, huts, vegetation and wildlife. Other role and
+building details load once when first needed; the original articulated meshes
+remain playable during loading or network failure. All authored geometry is
+preserved in the split groups.
+The loading/story background uses a 1280-pixel WebP derivative; its full source
+illustration remains available in the repository.
+
+Close zoom (scale 14 or below) and first person upgrade nearby material textures
+to the original GPU-compressed KTX2 assets, with at most two upgrades in flight.
+Texture objects, tiling and material metadata survive the transition. A failed
+upgrade retains the preview. Missing or stalled previews use the existing full
+texture pipeline, including its original-image fallback. `?assets=full` loads
+all model details and HD textures immediately for inspection; `?textures=png`
+retains the explicit original-image compatibility mode.
+
+Music and effects use `preload=none`. The first gesture prepares common combat
+sounds; selected spells and active effects request their own audio. Desktop Web
+Audio and mobile media playback retain their fallback paths.
+
+Run `npm run build:startup` after changing source textures or mesh-pack.json.
+Run `npm run build:asset-manifest` after other runtime changes. Generated files
+are committed so deployment requires no image tools. Content hashes version the
+asset URLs; an optional service worker caches only assets actually used, reuses
+unchanged content and keeps one previous release. Cache/storage restrictions
+fall back to ordinary downloads. This is an asset cache, not a promise that the
+complete game, every level or every sound is available offline.
+
+The download suite verifies the generated content, actual desktop/mobile startup
+requests, lazy models, close-up upgrades, failure paths and versioned cache hits.
+
 - `blender/Overhaul.blend`: editable Blender 5.2 source for 48 model parts covering buildings, characters, the airship, trees, wildlife with articulated bird wings and flowers. `blender/mesh-pack.json` is the corresponding indexed browser export; the source generator is `tools/blender_overhaul.py`. Seventeen PBR material sets include distinct leather, bronze, foliage, fur, feather, sand and cliff surfaces. See [the Blender guide](../docs/BLENDER-OVERHAUL.md).
 - `blender-pack.js`: loads and shares the Blender-authored geometry and PBR maps across web-game instances. It retains the existing articulated pivots and has a fallback to the original meshes.
 

@@ -10,6 +10,15 @@ automatically included in the simulation group. GitHub uses the same runner in
 six independent groups; all groups run even when another fails. Each group
 uploads its reports, including its suite summary.
 
+`download-loading` checks real desktop/mobile startup requests and byte budgets,
+exact model-chunk contents, deferred attachments and faction changes, progressive
+HD textures, failed/stalled downloads, versioned offline asset reuse and rejected
+service-worker registration. Full-quality art tests explicitly use `assets=full`;
+normal gameplay/startup tests exercise progressive loading. Service workers are
+disabled under `test=1` unless `cache=1` is also supplied, preserving network-fault
+fixtures. Regenerate asset hashes with `npm run build:asset-manifest` after runtime
+edits, or `npm run build:startup` after changing source textures/model exports.
+
 Examples:
 
 ```sh
