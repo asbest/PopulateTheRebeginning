@@ -21,8 +21,17 @@ try {
   await page.waitForFunction(() => window.gameTestAPI&&window.state?.shaman&&window.enemyAIs?.length, null, {timeout:90000});
   await page.evaluate(() => {closeHelp();closeStoryOverlay();state.matchSettings.peaceTimeMinutes=0;state.isPaused=false;document.getElementById('pause-menu').style.display='none';});
 
-  // The Shaman's spells must be available without selecting her first.
-  if(!await page.locator('#btn-blast').count()) throw new Error('Blast is hidden with no unit selected');
+  await page.evaluate(()=>{state.selectedUnits=[];state.selectedBuilding=null;gameTestAPI.updateContextMenus();gameTestAPI.updateUnitList();});
+  if(await page.locator('#right-menu').isVisible()||await page.locator('#btn-blast').count())
+    throw new Error('Action menu is visible with no unit selected');
+  const shamanPoint=await page.evaluate(()=>{
+    const button=state.shaman.listItem;button.scrollIntoView({block:'nearest'});
+    const rect=button.getBoundingClientRect();return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+  });
+  await page.mouse.click(shamanPoint.x,shamanPoint.y);
+  if(!await page.locator('#btn-blast').isVisible()||!await page.evaluate(()=>state.selectedUnits.includes(state.shaman)))
+    throw new Error('Selecting the shaman did not reveal her spells');
+  console.log('PASS live deselection hides actions and selecting the shaman restores spells');
   const enemy = await page.evaluate(() => state.units.filter(u => u.faction === 1).map(u => ({id:u.id,x:u.mesh.position.x,z:u.mesh.position.z})));
   const moving = await page.evaluate(() => {
     const ai=window.enemyAIs[0];

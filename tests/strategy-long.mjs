@@ -13,7 +13,7 @@ try {
   page.on('pageerror',e=>errors.push(String(e)));
   await page.addInitScript(seed=>{Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};},seed);
   try {
-   await page.goto('http://127.0.0.1:8765/PopulateTheRebeginning.html?test=1');
+   await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
    await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);
    await page.evaluate(({personality,raid})=>{
     state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;state.isGodMode=false;gameTestAPI.PathWorker.disable();
