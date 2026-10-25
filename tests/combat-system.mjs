@@ -37,6 +37,19 @@ async function clickAttack(selector){
     await page.mouse.click(point.x,point.y);
 }
 try{
+    await check('Right action menu hides without a selected unit and returns on selection',async()=>{
+        await fresh();return page.evaluate(()=>{
+            state.selectedBuilding=null;state.selectedUnits=[state.shaman];gameTestAPI.updateContextMenus();
+            const menu=document.getElementById('right-menu');
+            if(getComputedStyle(menu).display==='none'||!document.getElementById('btn-blast'))throw new Error('Selected shaman has no menu');
+            state.currentAction='blast';state.selectedUnits=[];gameTestAPI.updateContextMenus();
+            if(getComputedStyle(menu).display!=='none'||menu.children.length||state.visibleActions.length||state.currentAction!=='move')
+                throw new Error('Deselection left the menu or its action active');
+            state.selectedUnits=[state.shaman];gameTestAPI.updateContextMenus();
+            if(getComputedStyle(menu).display==='none'||!document.getElementById('btn-blast'))throw new Error('Reselection did not restore menu');
+            return {hiddenOnDeselection:true,restoredOnSelection:true};
+        });
+    });
     await check('Death immediately deselects units and exits control of a fallen fighter',async()=>{
         await fresh();return page.evaluate(()=>{
             const p=state.shaman.mesh.position;

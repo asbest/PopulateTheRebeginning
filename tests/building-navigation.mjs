@@ -92,10 +92,13 @@ try {
         gameTestAPI.handleTap((target.x+1)*innerWidth/2,(1-target.y)*innerHeight/2,false,false);
         if(!first.dead||state.currentAction!=='select')throw new Error('Targeted demolition did not remove the house');
         state.selectedUnits=[];state.selectedBuilding=second;gameTestAPI.updateContextMenus();
-        const selectedDemolish=document.getElementById('btn-demolish_building');
-        if(!selectedDemolish)throw new Error('Selected building has no demolition action');
-        selectedDemolish.click();
-        if(!second.dead||state.selectedBuilding)throw new Error('Selected building demolition failed');
+        if(getComputedStyle(document.getElementById('right-menu')).display!=='none'||state.visibleActions.length)
+            throw new Error('Menu remained visible without a selected unit');
+        state.selectedBuilding=null;state.selectedUnits=[brave];gameTestAPI.updateContextMenus();
+        document.getElementById('btn-demolish_building').click();
+        const secondTarget=second.mesh.position.clone().add(new THREE.Vector3(0,.5,0)).project(state.camera);
+        gameTestAPI.handleTap((secondTarget.x+1)*innerWidth/2,(1-secondTarget.y)*innerHeight/2,false,false);
+        if(!second.dead)throw new Error('Demolition from the build menu failed');
         if(!gameTestAPI.createBuilding('hut',0,10,0,false))throw new Error('Demolished site stayed blocked');
         return {radius,nearest,closest,destinationX:routed.mesh.position.x,crossingX:crossing.mesh.position.x,gap,passageZ:walker.mesh.position.z};
     });

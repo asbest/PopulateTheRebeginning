@@ -9727,10 +9727,9 @@ function updateContextMenus() {
 
     let visibleActions = [];
 
-    // Spells belong to the living Shaman, even when no unit is selected.
-    if (state.selectedBuilding && !state.selectedBuilding.dead && state.selectedBuilding.faction===0) {
+    if (hasSelection && state.selectedBuilding && !state.selectedBuilding.dead && state.selectedBuilding.faction===0) {
         visibleActions = ['demolish_building'];
-    } else if (hasShaman || (!hasSelection && state.shaman && state.shaman.state !== 'dead')) {
+    } else if (hasShaman) {
         visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom'];
     } else if (fighter&&['warrior','firewarrior'].includes(fighter.type)) {
         visibleActions = [`${fighter.type}_attack`];
@@ -9750,7 +9749,9 @@ function updateContextMenus() {
         visibleActions.push('upgrade_unit');
     }
     state.visibleActions = visibleActions;
-    if(['warrior_attack','firewarrior_attack'].includes(state.currentAction)&&!visibleActions.includes(state.currentAction))
+    menu.style.display=visibleActions.length?'':'none';
+    if((!visibleActions.length&&!['move','select'].includes(state.currentAction))||
+       (['warrior_attack','firewarrior_attack'].includes(state.currentAction)&&!visibleActions.includes(state.currentAction)))
         state.currentAction='move';
 
     visibleActions.forEach((act, index) => {
