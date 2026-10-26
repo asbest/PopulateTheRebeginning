@@ -1563,6 +1563,7 @@ const state = {
 
     shaman: null,
     selectedUnits: [],
+    rangeRing: null,
     cameraLookAt: null,
     viewScale: CONFIG.CAMERA.INITIAL_VIEW_SCALE,
     currentAction: 'select',
@@ -10387,6 +10388,10 @@ async function init() {
 
         state.clock = new THREE.Clock();
         state.cameraLookAt = new THREE.Vector3(0, 0, 0);
+        state.rangeRing = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 64, 1, true),
+            new THREE.MeshBasicMaterial({color:COLORS.snow,transparent:true,opacity:.15,
+                side:THREE.DoubleSide,depthWrite:false}));
+        state.rangeRing.visible = false;
 
         state.scene = new THREE.Scene();
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
@@ -10426,6 +10431,7 @@ async function init() {
         state.ambLight = amb;
         state.scene.add(amb);
         state.skyDome=createSkyDome();state.scene.add(state.skyDome);
+        state.scene.add(state.rangeRing);
         const sun = new THREE.DirectionalLight(0xffffff, 3.14);
         state.sunLight = sun;
         sun.position.set(50, 100, 40);
@@ -12199,6 +12205,32 @@ function animate() {
             console.error("Physics step failed:", e);
         }
     }
+    }
+
+    let rangeCaster = (state.shaman && state.shaman.state !== 'dead') ? state.shaman : null;
+    const unitAttackAction=state.currentAction==='warrior_attack'||state.currentAction==='firewarrior_attack';
+    if(unitAttackAction)rangeCaster=state.selectedUnits.length===1&&state.selectedUnits[0].state!=='dead'?state.selectedUnits[0]:null;
+    const isSpyHypnotise = (state.currentAction === 'hypnotise' && state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'spy');
+    if (isSpyHypnotise) rangeCaster = state.selectedUnits[0];
+
+    if (rangeCaster) {
+        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create', 'phantom', 'teleport'];
+        if (spells.includes(state.currentAction)||unitAttackAction) {
+            state.rangeRing.visible = true;
+            if (state.cheatUnlimitedRange&&!unitAttackAction) {
+                state.rangeRing.scale.set(1000, 1, 1000);
+            } else {
+                let r = 10.0 + rangeCaster.mesh.position.y;
+                if(unitAttackAction)r=rangeCaster.range;
+                if (rangeCaster.type === 'spy') r = 5.0;
+                state.rangeRing.scale.set(r, 60, r);
+            }
+            state.rangeRing.position.set(rangeCaster.mesh.position.x, rangeCaster.mesh.position.y - 30, rangeCaster.mesh.position.z);
+        } else {
+            state.rangeRing.visible = false;
+        }
+    } else {
+        state.rangeRing.visible = false;
     }
 
     updateChunks();

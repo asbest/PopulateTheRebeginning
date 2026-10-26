@@ -43,7 +43,7 @@ try{
  await check('Combat effects leave no ground circles or expanding ring meshes',async()=>{
   await fresh();return p.evaluate(()=>{
    const {caster,x,z}=fixture,existing=new Set(state.particles);
-   if(state.rangeRing||state.impactRing)throw new Error('Action ground preview rings are still present');
+   if(!state.rangeRing||state.impactRing)throw new Error('Spell reach ring or removed impact preview has the wrong state');
    const marks=gameTestAPI.SurfaceMarks.marks.length;
    gameTestAPI.executeSpell('blast',x,z,caster);
    const ball=state.projectiles.at(-1);
@@ -69,6 +69,17 @@ try{
    gameTestAPI.SpellWindup.clear();
    return {newEffects:state.particles.length-existing.size,hitSparks:gameTestAPI.HitPulseManager.meshes[0].count};
   });
+ });
+ await check('Spell reach circle appears while aiming and hides for movement',async()=>{
+  await fresh();
+  await p.evaluate(()=>{state.currentAction='blast';state.isPaused=false;});
+  await p.waitForFunction(()=>state.rangeRing?.visible,null,{timeout:5000});
+  const range=await p.evaluate(()=>({actual:state.rangeRing.scale.x,
+   expected:10+state.shaman.mesh.position.y}));
+  if(Math.abs(range.actual-range.expected)>.01)throw new Error('Spell range changed: '+JSON.stringify(range));
+  await p.evaluate(()=>{state.currentAction='move';});
+  await p.waitForFunction(()=>!state.rangeRing.visible,null,{timeout:5000});
+  return range;
  });
  await check('Fireball blast throws nearby enemies away from its impact',async()=>{
   await fresh();return p.evaluate(()=>{
