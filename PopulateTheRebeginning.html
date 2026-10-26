@@ -6217,6 +6217,9 @@ function prewarmFireballShaders() {
         // A firestorm otherwise pauses when its first explosion or smoke fades.
         spawnExplosion(start.x, start.y, start.z, 0xFF4500, 2, false);
         spawnSmoke(start.clone(), 0x3a302c, .6, 2);
+        // Spell windups now use a Points spark burst. Compile that shader during
+        // loading too, before the first firestorm or other charged spell.
+        spawnPulse(start.x, start.y, start.z, 0xffae47);
         // Compile the shared effect layers and the zero, one and two-light
         // variants while the loading screen is visible.
         existingLights.forEach(([light])=>{light.visible=false;});
@@ -10530,7 +10533,7 @@ async function init() {
         state.assetsReady=true;cacheCurrentAssets();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -12061,6 +12064,31 @@ let _framesThisSecond = 0;
 let _lastFpsTime = performance.now();
 let _qualityFrames=0,_qualityWindowStart=performance.now();
 
+function updateRangeRing() {
+    if(!state.rangeRing)return;
+    let rangeCaster=(state.shaman&&state.shaman.state!=='dead')?state.shaman:null;
+    const unitAttackAction=state.currentAction==='warrior_attack'||state.currentAction==='firewarrior_attack';
+    if(unitAttackAction)rangeCaster=state.selectedUnits.length===1&&state.selectedUnits[0].state!=='dead'?state.selectedUnits[0]:null;
+    if(state.currentAction==='hypnotise'&&state.selectedUnits.length===1&&state.selectedUnits[0].type==='spy')
+        rangeCaster=state.selectedUnits[0];
+    const spells=['blast','lightning','raise','lower','flatten','landbridge','swamp','invisibility',
+        'shield','hypnotise','swarm','tornado','firestorm','volcano','heal','create','phantom','teleport'];
+    if(!rangeCaster||(!spells.includes(state.currentAction)&&!unitAttackAction)){
+        state.rangeRing.visible=false;
+        return;
+    }
+    state.rangeRing.visible=true;
+    if(state.cheatUnlimitedRange&&!unitAttackAction)state.rangeRing.scale.set(1000,1,1000);
+    else {
+        let radius=10+rangeCaster.mesh.position.y;
+        if(unitAttackAction)radius=rangeCaster.range;
+        if(rangeCaster.type==='spy')radius=5;
+        state.rangeRing.scale.set(radius,60,radius);
+    }
+    state.rangeRing.position.set(rangeCaster.mesh.position.x,rangeCaster.mesh.position.y-30,
+        rangeCaster.mesh.position.z);
+}
+
 function animate() {
     requestAnimationFrame(animate);
     const frameTime=performance.now(),dt=Math.min(state.lastFrameTime===undefined?1/60:(frameTime-state.lastFrameTime)/1000,.1);
@@ -12207,31 +12235,7 @@ function animate() {
     }
     }
 
-    let rangeCaster = (state.shaman && state.shaman.state !== 'dead') ? state.shaman : null;
-    const unitAttackAction=state.currentAction==='warrior_attack'||state.currentAction==='firewarrior_attack';
-    if(unitAttackAction)rangeCaster=state.selectedUnits.length===1&&state.selectedUnits[0].state!=='dead'?state.selectedUnits[0]:null;
-    const isSpyHypnotise = (state.currentAction === 'hypnotise' && state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'spy');
-    if (isSpyHypnotise) rangeCaster = state.selectedUnits[0];
-
-    if (rangeCaster) {
-        const spells = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'create', 'phantom', 'teleport'];
-        if (spells.includes(state.currentAction)||unitAttackAction) {
-            state.rangeRing.visible = true;
-            if (state.cheatUnlimitedRange&&!unitAttackAction) {
-                state.rangeRing.scale.set(1000, 1, 1000);
-            } else {
-                let r = 10.0 + rangeCaster.mesh.position.y;
-                if(unitAttackAction)r=rangeCaster.range;
-                if (rangeCaster.type === 'spy') r = 5.0;
-                state.rangeRing.scale.set(r, 60, r);
-            }
-            state.rangeRing.position.set(rangeCaster.mesh.position.x, rangeCaster.mesh.position.y - 30, rangeCaster.mesh.position.z);
-        } else {
-            state.rangeRing.visible = false;
-        }
-    } else {
-        state.rangeRing.visible = false;
-    }
+    updateRangeRing();
 
     updateChunks();
 

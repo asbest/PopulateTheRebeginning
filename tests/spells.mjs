@@ -71,15 +71,16 @@ try{
   });
  });
  await check('Spell reach circle appears while aiming and hides for movement',async()=>{
-  await fresh();
-  await p.evaluate(()=>{state.currentAction='blast';state.isPaused=false;});
-  await p.waitForFunction(()=>state.rangeRing?.visible,null,{timeout:5000});
-  const range=await p.evaluate(()=>({actual:state.rangeRing.scale.x,
-   expected:10+state.shaman.mesh.position.y}));
-  if(Math.abs(range.actual-range.expected)>.01)throw new Error('Spell range changed: '+JSON.stringify(range));
-  await p.evaluate(()=>{state.currentAction='move';});
-  await p.waitForFunction(()=>!state.rangeRing.visible,null,{timeout:5000});
-  return range;
+  await fresh();return p.evaluate(()=>{
+   state.currentAction='blast';gameTestAPI.updateRangeRing();
+   const range={visible:state.rangeRing.visible,actual:state.rangeRing.scale.x,
+    expected:10+state.shaman.mesh.position.y};
+   if(!range.visible||Math.abs(range.actual-range.expected)>.01)
+    throw new Error('Spell range changed: '+JSON.stringify(range));
+   state.currentAction='move';gameTestAPI.updateRangeRing();
+   if(state.rangeRing.visible)throw new Error('Spell range remained visible for movement');
+   return range;
+  });
  });
  await check('Fireball blast throws nearby enemies away from its impact',async()=>{
   await fresh();return p.evaluate(()=>{
