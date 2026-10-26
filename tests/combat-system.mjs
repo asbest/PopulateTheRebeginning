@@ -413,6 +413,29 @@ try{
             return {mana:state.mana};
         });
     });
+    await check('Firewarrior shots share a five-second cooldown across manual and automatic attacks',async()=>{
+        await fresh();return page.evaluate(()=>{
+            closeHelp();closeStoryOverlay();state.isPaused=true;
+            const p=state.shaman.mesh.position,fighter=new Humanoid(0,'firewarrior',p.x,p.z);
+            const target=new Humanoid(1,'warrior',p.x+3,p.z);state.units.push(fighter,target);
+            let now=100;state.clock.getElapsedTime=()=>now;
+            fighter.lastAttackTime=now-.3;fighter.attackTarget=target;
+            const before=state.projectiles.length;fighter.attack();
+            if(state.projectiles.length!==before+1)throw new Error('Initial automatic shot missing');
+            fighter.upgrade();fighter.attackSpeed*=2;
+            now=104.999;fighter.attackFired=false;fighter.attack();
+            if(state.projectiles.length!==before+1||fighter.beginManualAttack(p.x+3,p.z))throw new Error('Cooldown bypassed before five seconds');
+            now=105;
+            if(!fighter.beginManualAttack(p.x+3,p.z))throw new Error('Manual attack still blocked after five seconds');
+            fighter.attack({...fighter.manualAttack,elapsed:fighter.manualAttack.duration*.6});fighter.manualAttack=null;
+            if(state.projectiles.length!==before+2)throw new Error('Manual shot missing after cooldown');
+            now=109.999;fighter.attackTarget=target;fighter.attackFired=false;fighter.lastAttackTime=now-.2;fighter.attack();
+            if(state.projectiles.length!==before+2)throw new Error('Automatic attack bypassed manual shot cooldown');
+            now=110;fighter.lastAttackTime=now-.15;fighter.attack();
+            if(state.projectiles.length!==before+3)throw new Error('Automatic shot did not recover');
+            return {shots:3,releaseTimes:[100,105,110],upgraded:true};
+        });
+    });
     await check('No combat runtime errors',()=>{if(errors.length)throw new Error(errors.join('\n'));});
 }finally{await browser.close();}
 console.log(JSON.stringify({passed:results.filter(result=>result.pass).length,failed:results.filter(result=>!result.pass).length}));

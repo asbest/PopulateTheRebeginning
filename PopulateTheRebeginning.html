@@ -948,6 +948,7 @@ const CONFIG = {
         FIREBALL_UNIT_DAMAGE: 115,
         FIREBALL_BUILDING_DAMAGE: 75,
         FIREWARRIOR_BALL_UNIT_DMG: 18,
+        FIREWARRIOR_SHOT_COOLDOWN: 5,
         FIREWARRIOR_BULLDING_DMG: 15,
         FIRESTORM_UNIT_DAMAGE: 70,
         FIRESTORM_BUILDING_DAMAGE: 50,
@@ -5891,9 +5892,10 @@ const FIREBALL_CORE_MAT = new THREE.MeshBasicMaterial({color:0xffda84});
 const FIREBALL_CORONA_MAT = new THREE.MeshBasicMaterial({color:COLORS.fireBody,transparent:true,opacity:.45,
     blending:THREE.AdditiveBlending,depthWrite:false});
 const FIREWARRIOR_FLAME_COLORS=[0xff5810,0xffa227,0xff6a16,0xffd052];
-// Small, soft flame tongues rise from the palms in one shared draw call.
+// Soft flame ribbons flow along each articulated arm in one shared draw call.
 const FirewarriorFlames={
     mesh:null,dummy:new THREE.Object3D(),point:new THREE.Vector3(),tint:new THREE.Color(),capacity:1024,
+    axis:new THREE.Vector3(),right:new THREE.Vector3(),normal:new THREE.Vector3(),view:new THREE.Vector3(),basis:new THREE.Matrix4(),
     init(){
         if(this.mesh)return;
         const geometry=new THREE.PlaneGeometry(1,1);geometry.translate(0,.5,0);
@@ -5905,11 +5907,12 @@ const FirewarriorFlames={
                 void main(){
                     float y=vUv.y;
                     float bend=sin(y*9.0-time*17.0)*.11*y+sin(y*17.0+time*23.0)*.045*y;
-                    float width=mix(.44,.015,pow(y,.72));
+                    float flow=fract(y*2.2-time*2.8);
+                    float width=mix(.44,.035,pow(flow,.72))*(.82+.18*sin(y*13.0-time*19.0));
                     float edge=abs(vUv.x-.5-bend);
-                    float alpha=(1.0-smoothstep(width*.35,width,edge))*(1.0-smoothstep(.65,1.0,y));
-                    vec3 color=mix(vTint,vec3(1.0,.94,.48),pow(1.0-y,2.0));
-                    gl_FragColor=vec4(color,alpha*.82);
+                    float alpha=(1.0-smoothstep(width*.35,width,edge))*smoothstep(0.0,.1,y)*(1.0-smoothstep(.82,1.0,y));
+                    vec3 color=mix(vTint,vec3(1.0,.82,.24),pow(1.0-flow,2.0));
+                    gl_FragColor=vec4(color,alpha*.62);
                     #include <encodings_fragment>
                 }`,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false});
         this.mesh=new THREE.InstancedMesh(geometry,material,this.capacity);
@@ -5930,19 +5933,25 @@ const FirewarriorFlames={
             for(let side=0;side<2;side++){
                 const arm=side===0?unit.armL:unit.armR;
                 const forearm=arm?.userData.lower;
-                const palm=forearm?.userData.palm;
-                if(!palm)continue;
-                palm.updateWorldMatrix(true,false);
+                if(!forearm)continue;
+                forearm.updateWorldMatrix(true,false);
                 for(let i=0;i<4;i++){
                     if(count>=this.capacity)break;
                     const phase=unit.animTime*19+i*2.7+side*1.9;
                     const flicker=.5+.3*Math.sin(phase)+.2*Math.sin(phase*1.73+1.4);
-                    // Hand is a scaled unit sphere; start just outside its palm surface.
-                    this.point.set((i-1.5)*.24,Math.sin(phase*.7)*.1,1.12)
-                        .applyMatrix4(palm.matrixWorld);
+                    const segment=i<2?arm:forearm;
+                    this.point.set(Math.sin(phase*.7)*.008,i<2?-.27:-.31,(i%2?1:-1)*(i<2?.068:.052))
+                        .applyMatrix4(segment.matrixWorld);
                     this.dummy.position.copy(this.point);
-                    this.dummy.quaternion.copy(state.camera.quaternion);
-                    this.dummy.scale.set(.032+flicker*.025,.075+flicker*.105,1);
+                    this.axis.set(0,1,0).transformDirection(segment.matrixWorld);
+                    this.view.copy(state.camera.position).sub(this.point).normalize();
+                    this.right.crossVectors(this.axis,this.view);
+                    if(this.right.lengthSq()<.0001)this.right.set(1,0,0).applyQuaternion(state.camera.quaternion);
+                    this.right.addScaledVector(this.axis,-this.right.dot(this.axis)).normalize();
+                    this.normal.crossVectors(this.right,this.axis).normalize();
+                    this.basis.makeBasis(this.right,this.axis,this.normal);
+                    this.dummy.quaternion.setFromRotationMatrix(this.basis);
+                    this.dummy.scale.set(.10+flicker*.035,i<2?.30:.35,1);
                     this.dummy.updateMatrix();
                     this.mesh.setMatrixAt(count,this.dummy.matrix);
                     this.mesh.setColorAt(count++,this.tint.setHex(FIREWARRIOR_FLAME_COLORS[i]));
@@ -7350,6 +7359,7 @@ window.Humanoid = class Humanoid {
         this.velocity = new THREE.Vector3(0,0,0);
         this.isGrounded = true; this.target = null; this.attackTarget = null; this.state = 'idle'; this.animTime = Math.random() * 100;
         this.lastAttackTime = 0;
+        this.lastFirewarriorShot = -Infinity;
         this.lastPainAt = -Infinity;
         this.path = []; this.pathIndex = 0; this.pathTimer = 0;
         this.finalDest = null; this.lastPos = new THREE.Vector3(); this.stuckTimer = 0;
@@ -7848,6 +7858,7 @@ window.Humanoid = class Humanoid {
         if(!['warrior','firewarrior'].includes(this.type)||this.faction!==0||isPeaceTime()||
            ['dead','stunned','getting_up','transported'].includes(this.state)||this.manualAttack)return false;
         const now=state.clock.getElapsedTime(),duration=1/this.attackSpeed;
+        if(this.type==='firewarrior'&&now-this.lastFirewarriorShot<CONFIG.COMBAT.FIREWARRIOR_SHOT_COOLDOWN)return false;
         if(now-this.lastAttackTime<duration)return false;
         const point=new THREE.Vector3(x,getSurfaceHeight(x,z),z);
         const direction=point.clone().sub(this.mesh.position).setY(0).normalize();
@@ -7877,6 +7888,10 @@ window.Humanoid = class Humanoid {
         if(!manual&&(!target || target.state === 'dead' || target.dead ||
            window.isAllied(target.faction,this.faction))) {
              this.state = 'idle'; this.attackTarget = null; return;
+        }
+
+        if(this.type==='firewarrior'&&state.clock.getElapsedTime()-this.lastFirewarriorShot<CONFIG.COMBAT.FIREWARRIOR_SHOT_COOLDOWN){
+            Locomotion.animateCombat(this,0);return;
         }
 
         Locomotion.turn(this, Math.atan2(point.x-this.mesh.position.x, point.z-this.mesh.position.z), this.frameDt||.016);
@@ -7948,6 +7963,7 @@ window.Humanoid = class Humanoid {
             }
 
             if(this.type === 'firewarrior') {
+                 this.lastFirewarriorShot=state.clock.getElapsedTime();
                  // Spawn Fireball
                  const hand=this.armR.userData.lower;
                  hand.updateWorldMatrix(true,false);
