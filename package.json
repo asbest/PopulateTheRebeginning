@@ -1,0 +1,24 @@
+{
+  "name": "populate-the-rebeginning",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "build:ktx2": "node tools/build-ktx2.mjs",
+    "build:startup": "node tools/build-startup-assets.mjs",
+    "build:asset-manifest": "node tools/build-startup-assets.mjs --manifest-only",
+    "benchmark:fps": "node tools/benchmark-fps.mjs",
+    "benchmark:first-fireball": "node tools/benchmark-first-fireball.mjs",
+    "benchmark:group-impact": "node tools/benchmark-group-impact.mjs",
+    "benchmark:hut-destruction": "node tools/benchmark-hut-destruction.mjs",
+    "benchmark:firestorm": "node tools/benchmark-firestorm.mjs",
+    "test": "node tools/run-tests.mjs",
+    "test:list": "node tools/run-tests.mjs --list",
+    "test:network-live": "node tests/network.mjs --live-signaling"
+  },
+  "devDependencies": {
+    "ktx2-encoder": "0.5.4",
+    "playwright": "1.62.1",
+    "sharp": "0.34.4"
+  }
+}

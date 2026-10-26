@@ -1,0 +1,24 @@
+name: Browser playability
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  tests:
+    name: ${{ matrix.group }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [interface, simulation, rendering, audio, performance, strategy-long]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Run ${{ matrix.group }} tests
+        run: node tools/run-tests.mjs --group=${{ matrix.group }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-report-${{ matrix.group }}
+          path: test-results/

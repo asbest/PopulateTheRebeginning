@@ -1,0 +1,88 @@
+import fs from 'node:fs/promises';
+import {createRequire} from 'node:module';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+
+const modulePath=process.argv.find(arg=>arg.startsWith('--playwright='))?.slice(13);
+const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createRequire(import.meta.url)('playwright');
+const executablePath=process.argv.find(arg=>arg.startsWith('--browser='))?.slice(10);
+const browser=await chromium.launch({headless:true,...(executablePath?{executablePath}:process.platform==='win32'?{channel:'chrome'}:{})});
+const base=process.env.GAME_URL||'http://127.0.0.1:8765';
+let failures=0;
+const results=[];
+const workflowEscape=value=>String(value).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A');
+try{
+    for(const [name,options,url] of [
+        ['desktop',{},`${base}/PopulateTheRebeginning.html`],
+        ['mobile',{viewport:{width:390,height:844},isMobile:true,hasTouch:true,
+            userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'},
+            `${base}/PopulateTheRebeginning.html`],
+        ['mobile PNG fallback',{viewport:{width:390,height:844},isMobile:true,hasTouch:true},
+            `${base}/PopulateTheRebeginning.html?textures=png`],
+        ['blocked browser storage',{},`${base}/PopulateTheRebeginning.html`],
+        ['full browser storage',{},`${base}/PopulateTheRebeginning.html`]
+    ]){
+        const page=await browser.newPage(options),errors=[],missing=[];
+        page.on('pageerror',error=>errors.push(String(error)));
+        page.on('console',message=>{if(message.type()==='error'&&/Init failed|WebGL|shader|texture/i.test(message.text()))errors.push(message.text());});
+        page.on('response',response=>{if(response.status()>=400&&response.url().startsWith(base))missing.push(`${response.status()} ${response.url()}`);});
+        page.on('dialog',dialog=>dialog.accept());
+        try{
+            if(name==='blocked browser storage')await page.addInitScript(()=>{
+                Object.defineProperty(window,'localStorage',{get(){throw new DOMException('Storage blocked','SecurityError');}});
+            });
+            if(name==='full browser storage')await page.addInitScript(()=>{
+                Storage.prototype.setItem=function(){throw new DOMException('Storage quota exceeded','QuotaExceededError');};
+            });
+            await page.goto(url,{waitUntil:'domcontentloaded',timeout:90000});
+            await page.waitForFunction(()=>document.querySelector('#loading')?.style.display==='none'&&
+                !!window.state?.renderer&&!!window.state?.shaman,null,{timeout:120000,polling:250});
+            const result=await page.evaluate(()=>({loading:document.querySelector('#loading')?.style.display,
+                renderer:!!window.state?.renderer,shaman:!!window.state?.shaman,textures:window.Art?.textureStatus,
+                help:document.querySelector('#help-overlay')?.style.display,
+                story:document.querySelector('#story-overlay')?.style.display,
+                paused:window.state?.isPaused}));
+            if(name==='mobile'){
+                await fs.mkdir(new URL('../test-results/',import.meta.url),{recursive:true});
+                await page.screenshot({path:fileURLToPath(new URL('../test-results/startup-mobile.png',import.meta.url))});
+            }
+            if(result.help==='flex')throw new Error('Help overlay obscures the campaign welcome screen');
+            if(result.story!=='flex')throw new Error('Campaign welcome screen is missing');
+            // Starting the simulation can schedule navigation (for example after a quick defeat).
+            // Observe the resulting UI state instead of letting the input action wait for navigation.
+            // The first simulation frame may navigate immediately after Begin.
+            // Dispatch the gesture without waiting for a scheduled navigation.
+            const begin = await page.locator('#story-close').boundingBox();
+            if (!begin) throw new Error('Begin button has no visible bounds');
+            const x=begin.x+begin.width/2,y=begin.y+begin.height/2;
+            if(name.startsWith('mobile'))await page.touchscreen.tap(x,y);
+            else await page.mouse.click(x,y);
+            await page.waitForFunction(()=>!state.isPaused&&
+                document.querySelector('#help-overlay')?.style.display==='none'&&
+                document.querySelector('#story-overlay')?.style.display==='none',null,{timeout:10000});
+            if(name.endsWith('browser storage')){
+                await page.evaluate(()=>{
+                    state.isPaused=true;state.mana=777;window.saveGame();
+                    if(!document.getElementById('game-toast').textContent.includes('only until'))
+                        throw new Error('Session-only save was reported as permanent');
+                    state.mana=1;window.loadGame();state.isPaused=true;
+                    if(state.mana!==777)throw new Error('Session fallback did not restore the save');
+                });
+            }
+            if(errors.length||missing.length)throw new Error(JSON.stringify({result,errors,missing}));
+            console.log(`PASS ${name} starts without test mode`,result);
+            results.push({name,pass:true,result});
+        }catch(error){
+            failures++;
+            const state=await page.evaluate(()=>({loading:document.querySelector('#loading')?.style.display,
+                renderer:!!window.state?.renderer,shaman:!!window.state?.shaman,textures:window.Art?.textureStatus})).catch(()=>null);
+            const detail={error:String(error),state,errors,missing};
+            results.push({name,pass:false,...detail});
+            console.error(`FAIL ${name}`,detail);
+            if(process.env.GITHUB_ACTIONS==='true')
+                console.log(`::error title=${workflowEscape(name+' startup')}::${workflowEscape(JSON.stringify(detail))}`);
+        }finally{await page.close();}
+    }
+}finally{await browser.close();}
+await fs.mkdir(new URL('../test-results/',import.meta.url),{recursive:true});
+await fs.writeFile(new URL('../test-results/startup-report.json',import.meta.url),JSON.stringify(results,null,2));
+if(failures)process.exitCode=1;

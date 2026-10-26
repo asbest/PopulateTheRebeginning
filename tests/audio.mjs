@@ -1,0 +1,473 @@
+import {createRequire} from 'node:module';
+import {pathToFileURL} from 'node:url';
+
+const modulePath=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
+const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createRequire(import.meta.url)('playwright');
+const browser=await chromium.launch({headless:true,args:['--autoplay-policy=user-gesture-required'],...(process.platform==='win32'?{channel:'chrome'}:{})});
+const page=await browser.newPage({viewport:{width:1440,height:900}});
+const errors=[];
+let checkpoint='desktop startup';
+page.on('pageerror',error=>errors.push(String(error)));
+page.on('dialog',dialog=>dialog.accept());
+const clickControl=async (target,selector)=>{
+    const point=await target.evaluate(selector=>{
+        const control=document.querySelector(selector);
+        if(!control)return null;
+        const bounds=control.getBoundingClientRect();
+        return {x:bounds.x+bounds.width/2,y:bounds.y+bounds.height/2};
+    },selector);
+    if(!point)throw new Error(`Missing control: ${selector}`);
+    return point;
+};
+const startRecording=target=>target.evaluate(()=>{
+    const chunks=[];
+    const recorder=new MediaRecorder(testSpellAudioDestination.stream,{mimeType:'audio/webm;codecs=opus'});
+    recorder.ondataavailable=event=>chunks.push(event.data);
+    window.testSpellRecording={recorder,chunks};
+    recorder.start();
+});
+const stopRecording=target=>target.evaluate(async()=>{
+    const {recorder,chunks}=testSpellRecording;
+    await new Promise(resolve=>setTimeout(resolve,1500));
+    const stopped=new Promise(resolve=>{recorder.onstop=resolve;});
+    recorder.stop();
+    await stopped;
+    const bytes=await new Blob(chunks,{type:recorder.mimeType}).arrayBuffer();
+    if(!bytes.byteLength)return 0;
+    const decoded=await gameTestAPI.SoundManager.ctx.decodeAudioData(bytes);
+    let peak=0;
+    for(const sample of decoded.getChannelData(0))peak=Math.max(peak,Math.abs(sample));
+    return peak;
+});
+
+try {
+    await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
+    await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:60000});
+    if(await page.evaluate(()=>gameTestAPI.SoundManager.ctx!==null))
+        throw new Error('AudioContext was created before the first user gesture');
+    console.log('PASS Startup leaves the playback AudioContext unopened');
+    await page.evaluate(async()=>{
+        window.closeHelp();
+        window.closeStoryOverlay();
+        document.getElementById('pause-menu').style.display='none';
+        state.isPaused=true;
+        state.matchSettings.peaceTimeMinutes=0;
+        const sound=gameTestAPI.SoundManager;
+        sound.setMusicEnabled(false);
+        await sound.ensureContext().suspend();
+        state.mana=1000;
+        gameTestAPI.updateUnitList();
+    });
+    const unitPoint=await clickControl(page,'#unit-list .unit-item');
+    await page.mouse.click(unitPoint.x,unitPoint.y);
+    const blastPoint=await clickControl(page,'#btn-blast');
+    await page.mouse.click(blastPoint.x,blastPoint.y);
+    if(await page.evaluate(()=>state.currentAction)!=='blast')throw new Error('Real spell button did not select fireball');
+    await page.evaluate(()=>{
+        const sound=gameTestAPI.SoundManager;
+        window.testSounds=[];
+        const oldPlaySound=sound.playSound;
+        sound.playSound=function(name){testSounds.push(name);return oldPlaySound.call(this,name);};
+        const recordingDestination=sound.ctx.createMediaStreamDestination();
+        sound.effectsBus.connect(recordingDestination);
+        window.testSpellAudioDestination=recordingDestination;
+    });
+    await startRecording(page);
+    checkpoint='desktop fireball click';
+    const target=await page.evaluate(()=>{
+        const point=state.shaman.mesh.position.clone();
+        point.x+=2;
+        point.project(state.camera);
+        return {x:(point.x+1)*innerWidth/2,y:(1-point.y)*innerHeight/2};
+    });
+    await page.mouse.click(target.x,target.y);
+    if(await page.evaluate(()=>state.mana)!==990)throw new Error('Real terrain click did not cast fireball');
+    const firstPeak=await stopRecording(page);
+    if(firstPeak<0.03)throw new Error(`Real fireball click produced no audio (peak ${firstPeak})`);
+    await page.waitForFunction(()=>gameTestAPI.SoundManager.ctx.state==='running');
+    console.log(`PASS Real fireball button and terrain click unlock audio (peak ${firstPeak.toFixed(3)})`);
+
+    await page.evaluate(()=>{state.mana=1000;state.selectedUnits=[state.shaman];});
+    for(const spell of ['blast','heal','raise','lightning','firestorm']) {
+        checkpoint=`desktop ${spell} sound`;
+        await startRecording(page);
+        const before=await page.evaluate(()=>state.mana);
+        const soundCount=await page.evaluate(()=>testSounds.length);
+        await page.evaluate(spell=>{
+            const shaman=state.shaman;
+            gameTestAPI.performAction(shaman.mesh.position.x+2,shaman.mesh.position.z,spell);
+            gameTestAPI.SpellWindup.update(1);
+        },spell);
+        const after=await page.evaluate(()=>state.mana);
+        if(after>=before)throw new Error(`${spell} was not cast`);
+        await page.waitForFunction(count=>testSounds.length>count,soundCount);
+        const soundName=await page.evaluate(()=>testSounds.at(-1));
+        const expected={blast:'fireball',heal:'heal',raise:'raise',lightning:'lightning',firestorm:'firestorm'}[spell];
+        if(soundName!==expected)throw new Error(`${spell} played ${soundName} instead of ${expected}`);
+        const peak=await stopRecording(page);
+        if(peak<0.015)throw new Error(`${spell} produced no audible signal (peak ${peak})`);
+        console.log(`PASS ${spell} produces spell audio (peak ${peak.toFixed(3)})`);
+    }
+    await page.evaluate(()=>gameTestAPI.SoundManager.ctx.suspend());
+    checkpoint='desktop keyboard unlock and sound test';
+    if(await page.evaluate(()=>gameTestAPI.SoundManager.ctx.state)!=='suspended')throw new Error('Audio context did not suspend');
+    await page.keyboard.press('q');
+    await page.waitForFunction(()=>gameTestAPI.SoundManager.ctx.state==='running');
+    console.log('PASS Keyboard gesture resumes spell audio');
+    checkpoint='wildlife proximity audio';
+    const wildlife=await page.evaluate(()=>{
+        const critters=gameTestAPI.CritterManager,sound=gameTestAPI.SoundManager;
+        const previous={bunnies:critters.bunnies,birds:critters.birds,check:critters.soundCheckTimer,
+            cooldown:critters.soundCooldown,focus:state.cameraLookAt.clone(),paused:state.isPaused,
+            fpv:state.isFPV,selected:state.selectedUnits,viewScale:state.viewScale,
+            gesture:sound.hasUserGesture,play:sound.playSound};
+        const calls=[];
+        try {
+            sound.playSound=(name,volume)=>{calls.push({name,volume});return Promise.resolve(true);};
+            state.isPaused=false;state.isFPV=false;state.viewScale=35;
+            state.cameraLookAt.set(0,0,0);
+            const rabbit={mesh:{position:{x:40,y:0,z:0}},state:'idle',age:10,nextSoundAt:0};
+            const bird={mesh:{position:{x:50,y:15,z:0}},age:10,nextSoundAt:0};
+            critters.bunnies=[rabbit];critters.birds=[bird];
+            const check=()=>{critters.soundCheckTimer=0;critters.soundCooldown=0;critters.updateAudio(.3);};
+            check();
+            if(calls.length)throw new Error('Distant animals made a sound');
+            rabbit.mesh.position.x=2;
+            sound.hasUserGesture=false;check();
+            if(calls.length)throw new Error('Wildlife sounded before audio unlock');
+            sound.hasUserGesture=true;check();
+            if(calls.length!==1||calls[0].name!=='bunny_nibble')throw new Error('Near idle rabbit did not nibble');
+            critters.updateAudio(.3);
+            if(calls.length!==1)throw new Error('Wildlife sound ignored global cooldown');
+            rabbit.state='hopping';rabbit.nextSoundAt=0;check();
+            if(calls.length!==1)throw new Error('Hopping rabbit nibbled');
+            bird.mesh.position.x=3;check();
+            if(calls.length!==2||calls[1].name!=='bird_call')throw new Error('Near bird did not call');
+            state.viewScale=70;bird.nextSoundAt=0;check();
+            if(calls.length!==3||calls[2].volume>=calls[1].volume)
+                throw new Error('Zooming out did not soften the bird call');
+            state.isFPV=true;state.cameraLookAt.set(100,0,100);
+            state.selectedUnits=[{mesh:{position:{x:3,y:0,z:0}}}];
+            bird.nextSoundAt=0;check();
+            if(calls.length!==4||calls[3].name!=='bird_call')
+                throw new Error('First-person listener did not follow the selected unit');
+            state.isPaused=true;bird.nextSoundAt=0;check();
+            if(calls.length!==4)throw new Error('Wildlife sounded while paused');
+            return calls;
+        } finally {
+            critters.bunnies=previous.bunnies;critters.birds=previous.birds;
+            critters.soundCheckTimer=previous.check;critters.soundCooldown=previous.cooldown;
+            state.cameraLookAt.copy(previous.focus);state.isPaused=previous.paused;
+            state.isFPV=previous.fpv;state.selectedUnits=previous.selected;
+            state.viewScale=previous.viewScale;sound.hasUserGesture=previous.gesture;sound.playSound=previous.play;
+        }
+    });
+    console.log(`PASS Wildlife sounds require proximity, idle behavior and active audio: ${wildlife.map(call=>call.name).join(', ')}`);
+    checkpoint='combat pain reactions';
+    const painSounds=await page.evaluate(()=>{
+        const sound=gameTestAPI.SoundManager;
+        const previous={play:sound.playSound,lastPainAt:sound.lastPainAt,paused:state.isPaused,
+            focus:state.cameraLookAt.clone(),fpv:state.isFPV,gesture:sound.hasUserGesture};
+        const calls=[];
+        const unit={type:'warrior',faction:1,state:'idle',hp:500,maxHp:500,shielded:false,
+            mesh:{position:{x:1,y:0,z:0}},hpBar:{scale:{x:1}},lastPainAt:-Infinity,
+            die(){this.state='dead';}};
+        try {
+            sound.playSound=(name,volume)=>{calls.push({name,volume});return Promise.resolve(true);};
+            sound.lastPainAt=-Infinity;sound.hasUserGesture=true;
+            state.isPaused=false;state.isFPV=false;state.cameraLookAt.set(0,0,0);
+            Humanoid.prototype.takeDamage.call(unit,40,true);
+            if(calls.length!==1||calls[0].name!=='hurt')throw new Error('Normal hit did not play a short pain sound');
+            Humanoid.prototype.takeDamage.call(unit,40,true);
+            if(calls.length!==1)throw new Error('Repeated hits ignored the pain cooldown');
+            unit.lastPainAt=sound.lastPainAt=-Infinity;
+            Humanoid.prototype.takeDamage.call(unit,150,true);
+            if(calls.length!==2||calls[1].name!=='hurt_heavy')throw new Error('Heavy hit did not use the stronger reaction');
+            unit.shielded=true;unit.lastPainAt=sound.lastPainAt=-Infinity;
+            Humanoid.prototype.takeDamage.call(unit,40,true);
+            if(calls.length!==2)throw new Error('Shielded figure cried out');
+            unit.shielded=false;
+            Humanoid.prototype.takeDamage.call(unit,1,true,false);
+            if(calls.length!==2)throw new Error('Drowning tick played a hit sound');
+            unit.mesh.position.x=100;
+            Humanoid.prototype.takeDamage.call(unit,30,true);
+            if(calls.length!==2)throw new Error('Distant combat played a pain sound');
+            unit.mesh.position.x=1;unit.type='airship';
+            Humanoid.prototype.takeDamage.call(unit,30,true);
+            if(calls.length!==2)throw new Error('Airship made a human pain sound');
+            return calls;
+        } finally {
+            sound.playSound=previous.play;sound.lastPainAt=previous.lastPainAt;
+            sound.hasUserGesture=previous.gesture;state.isPaused=previous.paused;
+            state.cameraLookAt.copy(previous.focus);state.isFPV=previous.fpv;
+        }
+    });
+    console.log(`PASS Nearby combat hits trigger restrained pain reactions: ${painSounds.map(call=>call.name).join(', ')}`);
+    await page.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
+    await startRecording(page);
+    const soundPoint=await clickControl(page,'#btn-test-sound');
+    await page.mouse.click(soundPoint.x,soundPoint.y);
+    const testPeak=await stopRecording(page);
+    if(testPeak<0.03)throw new Error(`Pause-menu sound test was silent (peak ${testPeak})`);
+    console.log(`PASS Pause-menu sound test (peak ${testPeak.toFixed(3)})`);
+
+    checkpoint='desktop sustained firestorm';
+    const sustain=await page.evaluate(()=>{
+        document.getElementById('pause-menu').style.display='none';
+        state.isPaused=false;
+        const sound=gameTestAPI.SoundManager;
+        sound.syncSustains(false);
+        state.mana=1000;
+        state.selectedUnits=[state.shaman];
+        gameTestAPI.performAction(state.shaman.mesh.position.x+2,state.shaman.mesh.position.z,'firestorm');
+        gameTestAPI.SpellWindup.update(1);
+        const effect=state.activeEffects.at(-1),handle=effect?.soundLoop;
+        if(effect?.constructor.name!=='Firestorm'||!handle||!sound.activeSustains.has(handle))
+            throw new Error('Firestorm did not start its persistent sound');
+        window.testSustainHandle=handle;
+        window.testSustainEffect=effect;
+        return {duration:effect.timer,loop:handle.audio.loop,src:handle.audio.currentSrc};
+    });
+    if(sustain.duration<9||!sustain.loop||!new URL(sustain.src).pathname.endsWith('/sfx/firestorm_loop.wav'))
+        throw new Error(`Wrong firestorm sustain: ${JSON.stringify(sustain)}`);
+    await page.waitForFunction(()=>testSustainHandle.audio.currentTime>.1||
+        (testSustainHandle.usingWebAudio&&testSustainHandle.webSource&&
+            gameTestAPI.SoundManager.ctx.state==='running'&&
+            gameTestAPI.SoundManager.ctx.currentTime-testSustainHandle.webStartedAt>.1),
+        null,{timeout:15000});
+    await page.evaluate(()=>{state.isPaused=true;gameTestAPI.SoundManager.syncSustains(true);});
+    if(!await page.evaluate(()=>testSustainHandle.audio.paused))
+        throw new Error('Sustained spell kept playing while paused');
+    const stoppedSustain=await page.evaluate(()=>{
+        const sound=gameTestAPI.SoundManager,effect=testSustainEffect;
+        state.isPaused=false;sound.syncSustains(false);
+        effect.timer=0;effect.update(.01);
+        return {inactive:!sound.activeSustains.has(testSustainHandle),
+            released:testSustainHandle.audio.__sustainOwner!==testSustainHandle,
+            paused:testSustainHandle.audio.paused};
+    });
+    if(!stoppedSustain.inactive||!stoppedSustain.released||!stoppedSustain.paused)
+        throw new Error(`Expired firestorm did not release its sound immediately: ${JSON.stringify(stoppedSustain)}`);
+    console.log('PASS Firestorm bed plays through its lifetime, pauses and stops on expiry');
+
+    // Release the desktop world and WebGL context before loading the mobile world.
+    await page.close();
+    checkpoint='Android startup';
+    const mobile=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,
+        userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'});
+    try {
+        const phone=await mobile.newPage();
+        phone.on('pageerror',error=>errors.push(String(error)));
+        phone.on('dialog',dialog=>dialog.accept());
+        await phone.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
+        await phone.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
+        if(await phone.evaluate(()=>gameTestAPI.SoundManager.ctx!==null))
+            throw new Error('Android AudioContext was created before the first touch');
+        await phone.evaluate(async()=>{
+            window.closeHelp();window.closeStoryOverlay();
+            document.getElementById('pause-menu').style.display='none';
+            state.isPaused=true;state.mana=1000;
+            state.matchSettings.peaceTimeMinutes=0;
+            gameTestAPI.SoundManager.setMusicEnabled(false);
+            await gameTestAPI.SoundManager.ensureContext().suspend();
+            gameTestAPI.SoundManager.prepareMediaEffects();
+            window.testMediaPlayback={played:false,maxTime:0,playCount:0};
+            for(const voice of gameTestAPI.SoundManager.mediaEffects.get('fireball')){
+                voice.addEventListener('play',()=>{testMediaPlayback.played=true;testMediaPlayback.playCount++;});
+                voice.addEventListener('timeupdate',()=>{testMediaPlayback.maxTime=Math.max(testMediaPlayback.maxTime,voice.currentTime);});
+                voice.addEventListener('ended',()=>{testMediaPlayback.maxTime=Math.max(testMediaPlayback.maxTime,voice.duration);});
+            }
+            gameTestAPI.updateUnitList();
+        });
+        const mobileUnit=await clickControl(phone,'#unit-list .unit-item');
+        checkpoint='Android fireball touch';
+        await phone.touchscreen.tap(mobileUnit.x,mobileUnit.y);
+        const mobileBlast=await clickControl(phone,'#btn-blast');
+        await phone.touchscreen.tap(mobileBlast.x,mobileBlast.y);
+        const mobileTarget=await phone.evaluate(()=>{
+            const point=state.shaman.mesh.position.clone();point.x+=1;point.project(state.camera);
+            return {x:(point.x+1)*innerWidth/2,y:(1-point.y)*innerHeight/2};
+        });
+        await phone.touchscreen.tap(mobileTarget.x,mobileTarget.y);
+        if(await phone.evaluate(()=>state.mana)!==990)throw new Error('Touch fireball did not cast');
+        await phone.waitForFunction(()=>testMediaPlayback.maxTime>.25,null,{timeout:30000});
+        const mobileAudio=await phone.evaluate(async()=>{
+            const response=await fetch('sfx/fireball.wav');
+            if(!response.ok||response.headers.get('content-type')!=='audio/wav')throw new Error('Fireball WAV is not served as audio');
+            const bytes=await response.arrayBuffer(),view=new DataView(bytes);
+            const samples=(start,end)=>{
+                let sum=0,count=0;
+                for(let i=Math.round(start*32000);i<Math.round(end*32000);i++){
+                    const sample=view.getInt16(44+i*2,true)/32768;sum+=sample*sample;count++;
+                }
+                return Math.sqrt(sum/count);
+            };
+            return {played:testMediaPlayback.played,maxTime:testMediaPlayback.maxTime,
+                duration:(bytes.byteLength-44)/(32000*2),onset:samples(0,.005),body:samples(.15,.35),
+                webAudioState:gameTestAPI.SoundManager.ctx.state};
+        });
+        if(!mobileAudio.played||mobileAudio.duration<.65||mobileAudio.body<.02||
+            mobileAudio.onset>=mobileAudio.body*.7)
+            throw new Error(`Android-style fireball was not a sustained media effect: ${JSON.stringify(mobileAudio)}`);
+        console.log(`PASS Android touch fireball plays a sustained WAV effect: ${JSON.stringify(mobileAudio)}`);
+        const assets=await phone.evaluate(async()=>Promise.all(
+            [...gameTestAPI.SoundManager.mediaEffects.keys()].map(async name=>{
+                const response=await fetch(`sfx/${name}.wav`);
+                return {name,ok:response.ok,type:response.headers.get('content-type'),bytes:(await response.arrayBuffer()).byteLength};
+            })));
+        if(assets.length!==32||assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
+            throw new Error(`Missing Android effect assets: ${JSON.stringify(assets)}`);
+        console.log(`PASS Android can load all ${assets.length} sound effects and ambient beds`);
+        checkpoint='Android wildlife playback';
+        const wildlifePlayback=[];
+        for(const name of ['bunny_nibble','bird_call','hurt','hurt_heavy']) {
+            if(!await phone.evaluate(name=>gameTestAPI.SoundManager.playSound(name,.8),name))
+                throw new Error(`${name} was blocked`);
+            // A play() promise can resolve before currentTime advances on busy CI runners.
+            await phone.waitForFunction(name=>gameTestAPI.SoundManager.mediaEffects.get(name)
+                .some(voice=>voice.currentTime>.04),name,{timeout:10000});
+            wildlifePlayback.push(name);
+        }
+        console.log(`PASS Android plays wildlife and hit reactions: ${wildlifePlayback.join(', ')}`);
+        await phone.evaluate(()=>{
+            state.isPaused=false;state.mana=1000;
+            gameTestAPI.SoundManager.syncSustains(false);
+            state.selectedUnits=[state.shaman];
+        });
+        const stormPoint=await clickControl(phone,'#btn-firestorm');
+        checkpoint='Android sustained firestorm';
+        await phone.touchscreen.tap(stormPoint.x,stormPoint.y);
+        if(await phone.evaluate(()=>state.currentAction)!=='firestorm')
+            throw new Error('Android touch did not select firestorm');
+        const stormTarget=await phone.evaluate(()=>{
+            const point=state.shaman.mesh.position.clone();point.x+=2;point.project(state.camera);
+            return {x:(point.x+1)*innerWidth/2,y:(1-point.y)*innerHeight/2};
+        });
+        await phone.touchscreen.tap(stormTarget.x,stormTarget.y);
+        await phone.evaluate(()=>gameTestAPI.SpellWindup.update(1));
+        await phone.waitForFunction(()=>state.activeEffects.some(effect=>effect.soundLoop?.name==='firestorm_loop'),
+            null,{timeout:10000});
+        await phone.waitForFunction(()=>[...gameTestAPI.SoundManager.activeSustains]
+            .some(handle=>handle.name==='firestorm_loop'&&
+                (handle.audio.currentTime>.1||
+                    (handle.usingWebAudio&&handle.webSource&&
+                        gameTestAPI.SoundManager.ctx.state==='running'&&
+                        gameTestAPI.SoundManager.ctx.currentTime-handle.webStartedAt>.1))),
+            null,{timeout:15000});
+        const stoppedPhoneStorm=await phone.evaluate(()=>{
+            const sound=gameTestAPI.SoundManager;
+            window.phoneStorm=[...sound.activeSustains].find(handle=>handle.name==='firestorm_loop');
+            state.isPaused=true;sound.syncSustains(true);
+            if(!phoneStorm.audio.paused)throw new Error('Android storm audio ignored pause');
+            const effect=state.activeEffects.find(item=>item.soundLoop===phoneStorm);
+            if(!effect)throw new Error('Android storm sound has no matching effect');
+            effect.timer=0;effect.update(.01);
+            return {paused:phoneStorm.audio.paused,stopped:phoneStorm.stopped,
+                released:phoneStorm.audio.__sustainOwner!==phoneStorm};
+        });
+        if(!stoppedPhoneStorm.paused||!stoppedPhoneStorm.stopped||!stoppedPhoneStorm.released)
+            throw new Error(`Android firestorm kept its sound after expiry: ${JSON.stringify(stoppedPhoneStorm)}`);
+        console.log('PASS Android touch firestorm sustains, pauses and stops with the spell');
+        checkpoint='Android stalled sustained media fallback';
+        await phone.evaluate(()=>gameTestAPI.SoundManager.preloadEffects(['tornado_loop']));
+        await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('tornado_loop'));
+        const resumePoint=await clickControl(phone,'#unit-list .unit-item');
+        await phone.touchscreen.tap(resumePoint.x,resumePoint.y);
+        await phone.waitForFunction(()=>gameTestAPI.SoundManager.ctx?.state==='running',null,{timeout:10000});
+        await phone.evaluate(()=>{
+            const sound=gameTestAPI.SoundManager;
+            state.isPaused=false;sound.syncSustains(false);
+            window.stalledVoices=sound.mediaEffects.get('tornado_loop');
+            window.stalledPlays=stalledVoices.map(voice=>voice.play);
+            for(const voice of stalledVoices)voice.play=()=>new Promise(()=>{});
+            window.testSpellAudioDestination=sound.ctx.createMediaStreamDestination();
+            sound.effectsBus.connect(testSpellAudioDestination);
+        });
+        await startRecording(phone);
+        await phone.evaluate(()=>{window.stalledLoop=gameTestAPI.SoundManager.startSustain('tornado_loop');});
+        try {
+            await phone.waitForFunction(()=>stalledLoop?.usingWebAudio&&stalledLoop.webSource&&
+                gameTestAPI.SoundManager.ctx.state==='running',null,{timeout:10000});
+        } catch(error) {
+            const detail=await phone.evaluate(()=>({active:gameTestAPI.SoundManager.activeSustains.has(stalledLoop),
+                owner:stalledVoices.indexOf(stalledLoop?.audio),blocked:gameTestAPI.SoundManager.mediaEffectsBlocked,
+                paused:gameTestAPI.SoundManager.sustainsPaused,webAudio:stalledLoop?.usingWebAudio,
+                webSource:!!stalledLoop?.webSource,mediaTime:stalledLoop?.audio.currentTime,
+                context:gameTestAPI.SoundManager.ctx?.state}));
+            throw new Error(`Stalled Android sustain did not recover: ${JSON.stringify(detail)}`,{cause:error});
+        }
+        const stalledPeak=await stopRecording(phone);
+        await phone.evaluate(()=>{
+            stalledLoop.stop(true);stalledVoices.forEach((voice,index)=>{voice.play=stalledPlays[index];});
+            gameTestAPI.SoundManager.effectsBus.disconnect(testSpellAudioDestination);
+        });
+        if(stalledPeak<.015)throw new Error(`Stalled Android loop had no audible fallback: ${stalledPeak}`);
+        console.log(`PASS Stalled Android sustain switches to audible Web Audio (peak ${stalledPeak.toFixed(3)})`);
+        await phone.evaluate(()=>gameTestAPI.SoundManager.preloadEffects(['heal','swamp_loop']));
+        await phone.waitForFunction(()=>gameTestAPI.SoundManager.effectBuffers.has('heal')&&
+            gameTestAPI.SoundManager.effectBuffers.has('swamp_loop'));
+        checkpoint='Android blocked-media fallback';
+        await phone.evaluate(()=>{
+            const sound=gameTestAPI.SoundManager;
+            const destination=sound.ctx.createMediaStreamDestination();
+            sound.effectsBus.connect(destination);
+            window.testSpellAudioDestination=destination;
+            for(const voice of sound.mediaEffects.get('heal'))
+                voice.play=()=>Promise.reject(new DOMException('Media playback blocked','NotAllowedError'));
+        });
+        await startRecording(phone);
+        const fallbackResult=await phone.evaluate(()=>gameTestAPI.SoundManager.playSound('heal'));
+        const fallbackPeak=await stopRecording(phone);
+        if(!fallbackResult||fallbackPeak<.015||!await phone.evaluate(()=>gameTestAPI.SoundManager.mediaEffectsBlocked))
+            throw new Error(`Blocked Android media did not fall back to audible Web Audio: ${fallbackPeak}`);
+        console.log(`PASS Blocked Android media uses audible Web Audio fallback (peak ${fallbackPeak.toFixed(3)})`);
+        await phone.evaluate(()=>{state.isPaused=false;gameTestAPI.SoundManager.syncSustains(false);});
+        const webLoop=await phone.evaluate(async()=>{
+            const sound=gameTestAPI.SoundManager;
+            const analyser=sound.ctx.createAnalyser();
+            analyser.fftSize=2048;
+            sound.effectsBus.connect(analyser);
+            const handle=sound.startSustain('swamp_loop');
+            window.testWebLoop=handle;
+            const data=new Float32Array(analyser.fftSize);
+            let peak=0;
+            for(let frame=0;frame<12;frame++){
+                await new Promise(resolve=>setTimeout(resolve,50));
+                analyser.getFloatTimeDomainData(data);
+                for(const sample of data)peak=Math.max(peak,Math.abs(sample));
+            }
+            sound.effectsBus.disconnect(analyser);
+            analyser.disconnect();
+            return {playing:Boolean(handle?.usingWebAudio&&handle.webSource),peak};
+        });
+        if(!webLoop.playing||webLoop.peak<.005)throw new Error(`Blocked Android loop was silent: ${JSON.stringify(webLoop)}`);
+        await phone.evaluate(()=>{
+            const sound=gameTestAPI.SoundManager;
+            state.isPaused=true;sound.syncSustains(true);
+            if(testWebLoop.webSource)throw new Error('Web Audio loop ignored pause');
+            state.isPaused=false;sound.syncSustains(false);
+            if(!testWebLoop.webSource)throw new Error('Web Audio loop did not resume');
+            testWebLoop.stop(true);
+            if(sound.activeSustains.has(testWebLoop))throw new Error('Web Audio loop did not stop');
+        });
+        console.log(`PASS Blocked Android spell loop plays, pauses and stops (peak ${webLoop.peak.toFixed(3)})`);
+        await phone.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
+        checkpoint='Android pause-menu sound test';
+        await startRecording(phone);
+        const phoneSoundPoint=await clickControl(phone,'#btn-test-sound');
+        await phone.touchscreen.tap(phoneSoundPoint.x,phoneSoundPoint.y);
+        const phoneTestPeak=await stopRecording(phone);
+        if(phoneTestPeak<.03)throw new Error(`Android pause-menu sound test was silent after media rejection (peak ${phoneTestPeak})`);
+        console.log(`PASS Android pause-menu sound test remains audible after media rejection (peak ${phoneTestPeak.toFixed(3)})`);
+    } finally {
+        await mobile.close();
+    }
+    if(errors.length)throw new Error(errors.join('\n'));
+} catch(error) {
+    const message=String(error?.stack||error).slice(0,1400)
+        .replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');
+    console.error(`::error title=Spell audio at ${checkpoint}::${message}`);
+    throw error;
+} finally {
+    await browser.close();
+}

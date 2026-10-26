@@ -3,10 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Immediate meta redirect -->
-    <meta http-equiv="refresh" content="0; url=https://asbest.github.io/PopulateTheRebeginning/PopulateTheRebeginning.html">
     <title>Redirecting...</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Keep test flags, campaign links and anchors when entering through the root URL.
+        const targetUrl = new URL("PopulateTheRebeginning.html", window.location.href);
+        targetUrl.search = window.location.search;
+        targetUrl.hash = window.location.hash;
+        window.location.replace(targetUrl.href);
+    </script>
     <style>
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -36,7 +40,7 @@
         <!-- Manual Link (Backup) -->
         <div class="pt-4">
             <a id="manual-link" 
-               href="https://asbest.github.io/PopulateTheRebeginning/PopulateTheRebeginning.html"
+               href="PopulateTheRebeginning.html"
                class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-lg shadow-blue-500/20">
                 Click here if not redirected
             </a>
@@ -47,19 +51,5 @@
         </p>
     </div>
 
-    <script>
-        // JavaScript redirection fallback
-        const targetUrl = "https://asbest.github.io/PopulateTheRebeginning/PopulateTheRebeginning.html";
-        
-        window.onload = function() {
-            // Attempt immediate redirect
-            window.location.href = targetUrl;
-            
-            // Secondary attempt after 1 second if the first fails
-            setTimeout(() => {
-                window.location.replace(targetUrl);
-            }, 1000);
-        };
-    </script>
 </body>
 </html>
