@@ -7431,7 +7431,6 @@ window.Humanoid = class Humanoid {
         if(amount>0)this.damageRevision=(this.damageRevision||0)+1;
         this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
         if(impact) SoundManager.playPain(this,amount);
-        if (!silent) HitPulseManager.add(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0xFF0000);
         if(this.hp <= 0) this.die();
     }
 

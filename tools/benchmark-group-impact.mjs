@@ -64,7 +64,7 @@ try {
             extraParticles:after.particles-before.particles,
             hitPulses,expired};
     });
-    if(report.hits!==24 || report.hitPulses!==24 || !report.expired || report.extraCalls>30 ||
+    if(report.hits!==24 || report.hitPulses!==0 || !report.expired || report.extraCalls>30 ||
         report.extraParticles>24 || report.after.programs>report.before.programs+2) {
         console.error(`::error title=Group impact rendering budget::${JSON.stringify(report)}`);
         throw new Error(`Group impact regressed: ${JSON.stringify(report)}`);
