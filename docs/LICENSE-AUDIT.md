@@ -1,7 +1,8 @@
 # License audit — 2026-10-26
 
-**Status: dependency review passes; complete clearance is pending seven original
-media files. Do not describe the whole repository as cleared or freely licensed.**
+**Status: the dependency and complete inventory checks pass with the recorded
+project-owner provenance for seven AI-generated uploads. This does not license
+the whole repository to others or independently verify generation-service terms.**
 
 ## Software
 
@@ -55,8 +56,11 @@ This documented authorship is recorded as `project-original`, with no invented
 third-party license or automatic public license grant. Input/reference rights
 and applicable generation-service terms still matter for generated derivatives.
 
-The following original uploads have **no author/source/license evidence in this
-repository**, including no statement permitting commercial use and redistribution:
+### Media owner attestation
+
+On 2026-10-26, the project owner stated in this project conversation: "Die von dir
+genannten Dateien wurden durch KI generiert daher bin ich selber der Herausgeber".
+This attestation applies to the seven files whose provenance was requested:
 
 - `FightMusic.mp3`
 - `IngameMusic.mp3`
@@ -66,12 +70,12 @@ repository**, including no statement permitting commercial use and redistributio
 - `Unittextures.png`
 - `promovideo1.mp4`
 
-The three MP3s are used by the game. The other original uploads remain in the
-repository and must be cleared even if current gameplay does not load them.
-They have not been deleted, silently relicensed, or declared free merely because
-they were uploaded by the owner. Obtain a rights-holder statement for original
-work or an upstream source/license allowing the intended use. If that cannot be
-obtained, replace them with documented original work or freely licensed assets.
+The three MP3s are used by the game; the remaining files are also tracked in the
+inventory. These seven records are now `project-original` based on the owner's
+attestation, with `license: null`. The attestation identifies AI generation and
+the owner's role as publisher; it does not identify the generator or its terms,
+independently establish rights in any inputs, or grant a public license. Review
+those terms and any third-party inputs before a release that depends on them.
 
 ## Project license and external environment
 
@@ -93,16 +97,18 @@ an open-source client library does not make a hosted service open source.
 `npm run license:check` produces `test-results/license-audit.json` and fails on
 unknown licenses, changed/unreviewed vendor files/media, missing notices, lockfile
 drift, or unresolved media provenance. `npm run license:dependencies` reports the
-software dependency portion separately and must not be reported as full clearance.
+software dependency portion separately and must not be reported as a full
+inventory check.
 
-The dedicated GitHub **License compliance** workflow runs the full check. It is
-expected to stay red until the seven media records have valid evidence. Existing
-browser/game tests remain separate. Branch-based GitHub Pages deployment is
-independent of this workflow; this audit does not falsely claim to block hosting.
+The dedicated GitHub **License compliance** workflow runs the full check. The
+seven records now have the owner's provenance attestation. Existing browser/game
+tests remain separate. Branch-based GitHub Pages deployment is independent of
+this workflow; the audit does not block hosting by itself.
 
-Before distributing a cleared release, resolve the records and require the license
-check in the repository's release/merge process. Do not bypass the failing check or
-delete unresolved entries just to get a green badge.
+Before distributing a release, check the applicable generation-service terms and
+any third-party inputs, and require the license check in the repository's
+release/merge process. Do not bypass the check or delete unresolved entries just
+to get a green badge.
 
 Primary references: [Open Source Definition](https://opensource.org/osd),
 [Three.js license](https://unpkg.com/three@0.128.0/LICENSE),

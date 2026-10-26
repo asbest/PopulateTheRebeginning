@@ -62,10 +62,10 @@ The existing support links below are preserved.
 
 Third-party dependencies must permit free use, modification and redistribution,
 including commercial use. See [the policy](LICENSE-POLICY.md) and
-[the license audit](docs/LICENSE-AUDIT.md). The software dependency check passes;
-seven original music/promotional uploads still need rights evidence. The complete
-license check intentionally fails until those are resolved. No project-wide MIT
-license or ownership of those uploads is assumed.
+[the license audit](docs/LICENSE-AUDIT.md). The full inventory check passes with
+the project owner's recorded attestation for seven AI-generated media uploads.
+This records their provenance; it does not independently verify generator terms
+or grant a project-wide MIT license.
 
 Run `npm run license:check` for the full inventory or
 `npm run license:dependencies` for the dependency portion only. Preserve the

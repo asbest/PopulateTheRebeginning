@@ -1,41 +1,41 @@
 {
   "reviewed": "2026-10-26",
-  "note": "Project-original records documented authorship, not a public license grant. Unverified originals remain unresolved.",
+  "note": "Project-original records documented project provenance, including the owner's 2026-10-26 attestation for seven AI-generated uploads. It is not a public license grant or independent verification of generation-service terms.",
   "files": {
     "FightMusic.mp3": {
-      "status": "unverified",
+      "status": "project-original",
       "license": null,
-      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "evidence": "Project owner attested on 2026-10-26 that this upload was AI-generated and that they are its publisher; see docs/LICENSE-AUDIT.md#media-owner-attestation.",
       "sha256": "b4cc6e4eb45cc96195b3e204c15953048ba72237e3d70a1255c6fe204fb9e8aa"
     },
     "IngameMusic.mp3": {
-      "status": "unverified",
+      "status": "project-original",
       "license": null,
-      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "evidence": "Project owner attested on 2026-10-26 that this upload was AI-generated and that they are its publisher; see docs/LICENSE-AUDIT.md#media-owner-attestation.",
       "sha256": "874a1ae062350f861f2bed2289486e8620b952df03181609b54047e9b66e6720"
     },
     "IngameMusic2.mp3": {
-      "status": "unverified",
+      "status": "project-original",
       "license": null,
-      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "evidence": "Project owner attested on 2026-10-26 that this upload was AI-generated and that they are its publisher; see docs/LICENSE-AUDIT.md#media-owner-attestation.",
       "sha256": "c3cd6f00a00f86853416cd856bb3ca7025b6efb15430a1974ad506de4e0a5d61"
     },
     "TitleImage.png": {
-      "status": "unverified",
+      "status": "project-original",
       "license": null,
-      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "evidence": "Project owner attested on 2026-10-26 that this upload was AI-generated and that they are its publisher; see docs/LICENSE-AUDIT.md#media-owner-attestation.",
       "sha256": "415bbd43ed1d5b2b9ce0b485c5c8fff919f1f02a0c2376520224c955e83ddac5"
     },
     "TitleImage2.png": {
-      "status": "unverified",
+      "status": "project-original",
       "license": null,
-      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "evidence": "Project owner attested on 2026-10-26 that this upload was AI-generated and that they are its publisher; see docs/LICENSE-AUDIT.md#media-owner-attestation.",
       "sha256": "872d88f7a19aac9f402632ec827f6e7ab97f907ae2056c7919fba3002080fa7c"
     },
     "Unittextures.png": {
-      "status": "unverified",
+      "status": "project-original",
       "license": null,
-      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "evidence": "Project owner attested on 2026-10-26 that this upload was AI-generated and that they are its publisher; see docs/LICENSE-AUDIT.md#media-owner-attestation.",
       "sha256": "8f58f54c407bb1ab4d4290d0041e0e20392ecd32f2ed81dae58bf7c884228992"
     },
     "art/blender/Overhaul.blend": {
@@ -1377,9 +1377,9 @@
       "sha256": "d37c9f0133e09ef27f3f9c8c445f9cc88eba6f0902be008d9914ac47effa88a1"
     },
     "promovideo1.mp4": {
-      "status": "unverified",
+      "status": "project-original",
       "license": null,
-      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "evidence": "Project owner attested on 2026-10-26 that this upload was AI-generated and that they are its publisher; see docs/LICENSE-AUDIT.md#media-owner-attestation.",
       "sha256": "203de508b80e3e815ae75cebc2d1404be23b58d2fcfb5e8db5e83b8ee69e9fe9"
     },
     "sfx/attack.wav": {

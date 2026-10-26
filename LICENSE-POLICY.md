@@ -35,8 +35,8 @@ not an open-source license grant or an independent ownership guarantee.
   distributing a toolchain or native binaries separately.
 
 `licenses/vendor.json` pins reviewed bundled bytes. `licenses/assets.json` pins
-reviewed media and records unresolved provenance. `package-lock.json` pins build
+reviewed media and their recorded provenance. `package-lock.json` pins build
 dependencies and their registry integrity metadata. These checks prevent unnoticed
 inventory drift; they do not replace checking a contributor's actual rights.
 
-See [the audit and outstanding evidence](docs/LICENSE-AUDIT.md).
+See [the audit and provenance evidence](docs/LICENSE-AUDIT.md).

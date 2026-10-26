@@ -14,7 +14,7 @@ uploads its reports, including its suite summary.
 unlicensed/non-commercial dependencies, optional packages, changed/new vendor
 files and media, notice tampering, unresolved media, attribution evidence and
 lockfile drift. The **License compliance** workflow checks the real inventory;
-it remains incomplete while original media ownership/license evidence is missing.
+it fails whenever tracked media lacks provenance or required license evidence.
 
 `download-loading` checks real desktop/mobile startup requests and byte budgets,
 exact model-chunk contents, deferred attachments and faction changes, progressive
