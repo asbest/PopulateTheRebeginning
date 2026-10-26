@@ -71,6 +71,53 @@ export function createArtKit(T) {
         ring.rotation.x=Math.PI/2;
         return ring;
     }
+    function bannerMaterial(color) {
+        const key='wall-banner/'+color;
+        if(!mats.has(key)){
+            const canvas=document.createElement('canvas');canvas.width=256;canvas.height=512;
+            const ctx=canvas.getContext('2d');
+            ctx.fillStyle='#'+new T.Color(color).getHexString();ctx.fillRect(0,0,256,512);
+            // Fine woven cloth, gold edging and the spiral motif of the splash art.
+            for(let x=0;x<256;x+=4){ctx.fillStyle='rgba(255,255,255,.055)';ctx.fillRect(x,0,1,512);}
+            for(let y=0;y<512;y+=4){ctx.fillStyle='rgba(0,0,0,.07)';ctx.fillRect(0,y,256,1);}
+            ctx.strokeStyle='#e9d49a';ctx.lineWidth=9;ctx.strokeRect(14,14,228,484);
+            ctx.lineWidth=4;ctx.strokeRect(27,27,202,458);
+            ctx.lineWidth=11;ctx.lineCap='round';ctx.beginPath();
+            for(let i=0;i<=180;i++){
+                const a=i/180*Math.PI*3.8,r=7+i/180*62,x=128+Math.cos(a)*r,y=205+Math.sin(a)*r;
+                if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);
+            }
+            ctx.stroke();
+            ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(128,291);ctx.lineTo(151,322);ctx.lineTo(128,353);ctx.lineTo(105,322);ctx.closePath();ctx.stroke();
+            const map=new T.CanvasTexture(canvas);map.encoding=T.sRGBEncoding;map.anisotropy=4;
+            mats.set(key,new T.MeshStandardMaterial({map,roughness:1,side:T.DoubleSide}));
+        }
+        return mats.get(key);
+    }
+    function wallBanners(p,kind,color){
+        const cloth=cachedGeometry('hanging-wall-banner',()=>{
+            const g=new T.PlaneGeometry(1,1,10,14),pos=g.attributes.position;
+            for(let i=0;i<pos.count;i++){
+                const x=pos.getX(i),v=pos.getY(i)+.5;
+                const y=-(1-v)*(1-.18*(1-Math.abs(x)*2));
+                pos.setXYZ(i,x,y,-y*.08+Math.sin(x*13+.6)*(-y)*.018);
+            }
+            g.computeVertexNormals();return g;
+        });
+        const layouts=kind==='tower'
+            ?[-1,1].map(side=>({x:side*.85,y:3.52,z:.83,a:side*.8,w:.48,h:1.55}))
+            :kind==='warrior'?[-1,1].map(side=>({x:side*.65,y:1.48,z:1.16,w:.44,h:1.05}))
+            :kind==='fire'?[-1,1].map(side=>({x:side*1.13,y:2.76,z:.80,w:.48,h:1.25}))
+            :kind==='shipyard'?[-1,1].map(side=>({x:side*1.3,y:.80,z:2.37,w:.4,h:.56}))
+            :[-1,1].map(side=>({x:side*.53,y:1.45,z:1.29,w:.36,h:.94}));
+        for(const {x,y,z,a=0,w,h} of layouts){
+            const mount=new T.Group();mount.name='Wall banner mount';mount.position.set(x,y,z);mount.rotation.y=a;p.add(mount);
+            const flag=new T.Mesh(cloth,bannerMaterial(color));flag.name='Tribal wall banner';flag.scale.set(w,h,1);
+            flag.userData.isFactionBanner=true;flag.userData.factionColor=color;
+            flag.castShadow=flag.receiveShadow=true;mount.add(flag);
+            box(mount,[0,.025,-.015],[w+.12,.055,.16],palette.wood);
+        }
+    }
     function building(kind, factionColor=0x4169e1) {
         const p = new T.Group(); p.userData.artVersion=1;
         cyl(p,[0,0.12,0],1.85,2,0.24,palette.stone,'stone');
@@ -133,9 +180,7 @@ export function createArtKit(T) {
             for(let i=0;i<3;i++)cyl(p,[-0.7+i*0.7,0.7,1.2],0.28,0.28,0.65,palette.wood);
             orb(p,[0,1.1,0],[1.8,0.6,2.6],palette.cloth);
         }
-        beam(p,[1.5,0.15,-1.35],[1.5,3.0,-1.35],0.04);
-        const banner=box(p,[1.82,2.66,-1.35],[0.65,0.45,0.025],factionColor,'cloth');
-        banner.userData.isFactionBanner=true;
+        wallBanners(p,kind,factionColor);
         blender.attach(p,'building/'+kind+'/root',factionColor);
         return p;
     }

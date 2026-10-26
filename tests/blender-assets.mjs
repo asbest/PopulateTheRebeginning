@@ -29,6 +29,20 @@ try {
         const count=node=>{let total=0;node.traverse(n=>{if(n.userData.blenderAsset)total++;});return total;};
         const buildings=['hut','spy','tower','warrior','fire','shipyard'].map(kind=>({kind,details:count(Art.building(kind))}));
         if(buildings.some(b=>b.details<1))throw new Error('Building detail was not attached');
+        let sharedBannerGeometry;
+        for(const faction of [0,1,2,3])for(const kind of ['hut','spy','preacher','tower','warrior','fire','shipyard']){
+            const color=getFactionColor(faction),house=Art.building(kind,color),flags=[];
+            house.traverse(node=>{if(node.userData.isFactionBanner)flags.push(node);});
+            if(flags.length!==2)throw new Error('Missing wall banners: '+kind);
+            for(const flag of flags){
+                const cloth=flag.material.map?.image;
+                if(!cloth?.getContext)throw new Error('Banner cloth texture missing');
+                const pixel=cloth.getContext('2d').getImageData(66,90,1,1).data;
+                if(((pixel[0]<<16)|(pixel[1]<<8)|pixel[2])!==color)throw new Error('Wrong tribe color: '+kind+'/'+faction);
+                if(sharedBannerGeometry&&flag.geometry!==sharedBannerGeometry)throw new Error('Banner geometry is not shared');
+                sharedBannerGeometry=flag.geometry;
+            }
+        }
         const probe=Art.building('hut'),lod=probe.getObjectByName('Blender detail LOD building/hut/root');
         const camera=new THREE.PerspectiveCamera();probe.updateMatrixWorld(true);
         camera.position.set(0,0,150);camera.updateMatrixWorld(true);lod.update(camera);
