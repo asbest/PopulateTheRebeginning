@@ -58,6 +58,19 @@ The browser suite includes dedicated effect and mana checks for all 18 spells, t
 
 The existing support links below are preserved.
 
+## License compliance
+
+Third-party dependencies must permit free use, modification and redistribution,
+including commercial use. See [the policy](LICENSE-POLICY.md) and
+[the license audit](docs/LICENSE-AUDIT.md). The software dependency check passes;
+seven original music/promotional uploads still need rights evidence. The complete
+license check intentionally fails until those are resolved. No project-wide MIT
+license or ownership of those uploads is assumed.
+
+Run `npm run license:check` for the full inventory or
+`npm run license:dependencies` for the dependency portion only. Preserve the
+bundled license texts when distributing the game. CI uses the committed lockfile.
+
 Please support me on Patreon:
 https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link
 

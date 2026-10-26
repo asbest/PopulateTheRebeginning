@@ -1,0 +1,175 @@
+{
+  "reviewed": "2026-10-26",
+  "components": [
+    {
+      "name": "Three.js and loaders",
+      "version": "0.128.0",
+      "license": "MIT",
+      "source": "https://unpkg.com/three@0.128.0/",
+      "notices": [
+        "vendor/THREE-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/three.module.js": "af527c374b56b8688737a42d7fcea7cb8aaeb57a4e3c6da98b4dffd55bcc3514",
+        "vendor/KTX2Loader.js": "bcf96547c5d6d04c17ae89959d5b8a9783861a77b0f20e72944bc46f32a6cf16",
+        "vendor/BasisTextureLoader.js": "186f5b8b988524ec530fee4c0be50e45d70606e1a209b846755832dfa3bfe409"
+      },
+      "noticeHashes": {
+        "vendor/THREE-LICENSE.txt": "7dddf7c5b8fd10ee654db8857d75d104b5557889aa5a91fc4ca545ea7c07062f"
+      }
+    },
+    {
+      "name": "KTX-Parse",
+      "version": "0.2.1",
+      "license": "MIT",
+      "source": "https://unpkg.com/ktx-parse@0.2.1/",
+      "notices": [
+        "vendor/KTX-PARSE-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/libs/ktx-parse.module.js": "5407fb49820e41bb9731b870f968a729888de8c93f34704420bb7c6aa2b779a3"
+      },
+      "noticeHashes": {
+        "vendor/KTX-PARSE-LICENSE.txt": "79847431f9ecef9cf399085cb863452e71a6dab99738f4f0c1ea06c6484b5692"
+      }
+    },
+    {
+      "name": "Zstandard decoder bundled by Three.js",
+      "version": "0.128.0 bundle",
+      "license": "MIT AND BSD-3-Clause",
+      "source": "https://unpkg.com/three@0.128.0/examples/jsm/libs/zstddec.module.js",
+      "notices": [
+        "vendor/THREE-LICENSE.txt",
+        "vendor/ZSTD-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/libs/zstddec.module.js": "8a13a2160de2975d548f4177b7f930ef50959e3dcd6e7e956af40cae34d6d8be"
+      },
+      "noticeHashes": {
+        "vendor/THREE-LICENSE.txt": "7dddf7c5b8fd10ee654db8857d75d104b5557889aa5a91fc4ca545ea7c07062f",
+        "vendor/ZSTD-LICENSE.txt": "8d078b49fc02bd63c1beaf4ddc629a8b48e4ba6a435415408c8209e2a5c3aacf"
+      }
+    },
+    {
+      "name": "Basis Universal decoder bundled by Three.js",
+      "version": "0.128.0 bundle",
+      "license": "Apache-2.0",
+      "source": "https://unpkg.com/three@0.128.0/examples/js/libs/basis/",
+      "notices": [
+        "vendor/BASIS-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/basis/basis_transcoder.js": "b352d4fb1b2b5f66877a37c418d061693cee99245bdaf38e6b6ba17c9f34a964",
+        "vendor/basis/basis_transcoder.wasm": "e7dcac729b9e38208a1382f17da3d64a3108a8390e95c912d24bd95b7bc2fb5b"
+      },
+      "noticeHashes": {
+        "vendor/BASIS-LICENSE.txt": "065fcf48d6af21c0b75e23be5ed5753aee75c892e1c2cf178fa6736305614a5c"
+      }
+    },
+    {
+      "name": "simplex-noise",
+      "version": "2.4.0",
+      "license": "MIT",
+      "source": "https://unpkg.com/simplex-noise@2.4.0/",
+      "notices": [
+        "vendor/SIMPLEX-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/simplex-noise.min.js": "c2d9dfac31f1d22389629d5f424a0aedf59a503032b12b48f16ee90874c43eb7"
+      },
+      "noticeHashes": {
+        "vendor/SIMPLEX-LICENSE.txt": "f1f3a7fd9895e26924bfbf71d28e353e68d387df6a430621d65d05b6dff26bed"
+      }
+    },
+    {
+      "name": "PeerJS",
+      "version": "1.5.2",
+      "license": "MIT",
+      "source": "https://unpkg.com/peerjs@1.5.2/",
+      "notices": [
+        "vendor/PEERJS-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/peerjs.min.js": "29e6ad48ce4552a35a348dc55ee7a5657db89cf9de229dbc56292d1be35867e8"
+      },
+      "noticeHashes": {
+        "vendor/PEERJS-LICENSE.txt": "9407807dba7f47a79bfb3ac55759d63d77c9371ebd0616d5a093e97d3e810397"
+      }
+    },
+    {
+      "name": "peerjs-js-binarypack embedded in PeerJS",
+      "version": "2.1.0",
+      "license": "MIT",
+      "source": "https://unpkg.com/peerjs-js-binarypack@2.1.0/",
+      "notices": [
+        "vendor/PEERJS-JS-BINARYPACK-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/peerjs.min.js": "29e6ad48ce4552a35a348dc55ee7a5657db89cf9de229dbc56292d1be35867e8"
+      },
+      "noticeHashes": {
+        "vendor/PEERJS-JS-BINARYPACK-LICENSE.txt": "9517e6f46b30231a62407f94a8c7adf8b4d14038c01807cd769f1d4de5911ba4"
+      }
+    },
+    {
+      "name": "webrtc-adapter embedded in PeerJS",
+      "version": "8.2.3",
+      "license": "BSD-3-Clause",
+      "source": "https://unpkg.com/webrtc-adapter@8.2.3/",
+      "notices": [
+        "vendor/WEBRTC-ADAPTER-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/peerjs.min.js": "29e6ad48ce4552a35a348dc55ee7a5657db89cf9de229dbc56292d1be35867e8"
+      },
+      "noticeHashes": {
+        "vendor/WEBRTC-ADAPTER-LICENSE.txt": "00a46c6cfc219593b97586398b477e188391556e70487225d3ff9d60ccda6dce"
+      }
+    },
+    {
+      "name": "sdp embedded in PeerJS",
+      "version": "3.2.0",
+      "license": "MIT",
+      "source": "https://unpkg.com/sdp@3.2.0/",
+      "notices": [
+        "vendor/SDP-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/peerjs.min.js": "29e6ad48ce4552a35a348dc55ee7a5657db89cf9de229dbc56292d1be35867e8"
+      },
+      "noticeHashes": {
+        "vendor/SDP-LICENSE.txt": "798e82590af6a84bfbde3d6bb0fb9162c519edf16122404fea00acefdc55cbd9"
+      }
+    },
+    {
+      "name": "eventemitter3 embedded in PeerJS",
+      "version": "4.0.7",
+      "license": "MIT",
+      "source": "https://unpkg.com/eventemitter3@4.0.7/",
+      "notices": [
+        "vendor/EVENTEMITTER3-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/peerjs.min.js": "29e6ad48ce4552a35a348dc55ee7a5657db89cf9de229dbc56292d1be35867e8"
+      },
+      "noticeHashes": {
+        "vendor/EVENTEMITTER3-LICENSE.txt": "3aecc12b1cb28832b5f65ab64291de96568c3f236a74d646281b4491f7bcadbf"
+      }
+    },
+    {
+      "name": "Rapier 3D compatibility",
+      "version": "0.11.2",
+      "license": "Apache-2.0",
+      "source": "https://unpkg.com/@dimforge/rapier3d-compat@0.11.2/",
+      "notices": [
+        "vendor/RAPIER-LICENSE.txt"
+      ],
+      "files": {
+        "vendor/rapier.es.js": "9f8ba0f4fca4b7f8993e293466db484eef1874ae6f0cec23f6d2cc06aa96c275"
+      },
+      "noticeHashes": {
+        "vendor/RAPIER-LICENSE.txt": "4c05555705e3efde601fb1252ae48f1d63992af8a8fb8947745b7fa834e8f519"
+      }
+    }
+  ]
+}

@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "license:check": "node tools/audit-licenses.mjs",
+    "license:dependencies": "node tools/audit-licenses.mjs --dependencies-only",
     "start": "node tools/serve.mjs",
     "build:ktx2": "node tools/build-ktx2.mjs",
     "build:startup": "node tools/build-startup-assets.mjs",

@@ -10,6 +10,12 @@ automatically included in the simulation group. GitHub uses the same runner in
 six independent groups; all groups run even when another fails. Each group
 uploads its reports, including its suite summary.
 
+`licenses.mjs` tests the separate license guard with isolated Git fixtures:
+unlicensed/non-commercial dependencies, optional packages, changed/new vendor
+files and media, notice tampering, unresolved media, attribution evidence and
+lockfile drift. The **License compliance** workflow checks the real inventory;
+it remains incomplete while original media ownership/license evidence is missing.
+
 `download-loading` checks real desktop/mobile startup requests and byte budgets,
 exact model-chunk contents, deferred attachments and faction changes, progressive
 HD textures, failed/stalled downloads, versioned offline asset reuse and rejected

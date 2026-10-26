@@ -1,0 +1,1578 @@
+{
+  "reviewed": "2026-10-26",
+  "note": "Project-original records documented authorship, not a public license grant. Unverified originals remain unresolved.",
+  "files": {
+    "FightMusic.mp3": {
+      "status": "unverified",
+      "license": null,
+      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "sha256": "b4cc6e4eb45cc96195b3e204c15953048ba72237e3d70a1255c6fe204fb9e8aa"
+    },
+    "IngameMusic.mp3": {
+      "status": "unverified",
+      "license": null,
+      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "sha256": "874a1ae062350f861f2bed2289486e8620b952df03181609b54047e9b66e6720"
+    },
+    "IngameMusic2.mp3": {
+      "status": "unverified",
+      "license": null,
+      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "sha256": "c3cd6f00a00f86853416cd856bb3ca7025b6efb15430a1974ad506de4e0a5d61"
+    },
+    "TitleImage.png": {
+      "status": "unverified",
+      "license": null,
+      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "sha256": "415bbd43ed1d5b2b9ce0b485c5c8fff919f1f02a0c2376520224c955e83ddac5"
+    },
+    "TitleImage2.png": {
+      "status": "unverified",
+      "license": null,
+      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "sha256": "872d88f7a19aac9f402632ec827f6e7ab97f907ae2056c7919fba3002080fa7c"
+    },
+    "Unittextures.png": {
+      "status": "unverified",
+      "license": null,
+      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "sha256": "8f58f54c407bb1ab4d4290d0041e0e20392ecd32f2ed81dae58bf7c884228992"
+    },
+    "art/blender/Overhaul.blend": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "75eb86fd0ede97240b0c6198bbcca4dc2181b55ecba3af6f40e6a31061ff0e6b"
+    },
+    "art/blender/bronze-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "2e3d0761e05985feededc5e1fd925508c604765367d3d8eb4ae5228431057d80"
+    },
+    "art/blender/bronze-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "adc25525121bbb4457cce804c4cb3b26a5c53cb058a1f28a1ef0264b2f45c473"
+    },
+    "art/blender/bronze-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "64b06f0bc230b31aa5d6385cc3c8e77480ea9543258d34aeef2789bbbb46d171"
+    },
+    "art/blender/bronze-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "662267ccec52dd45027796be4a22ba13bc48fd56bd880c5603e20fa7de7fd226"
+    },
+    "art/blender/bronze-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "313a8825d0702531fdb2f6c0b971b4341143c4b7ef00b8528e293ba873a03a50"
+    },
+    "art/blender/bronze-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "136ed58777fdec144162aa852a5c40e10802c219ac454a9956435670c0764468"
+    },
+    "art/blender/cliff-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "a630df4edf7598080657221312f8055e2265beedbfa4fe81df7c44263168fefb"
+    },
+    "art/blender/cliff-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "e74757793f7547ed5aa0f50be0f649c08908b8c2bba05c4b3792f8a5a38393e9"
+    },
+    "art/blender/cliff-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "76fa69a009989af667aaf3f48648a0736f836e7f97a126b501a6718f934cb126"
+    },
+    "art/blender/cliff-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "edcabc8a91fcdbee4fa87785ae30be77becede73fdd4d645b79dadf507e45816"
+    },
+    "art/blender/cliff-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "84504b7011b10301e08da57f243d437e373fa399e7db819e40428c03977be512"
+    },
+    "art/blender/cliff-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "94ebcd8f49d2878a62d12660560297d59de18c0959a958fda3f42375c477fbf5"
+    },
+    "art/blender/cloth-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "a4f6376f62b9b797eacbb29ba972287270741e2bf8c7f298bca05c754e90db8a"
+    },
+    "art/blender/cloth-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "c396f1ff32323fe7ed6631a0dc7e39e534cb745b75ef7b5199dd57133a2961a1"
+    },
+    "art/blender/cloth-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "899266e62fa2a7676c3d613f5e9686b74df84ba2d8313cdea048b3656720cceb"
+    },
+    "art/blender/cloth-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "4c3042ab6e324c2ed375f4cbffbb5a4712e0206a727e899f4f9f909b2cf61177"
+    },
+    "art/blender/dark-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "29188ccad1cc4d88043f727e415c628887b8606c01978a4dd214c7bb84b5fc8e"
+    },
+    "art/blender/dark-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "3aebe5b858deef95b54835826b01852f4e5d07be555d04e9e2592df42467407e"
+    },
+    "art/blender/dark-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "3bc96695ec3b6f5d27c097d050dc5aa15ae6f1b8ac82588425d2fc40cb2d7b65"
+    },
+    "art/blender/dark-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "a95b328baffae6ce3f3ce7b5923b90d9895c38bd239ed0a54e2013c2e4501661"
+    },
+    "art/blender/dark-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "661ad6ab88e0c522924734dcb1912af87ac87541fd5ab0ea30c8dba98222d2bc"
+    },
+    "art/blender/dark-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "40f337fb31741a434bd322a62f890b0953ff3d6815e4ce4113bbdeeaf42b3533"
+    },
+    "art/blender/dirt-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "aec664dc0d8d9a936790f0e015eda7872627f51388f7172ee7d843e3b8b377a3"
+    },
+    "art/blender/dirt-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "fa38d106ec5f5b13d743dfc3b38fc1e5515f4e31f75efb2524b046d4e9c66bf0"
+    },
+    "art/blender/dirt-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "9089e89c9be97e325e10c311744ea15a753044b2217296026fa375988eae4e1f"
+    },
+    "art/blender/dirt-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "6d26af477a2c2a779029a29e3f33dc124a85fde812422e0b58b06c07bd4026cd"
+    },
+    "art/blender/dirt-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "2df3b46abc980d9d4b60eb80b13f3252693c980504dce2c5d9ff6858cf34234c"
+    },
+    "art/blender/dirt-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "045f07f00cd4281096c0131103d32fdce642ba4b7a237d12fc87a81a8f3dfe4a"
+    },
+    "art/blender/ember-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "86d4eea52a24cb19fb993645ae2f470b3df83e1ce810d0f2a1e1aa6688966d4a"
+    },
+    "art/blender/ember-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "a993ad32da57cc8897ee8f2aca4cef44f40e5b068a121767c2f6e85b26f7a4ed"
+    },
+    "art/blender/ember-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "c6a0bed188ba1bffcb4a9a225038b682b01c91a2a1c8e0f06402d1134af81f81"
+    },
+    "art/blender/ember-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "98f6bfb1d74af23e26662e8d6f7cdc1a0ad01403e67fec70df804cd1ff5d49d2"
+    },
+    "art/blender/ember-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "bacdc87f9c01a927d888a51083753aaec7b25e1ec9b2c0729dafffc1758213d9"
+    },
+    "art/blender/ember-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "92145e9171d4953abf829e409f1416e3e99203a170ffefc848819a1a77690c2f"
+    },
+    "art/blender/feather-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "bfe65b9313ae704f00caba7ff17b3446185853b7e96d7761689a9c355b654f79"
+    },
+    "art/blender/feather-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "c0594fd126e613fcfefbcfaf748eb22d6709e12a0d07e1d814bd38d2c9bb416d"
+    },
+    "art/blender/feather-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "0788f32d93e50214597fbcf42cae83d7ca9162230fdb6d832b2be89b5a7a4f71"
+    },
+    "art/blender/feather-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "adf048e1d14d277f4c5a23186207a74e4279ee712f7e8f21561199596a457031"
+    },
+    "art/blender/feather-plumage-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "b3895aef6855ea0e72d62417db165e42dc6864bfd0ccf0946be26473be2b4205"
+    },
+    "art/blender/feather-plumage-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "52164044c7689f6e0c0d40be7ac8b17064d426ea427160cca651bd266e1307fc"
+    },
+    "art/blender/feather-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "dd01f0328d6fc41b73430894d0d82d84035f476ac7fa2298a9d5b3d2ddbfc3d8"
+    },
+    "art/blender/feather-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "289e4d1ca27279f88da3a284d6683dfa1c231cc14510452c48d8d381052ad55e"
+    },
+    "art/blender/foliage-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "a58ccaf8a54963997acf44d851de733676f2eb2b25474bbc1956083e38b8ca56"
+    },
+    "art/blender/foliage-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "31dcaa7f11baa3677d637dca6bb93d059d7252d9b3a7ceffc91d8cbceb1b3829"
+    },
+    "art/blender/foliage-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "f59fe0674ee13cf30de57fccea5eef74c86f07ecbb9f38a1b714f5102e6e57c2"
+    },
+    "art/blender/foliage-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "d0514f963dcebbf952ea0779ba5ac86523cfa3bf9a56c0081808a05211d098cc"
+    },
+    "art/blender/foliage-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "c5f5c8820fed76efe09d6ebcda67415835db940405c3d4b50a9b2cf987ff2144"
+    },
+    "art/blender/foliage-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "51a972a752732ae00cb478d53e22e89587c6681185f51c9ac71ca055ebaeb64a"
+    },
+    "art/blender/fur-albedo-v2.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "054d3b0f13b2535d237bb98fc60d4b14dd9fe00f016272d1322695d59bde4679"
+    },
+    "art/blender/fur-albedo-v2.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "b8a098ff8aca4a38980b01dcca9869d73a77fcf9afdbee00ed634874881c6cf4"
+    },
+    "art/blender/fur-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "aab4ec349f52b5f6bd672d696c4061f58478c35093bec54d9b1bdfb24a437e8a"
+    },
+    "art/blender/fur-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "7e45187ed591c0bc1b96304cea4e350a013e40cd3f07aaaa22c974a1024751b7"
+    },
+    "art/blender/fur-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "59ea1ea47b5f71536da050e033a4a7eb9ab60aca0b198f8298273dc9815f135f"
+    },
+    "art/blender/fur-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "f690ae5a93569a71842d795c2497cc0e7aadf56863ec730583e89cb35c023a0d"
+    },
+    "art/blender/fur-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "25339db957f0b0ae55903405ec3f4b8c5f1b93d78cc594b6b0dbdb1ebd7b4525"
+    },
+    "art/blender/fur-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "bcbdf8a38a31090f384a3289e288ed2a583ce2d1a5f6933973323a5c798aee76"
+    },
+    "art/blender/grass-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "23701279ede9535eaf7cc6d5178496993497410e7dc51bad42f3761786296d49"
+    },
+    "art/blender/grass-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "7969aa783a9b45b95491bd3bdfcdb678b7e32a4f56299d78714d4f7945378980"
+    },
+    "art/blender/grass-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "671bc46f9689e962d6d2f6a7ddad2037c126612300bc7608aa60644af2e8a1de"
+    },
+    "art/blender/grass-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "6ffa8a81522ac5292edac385c8c42cfc53570413cdcfe9cee5eba55bc4cbe64f"
+    },
+    "art/blender/gravel-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "e6facf09f8af670bb3830ea9a9e0d9448753a6723b2fee428beb693c07d6bfda"
+    },
+    "art/blender/gravel-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "90499fa4e297f9f7d06a46663af89bd848e689c8c0912b9f637729efd0643b11"
+    },
+    "art/blender/gravel-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "80d0503a239d5399e4ffac0ca435c5846aab65fe7c070fe72dcd345cdbb1e57a"
+    },
+    "art/blender/gravel-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "c51032b4e1ea9b44d726f36eb00c9a6bae667344e1de40d56daf6766767e8bd5"
+    },
+    "art/blender/gravel-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "fc5ea961fd7b9f0e00d08846060f80a59e8f63f49b1f6b692829581694e14775"
+    },
+    "art/blender/gravel-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "233b4ff49703dc781fe00b8daf00336794dcd54ff53fd74c0a060e939bcf8c8f"
+    },
+    "art/blender/ivory-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "c56042dde2fdff952c97348ff508ede1cf2e5232b363a48ea9496e77e6bcbf94"
+    },
+    "art/blender/ivory-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "c3fa3f8e4dcb79c1a396f2f2ed526fb7341eeecd23910a65d76ad7d18f64dbbb"
+    },
+    "art/blender/ivory-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "b026f9317aab9a4ca34726dfc60842612fdaa19fc294de351c81466d10214ebd"
+    },
+    "art/blender/ivory-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "7b29d1a5390ace4b4a17f5e9391ad006c61fecd4e36fb271f8684dc8fd9bcbef"
+    },
+    "art/blender/ivory-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "8dceb4609bbd0b3ff5a1323009682a656fdf15cf014ff95cb694cd57adaa4823"
+    },
+    "art/blender/ivory-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "03e49f2cf0479016d690f0e0160909898a8514461f1020e061519192f2db74a8"
+    },
+    "art/blender/leather-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "2aab1b9cadf3d3b1117083ed197ca59762196aa26f06499ff9276154ee287835"
+    },
+    "art/blender/leather-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "5733ba27604bcbca33072f352fc0321800f7117fe38acd0fe9ad900e150dc93f"
+    },
+    "art/blender/leather-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "2324d7402ae43efd476a21cc13bafe4a879dc9375c66597faa1af2e3506bbe5c"
+    },
+    "art/blender/leather-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "f808019c5d60185a7d0deb81ba45e413cd36a17f36f1ae3300f931cef74f346b"
+    },
+    "art/blender/leather-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "4a15168a2be53773fbb1571501c016a823cf68163a72fd28dbd4d1f9afe353f0"
+    },
+    "art/blender/leather-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "14214a2fcd495bf474ce8f6f1bfe490b015592bf62025061f8216aa75364b78c"
+    },
+    "art/blender/mesh-pack.json": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "a9d78c9aa1cab098dd9d36f5bf3c92d986e49ce1a2cd7cdc8d6b19476208ad0c"
+    },
+    "art/blender/moss-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "328ddc2b2da2f1af80951c475ef3ea3626ac47a64651dcafe27687139f3de68f"
+    },
+    "art/blender/moss-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "1eced120375fb7f0589f01118a38da3f2bd39b5d677ee257879c0ab1cc089e70"
+    },
+    "art/blender/moss-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "86ae903322d767df7b15939e079f0c2b1419866ce8176f56538fc01050e41010"
+    },
+    "art/blender/moss-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "b42d841cc86de47fc7f3aa44c58dc626224258eb9e4f9018cce694ae621e91d3"
+    },
+    "art/blender/moss-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "b49db8bca11b7da6c8aaa8ff946835d4e8373f901cb40ca68fc0f20073e38f50"
+    },
+    "art/blender/moss-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "ba5e8b81a0ef409c4aaa28d98210086bb5002ea060abff7c02a572e43642d5c9"
+    },
+    "art/blender/mud-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "897589645bc5230caaaa4518834efa1ce6dbc327198b273ddbd405d90a07a4a8"
+    },
+    "art/blender/mud-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "d64f5124e20df688d6f2a1dc2c12282674a074d7c5eaaa6bc0c688c91ca7652b"
+    },
+    "art/blender/mud-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "5e598ebaa8237a8d176016af06a8595cd2c840a056a3be76ed0718406fdae9a7"
+    },
+    "art/blender/mud-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "6bd34f99393d7e1a964131cc5b26733d7f714c882711dfb402db7817bfd00130"
+    },
+    "art/blender/mud-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "e65c4fd29e6814ce2e84c67afc44326461c790d834a2c811ef3854bdb0fa01cf"
+    },
+    "art/blender/mud-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "8e51d5960b996c5af3e9efb04bf33abf8d61f134a81ba17c503e33b2e0cf6842"
+    },
+    "art/blender/rope-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "2111f39fb7b47b85637fee8c74c1122e309353393a2a101ccc6f0effaf34295c"
+    },
+    "art/blender/rope-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "da79c7f476d572dc41610b421e16dbedd1d27b753dbff2e1afe7fc4fdbb45cc5"
+    },
+    "art/blender/rope-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "42a27eaa7aad35b55d5bb678ccae9db23c7412e68cd004b547c12e3402338d8c"
+    },
+    "art/blender/rope-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "29d5615d5856d419218e9177527f1ea3d146649d0346e6d416906afbfc38056d"
+    },
+    "art/blender/rope-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "9c5b4ea64e16c37db600101564c27cac329f29b195030e092bed406486d03a47"
+    },
+    "art/blender/rope-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "de1ed4813c0dd95523215ffe455594b1387a93e28e43a58ed1af0d77aa816677"
+    },
+    "art/blender/sand-albedo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "093a810b93c2fb5c8711893c0c728bcb3278aee6e399431eeca9cd0c5927fc65"
+    },
+    "art/blender/sand-albedo.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "2c7074655e4448484207b1693b6f364d3a9352a3afd8f1a4579dde6804041774"
+    },
+    "art/blender/sand-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "8b9b5731a05c9db808cf1590e0e8b367aaccecb52c3286bc93de948f1cc21046"
+    },
+    "art/blender/sand-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "f4f294a05a89cdabc4c4b7ec00d5d08ee465a649520089ae9500461ef345e63c"
+    },
+    "art/blender/sand-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "281d2c8ccd2365e9678c47beec9137520e0ad425a29d69d41ad3878c7a08cdf0"
+    },
+    "art/blender/sand-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "984d47b1153eddb9fbc356305e5a124fe33ae6d64b3f7b9e56ef51ad1554b5d5"
+    },
+    "art/blender/skin-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "fedfedcd0a601959c729a8485bfab86ce2367cf0b2dde799e0262e0de0d404d1"
+    },
+    "art/blender/skin-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "b2acbf9a47abed583fba1228945205e525b15bfd0d64b919e540d32d4deae5fb"
+    },
+    "art/blender/skin-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "9c74bc26bfe3162b0a3899864546e5b4f7cd15e4c93ce1fa6ee619da560aec3c"
+    },
+    "art/blender/skin-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "558eab2945cc7e529ddb4eb3530fe352be477743e25366db163ca3352b54a589"
+    },
+    "art/blender/stone-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "c3fb27917ed65b252f90062abed452ab41195bd680a31f8bf379f051ad9b2e9b"
+    },
+    "art/blender/stone-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "77d380fa0de49ff38007065004d5b0b94c2546dc063920d274ea1d190398c434"
+    },
+    "art/blender/stone-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "f40023c60ab4b03a0f4d8172f8323662dc2b98c63de1f2513c052cb3dba8a60b"
+    },
+    "art/blender/stone-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "39c34c6191917ec2f6a3932bb21c73b6cf0c74d5d97361d89a4914fdf4968fda"
+    },
+    "art/blender/thatch-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "f5d5ca0243851d29de3849c01e91a577ff7eba0d503a8b0db995123a75cf9b54"
+    },
+    "art/blender/thatch-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "891e79509c2aa1175518ea9f474d9a4298aac05eff8ff5058ae7c3f83be3edf8"
+    },
+    "art/blender/thatch-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "10866731713f6f912796c7459178122bffa4fdeb49567176862cade911162159"
+    },
+    "art/blender/thatch-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "8bf7d924c3383e262c0cf43702c6c6bb8de2223df0429da965eae2a3b4065017"
+    },
+    "art/blender/wood-normal.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "6d8a4224ea229d26fc8787b41819215e8bfdcab8dda2f0ccddcd4d75f91539d5"
+    },
+    "art/blender/wood-normal.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "d7410c37419c389357a60cdca601b3f1e64d972cfbfa8177b281e4946e3a6962"
+    },
+    "art/blender/wood-roughness.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "05e5ac35357b6fa0c8326266bbd2ec061f3102dddabe07725dbffd46d82fee94"
+    },
+    "art/blender/wood-roughness.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project procedural Blender source/export/materials: tools/blender_overhaul.py, art/README.md and docs/BLENDER-OVERHAUL.md.",
+      "sha256": "a21709bd881aaaca0ed67c3ca6a4ebf32f48895a00c03fed65a029528004d9c2"
+    },
+    "art/character-cloth.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "ecff70e5b0de41cfdbf63b94ba777df2edb94a21308304417a194bc0b13cae3b"
+    },
+    "art/character-cloth.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "92cab703f3b2afebbb83915194bbd54c009fddc073850a77074113907a7a4d15"
+    },
+    "art/character-materials.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "f04063b9f5b4e1a6cbcddbf318156fc5b5e686bd292cc686f2dbd159f88f22bc"
+    },
+    "art/character-skin-v2.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "8fcb393275a38815b61956b691e9f561f0a8c5c44bcb7a848050308d50e0c4ac"
+    },
+    "art/character-skin-v2.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "f440f001ead8c0ca462ff8269e69050e8df280045808e1027274a55cdc76f200"
+    },
+    "art/character-skin.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "f69d6d4b1a8330f6e980bd692e6f84ad5d2b680ed233c96a0fe4532d557f4673"
+    },
+    "art/key-art-startup.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "b095928e180478c7fd3a34ef702cbe4874cc197d3a37ffe53af2196fc86c8699"
+    },
+    "art/key-art.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "3d35163d88e9e6bfc9bbab49ccefee8fb8a22f29cf55dfb214fa0cac65ffabf1"
+    },
+    "art/materials/cliff-photo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "f002ed8473c7388616bc3c3922e36a1452d5b2a623969f08c3b08e7700497411"
+    },
+    "art/materials/cliff-photo.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "960bdd864a8bf6f0e188e9339e12a54d047ab3de40d2c64bd7c17187086cc274"
+    },
+    "art/materials/grass.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "db1ab9240c8205e71d345eaab132e3e3ff1d2a73ede4e4ddc2cd86e0227e9505"
+    },
+    "art/materials/grass.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "dc01d0644e99711948440e38725c39cd571bcf630a623b8bbeca83f49cd77954"
+    },
+    "art/materials/sand-photo.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "11eb6ec0bf5cabebee23cd2e320852d9772d64442d92b9d46e8984bd61b0f38a"
+    },
+    "art/materials/sand-photo.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "7fc878491c63531713f68f6c2be8de526b068983d32e9f346ae4271f272ac181"
+    },
+    "art/materials/stone.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "3c1e1c6abd6c26da90576c0aeb14cf095fec0526aa48550c5ee9e0fce5d8e838"
+    },
+    "art/materials/stone.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "8fc3fab8b9c09283ed829254a19ffe83fe8fbccde5e2fd67b273df5483d75fa6"
+    },
+    "art/materials/thatch.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "783a22f30e776736c83cb2e3698b051a4bda59aa725858b8fb27d4a2df9ce83b"
+    },
+    "art/materials/thatch.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "caab71ccabc2af2aa2877b7da946f242a7f5695459ce11bfdf325888caec8c3b"
+    },
+    "art/materials/wood.ktx2": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "40495c3f8e47fcc223cf50eaa76aab8ee744c5838a072f17a8899f6b49ac33e7"
+    },
+    "art/materials/wood.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project-generated artwork/textures documented in art/README.md and docs/MATERIALS.md; retain provenance of any input/reference images.",
+      "sha256": "8d7203c9dfbefe3cb5dc5dd46cfd0a90248f6793dc96c9a14c9c8037b5d91419"
+    },
+    "art/startup/models/airship.5ccaca783b607517.json": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "5ccaca783b6075175c66733affe393bcf401b60b33badc96282b0609efdeaf15"
+    },
+    "art/startup/models/firewarrior.429514ff5be17ed8.json": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "429514ff5be17ed86f5fbf5e70ae3f65d22a6329a23a3090f5ccf4da2ab93654"
+    },
+    "art/startup/models/spy.28cf2c36a05b328a.json": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "28cf2c36a05b328a5d3d56c61d6f97673f93e7daf1feb6a6f87a1c01f373b789"
+    },
+    "art/startup/models/startup.5838c08152e7f563.json": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "5838c08152e7f5630802540232db3b1db27dd7765bb05e5de3d55f13f9bfaa16"
+    },
+    "art/startup/models/tower.9bb297150bef3d76.json": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "9bb297150bef3d7647aadb88fb46e894d67a51cfd89b638e74a71d6a53483aa3"
+    },
+    "art/startup/models/warrior.259b676717d89e35.json": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "259b676717d89e351de8b3c65437a674899ce6c3c43659060bb1e2b1313e7773"
+    },
+    "art/startup/textures/blender-bronze-albedo.647559ce37c417c0.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "647559ce37c417c05a3c6d9eda6eaa1386e6a14124be43139ceba250eb7a2c82"
+    },
+    "art/startup/textures/blender-bronze-normal.18b151d998b5c5cd.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "18b151d998b5c5cd750adbb229453cb56b46151f09a7814a453e301508b9686e"
+    },
+    "art/startup/textures/blender-bronze-roughness.abf6dd6a3446a160.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "abf6dd6a3446a1603b3252957951703571e4198cc6b77c1382ffe23afa146526"
+    },
+    "art/startup/textures/blender-cliff-albedo.81231ab090a9dfa1.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "81231ab090a9dfa1c43ac13009348f4780ce31d9820d5ba5c5154c0215e85a0b"
+    },
+    "art/startup/textures/blender-cliff-normal.6e5b9444a5d898c0.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "6e5b9444a5d898c0f0eb8c0166d36cbe5268ca8772e9a301a104a2eb790a0694"
+    },
+    "art/startup/textures/blender-cliff-roughness.1248e006c1c81173.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "1248e006c1c811733b187747f4d0849ad916e1977dfb20b8c037fecf37819ddc"
+    },
+    "art/startup/textures/blender-cloth-normal.15696832b788834d.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "15696832b788834dffc75ee59281e8cd129f6bfa35f7765f13ca9d80d43cd020"
+    },
+    "art/startup/textures/blender-cloth-roughness.d97e0b093a164d89.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "d97e0b093a164d89988ac4782e00ff9ea567052fe340ddb8bbf72e062c266050"
+    },
+    "art/startup/textures/blender-dark-albedo.a806c1c41d1eab15.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "a806c1c41d1eab15563c73fc2ad042a15108c06308736af05d310ef31da17012"
+    },
+    "art/startup/textures/blender-dark-normal.19ce722c3ee020e0.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "19ce722c3ee020e0a188167f0798715d47290d551973861ef20de3599106657b"
+    },
+    "art/startup/textures/blender-dark-roughness.2d0f402e0dd3f035.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "2d0f402e0dd3f03547b94ce16a172821259b2dad19d5652a0176fc4d8087c117"
+    },
+    "art/startup/textures/blender-dirt-albedo.30080724704bf79c.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "30080724704bf79c96532fbcbe20278c4820b9203968bed668e9a962a4b3be42"
+    },
+    "art/startup/textures/blender-dirt-normal.7b9cc2d508f21622.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "7b9cc2d508f216227b8ec357a82411ded00ad5d6ca4245780b06b4fb93524f9b"
+    },
+    "art/startup/textures/blender-dirt-roughness.3a3f6976c146a862.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "3a3f6976c146a8625d692265794e79cdc7a7f3428bd080b03924a23cb82ceffc"
+    },
+    "art/startup/textures/blender-ember-albedo.f0b822072ef449c1.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "f0b822072ef449c118c46d5bac7172d570286fb383043d2eb2bc86a7a8fe6d59"
+    },
+    "art/startup/textures/blender-ember-normal.021595cad3cd584a.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "021595cad3cd584a7f40e9a3c66549da5c71e07efec06d711c48eb24a1d226e6"
+    },
+    "art/startup/textures/blender-ember-roughness.3d9100d33c4d9b9c.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "3d9100d33c4d9b9c9f43fd878a08815574e406e7ab3fa1ca650b8afb62229541"
+    },
+    "art/startup/textures/blender-feather-albedo.ec743cde6e79b705.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "ec743cde6e79b705db55575ad523f3857635f7022c746fc5c0ceb2facf18a371"
+    },
+    "art/startup/textures/blender-feather-normal.16fa7145d9dd99ed.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "16fa7145d9dd99ed29e7629df91cbf22ef81bd945dc280dda326a56083f35e54"
+    },
+    "art/startup/textures/blender-feather-plumage-albedo.d3682dbb8f10b355.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "d3682dbb8f10b3557e3e0b2d116b066c9300f10d7ffe09e19baabeeac743faf8"
+    },
+    "art/startup/textures/blender-feather-roughness.f006a0aa14991c0a.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "f006a0aa14991c0a4bbcd03b12f08e577aa2ce2738e7b52991e849676617cc90"
+    },
+    "art/startup/textures/blender-foliage-albedo.b163f6d4d42bb46d.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "b163f6d4d42bb46dc8c39589a1b8df28d3bc40f44c38c1be7e876bcb3c2100f1"
+    },
+    "art/startup/textures/blender-foliage-normal.2e09ee854bcd2fad.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "2e09ee854bcd2fade34a2ab13aca5d0d0d3d124b947c0edff4637df396f2c037"
+    },
+    "art/startup/textures/blender-foliage-roughness.34ddd607ae799fc0.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "34ddd607ae799fc06a4d4862477a30f7c694ab3568ab6bbac3b258bb777f37be"
+    },
+    "art/startup/textures/blender-fur-albedo-v2.57635ddcc691a9fc.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "57635ddcc691a9fcd040ccb560a578aaeab575adf31e7c66ad89b7aaa35a7b86"
+    },
+    "art/startup/textures/blender-fur-albedo.4ea0167f59b18e66.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "4ea0167f59b18e665e125c6b03ca3b3438893ceb8dafcb6dd72fc8bd3775a87c"
+    },
+    "art/startup/textures/blender-fur-normal.1eacd891f4ae3c9c.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "1eacd891f4ae3c9c5ea4439431062d8abeb4ea79e8811b06a72179cc24b634ff"
+    },
+    "art/startup/textures/blender-fur-roughness.5630787407f12c20.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "5630787407f12c204c04c7cbb1da3f006c7f49656c7273e6977bd5a587a0afb7"
+    },
+    "art/startup/textures/blender-grass-normal.689a12dfbf739e02.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "689a12dfbf739e02a92fbbed18fa2ce36d1e22c27ade379fa40e16371a8e2b7f"
+    },
+    "art/startup/textures/blender-grass-roughness.b2d0d9e776c603d9.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "b2d0d9e776c603d9711287c2388e0ac563de6c4adc71b27698760f4fe923c97d"
+    },
+    "art/startup/textures/blender-gravel-albedo.6ee5a38ef536cd9f.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "6ee5a38ef536cd9fda1a0a3700967ee40073caa5202899287fbf7b947b320666"
+    },
+    "art/startup/textures/blender-gravel-normal.d9821de4d52e2fb4.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "d9821de4d52e2fb40c293383d55d1071cd23c9bff0633f0a800aae2627f99ba6"
+    },
+    "art/startup/textures/blender-gravel-roughness.72ef28abef8ee23a.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "72ef28abef8ee23ad176a6ea9272e4b3d2d350d5ebf7f842c4d1343e0a209b64"
+    },
+    "art/startup/textures/blender-ivory-albedo.69adfde1e9a7084b.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "69adfde1e9a7084bfc9674d6bd76d3d93c74ee3a385cb42479f29d1ccb62aa02"
+    },
+    "art/startup/textures/blender-ivory-normal.f457643ee1f5a42b.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "f457643ee1f5a42b4e14ba20cedbeae665afe0d4899ee503d67250a522804fec"
+    },
+    "art/startup/textures/blender-ivory-roughness.37bb3b5d686eda66.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "37bb3b5d686eda669056fc6f9881c758130100f5a42fd6566de52f5d0b008c7d"
+    },
+    "art/startup/textures/blender-leather-albedo.93ccf6139a8f14c1.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "93ccf6139a8f14c1646e309b0b4a05416101e62b2a4c059d87cd78cf56718182"
+    },
+    "art/startup/textures/blender-leather-normal.6d22eddcf5229df9.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "6d22eddcf5229df9f8ab65755635c954ad65491a7bd4ecfab1df12b18d387222"
+    },
+    "art/startup/textures/blender-leather-roughness.4d786d690b98ae8b.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "4d786d690b98ae8b16adcaee89f81df0efd5a5fc45781ba4d6ae7d086e2f561b"
+    },
+    "art/startup/textures/blender-moss-albedo.aa05311b1a0c3077.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "aa05311b1a0c3077802c85022e530e75ce918c96ccc1e38134d6c8185e1c5c9a"
+    },
+    "art/startup/textures/blender-moss-normal.f0e608c681894fb7.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "f0e608c681894fb76b0af5286b75b0215af5de489be675f7ce8af3602dc1abd2"
+    },
+    "art/startup/textures/blender-moss-roughness.700248bd9e5cd0c6.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "700248bd9e5cd0c6776e366791d995ceb5d47ee2b01516aa0290e95c9760fd92"
+    },
+    "art/startup/textures/blender-mud-albedo.39d1eceb16eb1f6f.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "39d1eceb16eb1f6fb330a1b5bb095f256f0bbd4c358ac0737dccd4d85942052f"
+    },
+    "art/startup/textures/blender-mud-normal.473d6173eadfe34e.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "473d6173eadfe34e4cd0e3ccbfcc9954e57ff815d18f453038677f1c2051a016"
+    },
+    "art/startup/textures/blender-mud-roughness.a0326345fc331e2e.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "a0326345fc331e2e3c90810dfad17a823f407423a21ae0bbd70039a8ef83a3cd"
+    },
+    "art/startup/textures/blender-rope-albedo.a95e65d19050ece5.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "a95e65d19050ece52f744e61215d16bba5a1187e8c5ae39658fad3e9591264f2"
+    },
+    "art/startup/textures/blender-rope-normal.8f8ddd64d3461f38.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "8f8ddd64d3461f3897c260c2df0a7d6c535cd407bf74a7e14569ba1e5f6bdd91"
+    },
+    "art/startup/textures/blender-rope-roughness.01296bb0c9d2811a.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "01296bb0c9d2811ae5d384a5f08ed26fa78a4a8f632a2fb3716185cd5496623a"
+    },
+    "art/startup/textures/blender-sand-albedo.a828244b1a6954c5.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "a828244b1a6954c5b3e8cd0b91c09f3fc35ddb0003881ab26f81d560b10c41d4"
+    },
+    "art/startup/textures/blender-sand-normal.55560ef0df32c691.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "55560ef0df32c691da175ff52d5bb5a6e9d911cdfa4115c3e12f16fbeb9894c3"
+    },
+    "art/startup/textures/blender-sand-roughness.208213e6f1dd9645.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "208213e6f1dd964510613773b19f502493644e8d71260a96114509423932a475"
+    },
+    "art/startup/textures/blender-skin-normal.2ef397a69efcbf49.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "2ef397a69efcbf49473bf1f87476e0abe5419f8baf27690663057d9fd23862e0"
+    },
+    "art/startup/textures/blender-skin-roughness.3a14b54441289562.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "3a14b54441289562de1114a7bab7c6f0c3b381aaaa9833b7c9254a62afbe98b3"
+    },
+    "art/startup/textures/blender-stone-normal.1faf62ec3f85939a.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "1faf62ec3f85939ae380b7d55d38a241961385b517643ee6fe2cfd4c8ab9bd37"
+    },
+    "art/startup/textures/blender-stone-roughness.8606840dbbcfa8b5.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "8606840dbbcfa8b522209e728da8a29a19b433f500df3364afdd48b96a728361"
+    },
+    "art/startup/textures/blender-thatch-normal.447a2e1f9335b7df.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "447a2e1f9335b7df90b8e9519655e36a912754c4cd42644282f0da9b7dd85444"
+    },
+    "art/startup/textures/blender-thatch-roughness.b2129d16baa5304b.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "b2129d16baa5304bb1d0314e7bb431a37185881a4ce60b4f50acecac1abff3ce"
+    },
+    "art/startup/textures/blender-wood-normal.9834a3a4331be67f.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "9834a3a4331be67f88c27f8a36c306a83d8b612e43da50daf57623f3b6744d36"
+    },
+    "art/startup/textures/blender-wood-roughness.5e96671609904a79.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "5e96671609904a79c80e1c39b8be3a71c051e1bfe7e9babb6e9fd64e2bc611c6"
+    },
+    "art/startup/textures/character-cloth.aaac8df36cca7b94.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "aaac8df36cca7b947b442550d8937fac5ab02d31fb9f8b734d0334324d215083"
+    },
+    "art/startup/textures/character-skin-v2.47c1958729f47315.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "47c1958729f47315f1ac5be017cd20a91c3122486399f6bb49e38f1f820be4ed"
+    },
+    "art/startup/textures/materials-cliff-photo.b008863dd5da5ecd.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "b008863dd5da5ecd5604040961eeefe28f14e880dbc444b24e01ca4e27a2e857"
+    },
+    "art/startup/textures/materials-grass.309982797b695848.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "309982797b695848c347354803f1c3844254d631e202f2773e431aa658dcec53"
+    },
+    "art/startup/textures/materials-sand-photo.f8817426cfb895bc.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "f8817426cfb895bc76342080c8b6966ce305dcfbeed275f18e06c37933f85d39"
+    },
+    "art/startup/textures/materials-stone.a1444d8197841491.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "a1444d81978414914ce706c07a1fa254a2634376d2f8907245b09a2519450a3b"
+    },
+    "art/startup/textures/materials-thatch.59afb436619e5c52.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "59afb436619e5c520e8041fb96ae31f098b947372fa071522d77b63a48a86bb2"
+    },
+    "art/startup/textures/materials-wood.b49a11bc31b72080.webp": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Generated derivative of project art/model sources by tools/build-startup-assets.mjs; see art/README.md and docs/MATERIALS.md.",
+      "sha256": "b49a11bc31b720804e0fbccf95aad758dbaffef24cc41f9e48639c9a01781735"
+    },
+    "docs/blender-building-preview.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "24ed865d4d54b504cb0fa09426a2f75922db325eea6432d2d8be59a21c798f2e"
+    },
+    "docs/blender-overhaul-preview.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "1d0ccc96f9c56333f1f4cf06f26cc4e1eca093473079c9a6560dbd6d7523f02b"
+    },
+    "docs/browser-preview.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "3f6e6a65b857415da1cc69b3be7718121f5c5db8bb111a0618cf8ae8a63fa5b2"
+    },
+    "docs/characters-preview.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "6b78e4715087cb9c4330f82da415239d493374a886447c0625d6af41c7858aee"
+    },
+    "docs/locomotion-preview.gif": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "c2c6387a3c67a0d3d4b77734e8a13df3027c791ccaedcafd95f655a6ac14d9ca"
+    },
+    "docs/materials-close.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "240e36a88aa7475959049726f49c81c9b669600364d9882be842c18b3f3b2ad7"
+    },
+    "docs/terrain-contact.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "a0f197b03e74b5cc41013b38ca7b31c6ea742fe93ecb80d7f2bae4f9ed1ab47d"
+    },
+    "docs/terrain-overhaul-preview.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "009d796bacfbfb77b2cbdf476be9e28aac8989080087fd8ccd4cdbcd6a462553"
+    },
+    "docs/wildlife-preview.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "090476430c06ee202485159570435779315e1883ddd54506e1e1c7573e57a8fc"
+    },
+    "docs/wildlife-variants.png": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Project gameplay screenshots/recordings; see docs/TEST-REPORT.md and tools/capture-*.mjs.",
+      "sha256": "d37c9f0133e09ef27f3f9c8c445f9cc88eba6f0902be008d9914ac47effa88a1"
+    },
+    "promovideo1.mp4": {
+      "status": "unverified",
+      "license": null,
+      "evidence": "Original uploaded media: repository contains no author/source/license statement. Owner confirmation or replacement required.",
+      "sha256": "203de508b80e3e815ae75cebc2d1404be23b58d2fcfb5e8db5e83b8ee69e9fe9"
+    },
+    "sfx/attack.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "2276915db916b5d30c608891d033f49fdb38db47351720f388cd23ebbeacdd47"
+    },
+    "sfx/bird_call.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "f521f759547739722067e61f38387e099bcaad9a6faa514e583f18f49892e83f"
+    },
+    "sfx/bunny_nibble.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "bfa9f4bfa0e3db50e4ed26bbd3ea39176199ad48c105c6cc1037775ea78b52c3"
+    },
+    "sfx/construct.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "26c973e983528876f90ebe6842bec6b42274793e48d9b00f3a20ca3a8277bb7a"
+    },
+    "sfx/create.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "6173a242235b7a01466deab0623c9d3b2d42aff07aa2efa1a2e1abffd1fd94b7"
+    },
+    "sfx/explosion.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "dc2598a2bf2db6765fd7d5f2dc0572bd4c104a4ef6ab0d597278cceb58785483"
+    },
+    "sfx/fireball.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "069699a85a466422afce792e9ea0837e340e29536bd3516d8369179d780c9a69"
+    },
+    "sfx/firestorm.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "a2609abd25b474b538c40b2a252ac475c9a0c3bf5c521da7a183349a1fcca5c3"
+    },
+    "sfx/firestorm_loop.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "cab3e2ad657e6a0444587b417e3f7cbd48d9975b3b8c5876fdedba78e521f0ff"
+    },
+    "sfx/flatten.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "ef9ebc89ebf357b94c7a293ac059e8937f1da42af40ffbdba62307172fd0bc9e"
+    },
+    "sfx/heal.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "5371b01b2f6ce1973cdc69c5072bbdd7faf3af3c1990d548a1ed830510750931"
+    },
+    "sfx/hurt.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "b016d7d0c2c0e73061d2cf524891cee5769bfa985c0ac4e18b05b489c0c96daf"
+    },
+    "sfx/hurt_heavy.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "cafbd3c512be3add799b763f7b3bc6d6a7ff3f20ca9d6b6bef3c30d9de40b93f"
+    },
+    "sfx/hypnotise.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "eba283a4e61fe4b05b94b50539709ceb86e8352af6d99d72beec242caa50acfa"
+    },
+    "sfx/invisibility.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "fe374a947955f2663cf4419ac151a111acce40cf1f0e89896027c8cfce85818d"
+    },
+    "sfx/landbridge.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "d17cfa518c3798a81c1d073c54de94b685cebe1bb58610f17be865476a943f0c"
+    },
+    "sfx/lightning.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "894065e54e131d00ff10010f6271b332d3b55599f066bb00d9f1fcec76cdc2ae"
+    },
+    "sfx/lower.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "709e7d7887fe4968588db55f8d13f556dfc6928ccb0eccf96c163e454b6edcc2"
+    },
+    "sfx/magic.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "1e1adebc7251b7ad4f2710415bf25c112cb32d6e66217b5990323b465924e7ba"
+    },
+    "sfx/phantom.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "79cbe04d5f26b1c140851089156ea3aff52863b45d2a6956476fa930b47c30b1"
+    },
+    "sfx/raise.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "76d14448d105cbdd327b00b1a7eafa8978be31fa0dd9787aca92c5b01d6d4455"
+    },
+    "sfx/rumble.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "beb163ec0f476cc77dde556a77acd95d0c9383e2343f2c37557b596129c55b90"
+    },
+    "sfx/shield.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "dbdf9e428449688deb89e768b96debe658d2ba781a08704459d4bab76d81f5e5"
+    },
+    "sfx/swamp.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "09cec95f237b241bda4a1a5c7f8cd53f2ffe8ac9178720b7451aa8a3db33e54e"
+    },
+    "sfx/swamp_loop.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "ff091c18df9d047bfdd1b9864e655792a0a9dc763956961b1b0a1d0d6a4d1c77"
+    },
+    "sfx/swarm.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "d0c72989fa829cecd8e197674e481f952420bf58d35be5ae73973156bea6269f"
+    },
+    "sfx/swarm_loop.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "9daba3183e07236764ccf355b6bab3828f87b87feddaa3cf2352c00590e48ec2"
+    },
+    "sfx/teleport.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "75c6ae9f0944741f6ffb170409b9a6928bdc3bfde0cfde2970765a3d18deea11"
+    },
+    "sfx/tornado.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "76969069de727bd660e8eeb584bfb7758429a457301eaccbd85f614054b4c813"
+    },
+    "sfx/tornado_loop.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "450bea22d95830bb460b9706c5dbe33cd111010555c49022448378c078fe5f04"
+    },
+    "sfx/volcano.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "7fd174735558533b9347d02c2f0be18837b593936cb1503672883aa5d93f5d64"
+    },
+    "sfx/volcano_loop.wav": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
+      "sha256": "b25caf4467dcd563d31105b511520ec8c7ab675cf01306ad24ab96ef22013fd2"
+    }
+  }
+}
