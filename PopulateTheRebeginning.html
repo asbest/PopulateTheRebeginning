@@ -6847,24 +6847,61 @@ function castLandbridge(caster, x, z) {
     SoundManager.playSound('landbridge');
 }
 
+function staffTipPosition(caster) {
+    if(!caster?.staffTip)return caster.mesh.position.clone().add(new THREE.Vector3(0,2,0));
+    caster.staffTip.updateWorldMatrix(true,false);
+    return caster.staffTip.getWorldPosition(new THREE.Vector3());
+}
+function staffRay(caster,target,color=0x74eaff) {
+    if(!caster?.staffTip)return;
+    const start=staffTipPosition(caster),delta=target.clone().sub(start),length=delta.length();
+    if(length<.05)return;
+    const material=new THREE.MeshBasicMaterial({color,transparent:true,opacity:.85,
+        depthWrite:false,blending:THREE.AdditiveBlending});
+    const mesh=new THREE.Mesh(new THREE.CylinderGeometry(.018,.055,length,6),material);
+    mesh.position.copy(start).addScaledVector(delta,.5);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());
+    state.particles.push(new VisualEffect(mesh,.22,eff=>{
+        eff.mesh.material.opacity=.85*Math.max(0,eff.life/eff.maxLife);
+        eff.mesh.scale.x=eff.mesh.scale.z=Math.max(.01,eff.life/eff.maxLife);
+    }));
+}
+function beginStaffCast(caster,type,x,z) {
+    if(!caster.isShaman||!caster.staffTip)return;
+    const angle=Math.atan2(x-caster.mesh.position.x,z-caster.mesh.position.z);
+    Locomotion.turn(caster,angle,.16);
+    caster.staffWindup=null;
+    caster.staffCastTimer=.48;
+    // The release pose is applied before sampling the tip, so the beam and projectile
+    // actually leave the animated crystal rather than the shaman's torso.
+    caster.armR.rotation.set(-1.45,0,.13);
+    caster.armR.userData.lower.rotation.x=-.08;
+    caster.armL.rotation.set(-.55,0,-.12);
+    const colors={blast:0xff8d42,lightning:0xd9f7ff,heal:0x7dffbd,shield:0x7dceff,
+        teleport:0x9787ff,hypnotise:0xe27dff,firestorm:0xff663d,volcano:0xff6540};
+    const target=new THREE.Vector3(x,getHeight(x,z)+.7,z);
+    if(type==='blast'){
+        const tip=staffTipPosition(caster);
+        target.sub(tip).normalize().multiplyScalar(1.15).add(tip);
+    }
+    staffRay(caster,target,colors[type]||0x74eaff);
+}
 function executeSpell(type, x, z, caster) {
     if (!caster || !caster.mesh) return;
     if(isPeaceBlockedAction(type))return;
+
+    beginStaffCast(caster,type,x,z);
 
     if (caster.faction === 1 && caster.isShaman) {
         if(window.showEnemySpellIcon) window.showEnemySpellIcon(type);
     }
 
     if (type === 'blast') {
-        const startPos = caster.mesh.position.clone().add(new THREE.Vector3(0, 2, 0));
+        const startPos = caster.isShaman ? staffTipPosition(caster) : caster.mesh.position.clone().add(new THREE.Vector3(0, 2, 0));
         const h = getHeight(x, z);
         const targetPos = new THREE.Vector3(x, h, z);
         state.projectiles.push(new Fireball(startPos, targetPos, caster.faction));
         SoundManager.playSound('fireball');
-
-        const dx = targetPos.x - caster.mesh.position.x;
-        const dz = targetPos.z - caster.mesh.position.z;
-        caster.mesh.rotation.y = Math.atan2(dx, dz);
     }
     else if (type === 'raise') {
         const mods = modifyTerrain(x, z, CONFIG.TERRAIN.RAISE_LOWER_RADIUS, CONFIG.TERRAIN.RAISE_AMOUNT);
@@ -7134,6 +7171,10 @@ const SpellWindup={
         this.pending.push({type,x,z,caster,cost,remaining:SPELL_WINDUPS[type],
             startX:caster.mesh.position.x,startZ:caster.mesh.position.z,
             damageRevision:caster.damageRevision||0,pulseTimer:0});
+        if(caster.isShaman){
+            caster.staffWindup={x,z,type};
+            Locomotion.turn(caster,Math.atan2(x-caster.mesh.position.x,z-caster.mesh.position.z),.16);
+        }
         spawnPulse(x,getHeight(x,z)+.15,z,0xffae47);
         if(caster.faction!==0)window.showEnemySpellIcon?.(type);
         return true;
@@ -7146,6 +7187,7 @@ const SpellWindup={
                 Math.hypot(caster.mesh.position.x-cast.startX,caster.mesh.position.z-cast.startZ)>1.5;
             if(interrupted){
                 if(caster?.faction===0&&cast.cost>0){state.mana+=cast.cost*.5;updateUI();}
+                if(caster?.staffWindup?.type===cast.type)caster.staffWindup=null;
                 this.pending.splice(i,1);continue;
             }
             cast.remaining-=dt;cast.pulseTimer-=dt;
@@ -7158,7 +7200,7 @@ const SpellWindup={
             }
         }
     },
-    clear(){this.pending.length=0;}
+    clear(){for(const cast of this.pending)if(cast.caster?.staffWindup?.type===cast.type)cast.caster.staffWindup=null;this.pending.length=0;}
 };
 
 window.executeSpell = executeSpell;
@@ -7883,6 +7925,7 @@ window.Humanoid = class Humanoid {
 
     attack(manual=null) {
         if(isPeaceTime()) { this.state='idle';this.attackTarget=null;return; }
+        if(this.isShaman&&(this.staffWindup||this.staffCastTimer>0))return;
         const target=manual?manual.target:this.attackTarget;
         const point=manual?manual.point:target?.mesh.position;
         if(!manual&&(!target || target.state === 'dead' || target.dead ||
@@ -7927,10 +7970,12 @@ window.Humanoid = class Humanoid {
             }
         }
         else if (this.type === 'shaman') {
-            // Magic thrust with both arms
+            // Drive the strike with the staff arm; the free hand balances the pose.
             const thrust = Math.sin(this.attackPhase * Math.PI);
-            this.armR.rotation.x = -Math.PI/2 - (thrust * Math.PI/4);
-            this.armL.rotation.x = -Math.PI/2 - (thrust * Math.PI/4);
+            this.armR.rotation.x = -1.1 - thrust*.45;
+            this.armR.rotation.z = .13;
+            this.armR.userData.lower.rotation.x=-.08;
+            this.armL.rotation.x = -.4 - thrust*.15;
         }
         else if (this.type === 'spy') {
             // Sneaky stab
@@ -7998,34 +8043,9 @@ window.Humanoid = class Humanoid {
                     SoundManager.playSound('magic');
                 }
             } else if (this.type === 'shaman') {
-                // Shaman small flashes from hands to target
-                this.attackTarget.takeDamage(this.damage, true);
+                target.takeDamage(this.damage, true);
                 SoundManager.playSound('magic');
-
-                // Create flash effect
-                const startPosL = new THREE.Vector3();
-                const startPosR = new THREE.Vector3();
-                this.armL.getWorldPosition(startPosL);
-                this.armR.getWorldPosition(startPosR);
-                const targetPos = this.attackTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0));
-
-                const flashMat = new THREE.MeshBasicMaterial({color: 0x00FFFF, transparent: true, opacity: 0.8});
-
-                const createFlash = (start) => {
-                    const diff = targetPos.clone().sub(start);
-                    const dist = diff.length();
-                    const geo = new THREE.CylinderGeometry(0.05, 0.05, dist, 4);
-                    const mesh = new THREE.Mesh(geo, flashMat);
-
-                    mesh.position.copy(start).add(diff.multiplyScalar(0.5));
-                    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), diff.clone().normalize());
-
-                    state.particles.push(new VisualEffect(mesh, 0.15, (eff, dt) => {
-                        eff.mesh.material.opacity = (eff.life / eff.maxLife) * 0.8;
-                    }));
-                };
-                createFlash(startPosL);
-                createFlash(startPosR);
+                staffRay(this,target.mesh.position.clone().add(new THREE.Vector3(0,1,0)));
             } else {
                 // Melee
                 target.takeDamage(this.damage, true);
@@ -8088,6 +8108,7 @@ window.Humanoid = class Humanoid {
         this.hpGroup.visible = isSelected || isDamaged;
         if (this.hpGroup.visible && this.updateTicker % 2 === 0) this.hpGroup.lookAt(state.camera.position);
         this.animTime += dt;
+        if(this.staffCastTimer>0)this.staffCastTimer=Math.max(0,this.staffCastTimer-dt);
         this.hitImpulseCooldown=Math.max(0,(this.hitImpulseCooldown||0)-dt);
 
         if(this.garrisonedIn){

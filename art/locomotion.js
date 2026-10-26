@@ -262,6 +262,19 @@ export function createLocomotion(T) {
             pose(u.armR.userData.lower.rotation,'x',-.06);
         }
         if(attacking)animateCombat(u,u.attackPhase||0);
+        if(u.isShaman&&u.staffTip){
+            const winding=!!u.staffWindup,casting=(u.staffCastTimer||0)>0;
+            if((winding||casting)&&!['dead','stunned','getting_up'].includes(u.state)){
+                const lift=winding?Math.sin(u.animTime*10)*.09:0;
+                u.armR.rotation.x=smooth(u.armR.rotation.x,(winding?-2.05:-1.45)+lift,20,dt);
+                u.armR.rotation.z=smooth(u.armR.rotation.z,.13,18,dt);
+                u.armR.userData.lower.rotation.x=smooth(u.armR.userData.lower.rotation.x,-.08,18,dt);
+                u.armL.rotation.x=smooth(u.armL.rotation.x,winding?-.7:-.55,14,dt);
+                u.torso.rotation.y=smooth(u.torso.rotation.y,-.12,12,dt);
+            }
+            u.staffCrystal.material.emissiveIntensity=winding
+                ?1.5+.45*Math.sin(u.animTime*15):casting?1.3: .6;
+        }
         const cape=u.torso.getObjectByName(u.isShaman?'CeremonialCape':'SpyCloak');
         if(cape){
             cape.rotation.x=smooth(cape.rotation.x,-.14-.08*weight+Math.sin(g.phase*Math.PI*2)*.02*weight,8,dt);

@@ -166,7 +166,10 @@ export function createCharacters(T,art) {
                 const feather=cloth(u.head,[[-.028,0],[.028,.05],[.025,.22],[0,.30],[-.02,.19]],i%2?bone:faction,'CrownFeather');feather.position.set(i*.045,.15,-.015);feather.rotation.z=-i*.24;if(!(i%2))factionPiece(feather);
             }
             tube(hand,[[0,-.30,.07],[0,.03,.08],[.015,.50,.08],[0,.82,.08]],.021,leather,'RitualStaff');
-            const orb=oval(hand,[0,.79,.08],[.067,.075,.067],mat('plain',0x53d7dd),'StaffCrystal');orb.material.emissive.setHex(0x159fa8);orb.material.emissiveIntensity=.6;
+            const orb=oval(hand,[0,.79,.08],[.067,.075,.067],mat('plain',0x53d7dd),'StaffCrystal');
+            orb.material=orb.material.clone();orb.material.emissive.setHex(0x159fa8);orb.material.emissiveIntensity=.6;
+            u.staffCrystal=orb;
+            u.staffTip=new T.Object3D();u.staffTip.name='StaffTip';u.staffTip.position.set(0,.88,.08);hand.add(u.staffTip);
             mesh(hand,geo('staffring',()=>new T.TorusGeometry(.105,.015,6,16)),gold,[0,.81,.08]);
             for(let i=0;i<7;i++)oval(u.torso,[(i-3)*.045,.13-Math.sin(i/6*Math.PI)*.11,.14],[.018,.023,.017],i%2?bone:gold,'RitualBeads');
         }else if(role==='warrior'){

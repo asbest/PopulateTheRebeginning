@@ -12,6 +12,34 @@ try{
   const refs=[...new Set(source.match(/CONFIG(?:\.[A-Za-z_][A-Za-z_0-9]*){2,}/g))];
   return p.evaluate(refs=>{const missing=refs.filter(r=>r.split('.').slice(1).reduce((v,k)=>v?.[k],gameTestAPI.CONFIG)===undefined);if(missing.length)throw new Error(missing.join(', '));return refs.length;},refs);
  });
+ await check('Shaman spells and attacks release from the animated staff crystal',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {caster,enemy,x,z}=fixture;
+   if(!caster.staffTip||!caster.staffCrystal)throw new Error('Staff tip is missing');
+   const tip=()=>{caster.staffTip.updateWorldMatrix(true,false);return caster.staffTip.getWorldPosition(new THREE.Vector3());};
+   const beamCount=()=>state.particles.filter(p=>p.mesh?.geometry?.type==='CylinderGeometry').length;
+   gameTestAPI.executeSpell('blast',x,z,caster);
+   const ball=state.projectiles.at(-1),origin=tip();
+   if(ball.start.distanceTo(origin)>.001)throw new Error('Fireball did not start at the staff tip');
+   if(caster.armR.rotation.x> -1.2||caster.staffCastTimer<=0)throw new Error('Staff release pose is missing');
+   const beforeHeal=beamCount();gameTestAPI.executeSpell('heal',x,z,caster);
+   if(beamCount()!==beforeHeal+1)throw new Error('Support spell lacks a staff ray');
+   const beforeAttack=beamCount();
+   caster.staffCastTimer=0;
+   caster.attackTarget=enemy;caster.state='combat';caster.attackFired=false;
+   caster.lastAttackTime=state.clock.getElapsedTime()-.6/caster.attackSpeed;
+   caster.attack();
+   if(beamCount()!==beforeAttack+1||enemy.hp>=1000)throw new Error('Normal attack did not fire from the staff');
+   caster.attackTarget=null;caster.state='idle';
+   if(!gameTestAPI.SpellWindup.queue('lightning',x,z,caster))throw new Error('Windup did not queue');
+   gameTestAPI.Locomotion.animate(caster,.016,getSurfaceHeight);
+   if(!caster.staffWindup||caster.armR.rotation.x> -1.5||caster.staffCrystal.material.emissiveIntensity<=1)
+    throw new Error('Staff windup pose or crystal charge is missing');
+   gameTestAPI.SpellWindup.clear();
+   if(caster.staffWindup)throw new Error('Canceled cast left the staff charged');
+   return {ballStart:ball.start.toArray(),tip:origin.toArray(),staffCharge:caster.staffCrystal.material.emissiveIntensity};
+  });
+ });
  await check('Fireball blast throws nearby enemies away from its impact',async()=>{
   await fresh();return p.evaluate(()=>{
    const {x,z,enemy,ally}=fixture,y=getHeight(x,z),damage=gameTestAPI.CONFIG.COMBAT.FIREBALL_UNIT_DAMAGE;
