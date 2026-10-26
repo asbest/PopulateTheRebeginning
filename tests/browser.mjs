@@ -141,7 +141,7 @@ try {
   for(const kind of ['wild','warrior','firewarrior','preacher','spy','shaman','airship']){const u=new Humanoid(0,kind,p.x+3,p.z+3);state.units.push(u);if(!u.mesh||u.hp<=0||(!u.isVehicle&&!u.legL))throw new Error(kind);report.push({kind,hp:u.hp});}
   return report;
  }));
- await check('Firewarrior arms carry continuous batched flames',async()=>page.evaluate(()=>{
+ await check('Firewarrior palms carry small flickering flames in one draw call',async()=>page.evaluate(()=>{
   const unit=state.units.find(u=>u.type==='firewarrior'&&u.faction===0);
   const flames=gameTestAPI.FirewarriorFlames,cameraPos=state.camera.position.clone();
   const oldRotation=unit.armL.rotation.x,oldTime=unit.animTime;
@@ -149,15 +149,30 @@ try {
    state.camera.position.copy(unit.mesh.position).add(new THREE.Vector3(0,8,10));
    flames.update();
    if(!flames.mesh.isInstancedMesh||flames.mesh.count<8||flames.mesh.count%8)
-    throw new Error('Firewarrior arm flames are missing or unbatched: '+flames.mesh.count);
+    throw new Error('Firewarrior palm flames are missing or unbatched: '+flames.mesh.count);
+   const palms=[];
+   for(const warrior of state.units.filter(u=>u.type==='firewarrior'))for(const arm of [warrior.armL,warrior.armR]){
+    const palm=arm?.userData.lower?.userData.palm;
+    if(palm)palms.push(palm.getWorldPosition(new THREE.Vector3()));
+   }
+   const matrix=new THREE.Matrix4(),position=new THREE.Vector3(),scale=new THREE.Vector3();
+   for(let i=0;i<flames.mesh.count;i++){
+    flames.mesh.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);scale.setFromMatrixScale(matrix);
+    if(!palms.some(palm=>palm.distanceTo(position)<.06))throw new Error('Flame base is outside the palm');
+    if(scale.x>.058||scale.y>.181)throw new Error('Palm flames are too bulky');
+   }
+   const beforeHeight=new THREE.Vector3().setFromMatrixScale(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array)).y;
+   unit.animTime+=.073;flames.update();
+   const afterHeight=new THREE.Vector3().setFromMatrixScale(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array)).y;
+   if(Math.abs(afterHeight-beforeHeight)<.0001)throw new Error('Flame height does not flicker');
    const before=new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array));
    unit.armL.rotation.x+=.5;unit.animTime+=.15;flames.update();
    const after=new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array));
-   if(before.distanceTo(after)<.01)throw new Error('Flames do not follow the animated forearm');
+   if(before.distanceTo(after)<.01)throw new Error('Flames do not follow the animated palm');
    state.renderer.render(state.scene,state.camera);const withFlames=state.renderer.info.render.calls;
    flames.mesh.visible=false;state.renderer.render(state.scene,state.camera);
    const withoutFlames=state.renderer.info.render.calls;flames.mesh.visible=true;
-   if(withFlames-withoutFlames!==1)throw new Error('Arm flames require more than one draw call');
+   if(withFlames-withoutFlames!==1)throw new Error('Palm flames require more than one draw call');
    return {flames:flames.mesh.count,drawCalls:withFlames-withoutFlames};
   }finally{unit.armL.rotation.x=oldRotation;unit.animTime=oldTime;state.camera.position.copy(cameraPos);flames.update();}
  }));

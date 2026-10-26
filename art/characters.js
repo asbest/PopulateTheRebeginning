@@ -141,7 +141,7 @@ export function createCharacters(T,art) {
             mesh(lower,loft([[0,r*.69,r*.7],[-len*.3,r*.81,r*.77],[-len*.9,r*.45,r*.5],[-len,r*.44,r*.46]]),skin,[0,0,0],[1,1,1],'LowerLimb');
             if(arm){
                 band(lower,-.15,r*.75,r*.77,leather,.11);band(lower,-.10,r*.8,r*.81,gold,.027);
-                oval(lower,[0,-len-.031,.006],[.042,.056,.028],skin,'Hand');
+                lower.userData.palm=oval(lower,[0,-len-.031,.006],[.042,.056,.028],skin,'Hand');
                 oval(lower,[side*.038,-len-.021,.02],[.016,.032,.016],skin,'Thumb');
                 if(role==='firewarrior'||role==='spy'||role==='preacher')factionPiece(mesh(g,loft([[0,r*1.12,r*1.12],[-.20,r*.86,r*.89]]),faction,[0,0,0],[1,1,1],'Sleeve'));
             }else{

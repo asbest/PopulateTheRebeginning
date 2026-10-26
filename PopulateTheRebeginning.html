@@ -5891,14 +5891,27 @@ const FIREBALL_CORE_MAT = new THREE.MeshBasicMaterial({color:0xffda84});
 const FIREBALL_CORONA_MAT = new THREE.MeshBasicMaterial({color:COLORS.fireBody,transparent:true,opacity:.45,
     blending:THREE.AdditiveBlending,depthWrite:false});
 const FIREWARRIOR_FLAME_COLORS=[0xff5810,0xffa227,0xff6a16,0xffd052];
-// Arm flames for every firewarrior share one draw call and follow the animated forearms.
+// Small, soft flame tongues rise from the palms in one shared draw call.
 const FirewarriorFlames={
     mesh:null,dummy:new THREE.Object3D(),point:new THREE.Vector3(),tint:new THREE.Color(),capacity:1024,
     init(){
         if(this.mesh)return;
-        const geometry=new THREE.ConeGeometry(.105,.42,5);
-        const material=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.88,
-            depthWrite:false});
+        const geometry=new THREE.PlaneGeometry(1,1);geometry.translate(0,.5,0);
+        const material=new THREE.ShaderMaterial({uniforms:{time:{value:0}},
+            vertexShader:`varying vec2 vUv;varying vec3 vTint;
+                void main(){vUv=uv;vTint=instanceColor;
+                    gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.0);}`,
+            fragmentShader:`uniform float time;varying vec2 vUv;varying vec3 vTint;
+                void main(){
+                    float y=vUv.y;
+                    float bend=sin(y*9.0-time*17.0)*.11*y+sin(y*17.0+time*23.0)*.045*y;
+                    float width=mix(.44,.015,pow(y,.72));
+                    float edge=abs(vUv.x-.5-bend);
+                    float alpha=(1.0-smoothstep(width*.35,width,edge))*(1.0-smoothstep(.65,1.0,y));
+                    vec3 color=mix(vTint,vec3(1.0,.94,.48),pow(1.0-y,2.0));
+                    gl_FragColor=vec4(color,alpha*.82);
+                    #include <encodings_fragment>
+                }`,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false});
         this.mesh=new THREE.InstancedMesh(geometry,material,this.capacity);
         this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         this.mesh.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(this.capacity*3),3);
@@ -5908,6 +5921,7 @@ const FirewarriorFlames={
     },
     update(){
         if(!this.mesh)return;
+        this.mesh.material.uniforms.time.value=state.clock.elapsedTime;
         let count=0;
         for(const unit of state.units){
             if(unit.type!=='firewarrior'||unit.state==='dead'||unit.state==='transported'||
@@ -5916,18 +5930,19 @@ const FirewarriorFlames={
             for(let side=0;side<2;side++){
                 const arm=side===0?unit.armL:unit.armR;
                 const forearm=arm?.userData.lower;
-                if(!forearm)continue;
-                arm.updateWorldMatrix(true,false);forearm.updateWorldMatrix(true,false);
+                const palm=forearm?.userData.palm;
+                if(!palm)continue;
+                palm.updateWorldMatrix(true,false);
                 for(let i=0;i<4;i++){
                     if(count>=this.capacity)break;
-                    const phase=unit.animTime*12+i*2.7+side*1.9;
-                    const sway=Math.sin(phase)*.035;
-                    const segment=i<2?arm:forearm;
-                    this.point.set(side===0?.055:-.055,i%2===0?-.07:-.19,.07+sway)
-                        .applyMatrix4(segment.matrixWorld);
-                    this.dummy.position.copy(this.point);this.dummy.position.y+=.14;
-                    this.dummy.rotation.set(0,0,sway*2);
-                    this.dummy.scale.set(.8+(i%2)*.18,.75+Math.sin(phase*.83)*.18,.8);
+                    const phase=unit.animTime*19+i*2.7+side*1.9;
+                    const flicker=.5+.3*Math.sin(phase)+.2*Math.sin(phase*1.73+1.4);
+                    // Hand is a scaled unit sphere; start just outside its palm surface.
+                    this.point.set((i-1.5)*.24,Math.sin(phase*.7)*.1,1.12)
+                        .applyMatrix4(palm.matrixWorld);
+                    this.dummy.position.copy(this.point);
+                    this.dummy.quaternion.copy(state.camera.quaternion);
+                    this.dummy.scale.set(.032+flicker*.025,.075+flicker*.105,1);
                     this.dummy.updateMatrix();
                     this.mesh.setMatrixAt(count,this.dummy.matrix);
                     this.mesh.setColorAt(count++,this.tint.setHex(FIREWARRIOR_FLAME_COLORS[i]));
