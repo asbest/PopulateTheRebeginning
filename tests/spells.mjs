@@ -40,6 +40,36 @@ try{
    return {ballStart:ball.start.toArray(),tip:origin.toArray(),staffCharge:caster.staffCrystal.material.emissiveIntensity};
   });
  });
+ await check('Combat effects leave no ground circles or expanding ring meshes',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {caster,x,z}=fixture,existing=new Set(state.particles);
+   if(state.rangeRing||state.impactRing)throw new Error('Action ground preview rings are still present');
+   const marks=gameTestAPI.SurfaceMarks.marks.length;
+   gameTestAPI.executeSpell('blast',x,z,caster);
+   const ball=state.projectiles.at(-1);
+   ball.mesh.position.set(x,getHeight(x,z),z);ball.explode();
+   gameTestAPI.SpellWindup.queue('lightning',x,z,caster);
+   gameTestAPI.executeSpell('hypnotise',x,z,caster);
+   gameTestAPI.executeSpell('teleport',x,z,caster);
+   gameTestAPI.executeSpell('swamp',x,z,caster);
+   gameTestAPI.HitPulseManager.add(x,getHeight(x,z)+1,z,0x00ffff);
+   gameTestAPI.HitPulseManager.update(.1);
+   const ringTypes=['RingGeometry','TorusGeometry','TorusKnotGeometry'];
+   const transientRings=[];
+   for(const effect of state.particles)if(!existing.has(effect))effect.mesh?.traverse?.(node=>{
+    if(ringTypes.includes(node.geometry?.type))transientRings.push(node.geometry.type);
+   });
+   const hitRings=gameTestAPI.HitPulseManager.meshes.filter(mesh=>ringTypes.includes(mesh.geometry.type));
+   const hazardRings=[];
+   state.activeEffects.at(-1)?.mesh?.traverse?.(node=>{
+    if(ringTypes.includes(node.geometry?.type))hazardRings.push(node.geometry.type);
+   });
+   if(transientRings.length||hitRings.length||hazardRings.length||gameTestAPI.SurfaceMarks.marks.length!==marks)
+    throw new Error(JSON.stringify({transientRings,hitRings:hitRings.length,hazardRings,marksBefore:marks,marksAfter:gameTestAPI.SurfaceMarks.marks.length}));
+   gameTestAPI.SpellWindup.clear();
+   return {newEffects:state.particles.length-existing.size,hitSparks:gameTestAPI.HitPulseManager.meshes[0].count};
+  });
+ });
  await check('Fireball blast throws nearby enemies away from its impact',async()=>{
   await fresh();return p.evaluate(()=>{
    const {x,z,enemy,ally}=fixture,y=getHeight(x,z),damage=gameTestAPI.CONFIG.COMBAT.FIREBALL_UNIT_DAMAGE;
@@ -276,9 +306,9 @@ try{
    gameTestAPI.SpellWindup.update(1);
    const [swamp,tornado]=state.activeEffects.slice(-2);
    if(swamp?.constructor.name!=='Swamp'||tornado?.constructor.name!=='Tornado')throw new Error('Missing hazard visuals');
-   if(!swamp.surface?.geometry?.index?.count||!swamp.ripples?.isInstancedMesh||!swamp.bubbles?.isInstancedMesh||
+   if(!swamp.surface?.geometry?.index?.count||swamp.ripples||!swamp.bubbles?.isInstancedMesh||
       !tornado.ribbons?.geometry?.index?.count||!tornado.debris?.isInstancedMesh||
-      swamp.mesh.children.length>3||tornado.mesh.children.length>5)throw new Error('Unbounded hazard draw calls');
+      swamp.mesh.children.length>2||tornado.mesh.children.length>5)throw new Error('Unbounded hazard draw calls or ground ripple returned');
    const positions=swamp.surface.geometry.attributes.position,index=swamp.surface.geometry.index;
    for(let i=0;i<index.count;i+=3){
     const ys=[positions.getY(index.getX(i)),positions.getY(index.getX(i+1)),positions.getY(index.getX(i+2))];
