@@ -9649,6 +9649,7 @@ function updateUnitList() {
             };
         }
         item._unitRef = u;
+        item.style.setProperty('--unit-faction-color', `#${getFactionColor(u.faction).toString(16).padStart(6, '0')}`);
         item.classList.toggle('enemy',u.faction === 1);
         item.classList.toggle('selected',state.selectedUnits.includes(u));
         u._listSelected=state.selectedUnits.includes(u);
