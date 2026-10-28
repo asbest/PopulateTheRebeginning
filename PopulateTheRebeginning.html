@@ -7888,7 +7888,8 @@ window.Humanoid = class Humanoid {
            target.invisible||window.isAllied(target.faction,this.faction))return false;
         const dx=target.mesh.position.x-this.mesh.position.x,dz=target.mesh.position.z-this.mesh.position.z;
         const dy=target.mesh.position.y-this.mesh.position.y;
-        return Math.hypot(dx,dy,dz)<=this.range+(target.collisionRadius||0)&&
+        return Math.hypot(dx,dz)<=this.range+(target.collisionRadius||0)&&
+            Math.abs(dy)<=(this.height||1.5)+(target.height||1.5)+.5&&
             (!direction||dx*direction.x+dz*direction.z>=Math.hypot(dx,dz)*.55);
     }
 
@@ -7910,7 +7911,10 @@ window.Humanoid = class Humanoid {
         if(target)point.copy(target.mesh.position);
         const radius=this.type==='warrior'?(target?.collisionRadius||0):0;
         const range=this.type==='warrior'?this.range:combatRange(this,target||{mesh:{position:point}});
-        if(this.mesh.position.distanceTo(point)>range+radius)return false;
+        if(this.type==='warrior'){
+            if(target?!this.canMeleeHit(target,direction):
+               Math.hypot(this.mesh.position.x-x,this.mesh.position.z-z)>range)return false;
+        }else if(this.mesh.position.distanceTo(point)>range+radius)return false;
         this.manualAttack={target,point,direction,elapsed:0,duration};
         this.isWorshipping=false;
         this.lastAttackTime=now;this.attackFired=false;
@@ -8372,7 +8376,8 @@ window.Humanoid = class Humanoid {
 
             const dist = this.mesh.position.distanceTo(this.attackTarget.mesh.position);
             const ranged=this.type==='firewarrior'||this.type==='preacher';
-            if(dist <= (ranged?combatRange(this,this.attackTarget):this.range) &&
+            if((this.type==='warrior'?this.canMeleeHit(this.attackTarget):
+                dist <= (ranged?combatRange(this,this.attackTarget):this.range)) &&
                (!ranged||cachedCombatLineClear(this,this.attackTarget))) {
                 // In range, attack
                 this.velocity.set(0,0,0);
