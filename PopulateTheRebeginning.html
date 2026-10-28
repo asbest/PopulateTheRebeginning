@@ -695,6 +695,7 @@ window.RAPIER = RAPIERModule;
 import { createArtKit } from './art/art-kit.js';
 import { createCharacters } from './art/characters.js';
 import { createLocomotion } from './art/locomotion.js';
+import { createPostprocessing } from './art/postprocessing.js';
 import { icon } from './art/icons.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
@@ -10461,6 +10462,7 @@ async function init() {
         state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         state.renderer.toneMappingExposure = 0.75;
         state.renderer.setSize(window.innerWidth, window.innerHeight);
+        state.postprocessing = createPostprocessing(THREE,state.renderer);
         state.renderer.shadowMap.enabled = true;
         state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         state.renderer.physicallyCorrectLights = true;
@@ -12197,6 +12199,7 @@ function animate() {
     } else _qualityFrames++;
     if(state.graphicsQuality&&_qualityFrames>0&&frameTime-_qualityWindowStart>5000) {
         const fps=_qualityFrames*1000/(frameTime-_qualityWindowStart);state.graphicsQuality.averageFps=fps;
+        state.postprocessing?.adapt(fps);
         let scale=state.graphicsQuality.dynamicScale;
         if(fps<36)scale=Math.max(.67,scale-.1);else if(fps>56)scale=Math.min(1,scale+.05);
         if(Math.abs(scale-state.graphicsQuality.dynamicScale)>.001) {
@@ -12492,7 +12495,8 @@ function animate() {
     }
 
     updateUnitListSelection();
-    state.renderer.render(state.scene, state.camera);
+    if(state.postprocessing)state.postprocessing.render(state.scene,state.camera,state.graphicsQuality);
+    else state.renderer.render(state.scene,state.camera);
     if(state.assetsReady&&(state.isFPV||state.viewScale<=14)&&performance.now()-(state.lastAssetStreamAt||0)>500){
         state.lastAssetStreamAt=performance.now();
         Art.streamTextures(state.scene,state.isFPV?state.camera.position:state.cameraLookAt,state.isFPV?18:Math.max(12,state.viewScale*1.5));
