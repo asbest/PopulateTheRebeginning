@@ -2,6 +2,7 @@
 // Static meshes share BufferGeometry and PBR textures across every instance.
 import {MODEL_GROUPS,MODEL_FILES} from './startup-manifest.js';
 import {assetURL} from './asset-urls.js';
+import {fitBarracksTiles} from './roof-profile.js';
 let sharedPack;
 
 export function createBlenderPack(T,loadTexture) {
@@ -67,6 +68,7 @@ export function createBlenderPack(T,loadTexture) {
     function geometry(key,kind,data) {
         const cacheKey=key+'/'+kind;
         if(!geometries.has(cacheKey)) {
+            if(key==='building/warrior/root'&&kind==='thatch')data=fitBarracksTiles(data);
             const g=new T.BufferGeometry();
             g.setAttribute('position',new T.Float32BufferAttribute(data.position,3));
             g.setAttribute('normal',new T.Float32BufferAttribute(data.normal,3));

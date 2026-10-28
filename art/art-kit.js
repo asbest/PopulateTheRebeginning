@@ -1,6 +1,7 @@
 // Original mesh art, authored for this project. Uses the game's existing Three.js version.
 import {createBlenderPack} from './blender-pack.js';
 import {createTexturePipeline} from './texture-pipeline.js';
+import {BARRACKS_ROOF} from './roof-profile.js';
 export function createArtKit(T) {
     const pipeline=createTexturePipeline(T);
     const blender=createBlenderPack(T,pipeline.load);
@@ -158,8 +159,9 @@ export function createArtKit(T) {
         } else if(kind==='warrior') {
             box(p,[0,0.9,0],[3,1.5,2],palette.stone,'stone');
             for(const side of [-1,1]) {
-                const roof=box(p,[0,2.15,side*0.63],[3.65,0.16,1.94],0x986b48,'thatch');
-                roof.rotation.x=side*0.64;
+                const profile=BARRACKS_ROOF;
+                const roof=box(p,[0,profile.y,side*profile.z],[profile.width,profile.thickness,profile.depth],0x986b48,'thatch');
+                roof.rotation.x=side*profile.angle;
                 beam(p,[-1.72,1.56,side*1.4],[1.72,1.56,side*1.4],0.06,0x705033);
             }
             beam(p,[-1.75,2.83,0],[1.75,2.83,0],0.075,0x705033);
