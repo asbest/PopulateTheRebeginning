@@ -202,7 +202,7 @@ export function createCharacters(T,art) {
             oval(u.torso,[0,-.02,-.17],[.135,.18,.085],leather,'GatheringSatchel');
             for(const side of [-1,1])tube(u.torso,[[side*.12,.18,-.04],[side*.13,.02,.13],[side*.10,-.18,.12]],.016,leather,'SatchelStrap');
             band(u.head,.105,.13,.105,faction,.037).userData.characterFaction=true;
-            tube(hand,[[0,-.28,.07],[0,.18,.08]],.025,leather,'StoneTool');oval(hand,[0,.19,.08],[.09,.065,.045],bone,'ToolHead');
+            // Workers fight barehanded; their rounded hands form the striking fists.
         }
         for(const [part,pivot] of Object.entries({torso:u.torso,head:u.head,armL:u.armL,armR:u.armR,legL:u.legL,legR:u.legR})) {
             blender.attach(pivot,'character/'+role+'/'+part,color);

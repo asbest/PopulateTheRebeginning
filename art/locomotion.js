@@ -29,7 +29,7 @@ export function createLocomotion(T) {
     };
     const combatValue=(a,b,t,index)=>a[index]+(b[index]-a[index])*t;
     function animateCombat(u,phase){
-        const keys=combatPoses[u.type];
+        const keys=combatPoses[u.type==='wild'?'warrior':u.type];
         if(!keys||!u.armR)return;
         const p=clamp(phase,0,1);
         let i=1;while(i<keys.length-1&&p>keys[i][0])i++;
@@ -201,7 +201,7 @@ export function createLocomotion(T) {
         }
         const networkAttack=u.networkTarget&&(u.networkManualAttack||u.state==='combat'&&g.speed<.2);
         const attacking=networkAttack||u.manualAttack||u.combatPoseTick===u.updateTicker||u.state==='combat'&&u.attackTarget&&Math.hypot(u.attackTarget.mesh.position.x-p.x,u.attackTarget.mesh.position.z-p.z)<=u.range;
-        pelvis=Math.max(.52,pelvis-(attacking&&u.type==='warrior'?.035+.015*Math.sin((u.attackPhase||0)*Math.PI):0));
+        pelvis=Math.max(.52,pelvis-(attacking&&['warrior','wild'].includes(u.type)?.035+.015*Math.sin((u.attackPhase||0)*Math.PI):0));
         // Keep the pelvis connected to both hips; the old independent hip drops looked like squatting.
         g.pelvis=smooth(g.pelvis,pelvis,24,dt);g.pelvis=Math.min(g.pelvis,pelvis+.006);
         for(let i=0;i<2;i++){

@@ -238,6 +238,30 @@ try{
             return {damage:1000-enemy.hp,armRange:maxArm-minArm,moved};
         });
     });
+    await check('Workers use the warrior full-body swing barehanded and remain much weaker',async()=>{
+        await fresh();return page.evaluate(()=>{
+            const p=state.shaman.mesh.position;
+            const worker=new Humanoid(0,'wild',p.x,p.z),warrior=new Humanoid(1,'warrior',p.x,p.z+.9);
+            state.units.push(worker,warrior);
+            if(worker.mesh.getObjectByName('StoneTool')||worker.mesh.getObjectByName('ToolHead')||worker.weaponGrip||worker.shieldGrip)
+                throw new Error('Worker still carries a weapon');
+            if(warrior.maxHp<worker.maxHp*2||warrior.damage<worker.damage*5)
+                throw new Error('Warrior is not substantially tougher and stronger');
+            for(const phase of [0,.28,.5,.64,1]){
+                gameTestAPI.Locomotion.animateCombat(worker,phase);gameTestAPI.Locomotion.animateCombat(warrior,phase);
+                for(const part of ['armR','armL','torso','head'])
+                    if(worker[part].rotation.toArray().some((v,i)=>v!==warrior[part].rotation.toArray()[i]))
+                        throw new Error('Worker does not share warrior pose: '+part+'/'+phase);
+            }
+            let now=10;state.clock.getElapsedTime=()=>now;
+            worker.attackTarget=warrior;worker.lastAttackTime=now;worker.attackFired=false;
+            const hp=warrior.hp;now+=.49;worker.attack();
+            if(warrior.hp!==hp)throw new Error('Fist deals damage before contact');
+            now+=.02;worker.attack();worker.attack();
+            if(warrior.hp!==hp-worker.damage)throw new Error('Fist did not damage once at contact');
+            return {workerHp:worker.maxHp,warriorHp:warrior.maxHp,workerDamage:worker.damage,warriorDamage:warrior.damage};
+        });
+    });
     await check('Warrior club contacts at the damage frame with a guarded full-body swing at 30/60/120 FPS',async()=>{
         await fresh();return page.evaluate(()=>{
             const x=state.shaman.mesh.position.x,z=state.shaman.mesh.position.z;

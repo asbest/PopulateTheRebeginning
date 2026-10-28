@@ -7955,21 +7955,8 @@ window.Humanoid = class Humanoid {
 
         this.combatPoseTick=this.updateTicker;
         // Weapon poses share their contact time with the damage/release below.
-        if (this.type === 'warrior'||this.type==='firewarrior') {
+        if (this.type === 'warrior'||this.type==='firewarrior'||this.type==='wild') {
             Locomotion.animateCombat(this,this.attackPhase);
-        }
-        else if (this.type === 'wild') {
-            // Overhead tool swing
-            if (this.attackPhase < 0.4) {
-                const p = this.attackPhase / 0.4;
-                this.armR.rotation.x = -Math.PI/2 - (p * Math.PI/2); // Wind up overhead
-            } else if (this.attackPhase < 0.6) {
-                const p = (this.attackPhase - 0.4) / 0.2;
-                this.armR.rotation.x = -Math.PI + (p * Math.PI); // Strike down
-            } else {
-                const p = (this.attackPhase - 0.6) / 0.4;
-                this.armR.rotation.x = -Math.PI/2 + (Math.cos(p * Math.PI/2) * Math.PI/2); // Return
-            }
         }
         else if (this.type === 'shaman') {
             // Drive the strike with the staff arm; the free hand balances the pose.
