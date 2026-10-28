@@ -1371,8 +1371,10 @@ function getFactionMaterial(faction) {
 function getHpMaterial(faction) {
     if (!AssetCache.mats.hpMats) AssetCache.mats.hpMats = {};
     if (!AssetCache.mats.hpMats[faction]) {
-        const color = faction === 0 ? CONFIG.COLORS.hpGreen : (faction === 1 ? CONFIG.COLORS.hpRed : getFactionColor(faction));
-        AssetCache.mats.hpMats[faction] = new THREE.MeshBasicMaterial({color: color});
+        const color = faction === 0 ? CONFIG.COLORS.hpGreen : getFactionColor(faction);
+        AssetCache.mats.hpMats[faction] = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(color).convertSRGBToLinear(), toneMapped: false
+        });
     }
     return AssetCache.mats.hpMats[faction];
 }
@@ -7365,7 +7367,7 @@ window.Humanoid = class Humanoid {
 
         // Enemy Marker
         if(this.faction !== 0) {
-            this.marker = new THREE.Mesh(AssetCache.geos.marker, new THREE.MeshBasicMaterial({color: getFactionColor(faction)}));
+            this.marker = new THREE.Mesh(AssetCache.geos.marker, getHpMaterial(faction));
             this.marker.position.set(0, 6, 0);
             this.mesh.add(this.marker);
         }
@@ -7464,16 +7466,17 @@ window.Humanoid = class Humanoid {
         });
 
         // HP Bar
-        const hpMat = (this.faction === 0) ? AssetCache.mats.hpGreen : AssetCache.mats.hpRed;
+        const hpMat = getHpMaterial(this.faction);
         if(this.hpBar) this.hpBar.material = hpMat;
 
         // Marker
-        if(this.faction === 1) {
+        if(this.faction !== 0) {
             if(!this.marker) {
-                this.marker = new THREE.Mesh(AssetCache.geos.marker, AssetCache.mats.marker);
+                this.marker = new THREE.Mesh(AssetCache.geos.marker, hpMat);
                 this.marker.position.set(0, 6, 0);
                 this.mesh.add(this.marker);
             }
+            this.marker.material = hpMat;
             this.marker.visible = true;
         } else {
             if(this.marker) this.marker.visible = false;
