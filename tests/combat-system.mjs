@@ -306,7 +306,7 @@ try{
             return samples;
         });
     });
-    await check('Preacher and spy attacks deal damage without changing anyone’s tribe',async()=>{
+    await check('Preachers do not instantly convert and spies only convert through explicit hypnosis',async()=>{
         await fresh();
         return page.evaluate(()=>{
             const x=state.shaman.mesh.position.x+2,z=state.shaman.mesh.position.z;
@@ -316,12 +316,12 @@ try{
             preacher.attackTarget=warrior;
             preacher.lastAttackTime=state.clock.getElapsedTime()-1.2;
             preacher.attack();
-            if(warrior.faction!==1||warrior.conversionTimer!==0||warrior.originalFaction!==null||warrior.hp!==warrior.maxHp-preacher.damage)
-                throw new Error('Preacher did not damage or changed sides');
+            if(warrior.faction!==1||warrior.conversionTimer!==0||warrior.originalFaction!==null||warrior.hp!==warrior.maxHp)
+                throw new Error('Preacher attack caused instant damage or conversion');
             const spy=new Humanoid(0,'spy',x,z);state.units.push(spy);
             spy.attackTarget=warrior;spy.lastAttackTime=state.clock.getElapsedTime()-.6;spy.attackFired=false;
             spy.attack();
-            if(warrior.faction!==1||warrior.conversionTimer||warrior.hp!==warrior.maxHp-preacher.damage-spy.damage)
+            if(warrior.faction!==1||warrior.conversionTimer||warrior.hp!==warrior.maxHp-spy.damage)
                 throw new Error('Spy did not damage or changed sides');
             // Only a deliberately executed hypnosis spell may change sides.
             gameTestAPI.SpatialHash.update();gameTestAPI.executeSpell('hypnotise',x+1,z,state.shaman);
@@ -342,6 +342,38 @@ try{
             preacher.attack();
             if(rival.hp>=before||rival.faction!==1)throw new Error('Enemy preacher was not countered');
             return {hypnotised:warrior.faction,rivalDamage:before-rival.hp};
+        });
+    });
+    await check('Priest conversion needs five continuous seconds with visible progress and resets on interruption',async()=>{
+        await fresh();return page.evaluate(()=>{
+            const manager=state.preacherConversion,p=state.shaman.mesh.position;
+            const priest=new Humanoid(0,'preacher',p.x,p.z),target=new Humanoid(1,'warrior',p.x+1,p.z);
+            state.units.push(priest,target);target.mesh.position.copy(priest.mesh.position).add(new THREE.Vector3(1,0,0));
+            priest.state='combat';priest.attackTarget=target;
+            manager.update(4.99);
+            const effect=state.scene.getObjectByName('PreacherConversion');
+            if(target.faction!==1||!effect||effect.userData.progress<.99||!effect.getObjectByProperty('type','Sprite'))
+                throw new Error('Missing timed conversion progress');
+            manager.update(.01);
+            if(target.faction!==0||target.hypnosisActive||target.conversionTimer||state.scene.getObjectByName('PreacherConversion'))
+                throw new Error('Priest did not permanently convert at five seconds or left effects');
+            target.setFaction(1);priest.state='combat';priest.attackTarget=target;manager.update(4);
+            target.mesh.position.x+=20;manager.update(.1);
+            if(state.scene.getObjectByName('PreacherConversion'))throw new Error('Lost range kept conversion effects');
+            target.mesh.position.x-=20;manager.update(1);
+            if(target.faction!==1||state.scene.getObjectByName('PreacherConversion')?.userData.progress!==.2)
+                throw new Error('Interrupted conversion kept previous progress');
+            priest.die();if(state.scene.getObjectByName('PreacherConversion'))throw new Error('Dead priest left channel active');
+            const remote=new Humanoid(0,'preacher',p.x,p.z);state.units.push(remote);
+            remote.state='combat';remote.networkPreaching={targetId:target.id,elapsed:4.9};
+            const role=state.network.role;
+            try{
+                state.network.role='client';manager.update(.2);
+                if(target.faction!==1||!state.scene.getObjectByName('PreacherConversion'))throw new Error('Client converted independently or lost remote progress');
+                remote.networkPreaching=null;manager.update(.1);
+                if(state.scene.getObjectByName('PreacherConversion'))throw new Error('Client retained canceled remote effect');
+            }finally{state.network.role=role;manager.clear();}
+            return {duration:5,permanent:true,interruptionResets:true};
         });
     });
     await check('Occupied towers grant range and release guards after destruction',async()=>{

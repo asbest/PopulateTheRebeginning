@@ -695,6 +695,7 @@ window.RAPIER = RAPIERModule;
 import { createArtKit } from './art/art-kit.js';
 import { createCharacters } from './art/characters.js';
 import { createLocomotion } from './art/locomotion.js';
+import { createPreacherConversion } from './art/preacher-conversion.js';
 import { icon } from './art/icons.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
@@ -1876,6 +1877,7 @@ const NetworkManager = {
                 animTime: u.animTime,
                 attackPhase: u.attackPhase,
                 combatActive: !!u.manualAttack,
+                preaching: u.preachingSync||null,
                 shielded: !!u.shielded, invisible: !!u.invisible, isPhantom: !!u.isPhantom
             })),
             buildings: state.buildings.map(b => ({
@@ -1964,6 +1966,7 @@ const NetworkManager = {
              u.animTime = uData.animTime;
              u.attackPhase = uData.attackPhase||0;
              u.networkManualAttack=!!uData.combatActive;
+             u.networkPreaching=uData.preaching||null;
              if(!!u.shielded!==!!uData.shielded)u.setShield(!!uData.shielded);
              if(!!u.invisible!==!!uData.invisible)u.setInvisibility(!!uData.invisible);
         });
@@ -7303,6 +7306,8 @@ function cachedCombatLineClear(unit,target){
         ax:a.x,az:a.z,bx:b.x,bz:b.z,clear};
     return clear;
 }
+const PreacherConversion=createPreacherConversion(THREE,state,{getFactionColor,combatRange,lineClear:cachedCombatLineClear,isPeaceTime});
+state.preacherConversion=PreacherConversion;
 window.Humanoid = class Humanoid {
     getSeparationVector() {
         const push = new THREE.Vector3(0, 0, 0);
@@ -7447,6 +7452,7 @@ window.Humanoid = class Humanoid {
 
     setFaction(newFaction) {
         if (this.faction === newFaction) return;
+        PreacherConversion.cancel(this);
         this.manualAttack=null;
         if(this.garrisonedIn&&this.garrisonedIn.faction!==newFaction)this.leaveTower();
         this.faction = newFaction;
@@ -7579,6 +7585,7 @@ window.Humanoid = class Humanoid {
 
     die() {
         if(this.state==='dead') return;
+        PreacherConversion.cancel(this);
         this.manualAttack=null;
         if(this.fallRig){this.fallRig.rotation.x=0;this.fallRig.position.y=0;}
         if(this.garrisonedIn)this.leaveTower();
@@ -8013,8 +8020,9 @@ window.Humanoid = class Humanoid {
                  state.projectiles.push(new Fireball(startPos, targetPos, this.faction, CONFIG.COMBAT.FIREWARRIOR_BALL_UNIT_DMG, CONFIG.COMBAT.FIREWARRIOR_BULLDING_DMG, false, true));
                  SoundManager.playSound('fireball',.45);
             } else if (this.type === 'preacher') {
-                target.takeDamage(this.damage,true);
-                SoundManager.playSound('magic');
+                if(!PreacherConversion.eligible(this,target)){
+                    target.takeDamage(this.damage,true);SoundManager.playSound('magic');
+                }
             } else if (this.type === 'spy') {
                 target.takeDamage(this.damage,true);
                 SoundManager.playSound('attack');
@@ -11384,6 +11392,7 @@ window.loadGame = function(slot=activeSaveSlot) {
             throw new Error('Invalid save data');
         }
 
+        PreacherConversion.clear();
         state.units.forEach(u => {
             state.scene.remove(u.mesh);
             // Retired units must never retain handles into the rebuilt physics world.
@@ -12355,6 +12364,7 @@ function animate() {
 
     if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = CONFIG.CAMPAGIN.INFINITE_MANA_VALUE;
     state.units.forEach(u => u.update(dt));
+    PreacherConversion.update(dt);
     SpellWindup.update(dt);
     state.buildings.forEach(b => b.update(dt));
     if(state.graphicsQuality?.tier==='high'){
