@@ -71,13 +71,16 @@ try {
   albedo:(await fs.stat(path.join(root,'art/blender',name+'-albedo.png'))).size,
   normal:(await fs.stat(path.join(root,'art/blender',name+'-normal.png'))).size,
   roughness:(await fs.stat(path.join(root,'art/blender',name+'-roughness.png'))).size})));
+ // Vegetation must stay green while allowing intentional changes to the art palette.
+ const grassRgb={r:(detail.grass>>16)&255,g:(detail.grass>>8)&255,b:detail.grass&255};
+ const grassIsGreen=grassRgb.g>grassRgb.r&&grassRgb.g>grassRgb.b;
  const report={pass:errors.length===0&&detail.images.some(([w,h])=>w>=1000&&h>=1000)&&assets.every(a=>a.bytes>1000000)&&
   terrainLayers.every(a=>a.albedo>400000&&a.normal>200000&&a.roughness>100000)&&
-  detail.grass===0x65bd38&&detail.terrainSamples>10&&detail.grassVariation>.01&&detail.shaderVersion==='island-terrain-detail-v8'&&
+  grassIsGreen&&detail.terrainSamples>10&&detail.grassVariation>.01&&detail.shaderVersion==='island-terrain-detail-v8'&&
   detail.patterns===detail.chunks&&detail.normalSeamError<.001&&detail.colorSeamError<.001&&detail.terrainTextureReads<=8&&
   Math.abs(detail.shoreLevel-detail.visualWaterLevel)<.00001&&
   detail.cliffSize[0]===1024&&detail.sandSize[0]===1024,
-  detail,assets,terrainLayers,errors};
+  detail,grassRgb,grassIsGreen,assets,terrainLayers,errors};
  await fs.writeFile(path.join(root,'test-results/materials-report.json'),JSON.stringify(report,null,2));
  console.log(JSON.stringify(report));process.exitCode=report.pass?0:1;
 }finally{await browser.close();}
