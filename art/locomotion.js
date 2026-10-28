@@ -264,6 +264,7 @@ export function createLocomotion(T) {
         if(attacking)animateCombat(u,u.attackPhase||0);
         if(u.isShaman&&u.staffTip){
             const winding=!!u.staffWindup,casting=(u.staffCastTimer||0)>0;
+            if(u.staffGrip)u.staffGrip.rotation.x=smooth(u.staffGrip.rotation.x,winding||casting||attacking?Math.PI:0,20,dt);
             if((winding||casting)&&!['dead','stunned','getting_up'].includes(u.state)){
                 const lift=winding?Math.sin(u.animTime*10)*.09:0;
                 u.armR.rotation.x=smooth(u.armR.rotation.x,(winding?-2.05:-1.45)+lift,20,dt);

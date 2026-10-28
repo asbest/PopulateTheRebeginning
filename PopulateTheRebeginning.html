@@ -6887,6 +6887,7 @@ function beginStaffCast(caster,type,x,z) {
     // actually leave the animated crystal rather than the shaman's torso.
     caster.armR.rotation.set(-1.45,0,.13);
     caster.armR.userData.lower.rotation.x=-.08;
+    if(caster.staffGrip)caster.staffGrip.rotation.x=Math.PI;
     caster.armL.rotation.set(-.55,0,-.12);
     const colors={blast:0xff8d42,lightning:0xd9f7ff,heal:0x7dffbd,shield:0x7dceff,
         teleport:0x9787ff,hypnotise:0xe27dff,firestorm:0xff663d,volcano:0xff6540};
@@ -7954,6 +7955,7 @@ window.Humanoid = class Humanoid {
         }
 
         this.combatPoseTick=this.updateTicker;
+        if(this.isShaman&&this.staffGrip)this.staffGrip.rotation.x=Math.PI;
         // Weapon poses share their contact time with the damage/release below.
         if (this.type === 'warrior'||this.type==='firewarrior'||this.type==='wild') {
             Locomotion.animateCombat(this,this.attackPhase);

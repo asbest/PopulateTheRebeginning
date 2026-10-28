@@ -17,10 +17,19 @@ try{
    const {caster,enemy,x,z}=fixture;
    if(!caster.staffTip||!caster.staffCrystal)throw new Error('Staff tip is missing');
    const tip=()=>{caster.staffTip.updateWorldMatrix(true,false);return caster.staffTip.getWorldPosition(new THREE.Vector3());};
+   const checkHead=()=>{
+    caster.mesh.updateMatrixWorld(true);
+    const crystal=caster.staffCrystal.getWorldPosition(new THREE.Vector3());
+    const grip=caster.staffGrip.getWorldPosition(new THREE.Vector3());
+    const forward=new THREE.Vector3(0,0,1).applyQuaternion(caster.mesh.getWorldQuaternion(new THREE.Quaternion()));
+    if(caster.staffTip.parent!==caster.staffCrystal||tip().distanceTo(crystal)>.15||crystal.clone().sub(grip).dot(forward)<.3)
+     throw new Error('Staff head is not facing forward or release is detached from crystal');
+   };
    const beamCount=()=>state.particles.filter(p=>p.mesh?.geometry?.type==='CylinderGeometry').length;
    gameTestAPI.executeSpell('blast',x,z,caster);
    const ball=state.projectiles.at(-1),origin=tip();
    if(ball.start.distanceTo(origin)>.001)throw new Error('Fireball did not start at the staff tip');
+   checkHead();
    if(caster.armR.rotation.x> -1.2||caster.staffCastTimer<=0)throw new Error('Staff release pose is missing');
    const beforeHeal=beamCount();gameTestAPI.executeSpell('heal',x,z,caster);
    if(beamCount()!==beforeHeal+1)throw new Error('Support spell lacks a staff ray');
@@ -30,6 +39,7 @@ try{
    caster.lastAttackTime=state.clock.getElapsedTime()-.6/caster.attackSpeed;
    caster.attack();
    if(beamCount()!==beforeAttack+1||enemy.hp>=1000)throw new Error('Normal attack did not fire from the staff');
+   checkHead();
    caster.attackTarget=null;caster.state='idle';
    if(!gameTestAPI.SpellWindup.queue('lightning',x,z,caster))throw new Error('Windup did not queue');
    gameTestAPI.Locomotion.animate(caster,.016,getSurfaceHeight);
