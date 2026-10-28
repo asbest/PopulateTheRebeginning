@@ -503,8 +503,8 @@
     <div id="pause-menu" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); flex-direction:column; align-items:center; justify-content:center; z-index:200; pointer-events:auto;">
         <h1 style="color:white; margin-bottom:20px; text-shadow: 2px 2px 0 #000;">PAUSED</h1>
         <div style="display: grid; grid-template-columns: repeat(2, 160px); gap: 5px; justify-content: center;">
-            <button class="menu-btn" style="margin:0; width:100%;" onclick="saveGame()">Save Game</button>
-            <button class="menu-btn" style="margin:0; width:100%;" onclick="loadGame()">Load Game</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openSaveSlots('save')">Save Game</button>
+            <button class="menu-btn" style="margin:0; width:100%;" onclick="openSaveSlots('load')">Load Game</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="openMultiplayer()">Multiplayer</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="openCampaignMenu()">Level selection</button>
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-campaign-journal" onclick="showCampaignJournal()">Campaign journal</button>
@@ -10491,10 +10491,10 @@ async function init() {
                 localStorage.removeItem(CONFIG.SAVED_KEYS.SANDBOX_START);
                 findSafeSpawnAndStart();
             } else {
-                const saveStr = localStorage.getItem(CONFIG.SAVED_KEYS.SAVE_DATA);
+                const saveStr = localStorage.getItem(saveSlotKey(activeSaveSlot));
                 if (saveStr) {
                     try {
-                        window.loadGame();
+                        if(!window.loadGame(activeSaveSlot))throw new Error('Auto-load failed');
                         if(state.isPaused) togglePause();
                     } catch(e) {
                         console.error("Auto-load failed:", e);
@@ -11243,10 +11243,64 @@ function restoreSpellStatus(u, status) {
     if(u.invisibilityTimer>0)u.setInvisibility(true);
 }
 
-window.saveGame = function() {
+const activeSlotKey=CONFIG.SAVED_KEYS.SAVE_DATA+'.activeSlot';
+let activeSaveSlot=Number(localStorage.getItem(activeSlotKey))||1;
+if(!Number.isInteger(activeSaveSlot)||activeSaveSlot<1||activeSaveSlot>10)activeSaveSlot=1;
+function saveSlotKey(slot){return slot===1?CONFIG.SAVED_KEYS.SAVE_DATA:CONFIG.SAVED_KEYS.SAVE_DATA+'.slot.'+slot;}
+function validSaveSlot(slot){return Number.isInteger(slot)&&slot>=1&&slot<=10;}
+let closeSaveSlots=null;
+window.openSaveSlots=function(mode){
+    if(!['save','load'].includes(mode)||closeSaveSlots)return;
+    if(!state.isPaused)togglePause();
+    const previousFocus=document.activeElement;
+    const overlay=document.createElement('div');overlay.id='save-slots';
+    overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','save-slots-title');
+    Object.assign(overlay.style,{position:'fixed',inset:'0',zIndex:'1005',background:'rgba(5,10,12,.9)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',boxSizing:'border-box',pointerEvents:'auto'});
+    const card=document.createElement('div');card.className='game-dialog-card';
+    Object.assign(card.style,{maxHeight:'100%',overflowY:'auto',boxSizing:'border-box',width:'min(560px,100%)'});
+    const title=document.createElement('h2');title.id='save-slots-title';title.textContent=mode==='save'?'Save Game — choose a slot':'Load Game — choose a slot';card.appendChild(title);
+    const list=document.createElement('div');list.style.cssText='display:grid;gap:8px;';
+    for(let slot=1;slot<=10;slot++){
+        const raw=localStorage.getItem(saveSlotKey(slot));let saved=null;
+        try{if(raw){saved=JSON.parse(raw);if(!Array.isArray(saved.units)||!Array.isArray(saved.buildings)||!Array.isArray(saved.terrainMods)||!saved.cameraLookAt||!Number.isFinite(saved.mana))saved=null;}}catch{}
+        const button=document.createElement('button');button.type='button';button.className='menu-btn';button.dataset.slot=slot;
+        button.style.cssText='width:100%;margin:0;padding:12px;text-align:left;white-space:normal;';
+        const stamp=saved?.savedAt?new Date(saved.savedAt).toLocaleString():'Earlier save';
+        const summary=saved?`${saved.isCampaign?'Level '+saved.campaignLevel:'Sandbox'} · ${stamp}`:raw?'Unreadable save':'Empty';
+        button.textContent=`Slot ${slot}${slot===activeSaveSlot?' (current)':''} — ${summary}`;
+        button.disabled=mode==='load'&&!saved;
+        if(button.disabled)button.style.opacity='.45';
+        button.onclick=()=>{
+            const run=()=>{const success=mode==='save'?window.saveGame(slot):window.loadGame(slot);if(success)closeSaveSlots?.();};
+            if(mode==='save'&&raw)showGameDialog(`Overwrite slot ${slot}?`,'The previous save in this slot will be replaced.',run,'Cancel','Overwrite');
+            else if(mode==='load')showGameDialog(`Load slot ${slot}?`,'Unsaved progress will be lost.',run,'Cancel','Load');
+            else run();
+        };
+        list.appendChild(button);
+    }
+    card.appendChild(list);
+    const cancel=document.createElement('button');cancel.type='button';cancel.className='menu-btn';cancel.textContent='Cancel';cancel.style.cssText='width:100%;margin:12px 0 0;';card.appendChild(cancel);
+    function onKey(event){
+        if(!document.getElementById('game-dialog').hidden)return;
+        if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();closeSaveSlots();}
+        else if(event.key==='Tab'){
+            const buttons=[...card.querySelectorAll('button:not(:disabled)')],first=buttons[0],last=buttons.at(-1);
+            if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+            else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+            event.stopImmediatePropagation();
+        }else event.stopImmediatePropagation();
+    }
+    closeSaveSlots=()=>{overlay.remove();document.removeEventListener('keydown',onKey,true);closeSaveSlots=null;if(previousFocus?.isConnected&&previousFocus.getClientRects().length)previousFocus.focus();};
+    cancel.onclick=()=>closeSaveSlots();overlay.appendChild(card);document.body.appendChild(overlay);
+    document.addEventListener('keydown',onKey,true);(list.querySelector('button:not(:disabled)')||cancel).focus();
+};
+
+window.saveGame = function(slot=activeSaveSlot) {
+    if(!validSaveSlot(slot)){showGameMessage('Invalid save slot.', 'error');return false;}
     const manaAtRest=state.mana+SpellWindup.pending.reduce((refund,cast)=>
         refund+(cast.caster?.faction===0?cast.cost:0),0);
     const data = {
+        savedAt: new Date().toISOString(),
         isCampaign: state.isCampaign,
         campaignLevel: state.campaignLevel,
         campaignNarrative: state.isCampaign ? state.campaignNarrative : null,
@@ -11311,8 +11365,10 @@ window.saveGame = function() {
             trainingQueue: b.trainingQueue
         }))
     };
-    const persisted=localStorage.setItem(CONFIG.SAVED_KEYS.SAVE_DATA, JSON.stringify(data));
+    const persisted=localStorage.setItem(saveSlotKey(slot), JSON.stringify(data));
+    activeSaveSlot=slot;localStorage.setItem(activeSlotKey,String(slot));
     showGameMessage(persisted?'Game saved!':'Browser storage is unavailable. This save lasts only until you reload or close the game.',persisted?'info':'error');
+    return true;
 }
 
 function restoredUnitHealth(unit,saved) {
@@ -11327,9 +11383,10 @@ function restoredBuildingHealth(building,saved) {
         ? saved.maxHp : legacyMax[building.type]||building.maxHp;
     return THREE.MathUtils.clamp((saved.hp||0)*building.maxHp/oldMax,0,building.maxHp);
 }
-window.loadGame = function() {
-    const json = localStorage.getItem(CONFIG.SAVED_KEYS.SAVE_DATA);
-    if(!json) { showGameMessage('No save found!', 'error'); return; }
+window.loadGame = function(slot=activeSaveSlot) {
+    if(!validSaveSlot(slot)){showGameMessage('Invalid save slot.', 'error');return false;}
+    const json = localStorage.getItem(saveSlotKey(slot));
+    if(!json) { showGameMessage('No save found!', 'error'); return false; }
 
     try {
         const data = JSON.parse(json);
@@ -11503,9 +11560,12 @@ window.loadGame = function() {
         updateContextMenus();
         togglePause();
         showGameMessage('Game loaded!');
+        activeSaveSlot=slot;localStorage.setItem(activeSlotKey,String(slot));
+        return true;
     } catch(e) {
         console.error(e);
         showGameMessage('Failed to load save: ' + e.message, 'error');
+        return false;
     }
 }
 
