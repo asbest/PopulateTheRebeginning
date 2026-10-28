@@ -695,7 +695,6 @@ window.RAPIER = RAPIERModule;
 import { createArtKit } from './art/art-kit.js';
 import { createCharacters } from './art/characters.js';
 import { createLocomotion } from './art/locomotion.js';
-import { createPostprocessing } from './art/postprocessing.js';
 import { icon } from './art/icons.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
@@ -824,7 +823,7 @@ const CONFIG = {
         INITIAL_VIEW_SCALE: 35,
     },
     COLORS: {
-        water: 0x087bd8, sand: 0xefcf77, grass: 0x65bd38, rock: 0x947044, snow: 0xe8f4ff,
+        water: 0x167f98, sand: 0xead6a4, grass: 0x809c46, rock: 0xa39a80, snow: 0xe8f4ff,
         lava: 0xCF1020, skin: 0xD2B48C, shirt_wild: 0x8B4513, shirt_shaman: 0xFF4500,
         wood: 0x8B4513, straw: 0xDAA520, stone: 0x808080, red: 0x8B0000, yellow: 0xFFD700, blue: 0x4169E1,
         hpGreen: 0x00FF00, hpRed: 0xFF0000,
@@ -1119,8 +1118,8 @@ const CONFIG = {
     },
     BIOMES: {
         normal: {
-            bg: 0x65b4e8, fog: 0x93c7dc, fogNear: 145, fogFar: 355,
-            sunIntensity: 2.2, sunColor: 0xffdbaf, waterColor: 0x087bd8,
+            bg: 0x8fb9d5, fog: 0xc2d0cb, fogNear: 120, fogFar: 330,
+            sunIntensity: 2.3, sunColor: 0xffdfb2, waterColor: 0x167f98,
         },
         winter: {
             bg: 0x7EC8E3, fog: 0x7EC8E3, fogNear: 30, fogFar: 180,
@@ -4247,7 +4246,7 @@ const _cCyan = new THREE.Color(0x00FFFF);
 const _cDeepGreen = new THREE.Color(0x004400);
 const _col = new THREE.Color();
 const _cDryGrass = new THREE.Color(0xa8b76b);
-const _cLushGrass = new THREE.Color(0x55ae48);
+const _cLushGrass = new THREE.Color(0x789947);
 const _cWetSand = new THREE.Color(0xb6a88a);
 const _grassTone = new THREE.Color();
 const _shoreTone = new THREE.Color();
@@ -4308,6 +4307,7 @@ function initTerrainResources() {
         uniform vec3 color;
         uniform vec3 skyColor;
         uniform vec3 sunDirection;
+        uniform vec3 sunColor;
         uniform float time;
         varying vec2 vUv;
         varying float vFoam;
@@ -4329,7 +4329,7 @@ function initTerrainResources() {
             vec3 viewDir=normalize(cameraPosition-vWorldPosition);
             vec3 normal=normalize(vWaveNormal+vec3(detail*.035,0.0,swell*.025));
             float fresnel=pow(1.0-max(dot(viewDir,normal),0.0),3.2);
-            vec3 reflected=mix(skyColor,vec3(0.82,0.91,1.0),pow(max(dot(reflect(-viewDir,normal),normalize(sunDirection)),0.0),64.0));
+            vec3 reflected=mix(skyColor,sunColor,pow(max(dot(reflect(-viewDir,normal),normalize(sunDirection)),0.0),64.0));
             float shallows=1.0-smoothstep(0.4,9.0,vDepth);
             vec3 baseColor = mix(deep,lagoon,clamp(shallows * 0.68 + vFoam * 0.10 + swell * 0.05,0.0,0.82));
             baseColor=mix(baseColor,vec3(.20,.69,.64),shallows*shallows*.12);
@@ -4344,7 +4344,7 @@ function initTerrainResources() {
             vec3 finalColor = mix(baseColor, vec3(0.90, 0.98, 0.97), foamAmount * 0.62);
             float glint = pow(max(dot(reflect(-normalize(sunDirection),normal),viewDir),0.0),72.0)*1.25+
                 pow(max(0.0, ripples * (0.55 + swell * 0.45)), 12.0) * 0.07;
-            finalColor += vec3(glint);
+            finalColor += sunColor*glint;
             float finalAlpha = mix(0.82, 0.98, foamAmount);
             gl_FragColor = vec4(finalColor, finalAlpha);
             #include <tonemapping_fragment>
@@ -4357,6 +4357,7 @@ function initTerrainResources() {
             waveStrength:{value:1},
             color: { value: new THREE.Color(COLORS.water).convertSRGBToLinear() },
             skyColor:{value:new THREE.Color(CONFIG.BIOMES.normal.bg).convertSRGBToLinear()},
+            sunColor:{value:new THREE.Color(CONFIG.BIOMES.normal.sunColor).convertSRGBToLinear()},
             sunDirection:{value:new THREE.Vector3(.42,.84,.34).normalize()}
         },
         vertexShader: waterVertexShader,
@@ -10462,7 +10463,6 @@ async function init() {
         state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         state.renderer.toneMappingExposure = 0.75;
         state.renderer.setSize(window.innerWidth, window.innerHeight);
-        state.postprocessing = createPostprocessing(THREE,state.renderer);
         state.renderer.shadowMap.enabled = true;
         state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         state.renderer.physicallyCorrectLights = true;
@@ -10473,12 +10473,12 @@ async function init() {
         await Characters.ready;
         initTerrainResources();
 
-        const amb = new THREE.HemisphereLight(0xdcecf4, 0x596650, 0.62);
+        const amb = new THREE.HemisphereLight(0xc9deef, 0x77704c, 0.56);
         state.ambLight = amb;
         state.scene.add(amb);
         state.skyDome=createSkyDome();state.scene.add(state.skyDome);
         state.scene.add(state.rangeRing);
-        const sun = new THREE.DirectionalLight(0xffffff, 3.14);
+        const sun = new THREE.DirectionalLight(CONFIG.BIOMES.normal.sunColor, CONFIG.BIOMES.normal.sunIntensity);
         state.sunLight = sun;
         sun.position.set(50, 100, 40);
         sun.castShadow = true;
@@ -12141,7 +12141,7 @@ function animate() {
     const biome = state.matchSettings.biome || 'normal';
     const biomeCfg = CONFIG.BIOMES[biome] || CONFIG.BIOMES.normal;
     const atmosphereTime=state.clock?.elapsedTime||0;
-    const sunAzimuth=atmosphereTime*.0018+.65,sunElevation=.62+.09*Math.sin(atmosphereTime*.0011);
+    const sunAzimuth=atmosphereTime*.0018+.65,sunElevation=(biome==='normal'?.43:.62)+.06*Math.sin(atmosphereTime*.0011);
     _movingSunDirection.set(Math.cos(sunAzimuth)*.58,sunElevation,Math.sin(sunAzimuth)*.58).normalize();
     if(state.sunLight){_movingSunFocus.copy(state.cameraLookAt||state.sunLight.target.position);state.sunLight.target.position.copy(_movingSunFocus);
         state.sunLight.position.copy(_movingSunFocus).addScaledVector(_movingSunDirection,125);state.sunLight.target.updateMatrixWorld();}
@@ -12151,6 +12151,7 @@ function animate() {
     if (state.chunkWaterMat) {
         state.chunkWaterMat.uniforms.color.value.lerp(new THREE.Color(targetWaterColor).convertSRGBToLinear(), dt * CONFIG.WATER_WAVE.WATER_LERP_SPEED);
         state.chunkWaterMat.uniforms.skyColor.value.lerp(new THREE.Color(biomeCfg.bg).convertSRGBToLinear(),dt*.7);
+        state.chunkWaterMat.uniforms.sunColor.value.lerp(new THREE.Color(biomeCfg.sunColor).convertSRGBToLinear(),dt*.7);
         if(state.sunLight)state.chunkWaterMat.uniforms.sunDirection.value.copy(_movingSunDirection);
         const waveTarget=state.waterState==='frozen' ? .035 : biome==='storm' ? 1.55 : 1;
         state.chunkWaterMat.uniforms.waveStrength.value+=(waveTarget-state.chunkWaterMat.uniforms.waveStrength.value)*Math.min(1,dt*.8);
@@ -12182,8 +12183,8 @@ function animate() {
         state.renderer.toneMappingExposure+=(exposureTarget-state.renderer.toneMappingExposure)*Math.min(1,dt*.45);
         if(state.skyDome) {
             state.skyDome.position.copy(state.camera.position);
-            state.skyDome.material.uniforms.topColor.value.lerp(new THREE.Color(biome==='normal'?0x247fca:targetBg).multiplyScalar(biome==='normal'?1:.78),dt*.7);
-            state.skyDome.material.uniforms.horizonColor.value.lerp(new THREE.Color(biome==='normal'?0x6caad8:targetFog).lerp(new THREE.Color(0xffffff),biome==='normal'?0:.2),dt*.7);
+            state.skyDome.material.uniforms.topColor.value.lerp(new THREE.Color(biome==='normal'?0x78a9ce:targetBg).multiplyScalar(biome==='normal'?1:.78),dt*.7);
+            state.skyDome.material.uniforms.horizonColor.value.lerp(new THREE.Color(biome==='normal'?0xe0d8be:targetFog).lerp(new THREE.Color(0xffffff),biome==='normal'?0:.2),dt*.7);
             state.skyDome.material.uniforms.sunDirection.value.copy(_movingSunDirection);
             state.skyDome.material.uniforms.sunColor.value.copy(state.sunLight.color);
             const nightTarget=(biome==='night'||biome==='cosmic') ? .92 : biome==='void' ? .72 : 0;
@@ -12199,7 +12200,6 @@ function animate() {
     } else _qualityFrames++;
     if(state.graphicsQuality&&_qualityFrames>0&&frameTime-_qualityWindowStart>5000) {
         const fps=_qualityFrames*1000/(frameTime-_qualityWindowStart);state.graphicsQuality.averageFps=fps;
-        state.postprocessing?.adapt(fps);
         let scale=state.graphicsQuality.dynamicScale;
         if(fps<36)scale=Math.max(.67,scale-.1);else if(fps>56)scale=Math.min(1,scale+.05);
         if(Math.abs(scale-state.graphicsQuality.dynamicScale)>.001) {
@@ -12495,8 +12495,7 @@ function animate() {
     }
 
     updateUnitListSelection();
-    if(state.postprocessing)state.postprocessing.render(state.scene,state.camera,state.graphicsQuality);
-    else state.renderer.render(state.scene,state.camera);
+    state.renderer.render(state.scene, state.camera);
     if(state.assetsReady&&(state.isFPV||state.viewScale<=14)&&performance.now()-(state.lastAssetStreamAt||0)>500){
         state.lastAssetStreamAt=performance.now();
         Art.streamTextures(state.scene,state.isFPV?state.camera.position:state.cameraLookAt,state.isFPV?18:Math.max(12,state.viewScale*1.5));
