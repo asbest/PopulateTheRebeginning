@@ -306,7 +306,7 @@ try{
             return samples;
         });
     });
-    await check('Preachers permanently convert ordinary enemies and counter enemy preachers',async()=>{
+    await check('Preacher and spy attacks deal damage without changing anyone’s tribe',async()=>{
         await fresh();
         return page.evaluate(()=>{
             const x=state.shaman.mesh.position.x+2,z=state.shaman.mesh.position.z;
@@ -316,10 +316,16 @@ try{
             preacher.attackTarget=warrior;
             preacher.lastAttackTime=state.clock.getElapsedTime()-1.2;
             preacher.attack();
-            if(warrior.faction!==0||warrior.conversionTimer!==0||warrior.originalFaction!==null||preacher.attackTarget)
-                throw new Error('Conversion is temporary or failed');
-            warrior.update(4);
-            if(warrior.faction!==0)throw new Error('Converted warrior reverted');
+            if(warrior.faction!==1||warrior.conversionTimer!==0||warrior.originalFaction!==null||warrior.hp!==warrior.maxHp-preacher.damage)
+                throw new Error('Preacher did not damage or changed sides');
+            const spy=new Humanoid(0,'spy',x,z);state.units.push(spy);
+            spy.attackTarget=warrior;spy.lastAttackTime=state.clock.getElapsedTime()-.6;spy.attackFired=false;
+            spy.attack();
+            if(warrior.faction!==1||warrior.conversionTimer||warrior.hp!==warrior.maxHp-preacher.damage-spy.damage)
+                throw new Error('Spy did not damage or changed sides');
+            // Only a deliberately executed hypnosis spell may change sides.
+            gameTestAPI.SpatialHash.update();gameTestAPI.executeSpell('hypnotise',x+1,z,state.shaman);
+            if(warrior.faction!==0||!warrior.hypnosisActive)throw new Error('Explicit hypnosis failed');
             const shooter=new Humanoid(0,'firewarrior',x,z);
             state.units.push(shooter);
             shooter.attackTarget=warrior;
@@ -335,7 +341,7 @@ try{
             preacher.lastAttackTime=state.clock.getElapsedTime()-1.2;
             preacher.attack();
             if(rival.hp>=before||rival.faction!==1)throw new Error('Enemy preacher was not countered');
-            return {converted:warrior.faction,rivalDamage:before-rival.hp};
+            return {hypnotised:warrior.faction,rivalDamage:before-rival.hp};
         });
     });
     await check('Occupied towers grant range and release guards after destruction',async()=>{

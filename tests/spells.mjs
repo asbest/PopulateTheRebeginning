@@ -50,6 +50,25 @@ try{
    return {ballStart:ball.start.toArray(),tip:origin.toArray(),staffCharge:caster.staffCrystal.material.emissiveIntensity};
   });
  });
+ await check('Only explicit hypnosis restores a timed faction change after saving',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {caster,enemy,x,z}=fixture,id=enemy.id;
+   gameTestAPI.executeSpell('hypnotise',x,z,caster);
+   saveGame(1);loadGame(1);state.isPaused=true;
+   let unit=state.units.find(u=>u.id===id);
+   if(!unit.hypnosisActive||unit.faction!==0||unit.originalFaction!==1)throw new Error('Saved hypnosis was lost');
+   unit.conversionTimer=.01;unit.update(.02);
+   if(unit.faction!==1||unit.hypnosisActive)throw new Error('Explicit hypnosis did not expire');
+   const key=gameTestAPI.CONFIG.SAVED_KEYS.SAVE_DATA,data=JSON.parse(localStorage.getItem(key));
+   delete data.units.find(u=>u.id===id).hypnosisActive;
+   localStorage.setItem(key,JSON.stringify(data));loadGame(1);state.isPaused=true;
+   unit=state.units.find(u=>u.id===id);
+   if(unit.conversionTimer||unit.originalFaction!==null)throw new Error('Legacy conversion timer survived load');
+   unit.conversionTimer=.01;unit.originalFaction=2;unit.update(.02);
+   if(unit.faction!==0)throw new Error('Unmarked timer spontaneously changed tribe');
+   return {hypnosisRestored:true,legacyTimerCleared:true};
+  });
+ });
  await check('Combat effects leave no ground circles or expanding ring meshes',async()=>{
   await fresh();return p.evaluate(()=>{
    const {caster,x,z}=fixture,existing=new Set(state.particles);

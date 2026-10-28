@@ -195,7 +195,7 @@ try {
   }
   return {dimensions,roles};
  }));
- await check('New character combat animations retain damage, fireballs and spy conversion',async()=>page.evaluate(()=>{
+ await check('New character combat animations retain damage and fireballs without changing sides',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position,victim=new Humanoid(1,'warrior',p.x+1,p.z+1);state.units.push(victim);
   victim.hp=victim.maxHp=1000;const clock=state.clock.getElapsedTime;state.clock.getElapsedTime=()=>100;
   const report=[];
@@ -206,13 +206,13 @@ try {
    u.attackTarget=victim;u.lastAttackTime=100-.6/u.attackSpeed;u.attackFired=false;
    const hp=victim.hp,projectiles=state.projectiles.length;u.attack();
    if(!u.attackFired||!Number.isFinite(u.armR.rotation.x))throw new Error(type+' animation/impact missing');
-   if(['wild','warrior','shaman'].includes(type)&&victim.hp>=hp)throw new Error(type+' damage missing');
+   if(['wild','warrior','shaman','spy'].includes(type)&&victim.hp>=hp)throw new Error(type+' damage missing');
    if(type==='firewarrior'){
     if(state.projectiles.length!==projectiles+1)throw new Error('Fireball missing');
     const shot=state.projectiles.at(-1);
     if(!shot.unitShot||shot.light)throw new Error('Firewarrior shot allocated a costly dynamic light');
    }
-   if(type==='spy'&&victim.faction!==0)throw new Error('Spy conversion missing');
+   if(victim.faction!==1)throw new Error('Ordinary attack changed the victim faction');
    report.push({type,damage:hp-victim.hp});u.attackTarget=null;u.attackFired=false;u.lastAttackTime=0;u.resetAnim();
   }}finally{state.clock.getElapsedTime=clock;victim.hp=0;victim.die();}
   return report;
