@@ -7,7 +7,7 @@ export function createControlTutorial(state,storage){
         ['Give a move order','With your Shaman selected, right-click nearby land. On touchscreens, tap the ground with Move selected. Watch the golden destination marker.'],
         ['Choose a spell','Select your Shaman again if needed. Click or tap Heal in the right panel. Hold an icon to see its name.'],
         ['Cast Heal','Click or tap nearby ground inside the range circle. The spell activates when you choose its target.'],
-        ['You are ready','Use the left panel to select units and the right panel for their actions. The pause menu contains the full controls and lets you replay this introduction.']
+        ['You are ready','Use the left panel to select units and the right panel for their actions. Open Controls / Help to replay this introduction at any time.']
     ];
     let root,step=0,baseline,highlight;
     const allowed=()=>!new URLSearchParams(location.search).has('test')||new URLSearchParams(location.search).has('tutorial');
@@ -20,7 +20,9 @@ export function createControlTutorial(state,storage){
         root.querySelector('button').textContent=step===6?'Finish':'Skip introduction';clearHighlight();
     }
     function start(replay=false){
-        if(root||(!replay&&(!allowed()||storage.getItem(key)==='done')))return;
+        if(!replay&&(!allowed()||storage.getItem(key)))return;
+        if(root){clearHighlight();root.remove();root=null;}
+        if(!storage.getItem(key))storage.setItem(key,'seen');
         document.getElementById('help-overlay').style.display='none';document.getElementById('story-overlay').style.display='none';
         document.getElementById('pause-menu').style.display='none';state.isPaused=false;
         document.getElementById('btn-pause').textContent='⏸️';

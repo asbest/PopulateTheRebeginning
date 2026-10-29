@@ -379,6 +379,7 @@
 <div id="ui-layer">
     <div id="help-overlay" style="display:none;">
         <h1 style="color:gold; margin-bottom:15px; text-shadow: 2px 2px 0 #000;">GAMEPLAY & CONTROLS</h1>
+        <button id="help-replay-tutorial" class="menu-btn" style="width:auto;flex-shrink:0;" onclick="state.controlTutorial.start(true)">Restart interactive introduction</button>
         <div style="max-width: 850px; text-align: left; font-size: 15px; line-height: 1.5; background: rgba(255,255,255,0.08); padding: 25px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); max-height: 70vh; overflow-y: auto; margin-bottom: 20px;">
 
             <div style="margin-bottom: 20px;">
@@ -519,7 +520,6 @@
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleMatchSettings()">Match Settings</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="openLandGenMenu()">Land Generation</button>
             <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2;" onclick="showHelp()">Controls / Help</button>
-            <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2;" onclick="state.controlTutorial.start(true)">Interactive introduction</button>
             <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2; background-color: #555;" onclick="togglePause()">Resume</button>
         </div>
 
