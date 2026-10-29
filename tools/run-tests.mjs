@@ -5,6 +5,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 
 const root=path.resolve(import.meta.dirname,'..');
 const namedGroups={
+    tutorial:['control-tutorial'],
     interface:['startup','peace-time','campaign-story','campaign-levels','live-gameplay','browser'],
     rendering:['blender-assets','ktx2','environment','terrain-variety','trees','sfx-assets','materials'],
     audio:['music','audio'],

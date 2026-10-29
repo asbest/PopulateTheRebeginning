@@ -6,13 +6,23 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
  ...(process.argv.includes('--software-rendering')?{args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']}:{})});
 try{
  const page=await browser.newPage({viewport:{width:1200,height:800}}),errors=[];
+ // This suite exercises controls; high-resolution rendering is covered separately.
+ // Keep software WebGL on CI from starving the input and animation-frame loop.
+ await page.addInitScript(()=>localStorage.setItem('graphics-quality','low'));
  async function click(selector){
-  const button=page.locator(selector);await button.waitFor({state:'visible',timeout:60000});
-  await button.scrollIntoViewIfNeeded();
-  const box=await button.boundingBox();if(!box||box.width<1||box.height<1)throw new Error('Control is not visible: '+selector);
-  // Starting the simulation can hold Chromium's click action/navigation waiter on
-  // software WebGL runners. Send the real gesture and verify its resulting state.
-  await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
+  await page.waitForFunction(selector=>{
+   const element=document.querySelector(selector),rect=element?.getBoundingClientRect();
+   return element&&!element.disabled&&rect.width>0&&rect.height>0&&getComputedStyle(element).visibility!=='hidden';
+  },selector,{timeout:60000,polling:100});
+  const point=await page.evaluate(selector=>{
+   const element=document.querySelector(selector);element.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+   const rect=element.getBoundingClientRect(),x=rect.left+rect.width/2,y=rect.top+rect.height/2;
+   if(!element.contains(document.elementFromPoint(x,y)))throw new Error('Control is obscured: '+selector);
+   return {x,y};
+  },selector);
+  // Avoid Playwright's animation-frame stability/navigation waits; keep actual
+  // pointer input and explicit assertions of every resulting tutorial state.
+  await page.mouse.click(point.x,point.y);
  }
  page.on('pageerror',e=>errors.push(String(e)));
  const url=(process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1&tutorial=1';

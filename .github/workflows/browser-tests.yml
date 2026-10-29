@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [interface, simulation, rendering, audio, performance, strategy-long]
+        group: [tutorial, interface, simulation, rendering, audio, performance, strategy-long]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
