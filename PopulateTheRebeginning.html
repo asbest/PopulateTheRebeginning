@@ -519,6 +519,7 @@
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleMatchSettings()">Match Settings</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="openLandGenMenu()">Land Generation</button>
             <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2;" onclick="showHelp()">Controls / Help</button>
+            <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2;" onclick="state.controlTutorial.start(true)">Interactive introduction</button>
             <button class="menu-btn" style="margin:0; width:100%; grid-column: span 2; background-color: #555;" onclick="togglePause()">Resume</button>
         </div>
 
@@ -696,6 +697,7 @@ import { createArtKit } from './art/art-kit.js';
 import { createCharacters } from './art/characters.js';
 import { createLocomotion } from './art/locomotion.js';
 import { createPreacherConversion } from './art/preacher-conversion.js';
+import { createControlTutorial } from './art/control-tutorial.js';
 import { icon } from './art/icons.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
@@ -1613,7 +1615,7 @@ const state = {
 function peaceTimeRemaining() {
     return Math.max(0,(state.matchSettings?.peaceTimeMinutes||0)*60-(state.matchElapsed||0));
 }
-function isPeaceTime() { return peaceTimeRemaining()>0; }
+function isPeaceTime() { return (state.network.role==='none'&&state.controlTutorial?.active)||peaceTimeRemaining()>0; }
 const PEACE_BLOCKED_ACTIONS=new Set([
     'blast','lightning','hypnotise','swamp','swarm','tornado','firestorm','volcano',
     'raise','lower','flatten','landbridge','airship_rocket','warrior_attack','firewarrior_attack'
@@ -6906,6 +6908,7 @@ function beginStaffCast(caster,type,x,z) {
 function executeSpell(type, x, z, caster) {
     if (!caster || !caster.mesh) return;
     if(isPeaceBlockedAction(type))return;
+    if(type==='heal')state.controlTutorial?.notify('heal',[caster]);
 
     beginStaffCast(caster,type,x,z);
 
@@ -9951,6 +9954,7 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
                 u.attackTarget = null;
             });
             markMoveDestination(x,z);
+            state.controlTutorial?.notify('move',actingUnits);
         }
         return;
     }
@@ -10558,6 +10562,8 @@ async function init() {
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
         state.assetsReady=true;cacheCurrentAssets();
+        state.controlTutorial=createControlTutorial(state,localStorage);
+        if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
             window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
@@ -11138,6 +11144,7 @@ window.closeStoryOverlay = function() {
         state.isPaused = false;
         const btn = document.getElementById('btn-pause');
         if(btn) btn.innerText = '⏸️';
+        state.controlTutorial?.start();
     }
 };
 
@@ -12184,6 +12191,7 @@ function animate() {
     const frameTime=performance.now(),dt=Math.min(state.lastFrameTime===undefined?1/60:(frameTime-state.lastFrameTime)/1000,.1);
     state.lastFrameTime=frameTime;
     SoundManager.syncSustains(!!state.isPaused);
+    state.controlTutorial?.update();
 
     const biome = state.matchSettings.biome || 'normal';
     const biomeCfg = CONFIG.BIOMES[biome] || CONFIG.BIOMES.normal;
@@ -12337,7 +12345,7 @@ function animate() {
     if(!state.isPaused) {
     if(state.network.role!=='client') {
         const peaceful=isPeaceTime();
-        state.matchElapsed+=dt;
+        if(!state.controlTutorial?.active)state.matchElapsed+=dt;
         if(peaceful&&!isPeaceTime()) {
             showGameMessage('Peace time has ended. Attacks are now possible.');
             updateContextMenus();
@@ -12345,7 +12353,7 @@ function animate() {
     }
     updatePeaceTimer();
     if(isPeaceTime()&&(state.projectiles.length||state.activeEffects.length))cancelOffensiveEffectsDuringPeace();
-    if (state.network.role !== 'client') window.enemyAIs.forEach(ai => ai.update(dt));
+    if (state.network.role !== 'client'&&!state.controlTutorial?.active) window.enemyAIs.forEach(ai => ai.update(dt));
     PathWorker.update();
 
     // Music Logic
