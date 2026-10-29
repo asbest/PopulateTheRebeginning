@@ -12075,7 +12075,8 @@ function updateCameraPosition() {
     if(state.sunLight) {
         const focus=state.isFPV&&state.selectedUnits[0]
             ? state.selectedUnits[0].mesh.position : state.cameraLookAt;
-        state.sunLight.position.set(focus.x+50,focus.y+100,focus.z+40);
+        // Camera tracking moves the shadow coverage, never the sunlight direction.
+        state.sunLight.position.copy(focus).addScaledVector(_movingSunDirection,125);
         state.sunLight.target.position.set(focus.x,focus.y,focus.z);
         state.sunLight.target.updateMatrixWorld();
         const half=state.isFPV?35:Math.max(18,Math.min(110,state.viewScale*Math.max(1,window.innerWidth/window.innerHeight)*1.25));
