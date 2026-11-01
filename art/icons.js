@@ -28,16 +28,18 @@ const paths = {
  upgrade_unit:'<path d="m16 3 4 8 9 1-7 7 2 10-8-5-8 5 2-10-7-7 9-1Z"/>',
  airship_rocket:'<path d="M11 21c-2-11 8-16 15-17-1 7-6 17-17 16Zm1-11-7 3v8l6-2m12-4-3 8h-8l2-6M8 24l-4 5"/><circle cx="21" cy="10" r="2"/>',
  move:'<path d="M5 27 27 5m-12 0h12v12M4 20v8h8"/>',
- wild:'<circle cx="16" cy="9" r="5"/><path d="M7 28V21c0-10 18-10 18 0v7M3 14l7-5m-7-3 7 8"/>',
- warrior:'<path d="m9 26 15-19 3-4-6 2L7 23ZM4 20l8 7m-7 2 4-5M3 4l10 2v9l-5 5-5-5Z"/>',
- firewarrior:'<path d="M8 28v-8c0-8 16-8 16 0v8M16 3c8 7 7 10 0 10S8 10 16 3Z"/>',
- shaman:'<path d="M7 28 16 8l9 20ZM11 7l5-4 5 4M4 28V10m-2 0 2-7 3 7M12 21h8"/>',
- spy:'<path d="M4 28 9 11l7-8 7 8 5 17ZM10 15h12m-10 6h8"/>',
- airship:'<ellipse cx="16" cy="10" rx="10" ry="7"/><path d="M9 15 12 25m11-10-3 10M10 25h12v5H10ZM16 3v14"/>'
+ wild:'<path fill="currentColor" fill-opacity=".15" d="M3 29v-6c0-7 17-7 17 0v6Z"/><path d="M5 10a6 6 0 0 1 12 0M3 10h16M7 12v2a4 4 0 0 0 8 0v-2M3 29v-6c0-7 17-7 17 0v6M11 20v8M25 12v17M21 4h9v7h-9Z"/>',
+ warrior:'<path fill="currentColor" fill-opacity=".15" d="m3 15 7-3 7 3v6c0 4-4 7-7 9-3-2-7-5-7-9Z"/><path d="m3 15 7-3 7 3v6c0 4-4 7-7 9-3-2-7-5-7-9ZM10 16v9m-4-5h8M18 29l6-17M20 12l-1-5 4-4 6 2 1 5-4 4ZM19 5l-2-1m10-2 1-1m3 8 1 1"/>',
+ firewarrior:'<circle cx="16" cy="11" r="4"/><path fill="currentColor" fill-opacity=".15" d="M9 29v-8c0-7 14-7 14 0v8Z"/><path d="M9 29v-8c0-7 14-7 14 0v8M12 21l-6-4m14 4 6-4M5 17c-6-2-3-7-1-10 0 4 4 4 4 7 0 2-1 3-3 3Zm22 0c-4 0-4-4-2-7l2-5c0 5 5 6 4 9-1 2-2 3-4 3ZM13 26h6"/>',
+ shaman:'<path d="m6 9-3-5 6 2 3-4 3 4 6-2-3 5M7 11v3a5 5 0 0 0 10 0v-3M7 21l-3 8h16l-3-8M12 21v8M25 11v18m-4-22 4-5 4 5-4 5Z"/><path fill="currentColor" fill-opacity=".2" d="m21 7 4-5 4 5-4 5ZM7 21l-3 8h16l-3-8Z"/>',
+ preacher:'<circle cx="11" cy="9" r="7"/><circle cx="11" cy="10" r="3"/><path fill="currentColor" fill-opacity=".15" d="m6 19-3 10h16l-3-10Z"/><path d="m6 19-3 10h16l-3-10M7 21l4 3 4-3M25 12v17m-3-10h6"/><circle cx="25" cy="8" r="4"/>',
+ spy:'<path fill="currentColor" fill-opacity=".15" d="m2 29 3-16 8-10 8 10 2 16Z"/><path d="m2 29 3-16 8-10 8 10 2 16M7 14h12l-2 8H9ZM9 17h1m6 0h1M13 23v6M27 25V12l-3-3v16m-1 0h8m-4 0v5"/>',
+ airship:'<ellipse cx="16" cy="11" rx="13" ry="8" fill="currentColor" fill-opacity=".15"/><path d="M16 3c-8 3-8 13 0 16 8-3 8-13 0-16ZM3 11h26M7 18l5 8m13-8-5 8M10 26h12v4H10Z"/>'
 };
+const unitKeys=new Set(['wild','warrior','firewarrior','shaman','preacher','spy','airship']);
 export function icon(key) {
     if(key==='warrior_attack')return '<svg class="tribal-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><path d="m6 28 12-15 3 2L9 30ZM16 12l1-7 7-3 6 6-3 7-7 1ZM17 5l-3-2m10-1 1-2m5 8 2 1M7 24l4 3"/></svg>';
     if(key==='firewarrior_attack')key='blast';
     const body=paths[key] || paths.blast;
-    return `<svg class="tribal-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+    return `<svg class="tribal-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="${unitKeys.has(key)?2:1.65}" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 }

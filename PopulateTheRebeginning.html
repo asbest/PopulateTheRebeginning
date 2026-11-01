@@ -701,6 +701,7 @@ import { createControlTutorial } from './art/control-tutorial.js';
 import { createTotemFactory } from './art/totem.js';
 import { createTrainingProgress } from './art/training-progress.js';
 import { icon } from './art/icons.js';
+import { createTreeFire } from './art/tree-fire.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
 import { createBrowserStorage } from './art/browser-storage.js';
@@ -2023,6 +2024,7 @@ const NetworkManager = {
         if (Number.isFinite(data.treeTime) && Array.isArray(data.treeBurns)) {
             state.treeTime=Math.max(0,data.treeTime);
             state.treeBurns.clear();
+        treeFire?.update([]);
             for(const [id,readyAt] of data.treeBurns){
                 if(typeof id==='string'&&Number.isFinite(readyAt)&&readyAt>state.treeTime)
                     state.treeBurns.set(id,readyAt);
@@ -4405,6 +4407,7 @@ function forEachTreeSite(cx,cz,visit) {
     }
 }
 
+let treeFire;
 function charTree(tree) {
     if(tree.burned)return false;
     const crown=tree.mesh.children[1];
@@ -4433,7 +4436,6 @@ function charTree(tree) {
     });
     tree.charredMaterials=[...clonedMaterials.values()];
     tree.crownScale=crown?.scale.clone();
-    if(crown)crown.scale.multiply(new THREE.Vector3(.8,.55,.8));
     tree.burned=true;
     return true;
 }
@@ -4463,18 +4465,22 @@ function burnTreesAt(x, z, radius) {
             if(dx*dx+dz*dz>=radiusSquared)return;
             // A fresh hit renews the timer, even if the tree is already charred.
             state.treeBurns.set(id,state.treeTime+CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
-            if(tree&&charTree(tree))state.particles.push(new Particle(
-                tree.mesh.position.clone().add(new THREE.Vector3(0,2,0)),0x493a32,.2,2,-1));
+            if(tree)charTree(tree);
         };
         if(chunk){
             for(const tree of chunk.userData?.trees||[])
                 hit(tree.id,tree.mesh.position.x,tree.mesh.position.z,tree);
-        }else forEachTreeSite(cx,cz,site=>hit(site.id,site.x,site.z,null));
+            for(const palm of chunk.userData?.palms?.data||[])hit(palm.id,palm.x,palm.z,null);
+        }else {
+            forEachTreeSite(cx,cz,site=>hit(site.id,site.x,site.z,null));
+            forEachPalmSite(cx,cz,site=>hit(site.id,site.x,site.z,null));
+        }
     }
 }
 
 function updateTreeRegrowth(dt) {
     state.treeTime+=dt;
+    if(!state.treeBurns.size)return;
     for(const [id,readyAt] of state.treeBurns){
         if(readyAt>state.treeTime)continue;
         state.treeBurns.delete(id);
@@ -4482,13 +4488,45 @@ function updateTreeRegrowth(dt) {
         const tree=chunk?.userData?.trees.find(item=>item.id===id);
         if(tree)restoreTree(tree);
     }
+    syncTreeAppearance();
 }
 
 function syncTreeAppearance() {
-    for(const chunk of Object.values(state.chunks))for(const tree of chunk.userData?.trees||[]){
-        if((state.treeBurns.get(tree.id)||0)>state.treeTime)charTree(tree);
-        else restoreTree(tree);
+    const flames=[];
+    for(const chunk of Object.values(state.chunks)){
+        for(const tree of chunk.userData?.trees||[]){
+            const ready=state.treeBurns.get(tree.id)||0;
+            if(ready>state.treeTime){
+                charTree(tree);
+                const age=state.treeTime-(ready-CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
+                const t=Math.min(1,Math.max(0,age/7)),crown=tree.mesh.children[1];
+                if(crown&&tree.crownScale)crown.scale.copy(tree.crownScale).multiply(new THREE.Vector3(1-t*.65,1-t*.8,1-t*.65));
+                if(age>=0&&age<8&&tree.mesh.visible)flames.push({x:tree.mesh.position.x,y:tree.mesh.position.y,z:tree.mesh.position.z,scale:tree.mesh.scale.x,age});
+            }else restoreTree(tree);
+        }
+        updatePalmAppearance(chunk.userData?.palms,flames);
     }
+    if(!treeFire)treeFire=createTreeFire(THREE,state);
+    treeFire.update(flames);
+}
+
+function updatePalmAppearance(palms,flames) {
+    if(!palms)return;
+    const attr=palms.mesh.geometry.getAttribute('aChar');
+    let changed=false;
+    for(let i=0;i<palms.data.length;i++){
+        const d=palms.data[i],ready=state.treeBurns.get(d.id)||0;
+        const age=state.treeTime-(ready-CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
+        const char=ready>state.treeTime?Math.min(1,Math.max(0,age/7)):0;
+        const burned=ready>state.treeTime;
+        if(d.burned!==burned||attr.getX(i)!==char){
+            attr.setX(i,char);palms.mesh.setColorAt(i,burned?new THREE.Color(.27,.23,.2):d.tint);
+            d.burned=burned;changed=true;
+        }
+        if(burned&&age>=0&&age<8&&i<palms.mesh.count&&flames)
+            flames.push({x:d.x,y:getHeight(d.x,d.z),z:d.z,scale:d.scale,age});
+    }
+    if(changed){attr.needsUpdate=true;palms.mesh.instanceColor.needsUpdate=true;}
 }
 
 function terrainChunksInBounds(minX,minZ,maxX,maxZ,chunks=new Set()) {
@@ -5096,6 +5134,14 @@ function initCoastalPalm() {
     coastalPalmMaterial=new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,
         side:THREE.DoubleSide,roughness:.86,metalness:0,emissive:0x102008,emissiveIntensity:.08});
     addWindShader(coastalPalmMaterial);
+    const wind=coastalPalmMaterial.onBeforeCompile;
+    coastalPalmMaterial.onBeforeCompile=shader=>{
+        wind(shader);
+        shader.vertexShader='attribute float aChar;\n'+shader.vertexShader;
+        shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
+            '#include <begin_vertex>\nif(position.y>2.7 && length(position.xz-vec2(.1,0.))>.24) transformed=mix(transformed,vec3(.1,3.86,0.),aChar*.98);');
+    };
+    coastalPalmMaterial.customProgramCacheKey=()=> 'palm-wind-char-v1';
 }
 
 function setPalmBounds(mesh,data) {
@@ -5110,9 +5156,8 @@ function setPalmBounds(mesh,data) {
     mesh.frustumCulled=true;
 }
 
-function createCoastalPalms(grp,cx,cz) {
+function forEachPalmSite(cx,cz,visit) {
     if(state.matchSettings.winter||!['normal','jungle'].includes(state.matchSettings.biome||'normal'))return;
-    initCoastalPalm();
     const rand=mulberry32(((cx*62617)^(cz*17389)^0x93bfc435)>>>0),data=[];
     for(let attempt=0;attempt<65&&data.length<4;attempt++){
         const x=cx*CHUNK_SIZE+(rand()-.5)*CHUNK_SIZE;
@@ -5124,20 +5169,28 @@ function createCoastalPalms(grp,cx,cz) {
         if(slope>1.3||data.some(d=>Math.hypot(d.x-x,d.z-z)<4))continue;
         data.push({x,z,rotation:rand()*Math.PI*2,scale:.75+rand()*.55});
     }
+    for(let i=0;i<data.length;i++)visit({...data[i],id:`${cx},${cz}:p${i}`,tint:new THREE.Color().setHSL(.11+(rand()-.5)*.04,.2,.9)});
+}
+
+function createCoastalPalms(grp,cx,cz) {
+    const data=[];forEachPalmSite(cx,cz,site=>data.push(site));
     if(!data.length)return;
+    initCoastalPalm();
     const geometry=coastalPalmGeometry.clone(),mesh=new THREE.InstancedMesh(geometry,coastalPalmMaterial,data.length);
     const bases=new Float32Array(data.length*3),dummy=new THREE.Object3D();
     for(let i=0;i<data.length;i++){
         const d=data[i],h=getHeight(d.x,d.z);
         dummy.position.set(d.x,h,d.z);dummy.rotation.set(0,d.rotation,0);dummy.scale.setScalar(d.scale);
         dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);bases.set([d.x,h,d.z],i*3);
-        mesh.setColorAt(i,new THREE.Color().setHSL(.11+(rand()-.5)*.04,.2,.9));
+        mesh.setColorAt(i,d.tint);
     }
     geometry.setAttribute('aBasePos',new THREE.InstancedBufferAttribute(bases,3));
+    geometry.setAttribute('aChar',new THREE.InstancedBufferAttribute(new Float32Array(data.length),1));
     mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
     mesh.count=Math.floor(data.length*(state.graphicsQuality?.coverDensity||1));
     mesh.castShadow=true;mesh.receiveShadow=true;mesh.name='Coastal palms';
     setPalmBounds(mesh,data);grp.add(mesh);grp.userData.palms={mesh,data};
+    updatePalmAppearance(grp.userData.palms);
 }
 
 let ritualAssets;
@@ -10561,7 +10614,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -10625,6 +10678,7 @@ window.applyLandGen = function() {
         // Regenerate world visually
         state.terrainMods.clear();
         state.treeBurns.clear();
+        treeFire?.update([]);
         state.treeTime=0;
         state.heightCache.clear();
 
@@ -11467,6 +11521,7 @@ window.loadGame = function(slot=activeSaveSlot) {
         });
         state.treeTime=Number.isFinite(data.treeTime)?Math.max(0,data.treeTime):0;
         state.treeBurns.clear();
+        treeFire?.update([]);
         if(Array.isArray(data.treeBurns))for(const [id,readyAt] of data.treeBurns){
             if(typeof id==='string'&&Number.isFinite(readyAt)&&readyAt>state.treeTime)
                 state.treeBurns.set(id,readyAt);

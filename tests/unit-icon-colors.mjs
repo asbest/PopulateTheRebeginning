@@ -9,6 +9,14 @@ try{
     const page=await browser.newPage();
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
+    await page.evaluate(async()=>{
+        const {icon}=await import('./art/icons.js');
+        const roles=['wild','warrior','firewarrior','shaman','preacher','spy','airship'];
+        const symbols=roles.map(role=>icon(role));
+        if(new Set(symbols).size!==roles.length||symbols.some(symbol=>symbol===icon('blast')))
+            throw new Error('Unit role uses a duplicate or fallback spell icon');
+    });
+    console.log('PASS All seven unit roles have distinct dedicated symbols');
     const colors=await page.evaluate(()=>{
         state.isPaused=true;
         const originalUnits=state.units;

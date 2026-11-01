@@ -7,6 +7,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
 const page=await browser.newPage();
 const errors=[];
 page.on('pageerror',error=>errors.push(String(error)));
+page.on('console',message=>{if(message.type()==='error'&&/Shader Error|VALIDATE_STATUS|shader error/i.test(message.text()))errors.push(message.text());});
 page.on('dialog',dialog=>dialog.accept());
 try{
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
@@ -160,6 +161,33 @@ try{
         if(!tree.burned)throw new Error('Fireball impact did not burn the regrown tree');
     });
     console.log('PASS A fireball can burn a regrown tree again');
+
+    await page.evaluate(()=>{
+        const palms=Object.values(state.chunks).map(chunk=>chunk.userData?.palms).find(p=>p?.mesh.count);
+        if(!palms)throw new Error('No visible palm');
+        const palm=palms.data[0],y=getHeight(palm.x,palm.z);
+        const shot=new gameTestAPI.Fireball(new THREE.Vector3(palm.x,y+1,palm.z),
+            new THREE.Vector3(palm.x,y,palm.z),0,20,10,false,true);
+        shot.mesh.position.set(palm.x,y,palm.z);shot.explode();
+        if(!state.treeBurns.has(palm.id))throw new Error('Firewarrior shot did not burn palm');
+        gameTestAPI.updateTreeRegrowth(.5);
+        const effects=state.scene.getObjectByName('Vegetation fire and smoke');
+        if(!effects?.visible||effects.count<4||effects.count>384)throw new Error('No bounded shared fire animation');
+        if(!palms.mesh.geometry.attributes.aChar.getX(0))throw new Error('Palm crown did not begin burning');
+        state.renderer.render(state.scene,state.camera);
+        gameTestAPI.updateTreeRegrowth(7.6);
+        if(effects.visible)throw new Error('Fire animation did not end');
+        if(palms.mesh.geometry.attributes.aChar.getX(0)<.99)throw new Error('Palm crown did not burn away');
+        gameTestAPI.updateTreeRegrowth(291.89);
+        if(!state.treeBurns.has(palm.id))throw new Error('Palm regrew before five minutes');
+        gameTestAPI.updateTreeRegrowth(.02);
+        if(state.treeBurns.has(palm.id)||palms.data[0].burned||palms.mesh.geometry.attributes.aChar.getX(0)!==0)
+            throw new Error('Palm did not regrow after five minutes');
+        const tint=new THREE.Color();palms.mesh.getColorAt(0,tint);
+        if(Math.max(Math.abs(tint.r-palm.tint.r),Math.abs(tint.g-palm.tint.g),Math.abs(tint.b-palm.tint.b))>.0001)
+            throw new Error('Palm tint did not restore');
+    });
+    console.log('PASS Firewarrior burns palms with bounded animated fire; palms regrow after exactly five minutes');
 
     const pausedAt=await page.evaluate(()=>state.treeTime);
     await page.waitForTimeout(250);
