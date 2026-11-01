@@ -97,17 +97,17 @@ try {
   for(const kind of ['hut','tower','warrior','fire','preacher','spy','shipyard']){const model=Art.building(kind,0xff4500);let meshes=0,banner=false;model.traverse(n=>{if(n.isMesh)meshes++;if(n.userData.isFactionBanner)banner=true;});if(meshes<10||!banner)throw new Error(kind+' incomplete');report.push({kind,meshes});}
   return report;
  }));
- await check('Strategy camera and instanced coastal scenery remain interactive without a camera selector',async()=>{
+ await check('Cinematic camera and instanced coastal scenery remain interactive',async()=>{
   const report=await page.evaluate(()=>{
    const palms=Object.values(state.chunks).flatMap(chunk=>chunk.userData?.palms?.data||[]).length;
    const shoreRocks=Object.values(state.chunks).flatMap(chunk=>chunk.userData?.groundCover?.stones?.data||[]).filter(d=>d.shore).length;
    state.cameraLookAt.copy(state.shaman.mesh.position);
-   window.updateCameraPosition();
+   window.setCameraView('cinematic');
    state.camera.updateMatrixWorld();
    const target=state.shaman.mesh.position.clone().add(new THREE.Vector3(0,1.3,0)).project(state.camera);
    state.currentAction='select';
-   return {strategy:state.camera===state.orthoCamera,
-    palms,shoreRocks,selector:!!document.getElementById('btn-camera-view'),
+   return {view:state.cameraView,perspective:state.camera===state.cinematicCamera,
+    palms,shoreRocks,stored:localStorage.getItem('camera-view'),
     target:{x:(target.x+1)*window.innerWidth/2,y:(1-target.y)*window.innerHeight/2}};
   });
   if(report.target.x>80&&report.target.x<1280&&report.target.y>35&&report.target.y<850)
@@ -127,12 +127,13 @@ try {
   });
   if(movePoint)await page.mouse.click(movePoint.x,movePoint.y,{button:'right'});
   report.ordered=!!movePoint&&await page.evaluate(()=>!!(state.shaman.finalDest||state.shaman.target));
-  await page.screenshot({path:path.join(root,'test-results','browser-strategy.png')});
+  await page.screenshot({path:path.join(root,'test-results','browser-cinematic.png')});
   await page.keyboard.press('c');
-  report.shortcut=await page.evaluate(()=>state.camera===state.orthoCamera&&!state.isFPV);
-  if(!report.strategy||report.selector||!report.selected||!report.ordered||report.palms<1||report.shoreRocks<1)
+  report.shortcut=await page.evaluate(()=>state.cameraView==='strategy'&&state.camera===state.orthoCamera&&
+   !document.getElementById('btn-camera-view'));
+  if(report.view!=='cinematic'||!report.perspective||!report.selected||!report.ordered||report.palms<1||report.shoreRocks<1||report.stored!=='cinematic')
    throw new Error(JSON.stringify(report));
-  if(!report.shortcut)throw new Error('Removed camera shortcut changed the strategy view: '+JSON.stringify(report));
+  if(!report.shortcut)throw new Error('Camera shortcut did not restore strategy view: '+JSON.stringify(report));
   return report;
  });
  await check('All seven unit types retain animation rig and statistics',async()=>page.evaluate(()=>{
