@@ -144,11 +144,14 @@ try {
  await check('Flowing fire follows both arm segments in one draw call',async()=>page.evaluate(()=>{
   const unit=state.units.find(u=>u.type==='firewarrior'&&u.faction===0);
   const flames=gameTestAPI.FirewarriorFlames,cameraPos=state.camera.position.clone();
-  const oldRotation=unit.armL.rotation.x,oldTime=unit.animTime;
+  const oldRotation=unit.armL.rotation.x,oldTime=unit.animTime,oldUnits=state.units;
   try{
+   // Instance order follows state.units, not faction. Isolate the warrior whose
+   // time and arm pose this test controls, including when enemies exist first.
+   state.units=[unit];unit.animTime=0;
    state.camera.position.copy(unit.mesh.position).add(new THREE.Vector3(0,8,10));
    flames.update();
-   if(!flames.mesh.isInstancedMesh||flames.mesh.count<8||flames.mesh.count%8)
+   if(!flames.mesh.isInstancedMesh||flames.mesh.count!==8)
     throw new Error('Firewarrior arm flames are missing or unbatched: '+flames.mesh.count);
    const anchors=[];
    for(const warrior of state.units.filter(u=>u.type==='firewarrior'))for(const arm of [warrior.armL,warrior.armR]){
@@ -161,10 +164,17 @@ try {
     if(!anchors.some(anchor=>anchor.distanceTo(position)<.09))throw new Error('Flame ribbon is detached from the arm');
     if(scale.x>.136||scale.y<.29||scale.y>.351)throw new Error('Arm flame ribbon has the wrong proportions');
    }
-   const beforeWidth=new THREE.Vector3().setFromMatrixScale(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array)).x;
-   unit.animTime+=.073;flames.update();
-   const afterWidth=new THREE.Vector3().setFromMatrixScale(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array)).x;
-   if(Math.abs(afterWidth-beforeWidth)<.0001)throw new Error('Flame width does not flicker');
+   // Two samples can coincide near a turning point. Check a short animation
+   // interval and every ribbon instead of relying on the starting phase.
+   const minWidths=Array(8).fill(Infinity),maxWidths=Array(8).fill(-Infinity);
+   for(let frame=0;frame<=12;frame++){
+    unit.animTime=frame/60;flames.update();
+    for(let i=0;i<8;i++){
+     flames.mesh.getMatrixAt(i,matrix);scale.setFromMatrixScale(matrix);
+     minWidths[i]=Math.min(minWidths[i],scale.x);maxWidths[i]=Math.max(maxWidths[i],scale.x);
+    }
+   }
+   if(maxWidths.some((width,i)=>width-minWidths[i]<.003))throw new Error('Flame width does not flicker across the animation interval');
    const before=new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array));
    unit.armL.rotation.x+=.5;unit.animTime+=.15;flames.update();
    const after=new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(flames.mesh.instanceMatrix.array));
@@ -174,7 +184,7 @@ try {
    const withoutFlames=state.renderer.info.render.calls;flames.mesh.visible=true;
    if(withFlames-withoutFlames!==1)throw new Error('Arm flames require more than one draw call');
    return {flames:flames.mesh.count,drawCalls:withFlames-withoutFlames};
-  }finally{unit.armL.rotation.x=oldRotation;unit.animTime=oldTime;state.camera.position.copy(cameraPos);flames.update();}
+  }finally{state.units=oldUnits;unit.armL.rotation.x=oldRotation;unit.animTime=oldTime;state.camera.position.copy(cameraPos);flames.update();}
  }));
  await check('Replacement character meshes, HD materials, pivots and conversion',async()=>page.evaluate(async()=>{
   await Characters.ready;
