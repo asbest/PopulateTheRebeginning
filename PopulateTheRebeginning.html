@@ -3201,7 +3201,7 @@ function terrainSpeedFactor(x,z,dirX,dirZ) {
     if(rise>0){
         // Keep shoreline climbs passable; higher slopes require slower, deliberate steps.
         if(height<aiDryHeight()+2)return Math.max(.5,1/(1+rise*.65));
-        return Math.max(.25,1/(1+rise*4+rise*rise*4))/3;
+        return Math.max(.25,1/(1+rise*4+rise*rise*4))*2/3;
     }
     const descent=-rise;
     return Math.max(.72,Math.min(1.08,1+Math.min(descent,.5)*.16-Math.max(0,descent-.5)*.35));

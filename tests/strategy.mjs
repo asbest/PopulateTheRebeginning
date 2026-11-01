@@ -120,8 +120,8 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
    const mountainUp=gameTestAPI.terrainSpeedFactor(.5,3,1,0);
    const mountainDown=gameTestAPI.terrainSpeedFactor(1.5,3,-1,0);
    const mountainFlat=gameTestAPI.terrainSpeedFactor(3,3,1,0);
-   if(mountainUp>.1||mountainDown<.7||Math.abs(mountainFlat-1)>.01)
-    throw new Error('Mountain ascent is not three times slower while descent and flat speed stay normal: '+
+   if(Math.abs(mountainUp-1/6)>.001||mountainDown<.7||Math.abs(mountainFlat-1)>.01)
+    throw new Error('Mountain ascent did not double to one sixth of flat speed on the steep bank: '+
      JSON.stringify({mountainUp,mountainDown,mountainFlat}));
    const waterClimber=new Humanoid(1,'warrior',-3,0);state.units.push(waterClimber);
    waterClimber.aiWaterEscape=true;waterClimber.goto(4,0);
