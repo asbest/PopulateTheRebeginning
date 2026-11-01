@@ -698,6 +698,7 @@ import { createCharacters } from './art/characters.js';
 import { createLocomotion } from './art/locomotion.js';
 import { createPreacherConversion } from './art/preacher-conversion.js';
 import { createControlTutorial } from './art/control-tutorial.js';
+import { createTotemFactory } from './art/totem.js';
 import { icon } from './art/icons.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
@@ -5154,12 +5155,7 @@ function createRitualSite(grp,cx,cz) {
         stone:new THREE.DodecahedronGeometry(.47,1),
         stoneMat:new THREE.MeshStandardMaterial({color:0xbfb49a,roughness:.93,
             map:Art.blender.texture('stone','map')}),
-        totem:new THREE.CylinderGeometry(.22,.38,2.35,7),
-        woodMat:new THREE.MeshStandardMaterial({color:0x8b623e,roughness:.87,
-            map:Art.blender.texture('wood','map')}),
-        crown:new THREE.OctahedronGeometry(.4,0),
-        crownMat:new THREE.MeshStandardMaterial({color:0x65bdca,roughness:.4,metalness:.1,
-            emissive:0x0c4453,emissiveIntensity:.16})
+        monument:createTotemFactory(THREE,Art.blender.texture('stone','map'))
     };
     ritualAssets.stone.boundingSphere=new THREE.Sphere(new THREE.Vector3(),3.4);
     const site=new THREE.Group();site.position.set(x,h,z);site.name='Ancient stone circle';
@@ -5176,10 +5172,7 @@ function createRitualSite(grp,cx,cz) {
         dummy.updateMatrix();ring.setMatrixAt(i,dummy.matrix);
     }
     ring.instanceMatrix.needsUpdate=true;site.add(ring);
-    const totem=new THREE.Mesh(ritualAssets.totem,ritualAssets.woodMat);
-    totem.position.y=1.2;totem.castShadow=true;site.add(totem);
-    const crown=new THREE.Mesh(ritualAssets.crown,ritualAssets.crownMat);
-    crown.position.y=2.62;site.add(crown);
+    const totem=ritualAssets.monument();totem.rotation.y=rand()*Math.PI*2;site.add(totem);
     grp.add(site);grp.userData.ritualSite={mesh:site,ring,stones,x,z};
 }
 
