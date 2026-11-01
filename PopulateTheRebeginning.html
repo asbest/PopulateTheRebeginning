@@ -4448,8 +4448,10 @@ function charTree(tree) {
 }
 
 function updateBurnedTree(tree) {
+    if(tree.burnProgress===1)return;
     const age=state.treeTime-((state.treeBurns.get(tree.id)||0)-CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
-    const t=Math.min(1,Math.max(0,age/7));
+    const t=Math.max(tree.burnProgress||0,Math.min(1,Math.max(0,age/7)));
+    tree.burnProgress=t;
     tree.mesh.scale.copy(tree.originalScale);
     tree.mesh.scale.y*=1-t*.88;
     // The trunk becomes a short stump; no canopy or branches remain.
@@ -4468,7 +4470,7 @@ function restoreTree(tree) {
     if(tree.crownScale&&tree.mesh.children[1])tree.mesh.children[1].scale.copy(tree.crownScale);
     if(tree.originalScale)tree.mesh.scale.copy(tree.originalScale);
     for(const {part,visible,castShadow} of tree.originalAppearance||[]){part.visible=visible;part.castShadow=castShadow;}
-    tree.originalScale=null;tree.originalAppearance=null;
+    tree.originalScale=null;tree.originalAppearance=null;tree.burnProgress=0;
     tree.originalParts=null;
     tree.charredMaterials=null;
     tree.crownScale=null;
@@ -4503,14 +4505,30 @@ function burnTreesAt(x, z, radius) {
 function updateTreeRegrowth(dt) {
     state.treeTime+=dt;
     if(!state.treeBurns.size)return;
+    const flames=[],palmChunks=new Set();
     for(const [id,readyAt] of state.treeBurns){
-        if(readyAt>state.treeTime)continue;
-        state.treeBurns.delete(id);
         const chunk=state.chunks[id.split(':')[0]];
-        const tree=chunk?.userData?.trees.find(item=>item.id===id);
-        if(tree)restoreTree(tree);
+        if(id.split(':')[1]?.startsWith('p')){
+            if(chunk?.userData?.palms)palmChunks.add(chunk);
+        }else{
+            const tree=chunk?.userData?.trees.find(item=>item.id===id);
+            if(tree){
+                if(readyAt<=state.treeTime)restoreTree(tree);
+                else appendTreeFire(tree,readyAt,flames);
+            }
+        }
+        if(readyAt<=state.treeTime)state.treeBurns.delete(id);
     }
-    syncTreeAppearance();
+    for(const chunk of palmChunks)updatePalmAppearance(chunk.userData.palms,flames);
+    if(!treeFire)treeFire=createTreeFire(THREE,state);
+    treeFire.update(flames);
+}
+
+function appendTreeFire(tree,readyAt,flames) {
+    charTree(tree);
+    const age=state.treeTime-(readyAt-CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
+    updateBurnedTree(tree);
+    if(age>=0&&age<8&&tree.mesh.visible)flames.push({x:tree.mesh.position.x,y:tree.mesh.position.y,z:tree.mesh.position.z,scale:tree.mesh.scale.x,age});
 }
 
 function syncTreeAppearance() {
@@ -4519,10 +4537,7 @@ function syncTreeAppearance() {
         for(const tree of chunk.userData?.trees||[]){
             const ready=state.treeBurns.get(tree.id)||0;
             if(ready>state.treeTime){
-                charTree(tree);
-                const age=state.treeTime-(ready-CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
-                updateBurnedTree(tree);
-                if(age>=0&&age<8&&tree.mesh.visible)flames.push({x:tree.mesh.position.x,y:tree.mesh.position.y,z:tree.mesh.position.z,scale:tree.mesh.scale.x,age});
+                appendTreeFire(tree,ready,flames);
             }else restoreTree(tree);
         }
         updatePalmAppearance(chunk.userData?.palms,flames);
@@ -4538,7 +4553,7 @@ function updatePalmAppearance(palms,flames) {
     for(let i=0;i<palms.data.length;i++){
         const d=palms.data[i],ready=state.treeBurns.get(d.id)||0;
         const age=state.treeTime-(ready-CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
-        const char=ready>state.treeTime?Math.min(1,Math.max(0,age/7)):0;
+        const char=ready>state.treeTime?Math.max(attr.getX(i),Math.min(1,Math.max(0,age/7))):0;
         const burned=ready>state.treeTime;
         if(d.burned!==burned||attr.getX(i)!==char){
             attr.setX(i,char);palms.mesh.setColorAt(i,burned?new THREE.Color(.27,.23,.2):d.tint);
@@ -6099,6 +6114,7 @@ const FirewarriorFlames={
 // One draw call per layer, regardless of how many fireballs share a battlefield.
 const FireballFxManager={
     layers:null,lights:null,flashes:[],dummy:new THREE.Object3D(),tint:new THREE.Color(),
+    shots:new Set(),projectileMeshes:null,projectileMatrix:new THREE.Matrix4(),
     init(){
         if(this.layers)return;
         const layer=(capacity,geometry,material)=>{
@@ -6116,9 +6132,15 @@ const FireballFxManager={
             smoke:layer(160,SMOKE_GEO,new THREE.MeshBasicMaterial({color:0xffffff,
                 transparent:true,opacity:.23,depthWrite:false}))
         };
+        this.projectileMeshes=[new THREE.InstancedMesh(FIREBALL_CORE_GEO,FIREBALL_CORE_MAT,512),
+            new THREE.InstancedMesh(FIREBALL_CORONA_GEO,FIREBALL_CORONA_MAT,512)];
+        for(const mesh of this.projectileMeshes){
+            mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.count=0;mesh.visible=false;
+            mesh.frustumCulled=false;mesh.name='Batched fireball flight';state.scene.add(mesh);
+        }
         this.lights=Array.from({length:2},()=>{
             const light=new THREE.PointLight(0xff7b35,0,14);
-            light.visible=false;state.scene.add(light);return light;
+            light.visible=['high','ultra'].includes(state.graphicsQuality?.tier);state.scene.add(light);return light;
         });
     },
     add(kind,x,y,z,size,life,color,vx=0,vy=0,vz=0){
@@ -6126,6 +6148,46 @@ const FireballFxManager={
         const layer=this.layers[kind];
         if(layer.items.length>=layer.capacity)return;
         layer.items.push({x,y,z,size,life,age:0,color,vx,vy,vz,phase:Math.random()*6.28});
+    },
+    burn(entity,dt,building=false){
+        const p=entity.mesh.position;
+        if(p.distanceToSquared(state.camera.position)>14400)return;
+        entity.burnFxTimer=(entity.burnFxTimer||0)-dt;
+        if(entity.burnFxTimer<=0){
+            entity.burnFxTimer=state.graphicsQuality?.tier==='low'?.2:.12;
+            this.add('glow',p.x+(Math.random()-.5)*(building?2:1),p.y+(building?2:1),p.z+(Math.random()-.5),
+                building?.55:.32,.5,0xff6b18,0,1.2,0);
+        }
+        if(building){
+            entity.smokeTimer=(entity.smokeTimer||0)-dt;
+            if(entity.smokeTimer<=0){
+                entity.smokeTimer=.3+Math.random()*.15;
+                this.add('smoke',p.x+(Math.random()-.5)*1.5,p.y+2.2,p.z+(Math.random()-.5)*1.5,
+                    .6,2.2,0x332d2a,0,.65,0);
+            }
+        }
+    },
+    updateProjectiles(){
+        let total=0;
+        for(const shot of this.shots){
+            if(!shot.active||shot.mesh.parent!==state.scene){this.shots.delete(shot);continue;}
+            total++;
+        }
+        const batched=total>8;
+        let count=0;
+        for(const shot of this.shots){
+            const useBatch=batched&&count<512;
+            shot.mesh.visible=!useBatch;
+            if(!useBatch)continue;
+            shot.mesh.updateMatrix();shot.corona.updateMatrix();
+            this.projectileMeshes[0].setMatrixAt(count,shot.mesh.matrix);
+            this.projectileMatrix.multiplyMatrices(shot.mesh.matrix,shot.corona.matrix);
+            this.projectileMeshes[1].setMatrixAt(count++,this.projectileMatrix);
+        }
+        for(const mesh of this.projectileMeshes){
+            mesh.count=count;mesh.visible=count>0;
+            if(count)mesh.instanceMatrix.needsUpdate=true;
+        }
     },
     trail(position,unitShot){
         this.add('glow',position.x,position.y,position.z,unitShot?.215:.43,.38,0xff9d38);
@@ -6160,6 +6222,7 @@ const FireballFxManager={
     },
     update(dt){
         if(!this.layers)return;
+        this.updateProjectiles();
         for(const [kind,layer] of Object.entries(this.layers)){
             let count=0;
             for(const item of layer.items){
@@ -6200,8 +6263,18 @@ const FireballFxManager={
                 const light=this.lights[slot++];
                 light.position.copy(shot.mesh.position);light.intensity=1.2;light.visible=true;
             }
+            for(const effect of state.activeEffects){
+                if(slot>=this.lights.length)break;
+                if(!(effect instanceof Firestorm)||effect.timer<=0)continue;
+                const light=this.lights[slot++];
+                light.position.set(effect.x,getHeight(effect.x,effect.z)+5,effect.z);
+                light.intensity=1.8+Math.sin(effect.timer*7)*.35;
+            }
         }
-        for(;slot<this.lights.length;slot++)this.lights[slot].visible=false;
+        // Keep the light count stable within a quality tier. Changing visibility
+        // recompiles terrain and character shaders during overlapping impacts.
+        for(;slot<this.lights.length;slot++)this.lights[slot].intensity=0;
+        for(const light of this.lights)light.visible=enabled;
     },
     clear(){
         if(!this.layers)return;
@@ -6209,7 +6282,10 @@ const FireballFxManager={
             layer.items.length=0;layer.mesh.count=0;layer.mesh.visible=false;
         }
         this.flashes.length=0;
-        this.lights.forEach(light=>{light.visible=false;});
+        for(const shot of this.shots)shot.mesh.visible=true;
+        this.shots.clear();
+        for(const mesh of this.projectileMeshes){mesh.count=0;mesh.visible=false;}
+        this.lights.forEach(light=>{light.intensity=0;light.visible=['high','ultra'].includes(state.graphicsQuality?.tier);});
     },
     prewarm(){
         this.init();
@@ -6219,9 +6295,11 @@ const FireballFxManager={
             layer.mesh.setColorAt(0,this.tint.setHex(0xffffff));
             layer.mesh.count=1;layer.mesh.visible=true;
         }
+        for(const mesh of this.projectileMeshes){mesh.setMatrixAt(0,this.dummy.matrix);mesh.count=1;mesh.visible=true;}
     },
     endPrewarm(){
         for(const layer of Object.values(this.layers)){layer.mesh.count=0;layer.mesh.visible=false;}
+        for(const mesh of this.projectileMeshes){mesh.count=0;mesh.visible=false;}
     }
 };
 class Fireball {
@@ -6258,6 +6336,7 @@ class Fireball {
         this.light = null;
 
         state.scene.add(this.mesh);
+        FireballFxManager.init();FireballFxManager.shots.add(this);
     }
     update(dt) {
         if(!this.active) return false;
@@ -6382,7 +6461,7 @@ function prewarmFireballShaders() {
         state.scene.remove(preview.mesh);
         FirewarriorFlames.clear();
         FireballFxManager.endPrewarm();
-        FireballFxManager.lights.forEach(light=>{light.visible=false;});
+        FireballFxManager.lights.forEach(light=>{light.intensity=0;light.visible=['high','ultra'].includes(state.graphicsQuality?.tier);});
     }
 }
 
@@ -6881,11 +6960,8 @@ class Firestorm extends ActiveEffect {
         this.interval = 0;
         SoundManager.playSound('firestorm');
         this.soundLoop = SoundManager.startSustain('firestorm_loop');
-        this.light = ['high','ultra'].includes(state.graphicsQuality?.tier) ? new THREE.PointLight(0xFF4500, 2, 20) : null;
-        if (this.light) {
-            this.light.position.set(x, getHeight(x,z) + 5, z);
-            state.scene.add(this.light);
-        }
+        // Firestorms share the fixed battlefield light pool with projectiles.
+        this.light = null;
     }
     update(dt) {
         this.timer -= dt;
@@ -6900,7 +6976,6 @@ class Firestorm extends ActiveEffect {
                 CONFIG.COMBAT.FIRESTORM_UNIT_DAMAGE,CONFIG.COMBAT.FIRESTORM_BUILDING_DAMAGE,true));
             SoundManager.playSound('fireball',.38);
         }
-        if (this.light) this.light.intensity = 1.8 + Math.sin(this.timer * 7) * .35;
         if (this.timer > 0) return true;
         this.dispose();
         return false;
@@ -8143,9 +8218,7 @@ window.Humanoid = class Humanoid {
         if (this.burnTimer > 0) {
             this.burnTimer = Math.max(0,this.burnTimer-dt);
             this.takeDamage(CONFIG.COMBAT.FIREBALL_BURN_DPS*dt,true,false);
-            if(Math.random() < 0.25) {
-                state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5), 1, (Math.random()-0.5))), 0xFF4500, 0.1, 0.5));
-            }
+            FireballFxManager.burn(this,dt);
         }
 
         if (this.conversionTimer > 0) {
@@ -9129,11 +9202,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
                 if(this.burnTimer > 0) {
                     this.burnTimer -= dt;
-                    this.smokeTimer-=dt;
-                    if(this.smokeTimer<=0){this.smokeTimer=.18+Math.random()*.2;spawnSmoke(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-.5)*1.5,1.6+Math.random()*1.4,(Math.random()-.5)*1.5)),0x332d2a,.5+Math.random()*.4,2.2);}
-                    if(Math.random() < 0.25) {
-                        state.particles.push(new Particle(this.mesh.position.clone().add(new THREE.Vector3((Math.random()-0.5)*2, 2, (Math.random()-0.5)*2)), 0xFF4500, 0.15, 0.5));
-                    }
+                    FireballFxManager.burn(this,dt,true);
                 }
 
                 if(this.underConstruction) {
