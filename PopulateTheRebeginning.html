@@ -827,7 +827,7 @@ const CONFIG = {
         INITIAL_VIEW_SCALE: 35,
     },
     COLORS: {
-        water: 0x167f98, sand: 0xead6a4, grass: 0x809c46, rock: 0xa39a80, snow: 0xe8f4ff,
+        water: 0x1098b5, sand: 0xf4e6bd, grass: 0x90b94e, rock: 0xb8b293, snow: 0xe8f4ff,
         lava: 0xCF1020, skin: 0xD2B48C, shirt_wild: 0x8B4513, shirt_shaman: 0xFF4500,
         wood: 0x8B4513, straw: 0xDAA520, stone: 0x808080, red: 0x8B0000, yellow: 0xFFD700, blue: 0x4169E1,
         hpGreen: 0x00FF00, hpRed: 0xFF0000,
@@ -1122,8 +1122,8 @@ const CONFIG = {
     },
     BIOMES: {
         normal: {
-            bg: 0x8fb9d5, fog: 0xc2d0cb, fogNear: 120, fogFar: 330,
-            sunIntensity: 2.3, sunColor: 0xffdfb2, waterColor: 0x167f98,
+            bg: 0x76c6ed, fog: 0xb4dfed, fogNear: 155, fogFar: 380,
+            sunIntensity: 2.75, sunColor: 0xfff1d3, waterColor: 0x1098b5,
         },
         winter: {
             bg: 0x7EC8E3, fog: 0x7EC8E3, fogNear: 30, fogFar: 180,
@@ -4253,9 +4253,9 @@ const _cGold = new THREE.Color(0xFFD700);
 const _cCyan = new THREE.Color(0x00FFFF);
 const _cDeepGreen = new THREE.Color(0x004400);
 const _col = new THREE.Color();
-const _cDryGrass = new THREE.Color(0xa8b76b);
-const _cLushGrass = new THREE.Color(0x789947);
-const _cWetSand = new THREE.Color(0xb6a88a);
+const _cDryGrass = new THREE.Color(0xb7c67b);
+const _cLushGrass = new THREE.Color(0x76b54c);
+const _cWetSand = new THREE.Color(0xc6b88f);
 const _grassTone = new THREE.Color();
 const _shoreTone = new THREE.Color();
 const _cRockLinear = _cRock.clone().convertSRGBToLinear();
@@ -10454,7 +10454,7 @@ async function init() {
         await Characters.ready;
         initTerrainResources();
 
-        const amb = new THREE.HemisphereLight(0xc9deef, 0x77704c, 0.56);
+        const amb = new THREE.HemisphereLight(0xd6f0ff, 0x8e8862, 0.76);
         state.ambLight = amb;
         state.scene.add(amb);
         state.skyDome=createSkyDome();state.scene.add(state.skyDome);
@@ -12190,7 +12190,7 @@ function animate() {
     const biome = state.matchSettings.biome || 'normal';
     const biomeCfg = CONFIG.BIOMES[biome] || CONFIG.BIOMES.normal;
     const atmosphereTime=state.clock?.elapsedTime||0;
-    const sunAzimuth=atmosphereTime*.0018+.65,sunElevation=(biome==='normal'?.43:.62)+.06*Math.sin(atmosphereTime*.0011);
+    const sunAzimuth=atmosphereTime*.0018+.65,sunElevation=(biome==='normal'?.72:.62)+.06*Math.sin(atmosphereTime*.0011);
     _movingSunDirection.set(Math.cos(sunAzimuth)*.58,sunElevation,Math.sin(sunAzimuth)*.58).normalize();
     if(state.sunLight){_movingSunFocus.copy(state.cameraLookAt||state.sunLight.target.position);state.sunLight.target.position.copy(_movingSunFocus);
         state.sunLight.position.copy(_movingSunFocus).addScaledVector(_movingSunDirection,125);state.sunLight.target.updateMatrixWorld();}
@@ -12228,12 +12228,13 @@ function animate() {
         state.sunLight.color.lerp(new THREE.Color(sunCol), dt);
         if(cloudTopMaterial){const stormy=biome==='storm';cloudTopMaterial.color.lerp(new THREE.Color(stormy?0x9ba5ab:0xf4f8fa),dt*.35);
             cloudBaseMaterial.color.lerp(new THREE.Color(stormy?0x5e6871:0x9caeb8),dt*.35);}
-        const exposureTarget=((biome==='night'||biome==='cosmic') ? .62 : biome==='storm' ? .69 : biome==='normal' ? .82 : .76)*(.96+daylight*.04);
+        if(state.ambLight)state.ambLight.intensity+=((biome==='normal'?.76:.56)-state.ambLight.intensity)*Math.min(1,dt*.7);
+        const exposureTarget=((biome==='night'||biome==='cosmic') ? .62 : biome==='storm' ? .69 : biome==='normal' ? 1.02 : .76)*(.96+daylight*.04);
         state.renderer.toneMappingExposure+=(exposureTarget-state.renderer.toneMappingExposure)*Math.min(1,dt*.45);
         if(state.skyDome) {
             state.skyDome.position.copy(state.camera.position);
-            state.skyDome.material.uniforms.topColor.value.lerp(new THREE.Color(biome==='normal'?0x78a9ce:targetBg).multiplyScalar(biome==='normal'?1:.78),dt*.7);
-            state.skyDome.material.uniforms.horizonColor.value.lerp(new THREE.Color(biome==='normal'?0xe0d8be:targetFog).lerp(new THREE.Color(0xffffff),biome==='normal'?0:.2),dt*.7);
+            state.skyDome.material.uniforms.topColor.value.lerp(new THREE.Color(biome==='normal'?0x48a9e2:targetBg).multiplyScalar(biome==='normal'?1:.78),dt*.7);
+            state.skyDome.material.uniforms.horizonColor.value.lerp(new THREE.Color(biome==='normal'?0xbdebf5:targetFog).lerp(new THREE.Color(0xffffff),biome==='normal'?0:.2),dt*.7);
             state.skyDome.material.uniforms.sunDirection.value.copy(_movingSunDirection);
             state.skyDome.material.uniforms.sunColor.value.copy(state.sunLight.color);
             const nightTarget=(biome==='night'||biome==='cosmic') ? .92 : biome==='void' ? .72 : 0;
