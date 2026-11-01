@@ -264,7 +264,7 @@ export function createLocomotion(T) {
         if(attacking)animateCombat(u,u.attackPhase||0);
         if(u.isShaman&&u.staffTip){
             const winding=!!u.staffWindup,casting=(u.staffCastTimer||0)>0;
-            if(u.staffGrip)u.staffGrip.rotation.x=smooth(u.staffGrip.rotation.x,winding||casting||attacking?Math.PI:0,20,dt);
+            if(u.staffGrip)u.staffGrip.rotation.x=smooth(u.staffGrip.rotation.x,winding||casting||attacking?Math.PI:.6,20,dt);
             if((winding||casting)&&!['dead','stunned','getting_up'].includes(u.state)){
                 const lift=winding?Math.sin(u.animTime*10)*.09:0;
                 u.armR.rotation.x=smooth(u.armR.rotation.x,(winding?-2.05:-1.45)+lift,20,dt);
@@ -276,6 +276,7 @@ export function createLocomotion(T) {
             u.staffCrystal.material.emissiveIntensity=winding
                 ?1.5+.45*Math.sin(u.animTime*15):casting?1.3: .6;
         }
+        if(u.preacherGrip)u.preacherGrip.rotation.x=smooth(u.preacherGrip.rotation.x,attacking?Math.PI:.6,20,dt);
         const cape=u.torso.getObjectByName(u.isShaman?'CeremonialCape':'SpyCloak');
         if(cape){
             cape.rotation.x=smooth(cape.rotation.x,-.14-.08*weight+Math.sin(g.phase*Math.PI*2)*.02*weight,8,dt);

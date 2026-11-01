@@ -1,5 +1,6 @@
 // Original tribal character meshes. Shared geometry and atlas materials keep large armies affordable.
 import {createBlenderPack} from './blender-pack.js';
+import {createGripGeometry} from './hand-grip.js';
 // The public pivots match the gameplay rig; collision shapes and unit statistics are untouched.
 export function createCharacters(T,art) {
     const blender=createBlenderPack(T);
@@ -142,7 +143,9 @@ export function createCharacters(T,art) {
             if(arm){
                 band(lower,-.15,r*.75,r*.77,leather,.11);band(lower,-.10,r*.8,r*.81,gold,.027);
                 lower.userData.palm=oval(lower,[0,-len-.031,.006],[.042,.056,.028],skin,'Hand');
-                oval(lower,[side*.038,-len-.021,.02],[.016,.032,.016],skin,'Thumb');
+                lower.userData.thumb=oval(lower,[side*.038,-len-.021,.02],[.016,.032,.016],skin,'Thumb');
+                lower.userData.gripPoint=new T.Object3D();lower.userData.gripPoint.name='PalmGrip';
+                lower.userData.gripPoint.position.set(0,-len-.031,.018);lower.add(lower.userData.gripPoint);
                 if(role==='firewarrior'||role==='spy'||role==='preacher')factionPiece(mesh(g,loft([[0,r*1.12,r*1.12],[-.20,r*.86,r*.89]]),faction,[0,0,0],[1,1,1],'Sleeve'));
             }else{
                 factionPiece(mesh(g,loft([[0,r*1.13,r*1.13],[-.27,r*.85,r*.88]]),faction,[0,0,0],[1,1,1],'Trouser'));
@@ -158,6 +161,13 @@ export function createCharacters(T,art) {
         robePanels.forEach((n,i)=>{(i===0?u.legR:u.legL).add(n);n.position.y=.27;n.position.x=i===0?.1:-.1;});
         // Hand-bound weapons follow the combat animation instead of floating beside the body.
         const hand=u.armR.userData.lower;
+        function closeHand(arm,axis='y'){
+            const lower=arm.userData.lower,side=arm===u.armL?1:-1,palm=lower.userData.palm;
+            palm.geometry=geo(`grasp/${side}/${axis}`,()=>createGripGeometry(T,side,axis));palm.scale.set(1,1,1);
+            lower.remove(lower.userData.thumb);lower.userData.thumb=null;palm.name='GrippingHand';
+        }
+        if(['shaman','warrior','preacher','spy'].includes(role))closeHand(u.armR);
+        if(role==='warrior')closeHand(u.armL,'x');
         if(female){
             root.scale.setScalar(1.5);
             const cape=cloth(u.torso,[[-.19,.17],[.19,.17],[.30,-.76],[.13,-.82],[-.23,-.73]],faction,'CeremonialCape');cape.position.z=-.155;cape.rotation.x=-.14;factionPiece(cape);
@@ -165,8 +175,8 @@ export function createCharacters(T,art) {
             for(let i=-2;i<=2;i++){
                 const feather=cloth(u.head,[[-.028,0],[.028,.05],[.025,.22],[0,.30],[-.02,.19]],i%2?bone:faction,'CrownFeather');feather.position.set(i*.045,.15,-.015);feather.rotation.z=-i*.24;if(!(i%2))factionPiece(feather);
             }
-            const staffGrip=new T.Group();staffGrip.name='StaffGrip';staffGrip.position.set(0,-.28,.08);hand.add(staffGrip);u.staffGrip=staffGrip;
-            tube(staffGrip,[[0,-.02,-.01],[0,.31,0],[.015,.78,0],[0,1.10,0]],.021,leather,'RitualStaff');
+            const staffGrip=new T.Group();staffGrip.name='StaffGrip';staffGrip.position.copy(hand.userData.gripPoint.position);staffGrip.rotation.x=.6;hand.add(staffGrip);u.staffGrip=staffGrip;
+            tube(staffGrip,[[0,-.14,0],[0,.31,0],[.015,.78,0],[0,1.10,0]],.021,leather,'RitualStaff');
             const orb=oval(staffGrip,[0,1.07,0],[.067,.075,.067],mat('plain',0x53d7dd),'StaffCrystal');
             orb.material=orb.material.clone();orb.material.emissive.setHex(0x159fa8);orb.material.emissiveIntensity=.6;
             u.staffCrystal=orb;
@@ -176,29 +186,34 @@ export function createCharacters(T,art) {
         }else if(role==='warrior'){
             band(u.head,.095,.134,.11,gold,.065);
             for(const side of [-1,1])oval(u.torso,[side*.23,.11,0],[.11,.07,.13],leather,'ShoulderArmor');
-            u.weaponGrip=new T.Group();u.weaponGrip.name='WeaponGrip';u.weaponGrip.position.set(0,-.28,.025);hand.add(u.weaponGrip);
+            u.weaponGrip=new T.Group();u.weaponGrip.name='WeaponGrip';u.weaponGrip.position.copy(hand.userData.gripPoint.position);hand.add(u.weaponGrip);
             tube(u.weaponGrip,[[0,.04,0],[0,-.20,0],[0,-.42,0]],.029,leather,'WarClub');
             u.weaponTip=oval(u.weaponGrip,[0,-.42,0],[.085,.11,.072],gold,'ClubHead');
             for(let i=0;i<5;i++){const tooth=mesh(u.weaponGrip,geo('spike',()=>new T.ConeGeometry(.021,.09,6)),bone,[Math.sin(i*1.26)*.08,-.42,Math.cos(i*1.26)*.08]);tooth.rotation.z=-Math.PI/2;tooth.rotation.y=i*1.26;}
-            u.shieldGrip=new T.Group();u.shieldGrip.name='ShieldGrip';u.shieldGrip.position.set(.055,-.14,.09);u.armL.userData.lower.add(u.shieldGrip);
-            const shield=mesh(u.shieldGrip,geo('shield',()=>new T.CylinderGeometry(.18,.18,.045,20)),leather,[0,0,0]);shield.rotation.x=Math.PI/2;
-            mesh(u.shieldGrip,geo('shieldrim',()=>new T.TorusGeometry(.18,.015,6,24)),gold,[0,0,.026]);
-            oval(u.shieldGrip,[0,0,.032],[.048,.048,.025],gold,'ShieldBoss');
+            u.shieldGrip=new T.Group();u.shieldGrip.name='ShieldGrip';u.shieldGrip.position.copy(u.armL.userData.lower.userData.gripPoint.position);u.armL.userData.lower.add(u.shieldGrip);
+            const shield=mesh(u.shieldGrip,geo('shield',()=>new T.CylinderGeometry(.18,.18,.045,20)),leather,[0,0,.075]);shield.rotation.x=Math.PI/2;
+            mesh(u.shieldGrip,geo('shieldrim',()=>new T.TorusGeometry(.18,.015,6,24)),gold,[0,0,.101]);
+            oval(u.shieldGrip,[0,0,.107],[.048,.048,.025],gold,'ShieldBoss');
+            tube(u.shieldGrip,[[-.065,0,.035],[0,0,0],[.065,0,.035]],.018,leather,'ShieldHandle');
         }else if(role==='firewarrior'){
             const mask=cloth(u.head,[[-.10,.12],[.10,.12],[.12,-.02],[.055,-.12],[0,-.16],[-.055,-.12],[-.12,-.02]],gold,'RitualMask');mask.position.z=.105;
             for(const side of [-1,1])oval(u.head,[side*.045,.025,.128],[.024,.009,.005],eye,'MaskEyeSlit');
             for(let i=-1;i<=1;i++)tube(u.head,[[i*.065,.15,0],[i*.1,.27,-.012],[i*.12,.34,-.05]],.012,bone,'MaskCrown');
-            oval(hand,[0,-.28,.025],[.04,.048,.04],gold,'FireFocus');
+            oval(hand,hand.userData.gripPoint.position.toArray(),[.04,.048,.04],gold,'FireFocus');
         }else if(role==='preacher'){
             band(u.head,.11,.14,.11,gold,.06);
             oval(u.torso,[0,.12,.17],[.075,.095,.028],gold,'FaithEmblem');
-            tube(hand,[[0,-.28,.05],[0,.05,.05],[0,.34,.05]],.025,leather,'PreacherStaff');
-            oval(hand,[0,.36,.05],[.09,.11,.055],gold,'PreacherStaffHead');
+            u.preacherGrip=new T.Group();u.preacherGrip.name='PreacherGrip';u.preacherGrip.position.copy(hand.userData.gripPoint.position);u.preacherGrip.rotation.x=.6;hand.add(u.preacherGrip);
+            tube(u.preacherGrip,[[0,-.14,0],[0,.33,0],[0,.62,0]],.025,leather,'PreacherStaff');
+            oval(u.preacherGrip,[0,.64,0],[.09,.11,.055],gold,'PreacherStaffHead');
         }else if(role==='spy'){
             mesh(u.head,geo('hood',()=>new T.SphereGeometry(1,16,12,Math.PI*.30,Math.PI*1.4)),dark,[0,.012,-.035],[.16,.215,.16],'OpenHood');
             const scarf=cloth(u.head,[[-.11,-.025],[.11,-.025],[.075,-.145],[-.075,-.145]],faction,'FaceScarf');scarf.position.z=.116;factionPiece(scarf);
             const cape=cloth(u.torso,[[-.2,.16],[.2,.16],[.24,-.60],[-.17,-.65]],dark,'SpyCloak');cape.position.z=-.17;
-            mesh(hand,geo('dagger',()=>new T.ConeGeometry(.025,.20,4)),gold,[0,-.05,.08],[1,1,.45],'Dagger');
+            u.daggerGrip=new T.Group();u.daggerGrip.name='DaggerGrip';u.daggerGrip.position.copy(hand.userData.gripPoint.position);hand.add(u.daggerGrip);
+            tube(u.daggerGrip,[[0,.045,0],[0,-.09,0]],.018,leather,'DaggerHandle');
+            oval(u.daggerGrip,[0,-.10,0],[.065,.018,.028],gold,'DaggerGuard');
+            const blade=mesh(u.daggerGrip,geo('dagger',()=>new T.ConeGeometry(.035,.22,4)),gold,[0,-.22,0],[1,1,.5],'Dagger');blade.rotation.x=Math.PI;
         }else{
             oval(u.torso,[0,-.02,-.17],[.135,.18,.085],leather,'GatheringSatchel');
             for(const side of [-1,1])tube(u.torso,[[side*.12,.18,-.04],[side*.13,.02,.13],[side*.10,-.18,.12]],.016,leather,'SatchelStrap');

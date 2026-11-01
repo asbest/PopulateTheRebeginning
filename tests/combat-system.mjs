@@ -137,7 +137,7 @@ try{
             const automatic=new gameTestAPI.Fireball(fighter.mesh.position.clone(),fighter.mesh.position.clone(),0,1,1,false,true);
             if(automatic.mesh.scale.x!==spell.mesh.scale.x*.5)throw new Error('Automatic unit shot is not half size');
             fighter.armR.userData.lower.updateWorldMatrix(true,false);
-            const hand=fighter.armR.userData.lower.localToWorld(new THREE.Vector3(0,-.28,.025));
+            const hand=fighter.armR.userData.lower.userData.gripPoint.getWorldPosition(new THREE.Vector3());
             if(shot.start.distanceTo(hand)>.001)throw new Error('Fireball did not leave the throwing hand');
             return {unitScale:shot.mesh.scale.x,spellScale:spell.mesh.scale.x};
         });

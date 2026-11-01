@@ -7946,6 +7946,7 @@ window.Humanoid = class Humanoid {
 
         this.combatPoseTick=this.updateTicker;
         if(this.isShaman&&this.staffGrip)this.staffGrip.rotation.x=Math.PI;
+        if(this.preacherGrip)this.preacherGrip.rotation.x=Math.PI;
         // Weapon poses share their contact time with the damage/release below.
         if (this.type === 'warrior'||this.type==='firewarrior'||this.type==='wild') {
             Locomotion.animateCombat(this,this.attackPhase);
@@ -7993,7 +7994,7 @@ window.Humanoid = class Humanoid {
                  // Spawn Fireball
                  const hand=this.armR.userData.lower;
                  hand.updateWorldMatrix(true,false);
-                 const startPos = hand.localToWorld(new THREE.Vector3(0,-.28,.025));
+                 const startPos = hand.userData.gripPoint.getWorldPosition(new THREE.Vector3());
                  const targetPos = point.clone().add(new THREE.Vector3(0, manual&&!target ? 0 : 1, 0));
                  state.projectiles.push(new Fireball(startPos, targetPos, this.faction, CONFIG.COMBAT.FIREWARRIOR_BALL_UNIT_DMG, CONFIG.COMBAT.FIREWARRIOR_BULLDING_DMG, false, true));
                  SoundManager.playSound('fireball',.45);
