@@ -8782,6 +8782,7 @@ function applyBuildingConstructionVisual(building) {
     building.visualMesh.scale.y = building.underConstruction ? Math.max(0.01, progress) : 1;
     building.constructionRig.visible = !!building.underConstruction;
     building.constructionRig.scale.y = .18 + .82 * progress;
+    if(building.roofFlame)building.roofFlame.visible=!building.underConstruction;
     if(building.pathVisual)building.pathVisual.visible=!building.underConstruction;
 }
 
@@ -8946,6 +8947,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             id: id || generateUUID(),
             mesh: group,
             visualMesh: mesh,
+            roofFlame: mesh.getObjectByName('RoofFlame')||null,
             pathVisual: pathVisual,
             hpBar: hpBar,
             hpGroup: hpGroup,

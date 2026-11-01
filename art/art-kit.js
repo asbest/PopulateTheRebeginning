@@ -2,6 +2,7 @@
 import {createBlenderPack} from './blender-pack.js';
 import {createTexturePipeline} from './texture-pipeline.js';
 import {BARRACKS_ROOF} from './roof-profile.js';
+import {createRoofLandmarks} from './roof-landmarks.js';
 export function createArtKit(T) {
     const pipeline=createTexturePipeline(T);
     const blender=createBlenderPack(T,pipeline.load);
@@ -183,10 +184,13 @@ export function createArtKit(T) {
             orb(p,[0,1.1,0],[1.8,0.6,2.6],palette.cloth);
         }
         wallBanners(p,kind,factionColor);
+        if(kind==='fire')roofLandmarks.fire(p,material(palette.gold,'wood',.65));
+        if(kind==='warrior')roofLandmarks.warrior(p,material(palette.wood,'wood'),material(palette.gold,'wood',.65),factionColor);
         blender.attach(p,'building/'+kind+'/root',factionColor);
         return p;
     }
     const uniforms={windTime:{value:0}};
+    const roofLandmarks=createRoofLandmarks(T,uniforms.windTime);
     const crownMaterial=new T.MeshStandardMaterial({vertexColors:true,roughness:1,side:T.DoubleSide,
         map:blender.texture('foliage','map')});
     crownMaterial.onBeforeCompile=shader=>{
