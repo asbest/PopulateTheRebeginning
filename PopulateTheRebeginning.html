@@ -538,7 +538,8 @@
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
 
             <div id="stats-dashboard" style="margin-top:15px; border: 1px solid #666; padding:12px; border-radius:8px; background:rgba(0,0,0,0.7); width:90%; text-align:center; color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
-                <h3 style="color:#00d4ff; font-size:16px; margin:0 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">Statistics</h3>
+                <h3 style="color:#00d4ff; font-size:16px; margin:0 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">Visitor statistics</h3>
+                <p id="visit-stats-status" role="status" style="margin-bottom:10px;">Loading visitor statistics…</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size:12px; margin-bottom:10px; color: white;">
                     <div style="background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px;">
                         <div style="opacity: 0.8; font-size: 10px; text-transform: uppercase;">Total</div>
@@ -1609,6 +1610,8 @@ const state = {
     isPaused: false,
     visitCount: null,
     visitStats: { year: null, month: null, week: null },
+    visitStatsErrors: {},
+    visitStatsStatus: 'Loading visitor statistics…',
 
     // Cheats
     cheatUnlimitedRange: false,
@@ -9660,24 +9663,17 @@ function updateUI() {
     if(faithText) faithText.textContent=String(Math.round(state.faith));
     if(faithBonus) faithBonus.textContent=`${Math.round(faithManaMultiplier()*100)}%`;
 
-    const visitDisplay = document.getElementById('visit-count-display');
-    if (visitDisplay) {
-        if (state.visitCount !== undefined && state.visitCount !== null) {
-            const value=String(state.visitCount);
-            if(visitDisplay._shownValue!==value){visitDisplay.innerText=value;visitDisplay._shownValue=value;}
-        } else if (!visitDisplay.innerText || visitDisplay.innerText === '...') {
-            visitDisplay.innerText = 'Loading...';
-        }
+    const visitValues={total:state.visitCount,...state.visitStats};
+    for(const [key,id] of Object.entries({total:'visit-count-display',year:'visit-year-display',month:'visit-month-display',week:'visit-week-display'})){
+        const element=document.getElementById(id);
+        if(!element)continue;
+        const value=visitValues[key];
+        const text=value!==null&&value!==undefined?String(value):state.visitStatsErrors[key]?'Unavailable':'…';
+        if(element.textContent!==text)element.textContent=text;
     }
-    const yearDisplay = document.getElementById('visit-year-display');
-    if (yearDisplay) {const value=String((state.visitStats.year !== null) ? state.visitStats.year : '...');
-        if(yearDisplay._shownValue!==value){yearDisplay.innerText=value;yearDisplay._shownValue=value;}}
-    const monthDisplay = document.getElementById('visit-month-display');
-    if (monthDisplay) {const value=String((state.visitStats.month !== null) ? state.visitStats.month : '...');
-        if(monthDisplay._shownValue!==value){monthDisplay.innerText=value;monthDisplay._shownValue=value;}}
-    const weekDisplay = document.getElementById('visit-week-display');
-    if (weekDisplay) {const value=String((state.visitStats.week !== null) ? state.visitStats.week : '...');
-        if(weekDisplay._shownValue!==value){weekDisplay.innerText=value;weekDisplay._shownValue=value;}}
+    const visitStatus=document.getElementById('visit-stats-status');
+    if(visitStatus&&visitStatus.textContent!==state.visitStatsStatus)visitStatus.textContent=state.visitStatsStatus;
+
 }
 
 function updatePeaceTimer() {
@@ -10417,58 +10413,17 @@ function getVisitKeys() {
         total: 'visits',
         year: `visits_${year}`,
         month: `visits_${year}_m${month}`,
-        week: `visits_${year}_w${weekNum}`
+        week: `visits_${d.getUTCFullYear()}_w${weekNum}`
     };
 }
 
+// CounterAPI v1 was retired. Do not issue requests to its removed endpoints
+// or retry increments through a third-party proxy (which can double-count).
 window.refreshStats = async function() {
-    if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') return;
-    const displays = ['visit-count-display', 'visit-year-display', 'visit-month-display', 'visit-week-display'];
-    displays.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerText = "...";
-    });
-
-    const ns = 'rb_eval_prod';
-    const keys = getVisitKeys();
-
-    const tryFetch = async (key) => {
-        const baseUrl = `https://api.counterapi.dev/v1/${ns}/${key}/`;
-        const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${baseUrl}`;
-
-        const fetchOnce = async (url) => {
-            const response = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
-            if (!response.ok) throw new Error("HTTP " + response.status);
-            const data = await response.json();
-            if (data && typeof data.count === 'number') return data.count;
-            throw new Error("Invalid Data");
-        };
-
-        try {
-            return await fetchOnce(baseUrl);
-        } catch (e) {
-            return await fetchOnce(proxyUrl);
-        }
-    };
-
-    const results = await Promise.allSettled([
-        tryFetch(keys.total),
-        tryFetch(keys.year),
-        tryFetch(keys.month),
-        tryFetch(keys.week)
-    ]);
-
-    if (results[0].status === 'fulfilled') state.visitCount = results[0].value;
-    if (results[1].status === 'fulfilled') state.visitStats.year = results[1].value;
-    if (results[2].status === 'fulfilled') state.visitStats.month = results[2].value;
-    if (results[3].status === 'fulfilled') state.visitStats.week = results[3].value;
-
+    state.visitStatsErrors={total:true,year:true,month:true,week:true};
+    state.visitStatsStatus='Global visitor statistics are unavailable: the previous counter service was discontinued. A replacement counter must be configured.';
     updateUI();
-
-    // Fallback labels for failures
-    if (results[0].status === 'rejected' && document.getElementById('visit-count-display'))
-        document.getElementById('visit-count-display').innerText = 'Offline';
-}
+};
 
 
 // --- js/main.js ---
@@ -10522,50 +10477,8 @@ function createSkyDome() {
 async function init() {
     console.log("Initializing Game...");
 
-    // Increment and fetch visit count (Non-blocking with proxy fallback)
-    (async () => {
-        if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') return;
-        const ns = 'rb_eval_prod';
-        const keys = getVisitKeys();
-
-        const tryIncr = async (key) => {
-            const upUrl = `https://api.counterapi.dev/v1/${ns}/${key}/up`;
-            const proxyUpUrl = `https://api.codetabs.com/v1/proxy/?quest=${upUrl}`;
-
-            const upOnce = async (url) => {
-                const response = await fetch(url, { cache: 'no-store' });
-                if (!response.ok) throw new Error("HTTP " + response.status);
-                const data = await response.json();
-                if (data && typeof data.count === 'number') return data.count;
-                throw new Error("Invalid Data");
-            };
-
-            try {
-                return await upOnce(upUrl);
-            } catch (e) {
-                return await upOnce(proxyUpUrl);
-            }
-        };
-
-        try {
-            const results = await Promise.allSettled([
-                tryIncr(keys.total),
-                tryIncr(keys.year),
-                tryIncr(keys.month),
-                tryIncr(keys.week)
-            ]);
-
-            if (results[0].status === 'fulfilled') state.visitCount = results[0].value;
-            if (results[1].status === 'fulfilled') state.visitStats.year = results[1].value;
-            if (results[2].status === 'fulfilled') state.visitStats.month = results[2].value;
-            if (results[3].status === 'fulfilled') state.visitStats.week = results[3].value;
-
-            updateUI();
-        } catch (err) {
-            console.error("Init visit increment failed:", err);
-            window.refreshStats();
-        }
-    })();
+    // Statistics availability must never delay game startup.
+    window.refreshStats();
 
     try {
 
