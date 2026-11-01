@@ -102,10 +102,10 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
     state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();player.update(.1);
    }
    if(getHeight(player.mesh.position.x,player.mesh.position.z)<gameTestAPI.aiDryHeight()||player.isSwimming)
-    throw new Error('Player did not swim to shore: '+JSON.stringify({position:player.mesh.position,state:player.state,health:player.hp}));
+    throw new Error('Player did not walk to shore: '+JSON.stringify({position:player.mesh.position,state:player.state,health:player.hp}));
    const drowning=new Humanoid(0,'warrior',0,0);state.units.push(drowning);drowning.seekShore=()=>false;
    for(let k=0;k<40;k++){state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();drowning.update(.1);}
-   if(!drowning.isSwimming||drowning.hp>=drowning.maxHp||drowning.hp<drowning.maxHp*.85)
+   if(!drowning.isUnderwater||drowning.isSwimming||Math.abs(drowning.mesh.position.y-getSurfaceHeight(drowning.mesh.position.x,drowning.mesh.position.z))>.1||drowning.hp>=drowning.maxHp||drowning.hp<drowning.maxHp*.85)
     throw new Error('Drowning should be gradual: '+JSON.stringify({health:drowning.hp,max:drowning.maxHp,exposure:drowning.waterExposure,position:drowning.mesh.position}));
    state.waterState='frozen';drowning.update(.1);
    if(drowning.isSwimming||drowning.aiWaterEscape)throw new Error('Swimming continued after water froze');

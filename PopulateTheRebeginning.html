@@ -7653,14 +7653,17 @@ window.Humanoid = class Humanoid {
 
     surviveWater(dt,groundH) {
         if(this.type==='airship'||this.state==='dead')return;
+        this.isSwimming=false;
         const manualSwim=(this.manualSwimTimer||0)>0;
         this.manualSwimTimer=Math.max(0,(this.manualSwimTimer||0)-dt);
         if(state.waterState==='frozen') {
-            this.isSwimming=false;this.aiWaterEscape=false;this.waterExposure=0;this.waterOriginalDest=null;
+            this.isUnderwater=false;this.isSinking=false;
+            this.aiWaterEscape=false;this.waterExposure=0;this.waterOriginalDest=null;
             return;
         }
         if(groundH>=aiDryHeight()) {
-            this.isSwimming=false;this.waterExposure=0;
+            this.isUnderwater=false;this.isSinking=false;
+            this.waterExposure=0;
             if(this.aiWaterEscape) {
                 const resume=this.waterOriginalDest;
                 this.aiWaterEscape=false;
@@ -7672,10 +7675,8 @@ window.Humanoid = class Humanoid {
             }
             return;
         }
-        // Enter swimming only on contact with the surface, not while flying over it.
-        const swimSurfaceY=Math.max(groundH,VISUAL_WATER_LEVEL-.65);
-        if(!this.isGrounded&&(this.velocity.y>0||this.mesh.position.y>swimSurfaceY+.1)) {
-            this.isSwimming=false;
+        // Flight remains physical; water does not catch or lift a falling unit.
+        if(!this.isGrounded&&(this.velocity.y>0||this.mesh.position.y>VISUAL_WATER_LEVEL+.1)) {
             return;
         }
         if(!manualSwim) {
@@ -7684,26 +7685,9 @@ window.Humanoid = class Humanoid {
             this.aiRole='escape-water';this.attackTarget=null;
         }
         const depth=VISUAL_WATER_LEVEL-groundH;
-        this.isSwimming=depth>.2;
-        if(this.isSwimming) {
-            const dx=manualSwim ? this.manualSwimDirection.x : (this.target?.x??this.mesh.position.x)-this.mesh.position.x;
-            const dz=manualSwim ? this.manualSwimDirection.z : (this.target?.z??this.mesh.position.z)-this.mesh.position.z;
-            const length=Math.hypot(dx,dz)||1;
-            // Keep the swimmer visually on the water while the collision capsule
-            // clears the bank ahead. Otherwise a tall bank pins the capsule below
-            // its rim before ordinary ground following can take over.
-            const step=Math.max(.8,this.moveSpeed*Math.min(dt,.1)+.35);
-            const bankH=getSurfaceHeight(this.mesh.position.x+dx/length*step,this.mesh.position.z+dz/length*step);
-            const surfaceY=Math.max(groundH,VISUAL_WATER_LEVEL-.65);
-            const bodyY=Math.max(surfaceY,bankH)+.18;
-            this.mesh.position.y=surfaceY;
-            this.isGrounded=true;
-            if(this.rigidBody) {
-                const v=this.rigidBody.linvel();
-                this.groundBodyOffset=bodyY-surfaceY;
-                this.rigidBody.setTranslation({x:this.mesh.position.x,y:bodyY+this.height/2,z:this.mesh.position.z},true);
-                this.rigidBody.setLinvel({x:v.x*.94,y:0,z:v.z*.94},true);
-            } else this.velocity.y=0;
+        this.isUnderwater=depth>.2&&this.mesh.position.y<VISUAL_WATER_LEVEL-.1;
+        this.isSinking=this.isUnderwater&&!this.isGrounded;
+        if(this.isUnderwater) {
             this.waterExposure=(this.waterExposure||0)+dt;
             if(this.waterExposure>2) this.takeDamage(this.maxHp*.055*Math.min(1,depth/1.5)*dt,true,false);
         }
@@ -7722,8 +7706,6 @@ window.Humanoid = class Humanoid {
         if(!this.lastManualControlledPosition)this.lastManualControlledPosition=this.mesh.position.clone();
         else this.lastManualControlledPosition.copy(this.mesh.position);
         if(vec.lengthSq()>0.001) {
-            if(!this.manualSwimDirection)this.manualSwimDirection=new THREE.Vector3();
-            this.manualSwimDirection.copy(vec);
             this.manualSwimTimer=.2;
         }
         this.aiWaterEscape=false;
@@ -8157,6 +8139,11 @@ window.Humanoid = class Humanoid {
         resolveTreeCollision(this);
         resolveBuildingCollision(this,previousX,previousZ);
 
+        const underwaterGround=getSurfaceHeight(this.mesh.position.x,this.mesh.position.z);
+        this.isSinking=this.type!=='airship'&&state.waterState!=='frozen'&&
+            underwaterGround<VISUAL_WATER_LEVEL-.2&&this.mesh.position.y<VISUAL_WATER_LEVEL+.1&&
+            this.mesh.position.y-underwaterGround>.35;
+        if(this.isSinking)this.isGrounded=false;
         Locomotion.ground(this, getSurfaceHeight, dt);
         const groundH = getSurfaceHeight(this.mesh.position.x, this.mesh.position.z);
 

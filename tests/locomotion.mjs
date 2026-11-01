@@ -228,7 +228,7 @@ try{
   }
   state.shaman=new Humanoid(0,'shaman',0,0);state.units=[state.shaman];state.shaman.placeOnGround(0,0);return report;
  }));
- await check('Knockback over water keeps its flight arc and resets gravity after splashdown',()=>page.evaluate(()=>{
+ await check('Knockback over water keeps its flight arc, sinks to the bottom and resets gravity after landing',()=>page.evaluate(()=>{
   for(let x=180;x<=220;x++)for(let z=-20;z<=20;z++)state.terrainMods.set(`${x},${z}`,-3-gameTestAPI.getBaseHeight(x,z));
   state.heightCache.clear();state.cameraLookAt.set(200,0,0);gameTestAPI.updateChunks(true);
   const report=[];
@@ -241,7 +241,7 @@ try{
    for(let frame=0;frame<600;frame++){
     if(physics){state.physicsWorld.timestep=1/60;state.physicsWorld.step();}u.update(1/60);
     if(lastY>2&&Math.abs(u.mesh.position.y-lastY)>1)throw new Error('Flight snapped to water: '+JSON.stringify({physics,frame,lastY,y:u.mesh.position.y}));
-    if(u.isSwimming&&u.isGrounded)splash=true;
+    if(u.isUnderwater&&u.isGrounded&&Math.abs(u.mesh.position.y-getSurfaceHeight(u.mesh.position.x,u.mesh.position.z))<.1)splash=true;
     if(splash&&u.state==='idle'){recovered=true;break;}lastY=u.mesh.position.y;
    }
    if(!splash||!recovered||u.blastAirborne||u.blastGravityScale!==1||Math.abs(u.fallRig.rotation.x)>.001)

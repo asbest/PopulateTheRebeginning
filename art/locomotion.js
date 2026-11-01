@@ -291,7 +291,7 @@ export function createLocomotion(T) {
         }
     }
     function ground(u,heightAt,dt){
-        if(u.isVehicle||u.isSwimming||['dead','stunned','getting_up'].includes(u.state))return;
+        if(u.isVehicle||u.isSwimming||u.isSinking||['dead','stunned','getting_up'].includes(u.state))return;
         const p=u.mesh.position;
         if(u.state!=='idle')u.idleAnchor=null;
         if(u.idleAnchor){p.x=u.idleAnchor.x;p.z=u.idleAnchor.z;}
