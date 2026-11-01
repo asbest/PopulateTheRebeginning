@@ -400,7 +400,6 @@
                 <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
                     <li><strong>Double-Click to Zoom & Center:</strong> Simply <strong>double-click</strong> any unit's entry in the sidebar unit list. The camera will immediately center and focus directly on that unit!</li>
                     <li><strong>Manual Zoom:</strong> Use your mouse <strong>Scroll Wheel</strong> or a touch <strong>Pinch</strong> gesture to adjust camera zoom.</li>
-                    <li><strong>Cinematic Camera:</strong> Press <strong>C</strong> or use <strong>Camera</strong> in the pause menu for a lower perspective. Selection, movement and spells work in both views.</li>
                 </ul>
             </div>
 
@@ -514,7 +513,6 @@
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-test-sound" onclick="testSpellSound()">Test spell sound</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFullscreen()">Toggle Fullscreen</button>
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-graphics-quality" onclick="cycleGraphicsQuality()">Graphics: High</button>
-            <button class="menu-btn" style="margin:0; width:100%;" id="btn-camera-view" onclick="toggleCameraView()">Camera: Strategy</button>
 
             <button class="menu-btn" style="margin:0; width:100%;" onclick="openTribeMenu()">Tribes</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleMatchSettings()">Match Settings</button>
@@ -817,8 +815,6 @@ const CONFIG = {
         ORTHO_Y_BASE: 25,
         ORTHO_Y_SCALE: 35,
         ORTHO_MIN_GROUND_OFFSET: 5,
-        CINEMATIC_FOV: 52,
-        CINEMATIC_MIN_GROUND_OFFSET: 6,
         DRAG_SPEED: 0.002,
         ROTATE_SPEED: 0.005,
         FPV_SPEED: 0.005,
@@ -1544,8 +1540,6 @@ const state = {
     raycaster: null,
     orthoCamera: null,
     perspectiveCamera: null,
-    cinematicCamera: null,
-    cameraView: 'strategy',
     isFPV: false,
     fpvYaw: 0,
     fpvPitch: 0,
@@ -10183,8 +10177,6 @@ function setupKeyboard() {
     window.addEventListener('keydown', (e) => {
         const k = e.key.toLowerCase();
         if(keys.hasOwnProperty(k)) { keys[k] = true; update(); }
-        if(k === 'c' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey &&
-           !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) window.toggleCameraView();
 
         // Hotkeys 1-9, 0
         if (state.visibleActions && !isNaN(k) && k !== ' ') {
@@ -10521,11 +10513,7 @@ async function init() {
         const aspect = window.innerWidth / window.innerHeight;
         state.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
         state.perspectiveCamera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
-        state.cinematicCamera = new THREE.PerspectiveCamera(CONFIG.CAMERA.CINEMATIC_FOV, aspect, 0.5, 1000);
-        try { state.cameraView = localStorage.getItem('camera-view') === 'cinematic' ? 'cinematic' : 'strategy'; } catch(e) {}
         state.camera = strategyCamera();
-        const cameraButton = document.getElementById('btn-camera-view');
-        if(cameraButton) cameraButton.textContent = `Camera: ${state.cameraView === 'cinematic' ? 'Cinematic' : 'Strategy'}`;
         updateCameraZoom();
 
         const memory=navigator.deviceMemory||8,cores=navigator.hardwareConcurrency||8;
@@ -12051,27 +12039,11 @@ function updateCameraZoom() {
 
     state.perspectiveCamera.aspect = aspect;
     state.perspectiveCamera.updateProjectionMatrix();
-    state.cinematicCamera.aspect = aspect;
-    state.cinematicCamera.updateProjectionMatrix();
 }
 
 function strategyCamera() {
-    return state.cameraView === 'cinematic' ? state.cinematicCamera : state.orthoCamera;
+    return state.orthoCamera;
 }
-
-window.setCameraView = function(view) {
-    state.cameraView = view === 'cinematic' ? 'cinematic' : 'strategy';
-    state.isFPV = false;
-    state.camera = strategyCamera();
-    updateCameraPosition();
-    const button = document.getElementById('btn-camera-view');
-    if(button) button.textContent = `Camera: ${state.cameraView === 'cinematic' ? 'Cinematic' : 'Strategy'}`;
-    try { localStorage.setItem('camera-view', state.cameraView); } catch(e) {}
-    return state.cameraView;
-};
-window.toggleCameraView = function() {
-    return window.setCameraView(state.cameraView === 'cinematic' ? 'strategy' : 'cinematic');
-};
 
 window.updateCameraPosition = updateCameraPosition;
 const _fpvForward=new THREE.Vector3(),_fpvRight=new THREE.Vector3(),_fpvUp=new THREE.Vector3();
@@ -12153,17 +12125,7 @@ function updateCameraPosition() {
         state.orthoCamera.position.set(targetX, targetY, targetZ);
         state.orthoCamera.lookAt(state.cameraLookAt);
 
-        if(state.cameraView==='cinematic') {
-            const cinematicDistance = 14 + state.viewScale * 1.2;
-            const cinematicX = state.cameraLookAt.x + Math.sin(state.cameraRotation) * cinematicDistance;
-            const cinematicZ = state.cameraLookAt.z + Math.cos(state.cameraRotation) * cinematicDistance;
-            const cinematicGround = getHeight(cinematicX, cinematicZ);
-            const cinematicY = Math.max(state.cameraLookAt.y + 9 + state.viewScale * .68,
-                cinematicGround + CONFIG.CAMERA.CINEMATIC_MIN_GROUND_OFFSET);
-            const focusY = Math.max(state.cameraLookAt.y, getHeight(state.cameraLookAt.x, state.cameraLookAt.z) + 1.5);
-            state.cinematicCamera.position.set(cinematicX, cinematicY, cinematicZ);
-            state.cinematicCamera.lookAt(state.cameraLookAt.x, focusY, state.cameraLookAt.z);
-        }
+
     }
     if(state.sunLight) {
         const focus=state.isFPV&&state.selectedUnits[0]
