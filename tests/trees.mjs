@@ -178,11 +178,28 @@ try{
         gameTestAPI.updateTreeRegrowth(7.6);
         if(effects.visible)throw new Error('Fire animation did not end');
         if(palms.mesh.geometry.attributes.aChar.getX(0)<.99)throw new Error('Palm crown did not burn away');
+        const palmShader={vertexShader:THREE.ShaderLib.standard.vertexShader,fragmentShader:THREE.ShaderLib.standard.fragmentShader,uniforms:{}};
+        palms.mesh.material.onBeforeCompile(palmShader);
+        if(!palmShader.vertexShader.includes('aChar*.91')||!palmShader.fragmentShader.includes('vPalmLeaf>.5)discard'))
+            throw new Error('Palm does not reduce to a leafless stump');
+        const depthShader={vertexShader:THREE.ShaderLib.depth.vertexShader,fragmentShader:THREE.ShaderLib.depth.fragmentShader,uniforms:{}};
+        if(!palms.mesh.customDepthMaterial)throw new Error('Missing palm burn shadow material');
+        palms.mesh.customDepthMaterial.onBeforeCompile(depthShader);
+        if(!depthShader.fragmentShader.includes('if(vPalmChar>.999)discard'))throw new Error('Burned palm still casts a shadow');
+        for(const tree of Object.values(state.chunks).flatMap(c=>c.userData.trees||[]).filter(t=>t.burned)){
+            if(tree.mesh.scale.y>tree.originalScale.y*.121)throw new Error('Burned trunk is too tall');
+            if(tree.mesh.children.slice(1).some(p=>p.visible))throw new Error('Burned crown, branches or contact shadow remain');
+            tree.mesh.traverse(p=>{if(p.castShadow)throw new Error('Burned tree still casts a shadow');});
+        }
+        state.renderer.render(state.scene,state.camera);
         gameTestAPI.updateTreeRegrowth(291.89);
         if(!state.treeBurns.has(palm.id))throw new Error('Palm regrew before five minutes');
         gameTestAPI.updateTreeRegrowth(.02);
         if(state.treeBurns.has(palm.id)||palms.data[0].burned||palms.mesh.geometry.attributes.aChar.getX(0)!==0)
             throw new Error('Palm did not regrow after five minutes');
+        const tree=Object.values(state.chunks).flatMap(c=>c.userData.trees||[]).find(t=>t.id===testTreeId);
+        if(tree&&(tree.mesh.scale.y<.9||!tree.mesh.children[1].visible||!tree.mesh.children.find(p=>p.name==='Tree canopy contact shadow')?.visible))
+            throw new Error('Regrown tree scale, crown or shadow was not restored');
         const tint=new THREE.Color();palms.mesh.getColorAt(0,tint);
         if(Math.max(Math.abs(tint.r-palm.tint.r),Math.abs(tint.g-palm.tint.g),Math.abs(tint.b-palm.tint.b))>.0001)
             throw new Error('Palm tint did not restore');
