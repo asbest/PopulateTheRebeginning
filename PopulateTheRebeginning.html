@@ -699,6 +699,7 @@ import { createLocomotion } from './art/locomotion.js';
 import { createPreacherConversion } from './art/preacher-conversion.js';
 import { createControlTutorial } from './art/control-tutorial.js';
 import { createTotemFactory } from './art/totem.js';
+import { createTrainingProgress } from './art/training-progress.js';
 import { icon } from './art/icons.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
@@ -710,6 +711,7 @@ installAssetCache();
 const Art = createArtKit(THREE);
 const Characters = createCharacters(THREE,Art);
 const Locomotion = createLocomotion(THREE);
+const TrainingProgress = createTrainingProgress(THREE);
 window.THREE = THREE; window.Characters = Characters;
 window.Art = Art;
 
@@ -1258,7 +1260,7 @@ const CONFIG = {
         HP_BAR_WIDTH: 2.0,
         HP_BAR_HEIGHT: 0.3,
         RALLY_LINE_Y_OFFSET: 0.5,
-        TRAINING_TIME: 2.0,
+        TRAINING_TIME: 10.0,
         BURN_PARTICLE_CHANCE: 0.25,
     },
     PHYSICS: {
@@ -1891,7 +1893,8 @@ const NetworkManager = {
                 z: b.mesh.position.z,
                 hp: b.hp,
                 underConstruction: b.underConstruction,
-                constructionTimer: b.constructionTimer
+                constructionTimer: b.constructionTimer,
+                trainingQueue: b.trainingQueue
             })),
             mana: state.mana,
             faith: state.faith,
@@ -1996,6 +1999,8 @@ const NetworkManager = {
                 b.hp = bData.hp;
                 b.underConstruction = bData.underConstruction;
                 b.constructionTimer = bData.constructionTimer;
+                b.trainingQueue=(bData.trainingQueue||[]).map(task=>({...task}));
+                TrainingProgress.update(b,state.camera,CONFIG.BUILDING.TRAINING_TIME);
                 if(b.hpBar) b.hpBar.scale.x = Math.max(0, b.hp / b.maxHp);
                 if(b.damageVisual)b.damageVisual.visible=b.hp/b.maxHp<.7;
                 applyBuildingConstructionVisual(b);
@@ -8246,7 +8251,7 @@ window.Humanoid = class Humanoid {
                              state.scene.remove(this.mesh);
                              this.hp = 0;
                              if(!b.trainingQueue) b.trainingQueue = [];
-                             b.trainingQueue.push({ timer: 2.0, type: newType, faction: this.faction });
+                             b.trainingQueue.push({ timer: CONFIG.BUILDING.TRAINING_TIME, duration: CONFIG.BUILDING.TRAINING_TIME, type: newType, faction: this.faction });
                              spawnPulse(b.mesh.position.x, b.mesh.position.y+2, b.mesh.position.z, 0x00FF00);
                              break;
                          }
@@ -8964,6 +8969,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
             damageVisual:damageVisual,
             smokeTimer:0,
             trainingQueue: [],
+            trainingProgress: TrainingProgress.attach(group,({warrior:6.1,fire:7.5,preacher:4.1,spy:3.8}[type]||structureHeight+.8)),
             rallyPoint: null,
             rallyLine: null,
             setRallyPoint: function(rx, rz) {
@@ -9021,7 +9027,9 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                 this.damageVisual.visible=this.hp/this.maxHp<.7;
                 this.hpGroup.visible = isSelected || isDamaged;
                 if (this.hpGroup.visible) this.hpGroup.lookAt(state.camera.position);
-                if (state.network.role === 'client') return;
+                if (state.network.role === 'client') {
+                    TrainingProgress.update(this,state.camera,CONFIG.BUILDING.TRAINING_TIME);return;
+                }
 
                 if(this.burnTimer > 0) {
                     this.burnTimer -= dt;
@@ -9068,19 +9076,23 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
                 // Handle Training Queue
                 if(this.trainingQueue && this.trainingQueue.length > 0) {
-                    for(let i = this.trainingQueue.length - 1; i >= 0; i--) {
-                        const task = this.trainingQueue[i];
-                        task.timer -= dt;
-                        if(task.timer <= 0) {
+                    let remaining=dt;
+                    while(this.trainingQueue.length&&remaining>0) {
+                        const task = this.trainingQueue[0];
+                        const consumed=Math.min(remaining,Math.max(0,task.timer));
+                        remaining-=consumed;
+                        task.timer -= consumed;
+                        if(task.timer <= 1e-8) {
                             const safe = findNearestLand(this.mesh.position.x + 2, this.mesh.position.z + 2, 10);
                             const u = new Humanoid(task.faction, task.type, safe.x, safe.z);
                             state.units.push(u);
                             if (this.rallyPoint) u.goto(this.rallyPoint.x, this.rallyPoint.z);
                             spawnPulse(u.mesh.position.x, u.mesh.position.y, u.mesh.position.z, 0xFFD700);
-                            this.trainingQueue.splice(i, 1);
-                        }
+                            this.trainingQueue.shift();
+                        }else break;
                     }
                 }
+                TrainingProgress.update(this,state.camera,CONFIG.BUILDING.TRAINING_TIME);
             }
         };
 
@@ -11485,7 +11497,11 @@ window.loadGame = function(slot=activeSaveSlot) {
                  b.hpBar.scale.x = Math.max(0, b.hp / b.maxHp);
                  applyBuildingConstructionVisual(b);
                  if (bData.rallyPoint) b.setRallyPoint(bData.rallyPoint.x, bData.rallyPoint.z);
-                 b.trainingQueue = bData.trainingQueue || [];
+                 b.trainingQueue = (bData.trainingQueue||[]).filter(task=>Number.isFinite(task.timer)).map(task=>({
+                     ...task,duration:CONFIG.BUILDING.TRAINING_TIME,
+                     timer:CONFIG.BUILDING.TRAINING_TIME*THREE.MathUtils.clamp(task.timer/(task.duration||2),0,1)
+                 }));
+                 TrainingProgress.update(b,state.camera,CONFIG.BUILDING.TRAINING_TIME);
              }
         });
         BuildingSpatialHash.markDirty();
