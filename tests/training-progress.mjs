@@ -14,6 +14,19 @@ try{
   for(const [i,type] of ['warrior','fire','preacher','spy'].entries()){
    const b=gameTestAPI.createBuilding(type,p.x+12+i*12,p.z,0,false,true);b.update(b.totalBuildTime+1);gameTestAPI.BuildingSpatialHash.update();
    const worker=new Humanoid(0,'wild',b.mesh.position.x,b.mesh.position.z);state.units.push(worker);worker.updateTicker=9;worker.update(0);
+   if(worker.state==='dead'||b.trainingQueue.length)throw new Error('Nearby worker trained without an explicit order: '+type);
+   gameTestAPI.performAction(b.mesh.position.x+4,b.mesh.position.z,'move',[worker]);
+   worker.updateTicker=9;worker.update(0);
+   if(worker.state==='dead'||b.trainingQueue.length)throw new Error('Walking past the school started training: '+type);
+   gameTestAPI.performAction(b.mesh.position.x,b.mesh.position.z,'move',[worker]);
+   gameTestAPI.performAction(b.mesh.position.x+5,b.mesh.position.z,'move',[worker]);
+   worker.updateTicker=9;worker.update(0);
+   if(worker.state==='dead'||b.trainingQueue.length)throw new Error('Cancelled training order still trained: '+type);
+   gameTestAPI.performAction(b.mesh.position.x,b.mesh.position.z,'move',[worker]);
+   worker.manualMove(new THREE.Vector3(1,0,0),0);worker.updateTicker=9;worker.update(0);
+   if(worker.state==='dead'||b.trainingQueue.length)throw new Error('Manual movement did not cancel training: '+type);
+   gameTestAPI.performAction(b.mesh.position.x,b.mesh.position.z,'move',[worker]);
+   worker.updateTicker=9;worker.update(0);
    if(b.trainingQueue.length!==1||b.trainingQueue[0].timer!==10||b.trainingQueue[0].duration!==10)throw new Error('Worker did not enter ten-second training: '+type);
    const expected={warrior:'warrior',fire:'firewarrior',preacher:'preacher',spy:'spy'}[type];
    const count=()=>state.units.filter(u=>u.faction===0&&u.type===expected&&u.state!=='dead').length,before=count();

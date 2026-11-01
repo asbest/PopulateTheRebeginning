@@ -413,7 +413,7 @@
                     <li><strong>3. Choose Structure:</strong> Click the desired building icon, or press its corresponding number hotkey.</li>
                     <li><strong>4. Place on Terrain:</strong> Click a location on <strong>dry land</strong> (above water level) that is <strong>close to your selected Brave</strong>. Leave enough space between buildings for people to pass. Your Brave will then walk over and build the structure!</li>
                     <li><strong>Demolish:</strong> Choose Demolish in the build menu and click one of your buildings, or select the building and use its action menu.</li>
-                    <li><em>Note: Each building has a specific Mana cost and unlocks new units and abilities (e.g., training Warriors, Firewarriors, Spies, or Airships).</em></li>
+                    <li><em>Note: Each building has a specific Mana cost and unlocks new units and abilities (e.g., training Warriors, Firewarriors, Spies, or Airships). To train a worker, select them and issue a move command directly onto the training building; standing nearby does not start training.</em></li>
                 </ul>
             </div>
 
@@ -7797,6 +7797,7 @@ window.Humanoid = class Humanoid {
 
     manualMove(vec, dt = 0.016) {
         if(['dead','stunned','getting_up','transported'].includes(this.state)) return;
+        this.aiTrainingTarget=null;
         this.manualInputFrame=state.manualInputFrame||0;
         this.manualStopOrigin=null;
         if(!this.lastManualControlledPosition)this.lastManualControlledPosition=this.mesh.position.clone();
@@ -7921,6 +7922,10 @@ window.Humanoid = class Humanoid {
     goto(x, z, workerPath = undefined) {
         if(['dead','stunned','getting_up','transported'].includes(this.state)) return;
         if(this.garrisonedIn)this.leaveTower();
+        if(this.aiTrainingTarget){
+            const school=state.buildings.find(b=>b.id===this.aiTrainingTarget&&!b.dead);
+            if(!school||Math.hypot(x-school.mesh.position.x,z-school.mesh.position.z)>(school.collisionRadius||2))this.aiTrainingTarget=null;
+        }
         const end = new THREE.Vector3(x, 0, z);
         this.finalDest = end.clone();
         const isFlying = (this.type === 'airship');
@@ -8323,15 +8328,15 @@ window.Humanoid = class Humanoid {
             this.rigidBody?.setLinearDamping(0.5);
         }
 
-        // Building Entry Check for Training - Every 10 frames
-        if(this.type === 'wild' && this.state !== 'dead' && this.updateTicker % 10 === 0) {
+        // Only workers explicitly assigned to this school may enter training.
+        if(this.type === 'wild' && this.aiTrainingTarget && ['idle','move'].includes(this.state) && this.updateTicker % 10 === 0) {
              const nearbyBuildings = BuildingSpatialHash.query(this.mesh.position.x, this.mesh.position.z);
              if (nearbyBuildings) {
                  for(let b of nearbyBuildings) {
                      if (!window.isAllied(this.faction, b.faction)) continue;
                      const dx = this.mesh.position.x - b.mesh.position.x;
                      const dz = this.mesh.position.z - b.mesh.position.z;
-                     if(dx*dx + dz*dz < 16.0 && b.hp > 0 && !b.underConstruction && (this.faction===0 || this.aiTrainingTarget===b.id)) {
+                     if(dx*dx + dz*dz < 16.0 && b.hp > 0 && !b.underConstruction && this.aiTrainingTarget===b.id) {
                          let newType = null;
                          if(b.type === 'warrior') newType = 'warrior';
                          if(b.type === 'fire') newType = 'firewarrior';
@@ -10035,7 +10040,11 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
 
     if(action === 'move') {
         if(actingUnits.length > 0) {
+            const school=state.buildings.find(b=>!b.dead&&b.hp>0&&!b.underConstruction&&
+                ['warrior','fire','preacher','spy'].includes(b.type)&&
+                Math.hypot(b.mesh.position.x-x,b.mesh.position.z-z)<=(b.collisionRadius||2));
             actingUnits.forEach(u => {
+                u.aiTrainingTarget=u.type==='wild'&&school&&window.isAllied(u.faction,school.faction)?school.id:null;
                 u.goto(x, z);
                 u.attackTarget = null;
             });
@@ -11952,6 +11961,14 @@ function handleTap(x, y, isRightClick, isShift) {
             updateContextMenus();
         }
     } else {
+        if(action==='move'&&buildingHits.length&&state.selectedUnits.some(u=>u.type==='wild')){
+            const school=meshToBuilding.get(buildingHits[0].object);
+            if(school&&!school.dead&&!school.underConstruction&&window.isAllied(school.faction,0)&&
+                ['warrior','fire','preacher','spy'].includes(school.type)){
+                performAction(school.mesh.position.x,school.mesh.position.z,'move');
+                return;
+            }
+        }
         if(action === 'move' && unitHits.length > 0) {
              const hitUnit = meshToUnit.get(unitHits[0].object);
 
