@@ -538,7 +538,7 @@
             <button class="menu-btn" onclick="cheatDisable()">Disable Cheats</button>
 
             <div id="stats-dashboard" style="margin-top:15px; border: 1px solid #666; padding:12px; border-radius:8px; background:rgba(0,0,0,0.7); width:90%; text-align:center; color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.5);">
-                <h3 style="color:#00d4ff; font-size:16px; margin:0 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">Visitor statistics</h3>
+                <h3 style="color:#00d4ff; font-size:16px; margin:0 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">Global page loads</h3>
                 <p id="visit-stats-status" role="status" style="margin-bottom:10px;">Loading visitor statistics…</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size:12px; margin-bottom:10px; color: white;">
                     <div style="background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px;">
@@ -713,6 +713,7 @@ import { createTreeFire } from './art/tree-fire.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
 import { createBrowserStorage } from './art/browser-storage.js';
+import { createVisitStatistics, countProductionVisit } from './art/visit-statistics.js';
 import {assetURL} from './art/asset-urls.js';
 import {installAssetCache,cacheCurrentAssets} from './art/asset-cache.js';
 const localStorage=createBrowserStorage();
@@ -10397,33 +10398,13 @@ window.cheatDisable = function() {
     showGameMessage('Cheats disabled');
 }
 
-function getVisitKeys() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-
-    // ISO Week Calculation
-    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-    const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
-
-    return {
-        total: 'visits',
-        year: `visits_${year}`,
-        month: `visits_${year}_m${month}`,
-        week: `visits_${d.getUTCFullYear()}_w${weekNum}`
-    };
-}
-
-// CounterAPI v1 was retired. Do not issue requests to its removed endpoints
-// or retry increments through a third-party proxy (which can double-count).
-window.refreshStats = async function() {
-    state.visitStatsErrors={total:true,year:true,month:true,week:true};
-    state.visitStatsStatus='Global visitor statistics are unavailable: the previous counter service was discontinued. A replacement counter must be configured.';
+const VisitStatistics=createVisitStatistics({storage:localStorage,onChange:stats=>{
+    state.visitCount=stats.values.total;
+    state.visitStats={year:stats.values.year,month:stats.values.month,week:stats.values.week};
+    state.visitStatsErrors=stats.errors;state.visitStatsStatus=stats.status;
     updateUI();
-};
+}});
+window.refreshStats=()=>VisitStatistics.refresh();
 
 
 // --- js/main.js ---
@@ -10477,8 +10458,8 @@ function createSkyDome() {
 async function init() {
     console.log("Initializing Game...");
 
-    // Statistics availability must never delay game startup.
-    window.refreshStats();
+    // The global counter never delays startup; local/test launches do not count.
+    void VisitStatistics.start(countProductionVisit(location));
 
     try {
 
