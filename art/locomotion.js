@@ -110,12 +110,14 @@ export function createLocomotion(T) {
         pose(u.legL.userData.lower?.rotation,'x',.22);
         pose(u.legR.userData.lower?.rotation,'x',.22);
     }
+    const ankleRotation=new T.Quaternion(),ankleAxis=new T.Vector3(1,0,0);
     const soleSamples=[];
     for(let row=0;row<=6;row++)for(let col=0;col<12;col++){
         const a=row*Math.PI/6,b=col*Math.PI/6;
         soleSamples.push({x:.055*Math.sin(a)*Math.cos(b),y:.01+.032*Math.cos(a),z:.034+.108*Math.sin(a)*Math.sin(b)});
     }
     function animate(u,dt,heightAt){
+        heightAt=heightAt.forPose?.()||heightAt;
         if(!u.legL||['dead','stunned','getting_up','transported'].includes(u.state))return;
         if(u.isSwimming){animateSwim(u,dt);return;}
         if(!u.isGrounded){animateFall(u,dt);return;}
@@ -211,9 +213,9 @@ export function createLocomotion(T) {
             leg.rotation.x=-Math.atan2(f.z,radialDown)-bend;
             leg.rotation.z=Math.atan2(lateral,down);
             leg.userData.lower.rotation.x=2*bend;
-            const ankle=leg.userData.lower.getObjectByName('Sandal');
+            const ankle=leg.userData.poseAnkle||(leg.userData.poseAnkle=leg.userData.lower.getObjectByName('Sandal'));
             if(ankle){
-                const desired=new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),f.pitch+f.roll);
+                const desired=ankleRotation.setFromAxisAngle(ankleAxis,f.pitch+f.roll);
                 ankle.quaternion.copy(leg.quaternion).multiply(leg.userData.lower.quaternion).invert().multiply(desired);
             }
         }
@@ -292,6 +294,7 @@ export function createLocomotion(T) {
         }
     }
     function ground(u,heightAt,dt){
+        heightAt=heightAt.forPose?.()||heightAt;
         if(u.isVehicle||u.isSwimming||u.isSinking||['dead','stunned','getting_up'].includes(u.state))return;
         const p=u.mesh.position;
         if(u.state!=='idle')u.idleAnchor=null;

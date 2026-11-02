@@ -714,6 +714,8 @@ import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
 import { createBrowserStorage } from './art/browser-storage.js';
 import { createVisitStatistics, countProductionVisit } from './art/visit-statistics.js';
+import { createCharacterBatches } from './art/character-batches.js';
+import { createBattleWork, createBattleProfiler } from './art/battle-work.js';
 import {assetURL} from './art/asset-urls.js';
 import {installAssetCache,cacheCurrentAssets} from './art/asset-cache.js';
 const localStorage=createBrowserStorage();
@@ -3076,15 +3078,27 @@ window.getHeight = getHeight;
 
 // Barycentric height of the actual rendered triangle, not the continuous noise
 // function between mesh vertices. Feet and physics now share one surface.
-function getSurfaceHeight(x,z) {
+function sampleSurfaceHeight(x,z,cache) {
     const cx=Math.round(x/CHUNK_SIZE),cz=Math.round(z/CHUNK_SIZE),step=CHUNK_SIZE/CHUNK_RES;
     const gx=(x-cx*CHUNK_SIZE+CHUNK_SIZE/2)/step,gz=(z-cz*CHUNK_SIZE+CHUNK_SIZE/2)/step;
     const ix=Math.max(0,Math.min(CHUNK_RES-1,Math.floor(gx))),iz=Math.max(0,Math.min(CHUNK_RES-1,Math.floor(gz)));
     const fx=gx-ix,fz=gz-iz,positions=state.chunks[`${cx},${cz}`]?.children[0]?.geometry.attributes.position;
     const sample=(i,j)=>positions?positions.getY(j*(CHUNK_RES+1)+i):getHeight(cx*CHUNK_SIZE-CHUNK_SIZE/2+i*step,cz*CHUNK_SIZE-CHUNK_SIZE/2+j*step);
-    const a=sample(ix,iz),b=sample(ix,iz+1),d=sample(ix+1,iz),c=sample(ix+1,iz+1);
+    let a,b,c,d;
+    if(cache&&cache.positions===positions&&cache.cx===cx&&cache.cz===cz&&cache.ix===ix&&cache.iz===iz){
+        ({a,b,c,d}=cache);
+    }else{
+        a=sample(ix,iz);b=sample(ix,iz+1);d=sample(ix+1,iz);c=sample(ix+1,iz+1);
+        if(cache)Object.assign(cache,{positions,cx,cz,ix,iz,a,b,c,d});
+    }
     return fx+fz<=1?a+(d-a)*fx+(b-a)*fz:c+(b-c)*(1-fx)+(d-c)*(1-fz);
 }
+function getSurfaceHeight(x,z){return sampleSurfaceHeight(x,z,null);}
+// A pose/grounding pass samples immutable terrain repeatedly. Cache only those
+// vertex reads within that pass, preserving every original barycentric result.
+getSurfaceHeight.forPose=()=>{
+    const cache={ix:-1};return (x,z)=>sampleSurfaceHeight(x,z,cache);
+};
 window.getSurfaceHeight=getSurfaceHeight;
 
 const TREE_OBSTACLE_CELL_SIZE=8;
@@ -5991,6 +6005,18 @@ const PathWorker = {
     }
 };
 
+const CharacterBatches=createCharacterBatches(THREE,state,getSurfaceHeight);
+const BattleProfiler=createBattleProfiler();
+const BattleWork=createBattleWork({state,worker:PathWorker,
+    findPath:(...args)=>Pathfinder.findPath(...args),walkable:isWalkableLine,
+    version:()=>`${state.navigationVersion}:${state.waterState}:${state.matchSettings?.biome}`,
+    enemy:(a,b)=>!b.invisible&&!window.isAllied(a.faction,b.faction),
+    makePath:raw=>raw?.map(([x,z])=>new THREE.Vector3(x,0,z))??null,
+    treeConflict:(start,path,goal)=>{
+        let a=start;for(const b of [...path,goal]){if(treeBlocksSegment(a.x,a.z,b.x,b.z))return true;a=b;}return false;
+    }
+});
+
 function isWalkableLine(start, end, isFlying, unitHeight = 1.5, avoidWater = false) {
     const dist = start.distanceTo(end);
     const steps = Math.ceil(dist / (avoidWater ? 0.25 : 1.0));
@@ -6424,6 +6450,8 @@ class Fireball {
 
 function prewarmFireballShaders() {
     if (!state.renderer || !state.scene || !state.shaman) return;
+    state.scene.updateMatrixWorld(true);
+    CharacterBatches.warming=true;CharacterBatches.update();
     HitPulseManager.prewarm();
     FirewarriorFlames.prewarm();
     FireballFxManager.prewarm();
@@ -6471,6 +6499,7 @@ function prewarmFireballShaders() {
         state.fireballShaderWarmMaterials = warmMaterials;
         oldMaterials.forEach(material => material.dispose());
         state.scene.remove(preview.mesh);
+        CharacterBatches.warming=false;CharacterBatches.update();
         FirewarriorFlames.clear();
         FireballFxManager.endPrewarm();
         FireballFxManager.lights.forEach(light=>{light.intensity=0;light.visible=['high','ultra'].includes(state.graphicsQuality?.tier);});
@@ -8271,7 +8300,7 @@ window.Humanoid = class Humanoid {
                     if(!this.attackTarget||this.attackTarget.state==='dead'||
                        window.isAllied(this.attackTarget.faction,this.faction)||
                        this.mesh.position.distanceTo(this.attackTarget.mesh.position)>combatRange(this,this.attackTarget))
-                        this.attackTarget=this.findTarget();
+                        if(BattleWork.canSearch())this.attackTarget=this.findTarget();
                     if(this.attackTarget&&this.mesh.position.distanceTo(this.attackTarget.mesh.position)<=combatRange(this,this.attackTarget)&&
                        cachedCombatLineClear(this,this.attackTarget))this.attack();
                     else this.resetAnim();
@@ -8524,7 +8553,7 @@ window.Humanoid = class Humanoid {
             if(isPeaceTime()) { this.state='idle';this.attackTarget=null;this.path=[];return; }
             if(!this.attackTarget || this.attackTarget.state === 'dead' || this.attackTarget.dead ||
                window.isAllied(this.attackTarget.faction,this.faction)) {
-                if (this.updateTicker % 5 === 0) {
+                if (this.updateTicker % 5 === 0 && BattleWork.canSearch()) {
                     this.attackTarget = this.findTarget();
                     if(!this.attackTarget) { this.state = 'idle'; return; }
                 } else return;
@@ -8550,16 +8579,20 @@ window.Humanoid = class Humanoid {
                     (this.pathTimer > .5 && movedTarget)) {
                      this.pathTimer = 0;
                      const isFlying = (this.type === 'airship');
-                     this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying, this.height,
-                         this.faction !== 0 && !isFlying && !this.aiWaterEscape, !!this.aiWaterEscape);
-                     this.pathIndex = 0;
-                     this.lastCombatPathTarget=targetPos.clone();
-                     this.lastCombatTargetId=this.attackTarget.id;
-                     if (!this.path) {
-                         this.state = 'idle';
-                         this.attackTarget = null;
-                         this.path = [];
-                         return;
+                     if(BattleWork.active&&state.units.length>=32&&!(state.isFPV&&state.selectedUnits[0]===this)){
+                         BattleWork.request(this,this.attackTarget);
+                     }else{
+                         this.path = Pathfinder.findPath(this.mesh.position, targetPos, isFlying, this.height,
+                             this.faction !== 0 && !isFlying && !this.aiWaterEscape, !!this.aiWaterEscape);
+                         this.pathIndex = 0;
+                         this.lastCombatPathTarget=targetPos.clone();
+                         this.lastCombatTargetId=this.attackTarget.id;
+                         if (!this.path) {
+                             this.state = 'idle';
+                             this.attackTarget = null;
+                             this.path = [];
+                             return;
+                         }
                      }
                 }
 
@@ -8767,7 +8800,9 @@ window.Humanoid = class Humanoid {
             if (!state.selectedUnits.includes(this) && !['retreat','builder','shelter','train','guard','support','escape-water'].includes(this.aiRole)) {
                 if (state.clock.getElapsedTime() > this.nextTargetCheck) {
                     this.nextTargetCheck = state.clock.getElapsedTime() + 0.5 + Math.random() * 0.5;
-                    const target = this.findTarget();
+                    const search=BattleWork.canSearch();
+                    if(!search)this.nextTargetCheck=state.clock.elapsedTime+.02;
+                    const target = search?this.findTarget():null;
                     if(target) {
                         this.attackTarget = target;
                         this.state = 'combat';
@@ -10494,6 +10529,7 @@ async function init() {
         state.rangeRing.visible = false;
 
         state.scene = new THREE.Scene();
+        state.scene.onBeforeRender=()=>CharacterBatches.update();
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
         state.scene.fog = new THREE.Fog(CONFIG.BIOMES.normal.fog, CONFIG.BIOMES.normal.fogNear, CONFIG.BIOMES.normal.fogFar);
 
@@ -10630,7 +10666,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -12264,6 +12300,7 @@ function updateRangeRing() {
 }
 
 function animate() {
+    BattleProfiler.begin();
     requestAnimationFrame(animate);
     const frameTime=performance.now(),dt=Math.min(state.lastFrameTime===undefined?1/60:(frameTime-state.lastFrameTime)/1000,.1);
     state.lastFrameTime=frameTime;
@@ -12401,6 +12438,7 @@ function animate() {
 
     if(state.chunkWaterMat && state.chunkWaterMat.uniforms) state.chunkWaterMat.uniforms.time.value += dt;
 
+    const physicsStart=performance.now();
     if (state.physicsWorld && typeof state.physicsWorld.step === 'function' && state.network.role !== 'client') {
         try {
             state.physicsAccumulator=Math.min((state.physicsAccumulator||0)+dt,.1);
@@ -12410,6 +12448,7 @@ function animate() {
             console.error("Physics step failed:", e);
         }
     }
+    BattleProfiler.add('physics',performance.now()-physicsStart);
     }
 
     updateRangeRing();
@@ -12431,6 +12470,7 @@ function animate() {
     }
     updatePeaceTimer();
     if(isPeaceTime()&&(state.projectiles.length||state.activeEffects.length))cancelOffensiveEffectsDuringPeace();
+    const simulationStart=performance.now();BattleWork.begin();
     if (state.network.role !== 'client'&&!state.controlTutorial?.active) window.enemyAIs.forEach(ai => ai.update(dt));
     PathWorker.update();
 
@@ -12626,10 +12666,12 @@ function animate() {
     HitPulseManager.update(dt);
     FirewarriorFlames.update();
     FireballFxManager.update(dt);
+    BattleWork.end();BattleProfiler.add('simulation',performance.now()-simulationStart);
     }
 
     updateUnitListSelection();
-    state.renderer.render(state.scene, state.camera);
+    const renderStart=performance.now();state.renderer.render(state.scene, state.camera);
+    BattleProfiler.add('render',performance.now()-renderStart);BattleProfiler.end();
     if(state.assetsReady&&(state.isFPV||state.viewScale<=14)&&performance.now()-(state.lastAssetStreamAt||0)>500){
         state.lastAssetStreamAt=performance.now();
         Art.streamTextures(state.scene,state.isFPV?state.camera.position:state.cameraLookAt,state.isFPV?18:Math.max(12,state.viewScale*1.5));
