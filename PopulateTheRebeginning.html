@@ -1025,6 +1025,7 @@ const CONFIG = {
         DUST_PER_RADIUS: 2.5,
         FIRE_TRAIL_RADIUS: 0.3,
         FIRE_TRAIL_LIFE: 0.4,
+        LIGHTNING_DURATION: 3.0,
         LIGHTNING_BOLT_SEGMENTS: 10,
         LIGHTNING_SEGMENT_HEIGHT: 3,
         LIGHTNING_JITTER: 4,
@@ -1574,6 +1575,7 @@ const state = {
     matchElapsed: 0,
 
     particles: [],
+    lightningSkyRemaining: 0,
     projectiles: [],
     buildings: [],
     activeEffects: [],
@@ -7290,6 +7292,8 @@ function executeSpell(type, x, z, caster) {
 
         // Jagged Lightning Bolt
         const boltGroup = new THREE.Group();
+        boltGroup.name = 'Lightning bolt';
+        state.lightningSkyRemaining = CONFIG.EFFECTS.LIGHTNING_DURATION;
         const mat = new THREE.MeshBasicMaterial({color: 0xFFFFFF, transparent: true, opacity: 1.0});
 
         let currentY = h + 30;
@@ -7321,11 +7325,12 @@ function executeSpell(type, x, z, caster) {
         light.position.set(x, h + 2, z);
         boltGroup.add(light);
 
-        state.particles.push(new VisualEffect(boltGroup, 0.2, (eff, dt) => {
-            eff.mesh.children.forEach(c => {
-                 if(c.material) c.material.opacity = eff.life / eff.maxLife;
-                 if(c.isLight) c.intensity = 3 * (eff.life / eff.maxLife);
-            });
+        state.particles.push(new VisualEffect(boltGroup, CONFIG.EFFECTS.LIGHTNING_DURATION, (eff, dt) => {
+            const age=eff.maxLife-eff.life;
+            const envelope=Math.max(0,Math.min(1,eff.life/.3));
+            const pulse=envelope*(.78+.22*Math.cos(age*Math.PI*6));
+            mat.opacity=pulse;
+            light.intensity=3*pulse;
         }));
 
         spawnExplosion(x, h, z, 0xFFFFFF, 20);
@@ -10457,14 +10462,23 @@ window.onload = () => setTimeout(init, 100);
 
 window.enemyAIs = [];
 
+// Simulation time keeps the sky and bolt in sync when paused; overlapping casts
+// renew the envelope without stacking exposure or retaining stale biome colours.
+function updateLightningSky(dt) {
+    state.lightningSkyRemaining=Math.max(0,state.lightningSkyRemaining-dt);
+    const remaining=state.lightningSkyRemaining,age=CONFIG.EFFECTS.LIGHTNING_DURATION-remaining;
+    const darkness=remaining>0?Math.max(0,Math.min(1,age/.12,remaining/.4)):0;
+    if(state.skyDome)state.skyDome.material.uniforms.lightningDarkness.value=darkness;
+}
+
 function createSkyDome() {
     const material=new THREE.ShaderMaterial({
         uniforms:{topColor:{value:new THREE.Color(0x3997dd)},horizonColor:{value:new THREE.Color(0xb8e4f5)},
             sunDirection:{value:new THREE.Vector3(.42,.84,.34).normalize()},sunColor:{value:new THREE.Color(0xffe3ad)},
-            nightMix:{value:0},cloudiness:{value:.28},time:{value:0}},
+            lightningDarkness:{value:0},nightMix:{value:0},cloudiness:{value:.28},time:{value:0}},
         vertexShader:`varying vec3 vSkyDirection;void main(){vSkyDirection=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
         fragmentShader:`uniform vec3 topColor;uniform vec3 horizonColor;uniform vec3 sunDirection;uniform vec3 sunColor;
-            uniform float nightMix;uniform float cloudiness;uniform float time;varying vec3 vSkyDirection;
+            uniform float lightningDarkness;uniform float nightMix;uniform float cloudiness;uniform float time;varying vec3 vSkyDirection;
             float skyHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
             float skyNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(skyHash(i),skyHash(i+vec2(1,0)),f.x),mix(skyHash(i+vec2(0,1)),skyHash(i+vec2(1,1)),f.x),f.y);}
             float skyFbm(vec2 p){float f=0.0,a=.55;for(int i=0;i<4;i++){f+=skyNoise(p)*a;p=mat2(.8,-.6,.6,.8)*p*2.03+11.7;a*=.48;}return f;}
@@ -10483,6 +10497,7 @@ function createSkyDome() {
             star*=.55+.45*sin(time*(1.3+skyHash(starCell+4.2))*2.0+skyHash(starCell)*30.0);
             float moon=pow(max(dot(dir,-normalize(sunDirection)),0.0),720.0);night+=vec3(.72,.80,1.0)*(star*1.7+moon*1.6);
             vec3 c=mix(daylight,night,nightMix);
+            c=mix(c,c*vec3(.23,.27,.36),lightningDarkness);
             gl_FragColor=vec4(c,1.0);\n#include <encodings_fragment>}`,
         side:THREE.BackSide,depthWrite:false,depthTest:false,fog:false
     });
@@ -10666,7 +10681,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -11541,6 +11556,7 @@ window.loadGame = function(slot=activeSaveSlot) {
         state.projectiles.length = 0;
         state.particles.forEach(p => state.scene.remove(p.mesh));
         state.particles.length = 0;
+        state.lightningSkyRemaining=0;updateLightningSky(0);
         SpellWindup.clear();
         FirewarriorFlames.clear();
         FireballFxManager.clear();
@@ -12305,6 +12321,7 @@ function animate() {
     const frameTime=performance.now(),dt=Math.min(state.lastFrameTime===undefined?1/60:(frameTime-state.lastFrameTime)/1000,.1);
     state.lastFrameTime=frameTime;
     SoundManager.syncSustains(!!state.isPaused);
+    updateLightningSky(state.isPaused?0:dt);
     state.controlTutorial?.update();
 
     const biome = state.matchSettings.biome || 'normal';

@@ -185,6 +185,40 @@ try{
    return {legacyHp:250,restoredHp:restored,maxHp:state.shaman.maxHp};
   });
  });
+ await check('Lightning lasts three seconds and restores the sky after overlapping casts',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {caster,enemy,x,z}=fixture,sky=state.skyDome.material.uniforms.lightningDarkness;
+   gameTestAPI.executeSpell('lightning',x,z,caster);
+   const bolt=state.particles.find(p=>p.mesh.name==='Lightning bolt'),hp=enemy.hp;
+   const cameraRotation=state.camera.quaternion.clone();
+   state.camera.lookAt(state.camera.position.clone().add(new THREE.Vector3(0,100,1)));
+   const skyPixel=()=>{
+    state.renderer.render(state.scene,state.camera);
+    const gl=state.renderer.getContext(),pixel=new Uint8Array(4);
+    gl.readPixels(Math.floor(gl.drawingBufferWidth/2),Math.floor(gl.drawingBufferHeight/2),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
+    return pixel[0]+pixel[1]+pixel[2];
+   };
+   const bright=skyPixel();
+   if(!bolt||bolt.maxLife!==3||state.lightningSkyRemaining!==3)throw new Error('Wrong lightning duration');
+   gameTestAPI.updateLightningSky(.15);bolt.update(.15);
+   if(sky.value<.99||bolt.mesh.children[0].material.opacity<=0)throw new Error('Sky or bolt not active');
+   const dark=skyPixel();
+   if(!bright||dark>=bright*.8)throw new Error('Rendered sky did not darken: '+JSON.stringify({bright,dark}));
+   gameTestAPI.updateLightningSky(0);
+   if(state.lightningSkyRemaining!==2.85)throw new Error('Paused atmosphere advanced');
+   for(let i=0;i<165;i++){bolt.update(1/60);gameTestAPI.updateLightningSky(1/60);}
+   if(bolt.life<=0||sky.value<=0||enemy.hp!==hp)throw new Error('Lightning ended early or repeated damage');
+   gameTestAPI.executeSpell('lightning',x,z,caster);
+   gameTestAPI.updateLightningSky(.2);
+   if(sky.value<.99)throw new Error('Overlapping cast did not renew darkening');
+   if(bolt.update(.2)!==false||bolt.mesh.parent)throw new Error('Expired bolt retained');
+   gameTestAPI.updateLightningSky(2.8);
+   if(sky.value!==0||state.lightningSkyRemaining!==0)throw new Error('Sky did not recover');
+   const restored=skyPixel();state.camera.quaternion.copy(cameraRotation);
+   if(Math.abs(restored-bright)>3)throw new Error('Rendered sky did not restore');
+   return {duration:bolt.maxLife,skyRestored:sky.value===0,bright,dark,restored};
+  });
+ });
  await check('Lightning weakens with distance and chains to each target once',async()=>{
   await fresh();return p.evaluate(()=>{
    const {caster,enemy,ally,x,z}=fixture;
