@@ -9950,14 +9950,14 @@ function hideIconNameTooltip() {
         tooltip.setAttribute('aria-hidden','true');
     }
 }
-function armIconNameTooltip(button,name,event) {
+function armIconNameTooltip(button,name,event,manaCost) {
     if(event.pointerType === 'mouse' && event.button !== 0)return;
     hideIconNameTooltip();
     iconNameTimer = setTimeout(() => {
         if(!button.isConnected)return;
         const tooltip = document.getElementById('spell-name-tooltip');
         const rect = button.getBoundingClientRect();
-        tooltip.textContent = name;
+        tooltip.textContent = manaCost===undefined ? name : `${name}\n${manaCost} mana`;
         tooltip.style.display = 'block';
         const left = rect.left < innerWidth / 2
             ? rect.right + 10 : rect.left - tooltip.offsetWidth - 10;
@@ -9965,6 +9965,7 @@ function armIconNameTooltip(button,name,event) {
         tooltip.style.top = `${Math.max(8,Math.min(innerHeight-tooltip.offsetHeight-8,
             rect.top+(rect.height-tooltip.offsetHeight)/2))}px`;
         tooltip.setAttribute('aria-hidden','false');
+        if(manaCost!==undefined)iconNameTimer=setTimeout(hideIconNameTooltip,2000);
     },450);
 }
 window.addEventListener('pointerup', hideIconNameTooltip);
@@ -10049,7 +10050,8 @@ function updateContextMenus() {
          btn.innerHTML = data.icon;
          btn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); } };
          if(iconName) {
-             btn.addEventListener('pointerdown',e=>armIconNameTooltip(btn,iconName,e));
+             btn.addEventListener('pointerdown',e=>armIconNameTooltip(btn,iconName,e,
+                 SPELL_NAMES[act] ? (state.campaignLevel===12?0:CONFIG.COSTS.SPELLS[act]) : undefined));
              btn.addEventListener('pointerup',hideIconNameTooltip);
              btn.addEventListener('pointercancel',hideIconNameTooltip);
              btn.addEventListener('pointerleave',hideIconNameTooltip);

@@ -381,7 +381,7 @@ try {
  await check('Spell bar shows every spell without scrolling',async()=>{
   const layout=await actionBarLayout(page);assertActionBar(layout);return layout;
  });
- await check('Holding a spell reveals its full name',async()=>{
+ await check('Holding a spell reveals its full name and mana cost for two seconds',async()=>{
   const point=await controlCenter(page,'#btn-blast');
   const before=await page.evaluate(()=>state.currentAction);
   await watchSpellPress(page);
@@ -393,9 +393,10 @@ try {
     icon:!!document.querySelector('#btn-blast svg'),action:state.currentAction,
     tip:document.getElementById('spell-name-tooltip').getBoundingClientRect().toJSON(),
     button:document.getElementById('btn-blast').getBoundingClientRect().toJSON()}));
-   if(shown.name!=='Blast (Fireball)'||!shown.icon||shown.action!==before||
+   if(shown.name!=='Blast (Fireball)\n10 mana'||!shown.icon||shown.action!==before||
       shown.tip.right>shown.button.left||shown.tip.left<0||shown.tip.bottom>900)
     throw new Error(JSON.stringify(shown));
+   await page.locator('#spell-name-tooltip').waitFor({state:'hidden',timeout:15000});
   }finally{await page.mouse.up();}
   if(await page.locator('#spell-name-tooltip').isVisible())throw new Error('Spell name remained visible after release');
   await page.evaluate(()=>window.selectAction('move'));
@@ -526,7 +527,7 @@ try {
     const shown=await phone.evaluate(()=>({name:document.getElementById('spell-name-tooltip').textContent,
      tip:document.getElementById('spell-name-tooltip').getBoundingClientRect().toJSON(),
      button:document.getElementById('btn-blast').getBoundingClientRect().toJSON()}));
-    if(shown.name!=='Blast (Fireball)'||shown.tip.left<0||shown.tip.right>390||
+    if(shown.name!=='Blast (Fireball)\n10 mana'||shown.tip.left<0||shown.tip.right>390||
        shown.tip.right>shown.button.left||shown.tip.top<0||shown.tip.bottom>844)
      throw new Error('Touch spell name is clipped or misplaced: '+JSON.stringify(shown));
    }finally{
