@@ -40,6 +40,13 @@ controlled combat retains immediate synchronous path handling.
 
 ## Measurements and regression checks
 
+- `node tools/benchmark-lightning.mjs`: windup, impact, sustained and overlapping
+  three-second bolts, then expiry. Checks a stable visible point-light count,
+  shared white lightning illumination on High/Ultra, and no bulk shader compilation.
+  `--tier=low` verifies the unlit effect path. Reports GPU-synchronized frame times
+  for diagnosis; timings depend on the machine. Lightning and its impact share the
+  existing two prewarmed battle lights, so casting and expiry do not add/remove
+  shader light variants. Low/Medium retain the emissive bolt and sky effect.
 - `node tools/benchmark-armies.mjs`: 80 mixed, animated units; compares original
   versus batched draw calls and pixels with full shadows, checks unchanged rig
   and Rapier state, exact terrain samples, fallback, and distant shadow LOD.

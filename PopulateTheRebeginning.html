@@ -6290,9 +6290,21 @@ const FireballFxManager={
             if(this.flashes[i].life<=0)this.flashes.splice(i,1);
         }
         const enabled=['high','ultra'].includes(state.graphicsQuality?.tier);
+        for(const light of this.lights){light.color.setHex(0xff7b35);light.distance=14;}
         let slot=0;
         if(enabled){
+            // Lightning shares the precompiled light budget with fireballs.
+            // Adding a light per bolt recompiles every lit landscape/actor material.
+            for(const effect of state.particles){
+                if(slot>=this.lights.length)break;
+                const glow=effect.mesh?.userData.lightning;
+                if(!glow||effect.life<=0)continue;
+                const light=this.lights[slot++];
+                light.position.set(glow.x,glow.y,glow.z);
+                light.color.setHex(0xffffff);light.distance=30;light.intensity=glow.intensity;
+            }
             for(const flash of this.flashes){
+                if(slot>=this.lights.length)break;
                 const light=this.lights[slot++];
                 light.position.set(flash.x,flash.y,flash.z);
                 light.intensity=2*flash.life/.24;light.visible=true;
@@ -7321,19 +7333,17 @@ function executeSpell(type, x, z, caster) {
              currentX = nextX; currentY = nextY; currentZ = nextZ;
         }
 
-        const light = new THREE.PointLight(0xFFFFFF, 3, 30);
-        light.position.set(x, h + 2, z);
-        boltGroup.add(light);
+        const glow=boltGroup.userData.lightning={x,y:h+2,z,intensity:3};
 
         state.particles.push(new VisualEffect(boltGroup, CONFIG.EFFECTS.LIGHTNING_DURATION, (eff, dt) => {
             const age=eff.maxLife-eff.life;
             const envelope=Math.max(0,Math.min(1,eff.life/.3));
             const pulse=envelope*(.78+.22*Math.cos(age*Math.PI*6));
             mat.opacity=pulse;
-            light.intensity=3*pulse;
+            glow.intensity=3*pulse;
         }));
 
-        spawnExplosion(x, h, z, 0xFFFFFF, 20);
+        spawnExplosion(x, h, z, 0xFFFFFF, 20, false);
 
         // Damage
         let hit = false;
