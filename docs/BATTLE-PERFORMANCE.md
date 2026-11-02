@@ -47,16 +47,23 @@ controlled combat retains immediate synchronous path handling.
   with eight additional fireballs every half second after terrain streaming settles. Reports median/p95 frame time, render calls,
   particle peaks, path queues and separate CPU phase timings. `--original`
   compares against unbatched character rendering on the same machine. Sampling
-  stops after 120 seconds if 60 frames cannot be collected and fails explicitly.
+  stops after 120 seconds locally (300 seconds for software CI) if 60 frames
+  cannot be collected and fails explicitly.
   First-frame stalls remain in the reported maximum/frame distribution instead
   of prematurely ending the measurement. `--first-frame-delay-ms=6000` reproduces
   a first sample longer than the nominal five-second window for regression checks.
   GitHub Actions automatically uses a bounded software-rendering profile (pixel
-  ratio capped at 0.25 and a 512-pixel shadow map); `--ci-rendering` reproduces it
-  locally. Actor counts, geometry, physics/animation frequency, PBR, effects and
+  ratio capped at 0.25, a 512-pixel shadow map and decorative background ground
+  cover/flowers/palms/trees omitted from drawing, terrain drawing limited to the
+  3-by-3 chunks around the battle); `--ci-rendering` reproduces it locally.
+  Terrain/obstacle physics remains intact. Actor counts and actor geometry,
+  physics/animation frequency, PBR, effects and
   sample requirements are unchanged. Results explicitly label the profile and
   render dimensions; CI frame times are not native-resolution FPS measurements.
   The separate army image-parity/draw-budget benchmark retains full resolution.
+  Landscape vegetation remains covered by the rendering group. `--software-gl`
+  selects Chromium's SwiftShader driver for local reproduction. Reports include
+  the actual GPU backend and peak triangle count.
 - `node tests/combat-worker.mjs`: a real Worker route and disabled-Worker fallback
   match the original pathfinder around a building without moving the physics body.
 - `node tests/battle-work.mjs`: frame budgets, stuns, faction/terrain changes,
