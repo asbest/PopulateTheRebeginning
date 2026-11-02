@@ -51,6 +51,12 @@ controlled combat retains immediate synchronous path handling.
   First-frame stalls remain in the reported maximum/frame distribution instead
   of prematurely ending the measurement. `--first-frame-delay-ms=6000` reproduces
   a first sample longer than the nominal five-second window for regression checks.
+  GitHub Actions automatically uses a bounded software-rendering profile (pixel
+  ratio capped at 0.25 and a 512-pixel shadow map); `--ci-rendering` reproduces it
+  locally. Actor counts, geometry, physics/animation frequency, PBR, effects and
+  sample requirements are unchanged. Results explicitly label the profile and
+  render dimensions; CI frame times are not native-resolution FPS measurements.
+  The separate army image-parity/draw-budget benchmark retains full resolution.
 - `node tests/combat-worker.mjs`: a real Worker route and disabled-Worker fallback
   match the original pathfinder around a building without moving the physics body.
 - `node tests/battle-work.mjs`: frame budgets, stuns, faction/terrain changes,
