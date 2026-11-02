@@ -2,13 +2,15 @@ import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 const modulePath=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createRequire(import.meta.url)('playwright');
+const firstFrameDelayMs=Number(process.argv.find(a=>a.startsWith('--first-frame-delay-ms='))?.split('=')[1]||0);
+if(!Number.isFinite(firstFrameDelayMs)||firstFrameDelayMs<0||firstFrameDelayMs>60000)throw new Error('Invalid first-frame delay');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:800}}),errors=[];
  page.on('pageerror',e=>errors.push(String(e)));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
- const result=await page.evaluate(async original=>{
+ const result=await page.evaluate(async ({original,firstFrameDelayMs})=>{
   closeHelp();closeStoryOverlay();state.isPaused=true;window.enemyAIs=[];state.matchSettings.peaceTimeMinutes=0;
   // Keep terrain streaming/loading out of the combat measurement.
   const settle=performance.now();
@@ -26,8 +28,13 @@ try{
   state.renderer.render(state.scene,state.camera);gameTestAPI.BattleProfiler.reset();
   const frames=[];let before=performance.now(),start=before,lastSalvo=before,peakCalls=0,peakBacklog=0,peakParticles=0,shots=0;
   state.isPaused=false;
-  while(performance.now()-start<5000){
-   await new Promise(r=>requestAnimationFrame(r));const now=performance.now();frames.push(now-before);before=now;
+  // Software WebGL on CI can spend longer than the target window in its first
+  // draw. Still collect a real sample population; retain that stall in timings.
+  const minimumFrames=60,targetDurationMs=5000,maximumDurationMs=120000;
+  while(performance.now()-start<maximumDurationMs&&(performance.now()-start<targetDurationMs||frames.length<minimumFrames)){
+   await new Promise(r=>requestAnimationFrame(r));
+   if(!frames.length&&firstFrameDelayMs)await new Promise(r=>setTimeout(r,firstFrameDelayMs));
+   const now=performance.now();frames.push(now-before);before=now;
    if(now-lastSalvo>=500){
     lastSalvo=now;
     for(let i=0;i<8;i++){
@@ -39,12 +46,13 @@ try{
    peakParticles=Math.max(peakParticles,state.particles.length);
   }
   state.isPaused=true;frames.sort((a,b)=>a-b);
-  return {mode:original?'original':'optimized',fighters:fighters.length,shots,frames:frames.length,
+  return {mode:original?'original':'optimized',fighters:fighters.length,shots,frames:frames.length,minimumFrames,
+   durationMs:performance.now()-start,maxFrameMs:frames.at(-1),timedOut:frames.length<minimumFrames,
    medianFrameMs:frames[Math.floor(frames.length*.5)],p95FrameMs:frames[Math.floor(frames.length*.95)],
    peakCalls,peakBacklog,peakParticles,phases:gameTestAPI.BattleProfiler.report(),
    work:{...gameTestAPI.BattleWork.stats},batch:{...gameTestAPI.CharacterBatches.stats},
    survivors:fighters.filter(u=>u.state!=='dead').length};
- },process.argv.includes('--original'));
- if(errors.length||result.survivors!==64||result.frames<2||result.shots<8)throw new Error(JSON.stringify({errors,result}));
+ },{original:process.argv.includes('--original'),firstFrameDelayMs});
+ if(errors.length||result.survivors!==64||result.frames<result.minimumFrames||result.timedOut||result.shots<8)throw new Error(JSON.stringify({errors,result}));
  console.log(JSON.stringify(result));
 }finally{await browser.close();}

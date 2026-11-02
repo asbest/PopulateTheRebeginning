@@ -43,10 +43,14 @@ controlled combat retains immediate synchronous path handling.
 - `node tools/benchmark-armies.mjs`: 80 mixed, animated units; compares original
   versus batched draw calls and pixels with full shadows, checks unchanged rig
   and Rapier state, exact terrain samples, fallback, and distant shadow LOD.
-- `node tools/benchmark-battle-live.mjs`: five seconds of an actual 64-unit fight
+- `node tools/benchmark-battle-live.mjs`: at least five seconds and 60 frames of an actual 64-unit fight
   with eight additional fireballs every half second after terrain streaming settles. Reports median/p95 frame time, render calls,
   particle peaks, path queues and separate CPU phase timings. `--original`
-  compares against unbatched character rendering on the same machine.
+  compares against unbatched character rendering on the same machine. Sampling
+  stops after 120 seconds if 60 frames cannot be collected and fails explicitly.
+  First-frame stalls remain in the reported maximum/frame distribution instead
+  of prematurely ending the measurement. `--first-frame-delay-ms=6000` reproduces
+  a first sample longer than the nominal five-second window for regression checks.
 - `node tests/combat-worker.mjs`: a real Worker route and disabled-Worker fallback
   match the original pathfinder around a building without moving the physics body.
 - `node tests/battle-work.mjs`: frame budgets, stuns, faction/terrain changes,
