@@ -7,7 +7,8 @@ const modulePath = process.argv.find(a=>a.startsWith('--playwright='))?.slice(13
 const {chromium} = modulePath ? await import(pathToFileURL(modulePath).href) : require('playwright');
 const root = path.resolve(import.meta.dirname, '..');
 await fs.mkdir(path.join(root,'test-results'),{recursive:true});
-const browser = await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
+const browser = await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),
+ ...(process.argv.includes('--software-gl')?{args:['--use-gl=angle','--use-angle=swiftshader']}:{})});
 const context = await browser.newContext({viewport:{width:1440,height:900}});
 const page = await context.newPage();
 const errors=[], requests=[], results=[];
@@ -187,23 +188,31 @@ try {
   }finally{state.units=oldUnits;unit.armL.rotation.x=oldRotation;unit.animTime=oldTime;state.camera.position.copy(cameraPos);flames.update();}
  }));
  await check('Replacement character meshes, HD materials, pivots and conversion',async()=>page.evaluate(async()=>{
-  await Characters.ready;
-  await Art.promoteTextures();
-  const dimensions=Object.fromEntries(Object.entries(Characters.tiles).map(([k,t])=>[k,[t.image.width,t.image.height]]));
-  if(dimensions.skin[0]<1024||dimensions.cloth[0]<1024)throw new Error('HD textures missing');
-  const roles=[];
-  for(const type of ['wild','shaman','warrior','firewarrior','spy','airship']){
-   const u=state.units.find(u=>u.type===type);if(u.mesh.userData.characterVersion!==2)throw new Error('Old model: '+type);
-   if(type!=='airship'){
-    if(!u.armR.userData.lower||!u.legL.userData.lower||!u.head.getObjectByName('SculptedFace'))throw new Error('Rig missing: '+type);
-    const beforeState=u.state;u.state='idle';u.isGrounded=true;u.updateWalkAnim(10,.8,.1);u.mesh.position.x+=.1;u.updateWalkAnim(10,.8,.1);u.mesh.position.x-=.1;u.state=beforeState;if(!Number.isFinite(u.legL.rotation.x)||Math.abs(u.legL.rotation.x)<.001)throw new Error('Walking animation missing');
+  let timer;
+  // This is an asset/rig inspection, not a live-play check. A slow software
+  // renderer correctly defers HD commits while playing; pause while awaiting
+  // them, then restore the original simulation state even if inspection fails.
+  const wasPaused=state.isPaused;state.isPaused=true;
+  try{
+   await Promise.race([(async()=>{await Characters.ready;await Art.promoteTextures();})(),
+    new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('HD material preparation timed out: '+
+     JSON.stringify({textures:Art.textureStatus,budget:Art.resources.stats,paused:state.isPaused}))),180000);})]);
+   const dimensions=Object.fromEntries(Object.entries(Characters.tiles).map(([k,t])=>[k,[t.image.width,t.image.height]]));
+   if(dimensions.skin[0]<1024||dimensions.cloth[0]<1024)throw new Error('HD textures missing');
+   const roles=[];
+   for(const type of ['wild','shaman','warrior','firewarrior','spy','airship']){
+    const u=state.units.find(u=>u.type===type);if(u.mesh.userData.characterVersion!==2)throw new Error('Old model: '+type);
+    if(type!=='airship'){
+     if(!u.armR.userData.lower||!u.legL.userData.lower||!u.head.getObjectByName('SculptedFace'))throw new Error('Rig missing: '+type);
+     const beforeState=u.state;u.state='idle';u.isGrounded=true;u.updateWalkAnim(10,.8,.1);u.mesh.position.x+=.1;u.updateWalkAnim(10,.8,.1);u.mesh.position.x-=.1;u.state=beforeState;if(!Number.isFinite(u.legL.rotation.x)||Math.abs(u.legL.rotation.x)<.001)throw new Error('Walking animation missing');
+    }
+    const cloth=[];u.mesh.traverse(n=>{if(n.userData.characterFaction)cloth.push(n);});
+    u.setFaction(1);const before=cloth.map(n=>n.material.color.getHex());u.setFaction(0);
+    if(!cloth.length||cloth.some((n,i)=>n.material.color.getHex()===before[i]))throw new Error('Faction cloth failed: '+type);
+    roles.push(type);
    }
-   const cloth=[];u.mesh.traverse(n=>{if(n.userData.characterFaction)cloth.push(n);});
-   u.setFaction(1);const before=cloth.map(n=>n.material.color.getHex());u.setFaction(0);
-   if(!cloth.length||cloth.some((n,i)=>n.material.color.getHex()===before[i]))throw new Error('Faction cloth failed: '+type);
-   roles.push(type);
-  }
-  return {dimensions,roles};
+   return {dimensions,roles};
+  }finally{clearTimeout(timer);state.isPaused=wasPaused;}
  }));
  await check('New character combat animations retain damage and fireballs without changing sides',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position,victim=new Humanoid(1,'warrior',p.x+1,p.z+1);state.units.push(victim);
@@ -511,6 +520,14 @@ try {
  await check('Touch selection and spell targeting on a phone viewport',async()=>{
   const mobile=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
   const phone=await mobile.newPage();phone.on('dialog',d=>d.accept());phone.on('pageerror',e=>errors.push(String(e)));
+  const desktopWasPaused=await page.evaluate(()=>{
+   const paused=state.isPaused,draw=state.renderer.render;
+   state.isPaused=true;window.__desktopDraw=draw;
+   // The inactive desktop world must not compete with phone startup on
+   // software WebGL. The phone keeps its original rendering and detail.
+   state.renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
+   return paused;
+  });
   try {
    await phone.goto(url+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
    await phone.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
@@ -579,7 +596,11 @@ try {
    await phone.touchscreen.tap(cancelPoint.x,cancelPoint.y);
    if(await phone.locator('#game-dialog').isVisible())throw new Error('Touch cancel did not close the confirmation');
     await phone.screenshot({path:path.join(root,'test-results','browser-touch.png'),animations:'disabled',timeout:120000});return {mana};
-  }finally{await mobile.close();}
+  }finally{
+   try{await mobile.close();}finally{await page.evaluate(paused=>{
+    state.renderer.render=window.__desktopDraw;delete window.__desktopDraw;state.isPaused=paused;
+   },desktopWasPaused);}
+  }
  });
  await page.setViewportSize({width:1440,height:900});
  await check('Confirming in-game prompts starts sandbox and campaign modes',async()=>{

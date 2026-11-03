@@ -30,6 +30,17 @@ frames, combat and recovery after errors. `benchmark-settlement-entry` is part
 of the performance group and verifies GPU-ready first-entry rendering and image
 parity; see [settlement streaming](SETTLEMENT-STREAMING.md).
 
+`texture-budget` reproduces persistently busy rendering frames and verifies that
+HD uploads yield during play and finish when the asset inspection pauses the
+simulation. The browser asset/rig inspection pauses only for that inspection,
+restores its previous state even on failure, and reports a bounded timeout with
+texture/queue diagnostics. Live-play checks continue to run unpaused. During the
+phone touch fixture, the inactive desktop world's simulation and main-scene drawing are suspended and
+restored afterwards; the phone retains full original rendering. This prevents
+two worlds competing for Software WebGL during the phone's initial loading. Both
+`tests/texture-budget.mjs` and `tests/browser.mjs` accept `--software-gl` to
+reproduce the runner's Software WebGL backend without reducing graphics detail.
+
 Examples:
 
 ```sh
