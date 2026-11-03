@@ -193,10 +193,17 @@ try{
    const cameraRotation=state.camera.quaternion.clone();
    state.camera.lookAt(state.camera.position.clone().add(new THREE.Vector3(0,100,1)));
    const skyPixel=()=>{
-    state.renderer.render(state.scene,state.camera);
-    const gl=state.renderer.getContext(),pixel=new Uint8Array(4);
-    gl.readPixels(Math.floor(gl.drawingBufferWidth/2),Math.floor(gl.drawingBufferHeight/2),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
-    return pixel[0]+pixel[1]+pixel[2];
+    // Test the sky shader itself: a cloud or white bolt crossing the sampled
+    // pixel must not hide the darkening being measured.
+    const visibility=state.scene.children.map(node=>[node,node.visible]),before=state.scene.onBeforeRender;
+    try{
+     state.scene.onBeforeRender=()=>{};
+     for(const [node]of visibility)if(node!==state.skyDome)node.visible=false;
+     state.renderer.render(state.scene,state.camera);
+     const gl=state.renderer.getContext(),pixel=new Uint8Array(4);
+     gl.readPixels(Math.floor(gl.drawingBufferWidth/2),Math.floor(gl.drawingBufferHeight/2),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
+     return pixel[0]+pixel[1]+pixel[2];
+    }finally{for(const [node,visible]of visibility)node.visible=visible;state.scene.onBeforeRender=before;}
    };
    const bright=skyPixel();
    if(!bolt||bolt.maxLife!==3||state.lightningSkyRemaining!==3)throw new Error('Wrong lightning duration');

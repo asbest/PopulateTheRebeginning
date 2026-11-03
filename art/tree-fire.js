@@ -19,10 +19,11 @@ export function createTreeFire(T,state) {
                     alpha=cloud*dataFire.r*.32;flame=vec3(.19,.17,.15);}
                 gl_FragColor=vec4(flame,alpha);}`});
         mesh=new T.InstancedMesh(new T.PlaneGeometry(1,1),material,capacity);
-        mesh.setColorAt(0,color.setRGB(1,0,0));mesh.count=0;mesh.frustumCulled=false;
+        mesh.setMatrixAt(0,new T.Matrix4());mesh.setColorAt(0,color.setRGB(1,0,0));mesh.count=0;mesh.frustumCulled=false;
+        mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.instanceColor.setUsage(T.DynamicDrawUsage);
         mesh.name='Vegetation fire and smoke';state.scene.add(mesh);
     }
-    return {update(sites){
+    return {prepareRoot(){if(!mesh)init();return mesh;},update(sites){
         if(!mesh&&!sites.length)return;
         if(!mesh)init();
         let count=0;
@@ -44,6 +45,7 @@ export function createTreeFire(T,state) {
                 (1.7+rise)*s.scale,(2+rise)*s.scale,fade,1,.5);
         }
         mesh.count=count;mesh.visible=count>0;mesh.material.uniforms.time.value=state.treeTime;
-        if(count){mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;}
+        if(count){mesh.instanceMatrix.updateRange.count=count*16;mesh.instanceColor.updateRange.count=count*3;
+            mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;}
     }};
 }

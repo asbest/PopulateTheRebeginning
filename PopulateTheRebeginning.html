@@ -710,6 +710,7 @@ import { createTotemFactory } from './art/totem.js';
 import { createTrainingProgress } from './art/training-progress.js';
 import { icon } from './art/icons.js';
 import { createTreeFire } from './art/tree-fire.js';
+import { createLightningFx } from './art/lightning-fx.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
 import { createBrowserStorage } from './art/browser-storage.js';
@@ -4328,6 +4329,7 @@ function forEachTreeSite(cx,cz,visit) {
 }
 
 let treeFire;
+const LightningFx=createLightningFx(THREE,state);
 function charTree(tree) {
     if(tree.burned)return false;
     const crown=tree.mesh.children[1];
@@ -6246,6 +6248,10 @@ function prewarmFireballShaders() {
     if (!state.renderer || !state.scene || !state.shaman) return;
     state.scene.updateMatrixWorld(true);
     CharacterBatches.warming=true;SceneryBatches.warming=true;CharacterBatches.update();SceneryBatches.update();
+    const lightningRoots=LightningFx.prepareRoots();
+    lightningRoots.forEach(root=>state.scene.add(root));
+    if(!treeFire)treeFire=createTreeFire(THREE,state);
+    treeFire.prepareRoot();
     HitPulseManager.prewarm();
     FirewarriorFlames.prewarm();
     FireballFxManager.prewarm();
@@ -6292,6 +6298,7 @@ function prewarmFireballShaders() {
         const oldMaterials = state.fireballShaderWarmMaterials || [];
         state.fireballShaderWarmMaterials = warmMaterials;
         oldMaterials.forEach(material => material.dispose());
+        lightningRoots.forEach(root=>{root.position.set(0,0,0);root.visible=false;state.scene.remove(root);});
         state.scene.remove(preview.mesh);
         CharacterBatches.warming=false;SceneryBatches.warming=false;CharacterBatches.update();SceneryBatches.update();
         FirewarriorFlames.clear();
@@ -7082,46 +7089,8 @@ function executeSpell(type, x, z, caster) {
     else if (type === 'lightning') {
         const h = getHeight(x,z);
 
-        // Jagged Lightning Bolt
-        const boltGroup = new THREE.Group();
-        boltGroup.name = 'Lightning bolt';
         state.lightningSkyRemaining = CONFIG.EFFECTS.LIGHTNING_DURATION;
-        const mat = new THREE.MeshBasicMaterial({color: 0xFFFFFF, transparent: true, opacity: 1.0});
-
-        let currentY = h + 30;
-        let currentX = x;
-        let currentZ = z;
-
-        for(let i=0; i<10; i++) {
-             let nextY = currentY - 3;
-             let nextX = x + (Math.random()-0.5)*4;
-             let nextZ = z + (Math.random()-0.5)*4;
-
-             if(i===9) { nextX = x; nextZ = z; } // Snap to target at end
-
-             const diff = new THREE.Vector3(nextX - currentX, nextY - currentY, nextZ - currentZ);
-             const dist = diff.length();
-
-             const segGeo = new THREE.CylinderGeometry(0.2, 0.2, dist, 8);
-             const seg = new THREE.Mesh(segGeo, mat);
-             seg.position.set(currentX + diff.x/2, currentY + diff.y/2, currentZ + diff.z/2);
-
-             // Orient segment
-             seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), diff.normalize());
-             boltGroup.add(seg);
-
-             currentX = nextX; currentY = nextY; currentZ = nextZ;
-        }
-
-        const glow=boltGroup.userData.lightning={x,y:h+2,z,intensity:3};
-
-        state.particles.push(new VisualEffect(boltGroup, CONFIG.EFFECTS.LIGHTNING_DURATION, (eff, dt) => {
-            const age=eff.maxLife-eff.life;
-            const envelope=Math.max(0,Math.min(1,eff.life/.3));
-            const pulse=envelope*(.78+.22*Math.cos(age*Math.PI*6));
-            mat.opacity=pulse;
-            glow.intensity=3*pulse;
-        }));
+        state.particles.push(LightningFx.strike(x,h,z,CONFIG.EFFECTS.LIGHTNING_DURATION));
 
         spawnExplosion(x, h, z, 0xFFFFFF, 20, false);
 
@@ -10466,6 +10435,14 @@ async function init() {
 
         animate();
         prewarmFireballShaders();
+        // Compile alone does not upload instance buffers. Draw the actual bolt
+        // and vegetation-fire resources in a single loading-screen pixel before accepting spell input.
+        const fireMesh=treeFire.prepareRoot(),fireCount=fireMesh.count;
+        fireMesh.count=Math.max(1,fireCount);
+        const lightningReady=Promise.all([...LightningFx.prepareRoots(),fireMesh]
+            .map(root=>SettlementPreparation.prepareRoot(root,false,false,true)));
+        fireMesh.count=fireCount;
+        await lightningReady;
         await SettlementPreparation.initial();
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
@@ -10474,7 +10451,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -11349,6 +11326,7 @@ window.loadGame = function(slot=activeSaveSlot) {
         state.projectiles.length = 0;
         state.particles.forEach(p => state.scene.remove(p.mesh));
         state.particles.length = 0;
+        LightningFx.clear();
         state.lightningSkyRemaining=0;updateLightningSky(0);
         SpellWindup.clear();
         FirewarriorFlames.clear();

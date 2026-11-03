@@ -82,13 +82,29 @@ GPU timings. CPU phase measurements remain separately available.
 
 ## Measurements and regression checks
 
-- `node tools/benchmark-lightning.mjs`: windup, impact, sustained and overlapping
-  three-second bolts, then expiry. Checks a stable visible point-light count,
-  shared white lightning illumination on High/Ultra, and no bulk shader compilation.
-  `--tier=low` verifies the unlit effect path. Reports GPU-synchronized frame times
-  for diagnosis; timings depend on the machine. Lightning and its impact share the
-  existing two prewarmed battle lights, so casting and expiry do not add/remove
-  shader light variants. Low/Medium retain the emissive bolt and sky effect.
+- `node tools/benchmark-lightning.mjs`: the first actual strike hits a nearby
+  loaded tree, including charred vegetation and its fire/smoke pass. Checks zero
+  new shader programs and bolt allocations through windup, overlapping three-second
+  effects and expiry. Reports browser-frame intervals as well as GPU-synchronized
+  draw timings and the actual GPU backend. Unrelated idle world streaming is frozen
+  after current building models load. Initial presentation frames are reported
+  separately; yielding between phases avoids filling the compositor's presentation
+  queue inside one long synchronous browser script. `--software-gl` reproduces
+  SwiftShader, and `--tier=low` checks the unlit quality path.
+  Bolts reuse one original eight-sided cylinder and ten segment transforms, normally
+  in one instanced draw. Eight bolts are prepared before input is enabled; expired
+  entries are reused with at most sixteen inactive entries retained. Overflow still
+  displays every bolt. Platforms without instancing retain ten original mesh draws
+  sharing the same geometry. Lightning and vegetation-fire shader variants and actual
+  instance buffers are prepared during loading, including a one-pixel scissored draw
+  in the game's framebuffer. Vegetation fire uploads only its active instance range.
+  The shared two-light budget, white illumination on High/Ultra, three-second sky
+  envelope, damage, chain hits and knockback are preserved.
+- `node tests/lightning-fx.mjs`: exact connected segment vertices match the original
+  cylinder geometry; verifies duration, concurrent effects, overflow, reuse, reset,
+  stale-effect safety and the non-instanced fallback. `tests/spells.mjs` retains damage,
+  chain-hit, impulse and sky restoration checks. Sky pixel checks isolate the sky
+  shader so an overlapping cloud or bright bolt cannot conceal its darkening.
 - `node tools/benchmark-scenery.mjs`: original-versus-batched pixel comparison,
   draw-call savings, unchanged-buffer uploads, live construction/visibility,
   destruction and fallback recovery, with full original landscape detail.

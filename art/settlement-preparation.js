@@ -21,7 +21,7 @@ export function createSettlementPreparation(T,state,art,getLights){
   }
   return signature;
  }
- function draw(source,instanced,program){
+ function draw(source,instanced,program,nativeTarget=false){
   if(disposed.has(source.geometry))return;
   const r=state.renderer;if(r.getContext().isContextLost())throw Error('Context lost during preparation');
   environment();
@@ -41,7 +41,8 @@ export function createSettlementPreparation(T,state,art,getLights){
   const auto=r.autoClear,shadowAuto=r.shadowMap.autoUpdate,shadowNeed=r.shadowMap.needsUpdate;
   try{
    r.shadowMap.autoUpdate=false;r.shadowMap.needsUpdate=false;r.autoClear=true;
-   r.setRenderTarget(target);r.setViewport(0,0,1,1);r.setScissorTest(false);
+   r.setRenderTarget(nativeTarget?null:target);r.setViewport(0,0,1,1);
+   r.setScissor(0,0,1,1);r.setScissorTest(nativeTarget);
    r.render(warmScene,camera);stats.meshes++;programs.add(program);
   }finally{
    r.setRenderTarget(oldTarget,face,level);r.setViewport(viewport);r.setScissor(scissor);r.setScissorTest(scissorTest);
@@ -50,7 +51,7 @@ export function createSettlementPreparation(T,state,art,getLights){
    if(instanced){mesh.instanceMatrix=ownMatrix;mesh.instanceColor=null;mesh.dispose();}
   }
  }
- function collect(root,promote=false,largeOnly=false){
+ function collect(root,promote=false,largeOnly=false,nativeTarget=false){
   const env=environment(),jobs=[];
   root.traverse(source=>{
    if(!source.isMesh||!source.geometry?.attributes.position?.count||disposed.has(source.geometry)||Array.isArray(source.material)||source.isInstancedMesh&&source.count===0)return;
@@ -63,7 +64,7 @@ export function createSettlementPreparation(T,state,art,getLights){
    if(promote)for(const name of ['map','normalMap','roughnessMap','metalnessMap','emissiveMap','aoMap','bumpMap','alphaMap'])art.requestTexture(source.material[name]);
    const variants=source.isInstancedMesh?[true]:source.material.type==='MeshStandardMaterial'&&source.material.onBeforeCompile===T.Material.prototype.onBeforeCompile?[false,true]:[false];
    for(const instanced of variants){
-    const key=[env,source.geometry.uuid,source.material.uuid,source.material.version,instanced,!!source.instanceColor,source.receiveShadow].join('|');
+    const key=[env,source.geometry.uuid,source.material.uuid,source.material.version,instanced,!!source.instanceColor,source.receiveShadow,nativeTarget].join('|');
     if(warmed.has(key))continue;warmed.add(key);
     let keys=geometryKeys.get(source.geometry);
     if(!keys){
@@ -73,7 +74,11 @@ export function createSettlementPreparation(T,state,art,getLights){
     keys.add(key);
     const program=[env,source.material.uuid,source.material.version,instanced,!!source.instanceColor,
      source.geometry.attributes.color?.itemSize||0,!!source.geometry.attributes.uv2].join('|');
-    const job=budget.enqueue('settlement/'+key,()=>{if(environment()!==env){warmed.delete(key);return;}draw(source,instanced,program);},()=>programs.has(program)?0:1).catch(error=>{
+    const prepare=()=>{if(environment()!==env){warmed.delete(key);return;}draw(source,instanced,program,nativeTarget);};
+    // These tiny loading-screen draws share one browser frame. Waiting for a
+    // full island redraw between each one adds seconds on software renderers.
+    const job=(nativeTarget&&!state.assetsReady?Promise.resolve().then(prepare):
+     budget.enqueue('settlement/'+key,prepare,()=>programs.has(program)?0:1)).catch(error=>{
      warmed.delete(key);stats.errors++;console.warn('Settlement preparation deferred; keeping original rendering',error);
     });jobs.push(job);
    }
