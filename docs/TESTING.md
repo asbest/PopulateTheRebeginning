@@ -52,6 +52,15 @@ accept `--software-gl` and `--cpu-throttle=6` for reproduction with Software Web
 and a throttled browser CPU. No graphic-detail reduction or larger Worker
 execution deadline is used by these fixtures.
 
+`control-tutorial` follows the full economy introduction after the basic pointer
+controls: successful Create Brave, builder selection, valid training-hut placement,
+completed construction, an explicit training order, the full ten-second training
+period, a replacement builder, Shipyard construction and Airship production.
+It checks that insufficient mana, unfinished buildings and mere proximity do
+not complete lessons. Construction/training use deterministic simulation ticks
+with real action handlers; screenshots check long instructions on short phone
+screens. First-start persistence, Help replay and No Flyers remain covered.
+
 Examples:
 
 ```sh

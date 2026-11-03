@@ -10470,7 +10470,7 @@ async function init() {
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
         state.assetsReady=true;cacheCurrentAssets();
-        state.controlTutorial=createControlTutorial(state,localStorage);
+        state.controlTutorial=createControlTutorial(state,localStorage,CONFIG);
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {

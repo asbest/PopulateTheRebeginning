@@ -1,5 +1,5 @@
 :root { --ink:#0b2029; --gold:#ddc58a; --aqua:#75ccd1; }
-#control-tutorial {position:fixed;z-index:220;top:90px;left:50%;transform:translateX(-50%);width:min(420px,calc(100vw - 126px));box-sizing:border-box;padding:16px;border:1px solid #ddc58a;border-radius:12px;background:#0b2530f5;color:#f5e8c3;box-shadow:0 8px 24px #0005;pointer-events:auto;}
+#control-tutorial {position:fixed;z-index:220;top:90px;left:50%;transform:translateX(-50%);width:min(420px,calc(100vw - 126px));max-height:calc(100dvh - 110px);overflow-y:auto;box-sizing:border-box;padding:16px;border:1px solid #ddc58a;border-radius:12px;background:#0b2530f5;color:#f5e8c3;box-shadow:0 8px 24px #0005;pointer-events:auto;}
 #control-tutorial small {color:#b7d6d7;font-size:12px;}
 #control-tutorial h2 {font-size:19px;margin:7px 0;}
 #control-tutorial p {font-size:14px;line-height:1.45;margin:0 0 12px;color:#f5e8c3;}
