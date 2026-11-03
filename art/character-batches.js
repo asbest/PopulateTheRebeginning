@@ -1,7 +1,7 @@
 // Draw the original, fully animated meshes as instances. The rig, collision
 // bodies, weapon pivots and raycast geometry remain authoritative and intact.
-export function createCharacterBatches(T,state,heightAt){
-    const hiddenLayer=31,buckets=new Map(),materials=new Map(),records=new WeakMap(),masked=new Map();
+export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
+    const hiddenLayer=31,buckets=new Map(),materials=new Map(),records=new WeakMap(),parts=new WeakMap(),masked=new Map();
     const inverse=new T.Matrix4(),matrix=new T.Matrix4(),color=new T.Color(),dummy=new T.Object3D();
     const frustum=new T.Frustum(),projection=new T.Matrix4(),sphere=new T.Sphere();
     let scene,blob,frame=0;
@@ -31,28 +31,42 @@ export function createCharacterBatches(T,state,heightAt){
             m.normalScale?.x,m.normalScale?.y,m.bumpScale,m.aoMapIntensity,m.emissive?.getHex(),m.emissiveIntensity,
             m.fog,m.toneMapped,m.wireframe].join('|');
         records.set(m,{version:m.version,key});
-        if(!materials.has(key)){const copy=m.clone();copy.color.setRGB(1,1,1);materials.set(key,copy);}
+        if(!materials.has(key)){
+            const copy=m.clone();copy.color.setRGB(1,1,1);
+            // Joint rotations under nonuniform scales produce affine shear.
+            // r128's stock instanced normals assume orthogonal columns; use the
+            // exact inverse transpose so combat/fall poses can stay batched too.
+            copy.onBeforeCompile=shader=>{
+                const normal=T.ShaderChunk.defaultnormal_vertex.replace(/#ifdef USE_INSTANCING[\s\S]*?#endif/,`#ifdef USE_INSTANCING
+                    mat3 affine=mat3(instanceMatrix);
+                    vec3 a=cross(affine[1],affine[2]);
+                    mat3 affineNormal=mat3(a,cross(affine[2],affine[0]),cross(affine[0],affine[1]));
+                    transformedNormal=affineNormal*objectNormal/dot(affine[0],a);
+                    #endif`);
+                shader.vertexShader=shader.vertexShader.replace('#include <defaultnormal_vertex>',normal);
+            };
+            copy.customProgramCacheKey=()=> 'full-affine-instance-normals-v1';materials.set(key,copy);
+        }
         return key;
     }
     function eligible(part){
         const m=part.material;
         return part.isMesh&&!part.isSkinnedMesh&&!part.isInstancedMesh&&m?.type==='MeshStandardMaterial'&&
-            !m.transparent&&m.opacity===1&&!m.clippingPlanes?.length&&!part.geometry.morphAttributes.position&&
+            !m.transparent&&m.opacity===1&&!m.clippingPlanes?.length&&!part.geometry.morphAttributes.position&&!part.geometry.attributes.tangent&&
             m.onBeforeCompile===T.Material.prototype.onBeforeCompile&&part.name!=='StaffCrystal'&&
             (part.layers.mask&1)!==0&&part.matrixWorld.determinant()>0;
-    }
-    function orthogonal(m){
-        const a=m.elements,x=a[0]*a[0]+a[1]*a[1]+a[2]*a[2],y=a[4]*a[4]+a[5]*a[5]+a[6]*a[6],z=a[8]*a[8]+a[9]*a[9]+a[10]*a[10];
-        return Math.abs(a[0]*a[4]+a[1]*a[5]+a[2]*a[6])<1e-6*Math.sqrt(x*y)&&
-            Math.abs(a[0]*a[8]+a[1]*a[9]+a[2]*a[10])<1e-6*Math.sqrt(x*z)&&
-            Math.abs(a[4]*a[8]+a[5]*a[9]+a[6]*a[10])<1e-6*Math.sqrt(y*z);
     }
     function collect(node,shadow){
         if(!node.visible)return;
         if(node.isLOD)node.update(state.camera);
-        if(eligible(node)&&orthogonal(node.matrixWorld)){
+        if(eligible(node)){
             const mk=materialKey(node.material),cast=shadow&&node.castShadow;
-            const key=node.geometry.uuid+'|'+mk+'|'+cast+'|'+node.receiveShadow+'|'+node.renderOrder;
+            let part=parts.get(node);
+            if(!part||part.geometry!==node.geometry||part.mk!==mk||part.cast!==cast||part.receive!==node.receiveShadow||part.order!==node.renderOrder){
+                part={geometry:node.geometry,mk,cast,receive:node.receiveShadow,order:node.renderOrder,
+                    key:node.geometry.uuid+'|'+mk+'|'+cast+'|'+node.receiveShadow+'|'+node.renderOrder};parts.set(node,part);
+            }
+            const key=part.key;
             let b=buckets.get(key);
             if(!b){b={geometry:node.geometry,material:materials.get(mk),cast,receive:node.receiveShadow,order:node.renderOrder,items:[],mesh:null,capacity:0};buckets.set(key,b);}
             b.items.push(node);b.used=frame;stats.parts++;
@@ -74,7 +88,8 @@ export function createCharacterBatches(T,state,heightAt){
         for(const b of buckets.values()){b.items.length=0;if(b.mesh)b.mesh.visible=false;}
         if(blob){blob.count=0;blob.visible=false;}
         Object.assign(stats,{parts:0,instances:0,batches:0,farShadows:0});
-        if(!api.enabled||!scene||!state.camera||state.units.length<12&&!api.warming){stats.ms=performance.now()-start;return;}
+        const animals=wildlife(),bunnies=animals?.bunnies||[],birds=animals?.birds||[];
+        if(!api.enabled||!scene||!state.camera||state.units.length+bunnies.length+birds.length<12&&!api.warming){stats.ms=performance.now()-start;return;}
         if(state.renderer&&!state.renderer.capabilities.isWebGL2&&!state.renderer.extensions.get('ANGLE_instanced_arrays')){
             api.enabled=false;stats.fallback=true;stats.ms=performance.now()-start;return;
         }
@@ -84,11 +99,12 @@ export function createCharacterBatches(T,state,heightAt){
             const focus=state.isFPV?state.camera.position:state.cameraLookAt;
             const near={low:20,medium:32,high:45,ultra:60}[state.graphicsQuality?.tier]||45;
             let shadows=0;
-            for(const u of state.units){
+            for(const population of [state.units,bunnies,birds])for(const u of population){
+                const animal=population!==state.units;
                 if(!u.mesh?.parent||!u.mesh.visible||u.state==='transported')continue;
                 let visible=true;for(let p=u.mesh.parent;p;p=p.parent)if(!p.visible)visible=false;
                 if(!visible)continue;
-                const p=u.mesh.position,detailed=api.fullShadows||Math.hypot(p.x-focus.x,p.z-focus.z)<=near;
+                const p=u.mesh.position,detailed=animal||api.fullShadows||Math.hypot(p.x-focus.x,p.z-focus.z)<=near;
                 sphere.center.copy(p);sphere.center.y+=u.isVehicle?4:2;sphere.radius=u.isVehicle?10:8;
                 if(!detailed&&!frustum.intersectsSphere(sphere)){
                     // Outside both the view and detailed-shadow range: suppress only
@@ -98,7 +114,8 @@ export function createCharacterBatches(T,state,heightAt){
                     });
                     continue;
                 }
-                for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed);
+                if(animal)collect(u.mesh,true);
+                else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed);
                 if(!detailed&&u.state!=='dead'&&!u.invisible&&!u.isPhantom&&shadows<2048){
                     if(!blob)initBlob();
                     const h=heightAt(p.x,p.z),altitude=Math.max(0,p.y-h),size=u.isVehicle?3.5:1.2;

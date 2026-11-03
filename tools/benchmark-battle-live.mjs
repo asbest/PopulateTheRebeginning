@@ -12,7 +12,7 @@ try{
  page.on('pageerror',e=>errors.push(String(e)));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
- const result=await page.evaluate(async ({original,firstFrameDelayMs,ciRendering})=>{
+ const result=await page.evaluate(async ({original,firstFrameDelayMs,ciRendering,gpuTiming})=>{
   closeHelp();closeStoryOverlay();state.isPaused=true;window.enemyAIs=[];state.matchSettings.peaceTimeMinutes=0;
   // The hosted runner uses software WebGL. Bound pixel/shadow fill, while
   // retaining all actors, actor geometry, animation, physics, PBR and battle effects.
@@ -40,9 +40,24 @@ try{
    };
   }
   // Keep terrain streaming/loading out of the combat measurement.
+  state.cameraLookAt.copy(state.shaman.mesh.position);updateCameraPosition();
+  const terrainReady=()=>{
+   const {CHUNK_SIZE,RENDER_DISTANCE:r}=gameTestAPI.CONFIG.TERRAIN;
+   const cx=Math.round(state.cameraLookAt.x/CHUNK_SIZE),cz=Math.round(state.cameraLookAt.z/CHUNK_SIZE);
+   for(let x=-r;x<=r;x++)for(let z=-r;z<=r;z++)if(!state.chunks[`${cx+x},${cz+z}`])return false;
+   return true;
+  };
   const settle=performance.now();
-  while(performance.now()-(state.lastTerrainBuildAt||0)<1600&&performance.now()-settle<15000)
-   await new Promise(r=>requestAnimationFrame(r));
+  const draw=state.renderer.render;
+  // CPU fixture preparation must not compete with software WebGL or turn a
+  // finished Worker job into a false timeout while the main thread is drawing.
+  // All rendering is restored for the warmup, measured battle and A/B checks.
+  if(ciRendering)state.renderer.render=()=>{};
+  try{
+   while((!terrainReady()||performance.now()-(state.lastTerrainBuildAt||0)<1600)&&performance.now()-settle<30000)
+    await new Promise(r=>requestAnimationFrame(r));
+  }finally{state.renderer.render=draw;}
+  const terrainSettled=terrainReady(),terrainSetupMs=performance.now()-settle;
   const p=state.shaman.mesh.position.clone(),fighters=[];
   for(let i=0;i<64;i++){
    const unit=new Humanoid(i%2,i%5===0?'firewarrior':'warrior',p.x+(i%8-4)*1.3,p.z+(Math.floor(i/8)-4)*1.3);
@@ -52,7 +67,7 @@ try{
   state.selectedUnits=[];state.cameraLookAt.copy(p);updateCameraPosition();gameTestAPI.SpatialHash.update();
   gameTestAPI.CharacterBatches.enabled=!original;
   for(let frame=0;frame<20;frame++)await new Promise(r=>requestAnimationFrame(r));
-  state.renderer.render(state.scene,state.camera);gameTestAPI.BattleProfiler.reset();
+  state.renderer.render(state.scene,state.camera);gameTestAPI.BattleProfiler.reset();gameTestAPI.GpuTimer.enabled=gpuTiming;gameTestAPI.GpuTimer.reset();
   const frames=[];let before=performance.now(),start=before,lastSalvo=before,peakCalls=0,peakTriangles=0,peakBacklog=0,peakParticles=0,shots=0;
   state.isPaused=false;
   // Software WebGL on CI can spend longer than the target window in its first
@@ -74,17 +89,31 @@ try{
    peakParticles=Math.max(peakParticles,state.particles.length);
   }
   state.isPaused=true;frames.sort((a,b)=>a-b);
+  const durationMs=performance.now()-start,scenery={...gameTestAPI.SceneryBatches.stats};
+  // Compare the very same frozen battle pose/effects at identical resolution.
+  // Synchronization is confined to this diagnostic, never the real game loop.
+  const compareScenery=enabled=>{
+   gameTestAPI.SceneryBatches.enabled=enabled;
+   const times=[];let calls=0;
+   for(let i=0;i<4;i++){
+    const start=performance.now();state.renderer.render(state.scene,state.camera);state.renderer.getContext().finish();
+    if(i)times.push(performance.now()-start);calls=state.renderer.info.render.calls;
+   }
+   times.sort((a,b)=>a-b);return {medianMs:times[1],calls};
+  };
+  const sameBattle={sceneryOff:compareScenery(false),sceneryOn:compareScenery(true)};
   const gl=state.renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
   return {gpu:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER),
    backgroundVegetation:ciRendering?'omitted':'full',terrainDrawRadiusChunks:ciRendering?1:null,mode:original?'original':'optimized',renderingProfile:ciRendering?'ci-bounded':'native',
    renderWidth:state.renderer.domElement.width,renderHeight:state.renderer.domElement.height,shadowSize:state.sunLight.shadow.mapSize.width,
-   fighters:fighters.length,shots,frames:frames.length,minimumFrames,
-   durationMs:performance.now()-start,maximumDurationMs,maxFrameMs:frames.at(-1),timedOut:frames.length<minimumFrames,
+   terrainSettled,terrainSetupMs,fighters:fighters.length,shots,frames:frames.length,minimumFrames,
+   durationMs,maximumDurationMs,maxFrameMs:frames.at(-1),timedOut:frames.length<minimumFrames,
    medianFrameMs:frames[Math.floor(frames.length*.5)],p95FrameMs:frames[Math.floor(frames.length*.95)],
+   sameBattle,gpuTime:{enabled:gpuTiming,...gameTestAPI.GpuTimer.report()},scenery,terrainWorker:{...gameTestAPI.TerrainStream.stats},
    peakCalls,peakTriangles,peakBacklog,peakParticles,phases:gameTestAPI.BattleProfiler.report(),
    work:{...gameTestAPI.BattleWork.stats},batch:{...gameTestAPI.CharacterBatches.stats},
    survivors:fighters.filter(u=>u.state!=='dead').length};
- },{original:process.argv.includes('--original'),firstFrameDelayMs,ciRendering});
- if(errors.length||result.survivors!==64||result.frames<result.minimumFrames||result.timedOut||result.shots<8)throw new Error(JSON.stringify({errors,result}));
+ },{original:process.argv.includes('--original'),firstFrameDelayMs,ciRendering,gpuTiming:process.argv.includes('--gpu-timing')});
+ if(errors.length||!result.terrainSettled||result.survivors!==64||result.frames<result.minimumFrames||result.timedOut||result.shots<8||result.sameBattle.sceneryOn.calls>result.sameBattle.sceneryOff.calls)throw new Error(JSON.stringify({errors,result}));
  console.log(JSON.stringify(result));
 }finally{await browser.close();}

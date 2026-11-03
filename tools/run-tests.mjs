@@ -15,7 +15,7 @@ const groups=Object.fromEntries(Object.entries(namedGroups).map(([name,files])=>
 const discovered=(await fs.readdir(path.join(root,'tests'))).filter(name=>name.endsWith('.mjs')).map(name=>`tests/${name}`);
 const assigned=new Set(Object.values(groups).flat());
 groups.simulation=discovered.filter(file=>!assigned.has(file)).sort();
-groups.performance=['first-fireball','lightning','group-impact','firewarriors','hut-destruction','firestorm','sustained-fire','armies','battle-live'].map(name=>`tools/benchmark-${name}.mjs`);
+groups.performance=['first-fireball','lightning','scenery','group-impact','firewarriors','hut-destruction','firestorm','sustained-fire','armies','battle-live'].map(name=>`tools/benchmark-${name}.mjs`);
 for(const file of Object.values(groups).flat())await fs.access(path.join(root,file));
 const group=process.argv.find(arg=>arg.startsWith('--group='))?.slice(8)||'all';
 if(group!=='all'&&!groups[group])throw new Error(`Unknown test group: ${group}`);

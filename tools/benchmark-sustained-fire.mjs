@@ -48,6 +48,7 @@ try{
   for(const particle of state.particles)state.scene.remove(particle.mesh);state.particles.length=0;fx.clear();
   const beforeBurn=render(),health=units[0].hp;
   for(const owner of [...units,...buildings])owner.burnTimer=10;
+  const records=new Set(Object.values(fx.layers).flatMap(layer=>[...layer.pool,...layer.items]));
   let peakParticles=0,peakGlow=0,peakSmoke=0;
   const start=performance.now();
   for(let frame=0;frame<180;frame++){
@@ -70,8 +71,10 @@ try{
   for(const owner of [...units,...buildings])owner.burnTimer=0;
   fx.update(3);render();
   const expired=Object.values(fx.layers).every(layer=>!layer.mesh.visible&&layer.items.length===0)&&fx.projectileMeshes.every(mesh=>!mesh.visible);
-  return {projectiles:80,flightCalls,burningUnits:40,burningBuildings:4,burnCalls,peakParticles,peakGlow,peakSmoke,burnCpuMs,burnDamage,flightPrograms,salvos:12,expired};
+  const pooled=Object.values(fx.layers).every(layer=>layer.pool.length===layer.capacity&&
+   new Set(layer.pool).size===layer.capacity&&layer.pool.every(item=>records.has(item)));
+  return {pooled,projectiles:80,flightCalls,burningUnits:40,burningBuildings:4,burnCalls,peakParticles,peakGlow,peakSmoke,burnCpuMs,burnDamage,flightPrograms,salvos:12,expired};
  });
- if(errors.length||report.flightCalls>2||report.flightPrograms>2||report.burnCalls>4||report.peakParticles>8||report.peakGlow>384||report.peakSmoke>160||!report.expired)throw new Error(JSON.stringify({errors,report}));
+ if(errors.length||!report.pooled||report.flightCalls>2||report.flightPrograms>2||report.burnCalls>4||report.peakParticles>8||report.peakGlow>384||report.peakSmoke>160||!report.expired)throw new Error(JSON.stringify({errors,report}));
  console.log('PASS sustained fire keeps projectile and afterburn rendering bounded '+JSON.stringify(report));
 }finally{await browser.close();}

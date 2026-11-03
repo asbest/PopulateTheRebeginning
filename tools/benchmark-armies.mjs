@@ -33,6 +33,7 @@ try{
   const differingFraction=differing/(width*height);
   // Every moving/stumbling pose must still be sent to the GPU at full cadence.
   for(let frame=0;frame<30;frame++){
+   gameTestAPI.CritterManager.update(1/60);
    for(const [i,u]of units.entries()){
     u.animTime+=1/60;u.mesh.position.x+=.001;u.isGrounded=true;
     if(i%3===0)Locomotion.animateCombat(u,(frame%20)/20);
@@ -44,6 +45,11 @@ try{
   if(batch.stats.fallback)throw new Error('Animated instancing failed');
   const matrixError=batch.matrixError();if(matrixError>.0001)throw new Error('GPU matrices differ from full-rate source poses');
   const animated=JSON.parse(JSON.stringify(batch.stats));
+  batch.enabled=false;render();const combatOriginal=render(),combatBefore=pixels();
+  batch.enabled=true;render();const combatOptimized=render(),combatAfter=pixels();
+  let combatDifferences=0;for(let i=0;i<combatBefore.length;i+=4){let d=0;for(let c=0;c<3;c++)d=Math.max(d,Math.abs(combatBefore[i+c]-combatAfter[i+c]));if(d>8)combatDifferences++;}
+  const animatedPixelError=combatDifferences/(width*height);
+  if(animatedPixelError>.001||combatOptimized.calls>combatOriginal.calls*.5)throw new Error('Animated affine batch parity/performance failed: '+JSON.stringify({animatedPixelError,combatOriginal,combatOptimized}));
   // Distant shadow simplification is independent of combat/animation state.
   batch.fullShadows=false;state.cameraLookAt.x-=70;render();const shadowLOD=batch.stats.farShadows;
   state.cameraLookAt.copy(p);updateCameraPosition();
@@ -53,7 +59,7 @@ try{
   batch.enabled=false;render();if(units.some(u=>(u.torso.children[0].layers.mask&1)===0))throw new Error('Fallback did not restore original meshes');
   batch.enabled=true;
   return {units:units.length,original,optimized,drawCallReduction:1-optimized.calls/original.calls,
-   differingFraction,actorPixelError:differing/Math.max(1,actorPixels),matrixError,poseAndPhysicsUnchanged:true,animated,shadowLOD,surfaceParity:parity};
+   combatOriginal,combatOptimized,animatedPixelError,differingFraction,actorPixelError:differing/Math.max(1,actorPixels),matrixError,poseAndPhysicsUnchanged:true,animated,shadowLOD,surfaceParity:parity};
  });
  if(errors.length||report.drawCallReduction<.5||report.actorPixelError>.015||!report.surfaceParity||!report.shadowLOD)
   throw new Error(JSON.stringify({errors,report}));

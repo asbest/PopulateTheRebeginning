@@ -75,7 +75,7 @@ export function createBattleProfiler(){
     const samples=Object.fromEntries(names.map(n=>[n,new Float32Array(size)]));
     let count=0,index=0,started=0,current={};
     return {
-        begin(){started=performance.now();current={physics:0,simulation:0,render:0};},
+        begin(){started=performance.now();current.physics=current.simulation=current.render=0;},
         add(name,time){current[name]=(current[name]||0)+time;},
         end(){current.frame=performance.now()-started;current.other=Math.max(0,current.frame-current.physics-current.simulation-current.render);for(const n of names)samples[n][index]=current[n]||0;index=(index+1)%size;count=Math.min(size,count+1);},
         reset(){count=index=0;},
