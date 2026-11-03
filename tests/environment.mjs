@@ -8,7 +8,7 @@ try{
  page.on('pageerror',e=>errors.push(String(e)));
  page.on('console',m=>{if(m.type()==='error'&&/shader|webgl/i.test(m.text()))errors.push(m.text());});
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:90000});
- await page.waitForFunction(()=>window.state?.shaman&&Object.keys(state.chunks).length>0,null,{timeout:90000});
+ await page.waitForFunction(()=>window.gameTestAPI&&window.state?.shaman&&Object.keys(state.chunks).length>0,null,{timeout:90000});
  await page.waitForTimeout(1200);
  const result=await page.evaluate(()=>{
   closeHelp();closeStoryOverlay();

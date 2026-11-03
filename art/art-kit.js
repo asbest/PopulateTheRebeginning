@@ -1,10 +1,12 @@
 // Original mesh art, authored for this project. Uses the game's existing Three.js version.
 import {createBlenderPack} from './blender-pack.js';
+import {createResourceBudget} from './resource-budget.js';
 import {createTexturePipeline} from './texture-pipeline.js';
 import {BARRACKS_ROOF} from './roof-profile.js';
 import {createRoofLandmarks} from './roof-landmarks.js';
 export function createArtKit(T) {
-    const pipeline=createTexturePipeline(T);
+    const resources=createResourceBudget();
+    const pipeline=createTexturePipeline(T,resources);
     const blender=createBlenderPack(T,pipeline.load);
     const mats = new Map(), geos = new Map();
     const palette = {wood:0x67503a, stone:0x99a69b, straw:0xc4a96b, gold:0xdcc27f, cloth:0xe1d8ba, dark:0x283b43};
@@ -327,9 +329,9 @@ export function createArtKit(T) {
         };
         material.customProgramCacheKey=()=> 'island-terrain-detail-v8';
     }
-    return {building,tree,dress,terrainDetail,textures,palette,uniforms,ready:blender.ready,blender,
+    return {building,tree,dress,terrainDetail,textures,palette,uniforms,resources,ready:blender.ready,blender,
         configureTextures,textureStatus:pipeline.status,loadTexture:pipeline.load,
-        textureReady:pipeline.whenReady,texturesReady:pipeline.waitForPending,promoteTextures:pipeline.promoteAll,
+        requestTexture:pipeline.request,warmTexture:pipeline.warmTexture,textureReady:pipeline.whenReady,texturesReady:pipeline.waitForPending,promoteTextures:pipeline.promoteAll,
         streamTextures:(scene,focus,radius)=>pipeline.streamVisible(scene,focus,radius,
             [...Object.values(textures),blender.texture('grass','normal'),blender.texture('dirt','normal')])};
 }

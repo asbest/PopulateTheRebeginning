@@ -4,7 +4,7 @@ import {assetPath,assetURL} from './asset-urls.js';
 
 // Keep the original images as a per-texture fallback. KTX2 is only selected
 // after WebGL reports an actual GPU block-compression format.
-export function createTexturePipeline(T){
+export function createTexturePipeline(T,resources){
     const plain=new T.TextureLoader();
     const status={enabled:false,loaded:0,fallbacks:0,pending:0,previewLoaded:0,previewPending:0,promoted:0,upgrading:0};
     const readyByTexture=new WeakMap(),pending=new Set();
@@ -13,10 +13,12 @@ export function createTexturePipeline(T){
     const query=new URLSearchParams(location.search);
     const fullMode=query.get('assets')==='full'||query.get('textures')==='png';
     let compressed=null;
-    let configured=false;
+    let configured=false,gpuRenderer=null;
+    let gpuVersions=new WeakMap();
     function configure(renderer){
         if(configured)return;
-        configured=true;
+        configured=true;gpuRenderer=renderer;
+        renderer.domElement?.addEventListener('webglcontextrestored',()=>{gpuVersions=new WeakMap();});
         const formats=['WEBGL_compressed_texture_astc','WEBGL_compressed_texture_etc',
             'WEBGL_compressed_texture_etc1','WEBGL_compressed_texture_s3tc',
             'EXT_texture_compression_bptc','WEBGL_compressed_texture_pvrtc'];
@@ -138,6 +140,10 @@ export function createTexturePipeline(T){
         },undefined,fallback);
         return texture;
     }
+    function warmTexture(texture){
+        if(!texture||!gpuRenderer?.initTexture||gpuVersions.get(texture)===texture.version)return;
+        gpuRenderer.initTexture(texture);gpuVersions.set(texture,texture.version);
+    }
     async function promote(texture){
         const entry=entryByTexture.get(texture);
         if(!entry||entry.high||entry.failed)return;
@@ -145,7 +151,16 @@ export function createTexturePipeline(T){
         entry.upgrade=(async()=>{
             await entry.ready;
             const source=loadFull(entry.url,entry.settings);
-            if(await readyByTexture.get(source)){adopt(entry.texture,source,entry.settings);entry.high=true;status.promoted++;}
+            if(await readyByTexture.get(source)){
+                const commit=()=>{
+                    adopt(entry.texture,source,entry.settings);
+                    // Initialize the actual stable texture object, not a disposable
+                    // copy that would force another upload at the first close view.
+                    warmTexture(entry.texture);entry.high=true;status.promoted++;
+                };
+                if(resources)await resources.enqueue('texture/'+entry.texture.uuid,commit,-2);
+                else commit();
+            }
             else entry.failed=true;
         })();
         return entry.upgrade;
@@ -169,11 +184,11 @@ export function createTexturePipeline(T){
         const radiusSq=radius*radius;
         scene.traverseVisible(node=>{
             if(!node.isMesh||!node.material)return;
-            if(node.getWorldPosition(point).distanceToSquared(focus)>radiusSq)return;
+            if(point.setFromMatrixPosition(node.matrixWorld).distanceToSquared(focus)>radiusSq)return;
             for(const material of [node.material].flat())for(const key of ['map','normalMap','roughnessMap','metalnessMap','emissiveMap'])request(material[key]);
         });
     }
-    return {configure,load,status,streamVisible,promote,
+    return {configure,load,status,streamVisible,promote,request,warmTexture,
         promoteAll:()=>Promise.all([...previews.values()].map(entry=>promote(entry.texture))),
         whenReady:texture=>readyByTexture.get(texture)||Promise.resolve(true),waitForPending:()=>Promise.all([...pending])};
 }

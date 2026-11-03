@@ -714,6 +714,7 @@ import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
 import { createBrowserStorage } from './art/browser-storage.js';
 import { createVisitStatistics, countProductionVisit } from './art/visit-statistics.js';
+import { createSettlementPreparation } from './art/settlement-preparation.js';
 import { createGpuTimer } from './art/gpu-timer.js';
 import { createTerrainKernel } from './art/terrain-kernel.js';
 import { createTerrainStream } from './art/terrain-stream.js';
@@ -5775,6 +5776,15 @@ const TerrainStream=createTerrainStream({
 
 const BattleProfiler=createBattleProfiler();
 const GpuTimer=createGpuTimer();
+const SettlementPreparation=createSettlementPreparation(THREE,state,Art,
+ ()=>{
+    // Lights live at scene level or directly inside short-lived effect meshes.
+    // Avoid scanning every building/actor/vegetation part for each light check.
+    const lights=state.scene.children.filter(node=>node.isLight&&node.visible);
+    for(const effect of state.particles)if(effect.mesh?.visible)
+        for(const child of effect.mesh.children)if(child.isLight&&child.visible)lights.push(child);
+    return lights;
+ });
 const BattleWork=createBattleWork({state,worker:PathWorker,
     findPath:(...args)=>Pathfinder.findPath(...args),walkable:isWalkableLine,
     version:()=>`${state.navigationVersion}:${state.waterState}:${state.matchSettings?.biome}`,
@@ -10456,6 +10466,7 @@ async function init() {
 
         animate();
         prewarmFireballShaders();
+        await SettlementPreparation.initial();
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
         state.assetsReady=true;cacheCurrentAssets();
@@ -10463,7 +10474,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -12472,6 +12483,9 @@ function animate() {
     const renderStart=performance.now();GpuTimer.begin(state.renderer);
     state.renderer.render(state.scene, state.camera);GpuTimer.end();
     BattleProfiler.add('render',performance.now()-renderStart);BattleProfiler.end();
+    Art.resources.frame(performance.now()-frameTime,!!state.isPaused,!state.assetsReady,
+        !!(Art.resources.stats.queued&&(state.projectiles.length||state.units.some(u=>u.state==='combat'))));
+    SettlementPreparation.tick(performance.now());
     if(state.assetsReady&&(state.isFPV||state.viewScale<=14)&&performance.now()-(state.lastAssetStreamAt||0)>500){
         state.lastAssetStreamAt=performance.now();
         Art.streamTextures(state.scene,state.isFPV?state.camera.position:state.cameraLookAt,state.isFPV?18:Math.max(12,state.viewScale*1.5));

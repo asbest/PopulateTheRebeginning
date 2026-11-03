@@ -1,6 +1,6 @@
 # Test suite
 
-Run `npm test` to execute every `tests/*.mjs` file and the five performance gates.
+Run `npm test` to execute every `tests/*.mjs` file and the registered performance gates.
 The runner starts the local game server when needed, continues after individual
 failures, exits with a failure code if any suite fails, and writes
 `test-results/suite-summary-all.json`. Existing servers are reused.
@@ -24,6 +24,11 @@ normal gameplay/startup tests exercise progressive loading. Service workers are
 disabled under `test=1` unless `cache=1` is also supplied, preserving network-fault
 fixtures. Regenerate asset hashes with `npm run build:asset-manifest` after runtime
 edits, or `npm run build:startup` after changing source textures/model exports.
+
+`resource-budget` checks the background preparation scheduler, including busy
+frames, combat and recovery after errors. `benchmark-settlement-entry` is part
+of the performance group and verifies GPU-ready first-entry rendering and image
+parity; see [settlement streaming](SETTLEMENT-STREAMING.md).
 
 Examples:
 
