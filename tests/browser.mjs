@@ -11,6 +11,8 @@ const browser = await chromium.launch({headless:true,...(process.platform==='win
  ...(process.argv.includes('--software-gl')?{args:['--use-gl=angle','--use-angle=swiftshader']}:{})});
 const context = await browser.newContext({viewport:{width:1440,height:900}});
 const page = await context.newPage();
+ const cpuRate=Number(process.argv.find(arg=>arg.startsWith('--cpu-throttle='))?.split('=')[1]||1);
+ if(cpuRate>1){const session=await page.context().newCDPSession(page);await session.send('Emulation.setCPUThrottlingRate',{rate:cpuRate});}
 const errors=[], requests=[], results=[];
 let nativeDialogs=0;
 page.on('pageerror',e=>{errors.push(e.stack||String(e));console.log('RUNTIME '+(e.stack||String(e)));});
@@ -192,11 +194,16 @@ try {
   // This is an asset/rig inspection, not a live-play check. A slow software
   // renderer correctly defers HD commits while playing; pause while awaiting
   // them, then restore the original simulation state even if inspection fails.
-  const wasPaused=state.isPaused;state.isPaused=true;
+  const wasPaused=state.isPaused,draw=state.renderer.render;state.isPaused=true;
+  // HD commits use initTexture in the real context. Redrawing the island for
+  // each queued commit is unrelated to this inspection and can take seconds
+  // per frame on the hosted runner. Keep off-screen GPU preparation enabled.
+  state.renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
   try{
    await Promise.race([(async()=>{await Characters.ready;await Art.promoteTextures();})(),
     new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('HD material preparation timed out: '+
      JSON.stringify({textures:Art.textureStatus,budget:Art.resources.stats,paused:state.isPaused}))),180000);})]);
+   state.renderer.render=draw;
    const dimensions=Object.fromEntries(Object.entries(Characters.tiles).map(([k,t])=>[k,[t.image.width,t.image.height]]));
    if(dimensions.skin[0]<1024||dimensions.cloth[0]<1024)throw new Error('HD textures missing');
    const roles=[];
@@ -212,7 +219,7 @@ try {
     roles.push(type);
    }
    return {dimensions,roles};
-  }finally{clearTimeout(timer);state.isPaused=wasPaused;}
+  }finally{clearTimeout(timer);state.renderer.render=draw;state.isPaused=wasPaused;}
  }));
  await check('New character combat animations retain damage and fireballs without changing sides',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position,victim=new Humanoid(1,'warrior',p.x+1,p.z+1);state.units.push(victim);

@@ -2,13 +2,19 @@ import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 const modulePath=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createRequire(import.meta.url)('playwright');
-const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
+const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),
+ ...(process.argv.includes('--software-gl')?{args:['--use-gl=angle','--use-angle=swiftshader']}:{})});
 try{
  const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));
+ const cpuRate=Number(process.argv.find(arg=>arg.startsWith('--cpu-throttle='))?.split('=')[1]||1);
+ if(cpuRate>1){const session=await page.context().newCDPSession(page);await session.send('Emulation.setCPUThrottlingRate',{rate:cpuRate});}
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
  const result=await page.evaluate(async()=>{
   closeHelp();closeStoryOverlay();state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;
+  // This fixture checks Worker transport, exact paths and unchanged physics,
+  // not rendering. Do not let software-GPU redraws consume Worker deadlines.
+  state.renderer.render=()=>{};window.requestAnimationFrame=()=>0;
   const {BattleWork:work,PathWorker:worker}=gameTestAPI,p=state.shaman.mesh.position;
   for(let x=Math.floor(p.x)-20;x<=p.x+20;x++)for(let z=Math.floor(p.z)-20;z<=p.z+20;z++)state.terrainMods.set(`${x},${z}`,8-gameTestAPI.getBaseHeight(x,z));
   state.heightCache.clear();gameTestAPI.updateChunks(true);
@@ -17,6 +23,15 @@ try{
   state.units.push(unit,target);unit.state='combat';unit.attackTarget=target;
   const reference=()=>Pathfinder.findPath(unit.mesh.position,target.mesh.position,false,unit.height,false,false)?.map(p=>[p.x,p.z])??null;
   const expected=reference();if(!expected?.length)throw new Error('No reference route around the building');
+  // Prime the actual Worker with a real round trip before measuring combat's
+  // 500 ms decision budget. Module import time is not path computation time.
+  await new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>finish(new Error('Worker startup round trip timed out')),10000);
+   const tick=setInterval(()=>worker.update(),20);
+   function finish(error){clearTimeout(timer);clearInterval(tick);error?reject(error):resolve();}
+   if(!worker.request(p,p,false,false,false,(_path,fallback)=>finish(fallback?new Error('Worker startup used fallback'):null)))
+    finish(new Error('Worker unavailable during startup'));
+  });
   let requests=0;const original=worker.request;
   worker.request=function(...args){requests++;return original.apply(this,args);};
   const body=JSON.stringify(unit.rigidBody.translation());
@@ -24,9 +39,9 @@ try{
   const started=performance.now();
   while(!unit.path?.length&&unit.state==='combat'){
    await new Promise(r=>setTimeout(r,20));worker.update();work.begin();work.end();
-   if(performance.now()-started>12000)throw new Error('Combat Worker never returned');
+   if(performance.now()-started>12000)throw new Error('Combat Worker never returned: '+JSON.stringify({work:work.stats,disabled:worker.disabled,pending:worker.pending.size,state:unit.state}));
   }
-  if(!requests||worker.disabled||JSON.stringify(unit.path.map(p=>[p.x,p.z]))!==JSON.stringify(expected))throw new Error('Worker path differs from original pathfinder');
+  if(!requests||work.stats.workerPaths<1||worker.disabled||JSON.stringify(unit.path.map(p=>[p.x,p.z]))!==JSON.stringify(expected))throw new Error('Worker path differs from original pathfinder');
   if(JSON.stringify(unit.rigidBody.translation())!==body)throw new Error('Path worker changed physics body');
   const workerPaths=work.stats.workerPaths;
   worker.disable();worker.update();work.clear();unit.path=[];unit.state='combat';unit.attackTarget=target;

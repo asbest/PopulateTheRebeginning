@@ -32,14 +32,25 @@ parity; see [settlement streaming](SETTLEMENT-STREAMING.md).
 
 `texture-budget` reproduces persistently busy rendering frames and verifies that
 HD uploads yield during play and finish when the asset inspection pauses the
-simulation. The browser asset/rig inspection pauses only for that inspection,
-restores its previous state even on failure, and reports a bounded timeout with
-texture/queue diagnostics. Live-play checks continue to run unpaused. During the
-phone touch fixture, the inactive desktop world's simulation and main-scene drawing are suspended and
-restored afterwards; the phone retains full original rendering. This prevents
-two worlds competing for Software WebGL during the phone's initial loading. Both
-`tests/texture-budget.mjs` and `tests/browser.mjs` accept `--software-gl` to
-reproduce the runner's Software WebGL backend without reducing graphics detail.
+simulation. Pure asset waits suspend main-scene drawing, keeping real GPU texture
+initialization and offscreen preparation active. Otherwise, a multi-second
+software-rendered frame for every queued upload can consume the test deadline.
+The browser inspection restores rendering before inspecting the rig/materials,
+and restores the original simulation state in `finally`. Live-play and graphics
+checks retain their full rendering. The phone touch fixture also suspends the
+inactive desktop world until the phone closes, then restores it.
+
+`combat-worker` suspends unrelated idle world redraws/streaming during its CPU
+fixture and primes the actual Worker with a real request before testing combat's
+500 ms decision budget. It requires an actual Worker path (not a fallback), exact
+agreement with the original pathfinder, unchanged physics, and then tests the
+explicit disabled-Worker fallback separately. Timeout/failure behavior remains
+covered by `battle-work` and `pathfinder-worker`.
+
+`tests/texture-budget.mjs`, `tests/browser.mjs` and `tests/combat-worker.mjs`
+accept `--software-gl` and `--cpu-throttle=6` for reproduction with Software WebGL
+and a throttled browser CPU. No graphic-detail reduction or larger Worker
+execution deadline is used by these fixtures.
 
 Examples:
 

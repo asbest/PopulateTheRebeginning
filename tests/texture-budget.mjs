@@ -8,12 +8,17 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
  ...(process.argv.includes('--software-gl')?{args:['--use-gl=angle','--use-angle=swiftshader']}:{})});
 try{
  const page=await browser.newPage({viewport:{width:960,height:600}}),errors=[];
+ const cpuRate=Number(process.argv.find(arg=>arg.startsWith('--cpu-throttle='))?.split('=')[1]||1);
+ if(cpuRate>1){const session=await page.context().newCDPSession(page);await session.send('Emulation.setCPUThrottlingRate',{rate:cpuRate});}
  page.on('pageerror',error=>errors.push(String(error)));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
  const result=await page.evaluate(async()=>{
   closeHelp();closeStoryOverlay();state.isPaused=false;
-  const budget=Art.resources,frame=budget.frame,wasPaused=state.isPaused;
+  const budget=Art.resources,frame=budget.frame,wasPaused=state.isPaused,draw=state.renderer.render;
+  // Frame cost is explicitly controlled below; unrelated landscape rasterizing
+  // must not consume the queue's wall-clock deadline on Software WebGL.
+  state.renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
   const start=performance.now(),deferred=budget.stats.deferred;
   let complete=false;
   // Model the runner's persistently expensive software-rendered frames on any GPU.
@@ -38,7 +43,7 @@ try{
    await promotion;
    return {deferred:budget.stats.deferred-deferred,promoted:Art.textureStatus.promoted,
     dimensions:Object.fromEntries(Object.entries(Characters.tiles).map(([key,t])=>[key,t.image.width]))};
-  }finally{budget.frame=frame;state.isPaused=wasPaused;}
+  }finally{budget.frame=frame;state.renderer.render=draw;state.isPaused=wasPaused;}
  });
  assert.deepEqual(errors,[]);
  assert(result.deferred>0&&result.promoted>0);
