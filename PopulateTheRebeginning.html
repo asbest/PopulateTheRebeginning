@@ -1239,6 +1239,9 @@ const CONFIG = {
         MUSIC_ENABLED: 'musicEnabled',
         OBJECTIVE_SETTINGS: 'rebeginning_campaign_objectives',
         PEACE_MINUTES: 'rebeginning_peace_minutes',
+        CONTROL_TUTORIAL: 'rebeginning_controls_tutorial_v1',
+        GRAPHICS_QUALITY: 'graphics-quality',
+        CAMERA_VIEW: 'camera-view',
     },
     UI: {
         UNIT_LIST_TOP: 70,
@@ -1781,7 +1784,7 @@ window.setGraphicsQuality=function(tier='high'){
         const palms=chunk.userData?.palms;
         if(palms?.mesh)palms.mesh.count=Math.floor(palms.data.length*profile.cover);
     }
-    try{localStorage.setItem('graphics-quality',tier);}catch(e){}
+    try{localStorage.setItem(CONFIG.SAVED_KEYS.GRAPHICS_QUALITY,tier);}catch(e){}
     const graphicsBtn=document.getElementById('btn-graphics-quality');
     if(graphicsBtn)graphicsBtn.innerText=`Graphics: ${{low:'Low',medium:'Medium',high:'High',ultra:'Ultra'}[state.graphicsQuality.tier]||'High'}`;
     return state.graphicsQuality;
@@ -10404,13 +10407,13 @@ async function init() {
         state.orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 1000);
         state.perspectiveCamera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
         state.cinematicCamera = new THREE.PerspectiveCamera(CONFIG.CAMERA.CINEMATIC_FOV, aspect, 0.5, 1000);
-        try { state.cameraView = localStorage.getItem('camera-view') === 'cinematic' ? 'cinematic' : 'strategy'; } catch(e) {}
+        try { state.cameraView = localStorage.getItem(CONFIG.SAVED_KEYS.CAMERA_VIEW) === 'cinematic' ? 'cinematic' : 'strategy'; } catch(e) {}
         state.camera = strategyCamera();
         updateCameraZoom();
 
         const memory=navigator.deviceMemory||8,cores=navigator.hardwareConcurrency||8;
         const automaticTier=memory<=4||cores<=4?'medium':'high';
-        let tier=automaticTier;try{const saved=localStorage.getItem('graphics-quality');if(['low','medium','high','ultra'].includes(saved))tier=saved;}catch(e){}
+        let tier=automaticTier;try{const saved=localStorage.getItem(CONFIG.SAVED_KEYS.GRAPHICS_QUALITY);if(['low','medium','high','ultra'].includes(saved))tier=saved;}catch(e){}
         state.graphicsQuality={tier,coverDensity:tier==='high'?1:.68,maxPixelRatio:tier==='high'?1.5:1.2,
             dynamicScale:1,lastAdjustment:performance.now(),averageFps:60};
         state.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -11229,6 +11232,17 @@ let activeSaveSlot=Number(localStorage.getItem(activeSlotKey))||1;
 if(!Number.isInteger(activeSaveSlot)||activeSaveSlot<1||activeSaveSlot>10)activeSaveSlot=1;
 function saveSlotKey(slot){return slot===1?CONFIG.SAVED_KEYS.SAVE_DATA:CONFIG.SAVED_KEYS.SAVE_DATA+'.slot.'+slot;}
 function validSaveSlot(slot){return Number.isInteger(slot)&&slot>=1&&slot<=10;}
+function resetGameProgress(){
+    const keys=[activeSlotKey,...Object.values(CONFIG.SAVED_KEYS)];
+    for(let slot=2;slot<=10;slot++)keys.push(saveSlotKey(slot));
+    let cleared=true;
+    for(const key of keys)if(!localStorage.removeItem(key))cleared=false;
+    if(!cleared){
+        showGameDialog('Reset incomplete','The browser prevented some game data from being removed. Allow site storage and try again.');
+        return;
+    }
+    location.reload();
+}
 let closeSaveSlots=null;
 window.openSaveSlots=function(mode){
     if(!['save','load'].includes(mode)||closeSaveSlots)return;
@@ -11260,6 +11274,15 @@ window.openSaveSlots=function(mode){
         list.appendChild(button);
     }
     card.appendChild(list);
+    if(mode==='load'){
+        const reset=document.createElement('button');reset.type='button';reset.id='reset-game-progress';
+        reset.className='menu-btn';reset.textContent='Delete all saves and reset game';
+        reset.style.cssText='width:100%;margin:12px 0 0;white-space:normal;color:#ffe0d8;border-color:#ac6662;';
+        reset.onclick=()=>showGameDialog('Reset the entire game?',
+            'This permanently deletes all ten save slots, your campaign progress and game settings. The current match will also be lost.',
+            resetGameProgress,'Cancel','Delete and reset');
+        card.appendChild(reset);
+    }
     const cancel=document.createElement('button');cancel.type='button';cancel.className='menu-btn';cancel.textContent='Cancel';cancel.style.cssText='width:100%;margin:12px 0 0;';card.appendChild(cancel);
     function onKey(event){
         if(!document.getElementById('game-dialog').hidden)return;
@@ -11963,7 +11986,7 @@ window.setCameraView = function(view) {
     state.isFPV = false;
     state.camera = strategyCamera();
     updateCameraPosition();
-    try { localStorage.setItem('camera-view', state.cameraView); } catch(e) {}
+    try { localStorage.setItem(CONFIG.SAVED_KEYS.CAMERA_VIEW, state.cameraView); } catch(e) {}
     return state.cameraView;
 };
 window.toggleCameraView = function() {

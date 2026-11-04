@@ -1,5 +1,5 @@
 export function createControlTutorial(state,storage,config){
-    const key='rebeginning_controls_tutorial_v1';
+    const key=config.SAVED_KEYS.CONTROL_TUTORIAL;
     let root,step=0,baseline,highlight,steps,worker,school,dock,trainingSeen=false;
     const alive=u=>u&&u.faction===0&&u.state!=='dead'&&u.hp>0;
     const selected=u=>alive(u)&&state.selectedUnits.includes(u);

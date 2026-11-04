@@ -14,8 +14,8 @@ export function createBrowserStorage(provider=()=>window.localStorage){
         },
         removeItem(key){
             key=String(key);
-            try{provider().removeItem(key);session.delete(key);}
-            catch{session.set(key,null);}
+            try{provider().removeItem(key);session.delete(key);return true;}
+            catch{session.set(key,null);return false;}
         }
     };
 }

@@ -19,6 +19,7 @@ try{
   const legacy=JSON.parse(localStorage.getItem(key));delete legacy.savedAt;localStorage.setItem(key,JSON.stringify(legacy));
   state.isPaused=true;openSaveSlots('save');
  });
+ if(await page.locator('#reset-game-progress').count())throw new Error('Reset available while saving');
  if(await page.locator('#save-slots [data-slot]').count()!==10)throw new Error('Missing slot choices');
  if(!(await page.locator('#save-slots [data-slot="1"]').innerText()).includes('Earlier save'))throw new Error('Legacy save missing');
  await page.locator('#save-slots [data-slot="1"]').click();
@@ -40,7 +41,36 @@ try{
  });
  if(!await page.locator('#save-slots [data-slot="3"]').isDisabled())throw new Error('Corrupt slot enabled');
  await page.screenshot({path:'test-results/save-slots-mobile.png'});
+ const keys=await page.evaluate(()=>{
+  const saved=gameTestAPI.CONFIG.SAVED_KEYS;
+  for(const key of Object.values(saved))if(key!==saved.SAVE_DATA)localStorage.setItem(key,'reset-test');
+  localStorage.setItem('unrelated-origin-data','keep');
+  return [...Object.values(saved),saved.SAVE_DATA+'.activeSlot',
+   ...Array.from({length:9},(_,i)=>saved.SAVE_DATA+'.slot.'+(i+2))];
+ });
+ const reset=page.locator('#reset-game-progress');
+ await reset.click();
+ await page.locator('#game-dialog-cancel').click();
+ if(!await reset.isVisible()||!await page.evaluate(keys=>keys.every(key=>localStorage.getItem(key)!==null),keys))
+  throw new Error('Cancelling reset lost data or closed the load screen');
+ await page.addInitScript(keys=>{
+  window.resetStorageSnapshot=keys.map(key=>localStorage.getItem(key));
+ },keys);
+ await reset.click();
+ await Promise.all([
+  page.waitForEvent('framenavigated',frame=>frame===page.mainFrame()),
+  page.locator('#game-dialog-confirm').click()
+ ]);
+ await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:90000});
+ await page.evaluate(()=>{
+  if(resetStorageSnapshot.some(value=>value!==null))throw new Error('Game data survived reset: '+resetStorageSnapshot);
+  if(localStorage.getItem('unrelated-origin-data')!=='keep')throw new Error('Reset removed unrelated origin storage');
+  if(!state.isCampaign||state.campaignLevel!==1||state.matchSettings.peaceTimeMinutes!==2.5)
+   throw new Error('Game did not restart with default progress and settings');
+  openSaveSlots('load');
+ });
+ if(await page.locator('#save-slots [data-slot]:disabled').count()!==10)throw new Error('Reset left loadable saves');
  await page.keyboard.press('Escape');
  if(errors.length)throw new Error(errors.join('\n'));
- console.log('PASS ten independent save slots, legacy saves, overwrite confirmation, mobile selection, corruption and reload');
+ console.log('PASS ten independent save slots, legacy saves, overwrite confirmation, mobile selection, corruption, reload and full reset');
 }finally{await browser.close();}
