@@ -254,9 +254,16 @@ try {
   const fx=gameTestAPI.FireballFxManager;
   const a=new gameTestAPI.Fireball(start,end,0),b=new gameTestAPI.Fireball(start,end,0),before=fx.layers.glow.items.length;
   if(a.mesh.geometry!==b.mesh.geometry||a.corona.geometry!==b.corona.geometry)throw new Error('Projectile geometry duplicated');
+  a.corona.geometry.computeBoundingBox();
+  const bounds=a.corona.geometry.boundingBox,size=bounds.getSize(new THREE.Vector3());
+  if(size.z<3*size.x||bounds.min.z>=-2*bounds.max.z)throw new Error('Flame profile does not taper behind the projectile');
   const cameraPos=state.camera.position.clone();state.camera.position.copy(start).add(new THREE.Vector3(0,10,10));
   for(let i=0;i<28;i++){a.update(1/60);b.update(1/60);}
   state.camera.position.copy(cameraPos);
+  const t=a.travel/a.duration,heading=end.clone().sub(start);
+  heading.y+=4*(1-2*t)*a.arcHeight;
+  if(new THREE.Vector3(0,0,1).applyQuaternion(a.mesh.quaternion).dot(heading.normalize())<.999)
+    throw new Error('Projectile nose does not follow the flight arc');
   const trails=fx.layers.glow.items.length-before;
   fx.update(0);
   if(trails>14||trails<2||!fx.layers.glow.mesh.isInstancedMesh||fx.layers.glow.mesh.count<2)
