@@ -346,7 +346,11 @@ try{
   }
   if(spell==='blast'){
    expect(state.projectiles.length>0,'No projectile');const projectile=state.projectiles.at(-1);
-   for(let i=0;i<180&&projectile.active;i++){state.physicsWorld.timestep=1/60;state.physicsWorld.step();projectile.update(1/60);}
+   sound.playSound=name=>castingSounds.push(name);
+   try {
+    for(let i=0;i<180&&projectile.active;i++){state.physicsWorld.timestep=1/60;state.physicsWorld.step();projectile.update(1/60);}
+   } finally {sound.playSound=playSound;}
+   expect(castingSounds.join(',')==='fireball,explosion','Fireball launch and impact sounds: '+castingSounds);
    expect(!projectile.active&&enemy.hp<before.hp&&ally.hp===500,'Projectile impact/damage/faction');
   }
   return {cost,enemyHealth:enemy.hp,unitCount:state.units.length};

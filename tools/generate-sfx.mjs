@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 // Deterministic, locally authored effects. Short seamless beds are looped only
 // while their matching world effect exists; long spells do not load long WAVs.
 const output = path.resolve(fileURLToPath(new URL('../sfx/', import.meta.url)));
+const {files:assetLicenses}=JSON.parse(fs.readFileSync(new URL('../licenses/assets.json',import.meta.url),'utf8'));
 const sampleRate = 32000;
 const sounds = [
     ['attack', .28, 'attack'], ['construct', .46, 'construct'],
@@ -161,4 +162,7 @@ function render(name, duration, kind, loop) {
 }
 
 fs.mkdirSync(output, { recursive: true });
-for (const [name, duration, kind, loop = false] of sounds) render(name, duration, kind, loop);
+for (const [name, duration, kind, loop = false] of sounds) {
+    if(assetLicenses[`sfx/${name}.wav`]?.status==='third-party')continue;
+    render(name, duration, kind, loop);
+}

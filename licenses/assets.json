@@ -1407,28 +1407,44 @@
       "sha256": "26c973e983528876f90ebe6842bec6b42274793e48d9b00f3a20ca3a8277bb7a"
     },
     "sfx/create.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "6173a242235b7a01466deab0623c9d3b2d42aff07aa2efa1a2e1abffd1fd94b7"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "JaggedStone",
+      "source": "https://opengameart.org/content/magic-spell-sfx",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "JaggedStone on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): magical_3.ogg, 0.04s, 1.18s, 1.18x, 1",
+      "sha256": "367a4f525161d7774ff994c30276bfc36d504ee7850c9e1314535052766e8b57"
     },
     "sfx/explosion.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "dc2598a2bf2db6765fd7d5f2dc0572bd4c104a4ef6ab0d597278cceb58785483"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "rubberduck; Julien Matthey",
+      "source": "https://opengameart.org/content/100-cc0-sfx-2 ; https://opengameart.org/content/fireball-1",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "rubberduck on OpenGameArt / Julien Matthey on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): sfx100v2_thunder_01.ogg, 0.85s, 1.05s, 0.79x, 1; 105016__julien-matthey__jm-fx-fireball-01.wav, 0.54s, 0.6s, 1.22x, 0.64; sfx100v2_stones_03.ogg, 0s, 0.36s, 0.84x, 0.34",
+      "sha256": "029dcdb6c51f128219e819e3c681ee6d24309c5aced422b383f81cde997952cd"
     },
     "sfx/fireball.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "069699a85a466422afce792e9ea0837e340e29536bd3516d8369179d780c9a69"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "Julien Matthey",
+      "source": "https://opengameart.org/content/fireball-1",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "Julien Matthey on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): 105016__julien-matthey__jm-fx-fireball-01.wav, 0.2s, 0.94s, 1.1x, 1",
+      "sha256": "d4393d31446199474285723064b7074aa6f48dc401b71b5c736eddab90a3f303"
     },
     "sfx/firestorm.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "a2609abd25b474b538c40b2a252ac475c9a0c3bf5c521da7a183349a1fcca5c3"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "Julien Matthey; rubberduck",
+      "source": "https://opengameart.org/content/fireball-1 ; https://opengameart.org/content/100-cc0-sfx-2",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "Julien Matthey on OpenGameArt / rubberduck on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): 105016__julien-matthey__jm-fx-fireball-01.wav, 0.21s, 1.1s, 0.84x, 1; sfx100v2_thunder_01.ogg, 0.74s, 1.1s, 1.05x, 0.43",
+      "sha256": "49a183b5adafef3369049bfb7d93c1be6ab8eaf1ce44eb1545ae574c6e64c146"
     },
     "sfx/firestorm_loop.wav": {
       "status": "project-original",
@@ -1437,16 +1453,24 @@
       "sha256": "cab3e2ad657e6a0444587b417e3f7cbd48d9975b3b8c5876fdedba78e521f0ff"
     },
     "sfx/flatten.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "ef9ebc89ebf357b94c7a293ac059e8937f1da42af40ffbdba62307172fd0bc9e"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "qubodup; rubberduck",
+      "source": "https://opengameart.org/content/earth-element-magic-spell ; https://opengameart.org/content/100-cc0-sfx-2",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "qubodup on OpenGameArt / rubberduck on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): Earth Element Magic Spell_3.ogg, 0.36s, 0.87s, 1.25x, 1; sfx100v2_stones_03.ogg, 0s, 0.42s, 1.25x, 0.3",
+      "sha256": "93e816649af50389ab5f650e552d91be0df4b2d6ee3b0fde33dd9985bec4346e"
     },
     "sfx/heal.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "5371b01b2f6ce1973cdc69c5072bbdd7faf3af3c1990d548a1ed830510750931"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "JaggedStone",
+      "source": "https://opengameart.org/content/magic-spell-sfx",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "JaggedStone on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): magical_2.ogg, 0s, 1.15s, 1.08x, 1",
+      "sha256": "e23f64aafcadd0b49ec45d5ba32f7943a95f9f85e4043b78664a4a105bbb8b01"
     },
     "sfx/hurt.wav": {
       "status": "project-original",
@@ -1461,34 +1485,64 @@
       "sha256": "cafbd3c512be3add799b763f7b3bc6d6a7ff3f20ca9d6b6bef3c30d9de40b93f"
     },
     "sfx/hypnotise.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "eba283a4e61fe4b05b94b50539709ceb86e8352af6d99d72beec242caa50acfa"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "JaggedStone",
+      "source": "https://opengameart.org/content/magic-spell-sfx",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "JaggedStone on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): magical_4.ogg, 0.03s, 1.29s, 0.94x, 1",
+      "sha256": "ae69e71a05c9a410f829abf6aff804bd5761e07e696ccf7471511ef23e5a076f"
     },
     "sfx/invisibility.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "fe374a947955f2663cf4419ac151a111acce40cf1f0e89896027c8cfce85818d"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "JaggedStone",
+      "source": "https://opengameart.org/content/magic-spell-sfx",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "JaggedStone on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): magical_5.ogg, 0.09s, 0.93s, 0.96x, 1",
+      "sha256": "7cd97a5c6506c88b04a8ce41b7bf504395bbb66f78c6de2ca3e1a6da04e0e520"
     },
     "sfx/landbridge.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "d17cfa518c3798a81c1d073c54de94b685cebe1bb58610f17be865476a943f0c"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "qubodup; rubberduck",
+      "source": "https://opengameart.org/content/earth-element-magic-spell ; https://opengameart.org/content/100-cc0-sfx-2",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "qubodup on OpenGameArt / rubberduck on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): Earth Element Magic Spell_3.ogg, 0s, 1.3s, 1.15x, 1; sfx100v2_stones_03.ogg, 0s, 0.42s, 1.15x, 0.3",
+      "sha256": "3627d64239132160c8d84c8402e08a5c3a04c7d28095d1e89360ea4cfe3d3feb"
     },
     "sfx/lightning.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "894065e54e131d00ff10010f6271b332d3b55599f066bb00d9f1fcec76cdc2ae"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "rubberduck",
+      "source": "https://opengameart.org/content/100-cc0-sfx-2",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "rubberduck on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): sfx100v2_thunder_01.ogg, 0.82s, 1.55s, 1x, 1",
+      "sha256": "8a974c54374ec358d03efd9b6c03d3ce04f575f8aa09175801bc0e052cc4d286"
+    },
+    "sfx/lightning_charge.wav": {
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "JaggedStone; rubberduck",
+      "source": "https://opengameart.org/content/magic-spell-sfx ; https://opengameart.org/content/100-cc0-sfx-2",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "JaggedStone on OpenGameArt / rubberduck on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): magical_7_0.ogg, 0s, 0.4s, 1.35x, 1; sfx100v2_air_03.ogg, 0s, 0.23s, 1.15x, 0.35",
+      "sha256": "fbfa58d76ec8fb47e0b7d7566182b85e46978ff9a5f3de4e47c9ac07a31a1024"
     },
     "sfx/lower.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "709e7d7887fe4968588db55f8d13f556dfc6928ccb0eccf96c163e454b6edcc2"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "qubodup; rubberduck",
+      "source": "https://opengameart.org/content/earth-element-magic-spell ; https://opengameart.org/content/100-cc0-sfx-2",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "qubodup on OpenGameArt / rubberduck on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): Earth Element Magic Spell_3.ogg, 0.3s, 1s, 0.84x, 1; sfx100v2_stones_03.ogg, 0s, 0.42s, 0.84x, 0.3",
+      "sha256": "c4531a05fe9d077ac7101abad4f0bb322a661e81d6e12fcfca6aefd88f975a99"
     },
     "sfx/magic.wav": {
       "status": "project-original",
@@ -1497,16 +1551,24 @@
       "sha256": "1e1adebc7251b7ad4f2710415bf25c112cb32d6e66217b5990323b465924e7ba"
     },
     "sfx/phantom.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "79cbe04d5f26b1c140851089156ea3aff52863b45d2a6956476fa930b47c30b1"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "JaggedStone",
+      "source": "https://opengameart.org/content/magic-spell-sfx",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "JaggedStone on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): magical_7_0.ogg, 0.2s, 1.09s, 0.93x, 1",
+      "sha256": "cde7085e66260ba2b2c977e21527e5636a94f13fbac3aa7f282c4cc03c54a02e"
     },
     "sfx/raise.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "76d14448d105cbdd327b00b1a7eafa8978be31fa0dd9787aca92c5b01d6d4455"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "qubodup; rubberduck",
+      "source": "https://opengameart.org/content/earth-element-magic-spell ; https://opengameart.org/content/100-cc0-sfx-2",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "qubodup on OpenGameArt / rubberduck on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): Earth Element Magic Spell_3.ogg, 0.08s, 1.05s, 1.1x, 1; sfx100v2_stones_03.ogg, 0s, 0.42s, 1.1x, 0.3",
+      "sha256": "852959fc0720ec4aef40c8a43cc7597232fcc1cd6b29a8a5d8ce8050555e3c83"
     },
     "sfx/rumble.wav": {
       "status": "project-original",
@@ -1515,16 +1577,24 @@
       "sha256": "beb163ec0f476cc77dde556a77acd95d0c9383e2343f2c37557b596129c55b90"
     },
     "sfx/shield.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "dbdf9e428449688deb89e768b96debe658d2ba781a08704459d4bab76d81f5e5"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "JaggedStone",
+      "source": "https://opengameart.org/content/magic-spell-sfx",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "JaggedStone on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): magical_1_0.ogg, 0.04s, 1.16s, 1.09x, 1",
+      "sha256": "5fb8829b894df91ac050b2b5398b5566a74ad6582ebef71db356ce4c978280d0"
     },
     "sfx/swamp.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "09cec95f237b241bda4a1a5c7f8cd53f2ffe8ac9178720b7451aa8a3db33e54e"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "qubodup",
+      "source": "https://opengameart.org/content/earth-element-magic-spell",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "qubodup on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): Earth Element Magic Spell_3.ogg, 0.28s, 1.05s, 0.68x, 1",
+      "sha256": "188314ba2bd1d9c749b8a46e20bff0102c6b73413fa6a8f502d13ffe2121d4dd"
     },
     "sfx/swamp_loop.wav": {
       "status": "project-original",
@@ -1533,10 +1603,14 @@
       "sha256": "ff091c18df9d047bfdd1b9864e655792a0a9dc763956961b1b0a1d0d6a4d1c77"
     },
     "sfx/swarm.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "d0c72989fa829cecd8e197674e481f952420bf58d35be5ae73973156bea6269f"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "rubberduck; JaggedStone",
+      "source": "https://opengameart.org/content/100-cc0-sfx-2 ; https://opengameart.org/content/magic-spell-sfx",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "rubberduck on OpenGameArt / JaggedStone on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): sfx100v2_air_02.ogg, 0s, 0.75s, 1.25x, 1; magical_5.ogg, 0s, 0.67s, 1.33x, 0.44",
+      "sha256": "5f19141357bdfa9a088f4c4bec1bd9a311ced0e1f4456a630de75662f280740d"
     },
     "sfx/swarm_loop.wav": {
       "status": "project-original",
@@ -1545,16 +1619,24 @@
       "sha256": "9daba3183e07236764ccf355b6bab3828f87b87feddaa3cf2352c00590e48ec2"
     },
     "sfx/teleport.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "75c6ae9f0944741f6ffb170409b9a6928bdc3bfde0cfde2970765a3d18deea11"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "JaggedStone",
+      "source": "https://opengameart.org/content/magic-spell-sfx",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "JaggedStone on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): magical_6_0.ogg, 0s, 0.97s, 1.14x, 1",
+      "sha256": "8270c6a6001062115381466d9e66e0bf81fae10fe5065eeb886265ed5b0a90db"
     },
     "sfx/tornado.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "76969069de727bd660e8eeb584bfb7758429a457301eaccbd85f614054b4c813"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "rubberduck",
+      "source": "https://opengameart.org/content/100-cc0-sfx-2",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "rubberduck on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): sfx100v2_air_01.ogg, 0.09s, 1.27s, 1.21x, 1",
+      "sha256": "f4d9fa02176d882d56b1fb9303b83beae5088a7a934d750429f24f2b1bcca4e4"
     },
     "sfx/tornado_loop.wav": {
       "status": "project-original",
@@ -1563,10 +1645,14 @@
       "sha256": "450bea22d95830bb460b9706c5dbe33cd111010555c49022448378c078fe5f04"
     },
     "sfx/volcano.wav": {
-      "status": "project-original",
-      "license": null,
-      "evidence": "Locally synthesized by tools/generate-sfx.mjs; no external audio samples.",
-      "sha256": "7fd174735558533b9347d02c2f0be18837b593936cb1503672883aa5d93f5d64"
+      "status": "third-party",
+      "license": "CC0-1.0",
+      "creator": "rubberduck; qubodup",
+      "source": "https://opengameart.org/content/100-cc0-sfx-2 ; https://opengameart.org/content/earth-element-magic-spell",
+      "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": "rubberduck on OpenGameArt / qubodup on OpenGameArt",
+      "evidence": "CC0 as published on the linked asset pages. Source audio edited to mono 32 kHz WAV. Clips (file, source start, output duration, playback rate, mix gain): sfx100v2_thunder_01.ogg, 0.83s, 1.55s, 0.67x, 1; Earth Element Magic Spell_3.ogg, 0.2s, 1.28s, 0.7x, 0.6",
+      "sha256": "e25fec0c6d8e07f1ef46c2a4643df707c7d42c171e8acd1689236b2a3ef61e9b"
     },
     "sfx/volcano_loop.wav": {
       "status": "project-original",

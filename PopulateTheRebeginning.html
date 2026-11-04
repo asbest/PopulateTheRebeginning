@@ -2338,14 +2338,14 @@ window.closeMultiplayer = () => {
 // --- js/audio.js ---
 const SOUND_ASSETS = [
     'attack','construct','fireball','explosion','magic','rumble',
-    'lightning','raise','lower','flatten','landbridge','swamp','invisibility',
+    'lightning','lightning_charge','raise','lower','flatten','landbridge','swamp','invisibility',
     'shield','hypnotise','swarm','tornado','firestorm','volcano','heal',
     'teleport','create','phantom','bunny_nibble','bird_call','hurt','hurt_heavy'
 ];
 const SUSTAIN_ASSETS = ['swamp_loop','swarm_loop','tornado_loop','firestorm_loop','volcano_loop'];
 const SOUND_LEVELS = {
     attack:.45,construct:.4,fireball:.67,explosion:.73,magic:.48,rumble:.57,
-    lightning:.72,raise:.53,lower:.53,flatten:.52,landbridge:.56,swamp:.48,
+    lightning:.72,lightning_charge:.38,raise:.53,lower:.53,flatten:.52,landbridge:.56,swamp:.48,
     invisibility:.42,shield:.47,hypnotise:.46,swarm:.42,tornado:.55,
     firestorm:.6,volcano:.72,heal:.43,teleport:.5,create:.46,phantom:.4,
     bunny_nibble:.3,bird_call:.34,hurt:.44,hurt_heavy:.5,
@@ -2478,7 +2478,7 @@ const SoundManager = {
     },
     unlockFromGesture: function() {
         this.hasUserGesture=true;
-        this.preloadEffects(['fireball','explosion','attack','hurt','hurt_heavy']);
+        this.preloadEffects(['fireball','explosion','lightning_charge','lightning','attack','hurt','hurt_heavy']);
         return this.unlock();
     },
     installUnlockHandlers: function() {
@@ -2620,7 +2620,7 @@ const SoundManager = {
             source.start();
             return;
         }
-        const fallback={lightning:'explosion',raise:'rumble',lower:'rumble',flatten:'rumble',landbridge:'rumble',
+        const fallback={lightning:'explosion',lightning_charge:'magic',raise:'rumble',lower:'rumble',flatten:'rumble',landbridge:'rumble',
             swamp:'magic',invisibility:'magic',shield:'magic',hypnotise:'magic',swarm:'magic',tornado:'rumble',
             firestorm:'fireball',volcano:'explosion',heal:'magic',teleport:'magic',create:'magic',phantom:'magic'}[name];
         if (fallback) { this.emitSound(fallback,volume); return; }
@@ -7152,6 +7152,7 @@ const SpellWindup={
             caster.staffWindup={x,z,type};
             Locomotion.turn(caster,Math.atan2(x-caster.mesh.position.x,z-caster.mesh.position.z),.16);
         }
+        if(type==='lightning')SoundManager.playSound('lightning_charge');
         spawnPulse(x,getHeight(x,z)+.15,z,0xffae47);
         if(caster.faction!==0)window.showEnemySpellIcon?.(type);
         return true;

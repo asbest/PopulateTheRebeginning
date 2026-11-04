@@ -47,14 +47,23 @@ rights or a patent/trademark clearance.
 
 ## Media
 
-The inventory covers 262 tracked media/model files. Repository documentation
-attributes the newer artwork/textures to project generation, the Blender models
-and material maps to `tools/blender_overhaul.py`, gameplay images to project
-captures, and 32 WAV effects to the local synthesizer `tools/generate-sfx.mjs`.
+The media inventory includes artwork and textures generated for the project,
+Blender models and material maps from `tools/blender_overhaul.py`, gameplay
+captures, and locally synthesized effects from `tools/generate-sfx.mjs`.
 KTX2 files and startup previews/model groups are derivatives of those sources.
 This documented authorship is recorded as `project-original`, with no invented
 third-party license or automatic public license grant. Input/reference rights
 and applicable generation-service terms still matter for generated derivatives.
+
+### Spell audio (CC0 1.0)
+
+The game bundles 20 short spell and impact WAVs edited from these OpenGameArt
+sources. The per-file inventory records the original clips, edits and hashes.
+
+- [Fireball](https://opengameart.org/content/fireball-1) by Julien Matthey
+- [Magic Spell SFX](https://opengameart.org/content/magic-spell-sfx) by JaggedStone
+- [100 CC0 SFX #2](https://opengameart.org/content/100-cc0-sfx-2) by rubberduck
+- [Earth Element Magic Spell](https://opengameart.org/content/earth-element-magic-spell) by qubodup
 
 ### Media owner attestation
 

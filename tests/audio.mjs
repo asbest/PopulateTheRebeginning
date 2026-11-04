@@ -67,7 +67,7 @@ try {
         const sound=gameTestAPI.SoundManager;
         window.testSounds=[];
         const oldPlaySound=sound.playSound;
-        sound.playSound=function(name){testSounds.push(name);return oldPlaySound.call(this,name);};
+        sound.playSound=function(name,volume){testSounds.push(name);return oldPlaySound.call(this,name,volume);};
         const recordingDestination=sound.ctx.createMediaStreamDestination();
         sound.effectsBus.connect(recordingDestination);
         window.testSpellAudioDestination=recordingDestination;
@@ -101,12 +101,20 @@ try {
         const after=await page.evaluate(()=>state.mana);
         if(after>=before)throw new Error(`${spell} was not cast`);
         await page.waitForFunction(count=>testSounds.length>count,soundCount);
-        const soundName=await page.evaluate(()=>testSounds.at(-1));
+        const sounds=await page.evaluate(count=>testSounds.slice(count),soundCount);
+        const soundName=sounds.at(-1);
+        if(spell==='lightning'&&sounds.join(',')!=='lightning_charge,lightning')
+            throw new Error(`Lightning windup and impact played out of order: ${sounds}`);
         const expected={blast:'fireball',heal:'heal',raise:'raise',lightning:'lightning',firestorm:'firestorm'}[spell];
         if(soundName!==expected)throw new Error(`${spell} played ${soundName} instead of ${expected}`);
         const peak=await stopRecording(page);
         if(peak<0.015)throw new Error(`${spell} produced no audible signal (peak ${peak})`);
-        console.log(`PASS ${spell} produces spell audio (peak ${peak.toFixed(3)})`);
+        const decoded=await page.evaluate(names=>{
+            const buffers=gameTestAPI.SoundManager.effectBuffers;
+            return names.every(name=>buffers.get(name)?.duration>0);
+        },sounds);
+        if(!decoded)throw new Error(`Missing decoded spell asset: ${sounds}`);
+        console.log(`PASS ${spell} plays decoded spell audio (peak ${peak.toFixed(3)})`);
     }
     await page.evaluate(()=>gameTestAPI.SoundManager.ctx.suspend());
     checkpoint='desktop keyboard unlock and sound test';
@@ -315,7 +323,7 @@ try {
                 const response=await fetch(`sfx/${name}.wav`);
                 return {name,ok:response.ok,type:response.headers.get('content-type'),bytes:(await response.arrayBuffer()).byteLength};
             })));
-        if(assets.length!==32||assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
+        if(assets.length!==33||assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
             throw new Error(`Missing Android effect assets: ${JSON.stringify(assets)}`);
         console.log(`PASS Android can load all ${assets.length} sound effects and ambient beds`);
         checkpoint='Android wildlife playback';
