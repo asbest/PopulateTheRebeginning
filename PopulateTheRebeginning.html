@@ -5995,12 +5995,13 @@ const FireballFxManager={
         item.color=color;item.vx=vx;item.vy=vy;item.vz=vz;item.phase=Math.random()*6.28;
         layer.items.push(item);
     },
+    burnInterval(){return state.graphicsQuality?.tier==='low'?.2:.12;},
     burn(entity,dt,building=false){
         const p=entity.mesh.position;
         if(p.distanceToSquared(state.camera.position)>14400)return;
         entity.burnFxTimer=(entity.burnFxTimer||0)-dt;
         if(entity.burnFxTimer<=0){
-            entity.burnFxTimer=state.graphicsQuality?.tier==='low'?.2:.12;
+            entity.burnFxTimer=this.burnInterval();
             this.add('glow',p.x+(Math.random()-.5)*(building?2:1),p.y+(building?2:1),p.z+(Math.random()-.5),
                 building?.55:.32,.5,0xff6b18,0,1.2,0);
         }
@@ -6032,7 +6033,10 @@ const FireballFxManager={
         }
         for(const mesh of this.projectileMeshes){
             mesh.count=count;mesh.visible=count>0;
-            if(count)mesh.instanceMatrix.needsUpdate=true;
+            if(count){
+                mesh.instanceMatrix.updateRange.count=count*16;
+                mesh.instanceMatrix.needsUpdate=true;
+            }
         }
     },
     trail(position,direction,unitShot){
@@ -6091,7 +6095,11 @@ const FireballFxManager={
                 layer.items[count++]=item;
             }
             layer.items.length=count;layer.mesh.count=count;layer.mesh.visible=count>0;
-            if(count){layer.mesh.instanceMatrix.needsUpdate=true;layer.mesh.instanceColor.needsUpdate=true;}
+            if(count){
+                layer.mesh.instanceMatrix.updateRange.count=count*16;
+                layer.mesh.instanceColor.updateRange.count=count*3;
+                layer.mesh.instanceMatrix.needsUpdate=true;layer.mesh.instanceColor.needsUpdate=true;
+            }
         }
         for(let i=this.flashes.length-1;i>=0;i--){
             this.flashes[i].life-=dt;
@@ -6246,7 +6254,10 @@ class Fireball {
         const incomingX = this.target.x - this.start.x;
         const incomingZ = this.target.z - this.start.z;
         const incomingLength = Math.hypot(incomingX, incomingZ);
-        SpatialHash.query(impactPos.x, impactPos.z, radius).forEach(u => {
+        const nearby=SpatialHash.query(impactPos.x,impactPos.z,radius);
+        const burnPhaseStep=nearby.length>=16?FireballFxManager.burnInterval()/8:0;
+        let burnPhase=0;
+        nearby.forEach(u => {
             if (u.faction === this.faction || u.state === 'dead') return;
             const dx = u.mesh.position.x - impactPos.x;
             const dz = u.mesh.position.z - impactPos.z;
@@ -6266,7 +6277,11 @@ class Fireball {
                 vehicle ? (this.unitShot ? 5.5 : 8) : (this.unitShot ? 4.5 : 5.5),
                 vehicle ? 6 : 8, vehicle ? 1 : (this.unitShot ? .7 : .6));
             u.takeDamage(this.unitDamage*radialDamageFactor(distance,radius));
-            u.burnTimer = Math.max(u.burnTimer||0,3*falloff);
+            const burnDuration=3*falloff;
+            // Spread the visual emitters across one interval. Damage and impulse stay immediate.
+            if(burnPhaseStep&&!(u.burnTimer>0)&&u.state!=='dead')
+                u.burnFxTimer=Math.min(burnDuration*.5,(burnPhase++%8)*burnPhaseStep);
+            u.burnTimer = Math.max(u.burnTimer||0,burnDuration);
         });
         // Buildings
         state.buildings.forEach(b => {

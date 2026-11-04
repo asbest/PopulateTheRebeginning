@@ -26,10 +26,12 @@ try {
         const center=state.shaman.mesh.position;
         const x=center.x+3,z=center.z+3;
         const units=[];
-        for(let i=0;i<24;i++){
-            const angle=i*Math.PI*2/24,radius=2+(i%3)*.65;
+        const crowdSize=72;
+        for(let i=0;i<crowdSize;i++){
+            const angle=i*2.399963,radius=Math.sqrt(i/crowdSize)*5.5;
             const unit=new Humanoid(1,'warrior',x+Math.sin(angle)*radius,z+Math.cos(angle)*radius);
             unit.hp=unit.maxHp=1000;
+            unit.nextTargetCheck=Infinity;
             state.units.push(unit);units.push(unit);
         }
         gameTestAPI.SpatialHash.update();
@@ -47,24 +49,44 @@ try {
                 programs:state.renderer.info.programs.length};
         };
         const before=sample();
-        const y=getHeight(x,z)+.4;
-        const target=new THREE.Vector3(x,y,z);
-        const shot=new gameTestAPI.Fireball(target.clone().add(new THREE.Vector3(-8,3,0)),target,0);
-        shot.mesh.position.copy(target);
-        const start=performance.now();shot.explode();
+        const fx=gameTestAPI.FireballFxManager;
+        gameTestAPI.executeSpell('blast',x,z,state.shaman);
+        const shot=state.projectiles.at(-1);
+        fx.update(0);
+        const launch=sample();
+        shot.update(shot.duration*.5);fx.update(1/60);
+        const flight=sample();
+        const start=performance.now();
+        shot.update(shot.duration*.5);
         gameTestAPI.HitPulseManager.update(0);
         const impactMs=performance.now()-start;
+        fx.update(0);
         const after=sample();
+        const hits=units.filter(unit=>unit.hp<1000).length;
+        const thrown=units.filter(unit=>unit.blastAirborne&&unit.state==='stunned').length;
+        let peakBurnEmissions=0,burnEmissions=0;
+        for(let frame=0;frame<9;frame++){
+            state.physicsWorld.timestep=1/60;
+            state.physicsWorld.step();
+            const beforeBurn=fx.layers.glow.items.length;
+            for(const unit of units)unit.update(1/60);
+            const emitted=fx.layers.glow.items.length-beforeBurn;
+            peakBurnEmissions=Math.max(peakBurnEmissions,emitted);
+            burnEmissions+=emitted;
+            gameTestAPI.updateTreeRegrowth(1/60);
+            fx.update(1/60);
+        }
         const hitPulses=gameTestAPI.HitPulseManager.active.length;
         gameTestAPI.HitPulseManager.update(.71);
         const expired=gameTestAPI.HitPulseManager.active.length===0&&
             gameTestAPI.HitPulseManager.meshes.every(mesh=>mesh.count===0&&!mesh.visible);
-        return {loadedChunks,startupPulses,units:units.length,hits:units.filter(unit=>unit.hp<1000).length,
-            impactMs,before,after,extraCalls:after.calls-before.calls,
+        return {loadedChunks,startupPulses,units:units.length,hits,thrown,peakBurnEmissions,burnEmissions,
+            impactMs,before,launch,flight,after,extraCalls:after.calls-before.calls,
             extraParticles:after.particles-before.particles,
             hitPulses,expired};
     });
-    if(report.hits!==24 || report.hitPulses!==0 || !report.expired || report.extraCalls>30 ||
+    if(report.hits!==report.units || report.thrown!==report.units || report.peakBurnEmissions>24 ||
+        report.burnEmissions<report.units || report.hitPulses!==0 || !report.expired || report.extraCalls>30 ||
         report.extraParticles>24 || report.after.programs>report.before.programs+2) {
         console.error(`::error title=Group impact rendering budget::${JSON.stringify(report)}`);
         throw new Error(`Group impact regressed: ${JSON.stringify(report)}`);
