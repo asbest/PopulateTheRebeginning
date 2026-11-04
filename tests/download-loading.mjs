@@ -60,7 +60,8 @@ try{
         try{
             const data=await page.evaluate(()=>({status:Art.textureStatus,width:Characters.tiles.skin.image.width,
                 models:Object.keys(Art.blender.models),audio:gameTestAPI.SoundManager.ctx}));
-            assert(!requests.some(url=>/\.(wav|mp3|ktx2)(\?|$)|\/mesh-pack\.json/.test(url)),'Startup downloaded deferred assets');
+            const deferred=requests.filter(url=>/\.(wav|mp3|ktx2)(\?|$)|\/mesh-pack\.json/.test(url));
+            assert(!deferred.length,'Startup downloaded deferred assets: '+deferred.join(', '));
             assert(!requests.some(url=>new URL(url).pathname.endsWith('/key-art.png')),'Startup fetched the original illustration');
             assert(!requests.some(url=>Object.entries(MODEL_FILES).some(([group,file])=>group!=='startup'&&url.includes(file))),'Unused role models downloaded');
             assert(data.width<=256&&data.width>1&&data.status.previewLoaded>=20,'Preview textures are not usable');

@@ -1790,9 +1790,9 @@ window.cycleGraphicsQuality=function(){
     const tiers=['low','medium','high','ultra'];
     const current=state.graphicsQuality?.tier||'high';
     const quality=window.setGraphicsQuality(tiers[(Math.max(0,tiers.indexOf(current))+1)%tiers.length]);
-    // A change to High/Ultra enables the projectile light; compile its shader variants
-    // while the graphics menu is open instead of during the next spell cast.
-    if(state.fireballShadersReady && ['high','ultra'].includes(quality.tier))prewarmFireballShaders();
+    // Refresh the spell programs when the selected tier changes the battlefield light budget.
+    const litTier=tier=>tier==='high'||tier==='ultra';
+    if(state.fireballShadersReady&&litTier(current)!==litTier(quality.tier))prewarmSpellShaders();
     return quality;
 };
 
@@ -6281,7 +6281,7 @@ class Fireball {
     }
 }
 
-function prewarmFireballShaders() {
+function prewarmSpellShaders() {
     if (!state.renderer || !state.scene || !state.shaman) return;
     state.scene.updateMatrixWorld(true);
     CharacterBatches.warming=true;SceneryBatches.warming=true;CharacterBatches.update();SceneryBatches.update();
@@ -6299,7 +6299,15 @@ function prewarmFireballShaders() {
     const firstParticle = state.particles.length;
     const firstMark = SurfaceMarks.marks.length;
     const warmMaterials = [];
+    const spellPreviews = [];
+    const litTier = ['high','ultra'].includes(state.graphicsQuality?.tier);
+    const volcanoLight = litTier ? new THREE.PointLight() : null;
     try {
+        // Build the actual visual variants without starting spells, sounds or simulation.
+        for(const Effect of [Swamp,Tornado,Swarm]) {
+            const {mesh}=new Effect(start.x,start.z,0,true);
+            spellPreviews.push(mesh);
+        }
         // Keep representative impact materials compiled as well as the projectile.
         // A firestorm otherwise pauses when its first explosion or smoke fades.
         spawnExplosion(start.x, start.y, start.z, 0xFF4500, 2, false);
@@ -6310,16 +6318,35 @@ function prewarmFireballShaders() {
         // Compile the shared effect layers and the zero, one and two-light
         // variants while the loading screen is visible.
         existingLights.forEach(([light])=>{light.visible=false;});
+        if(!litTier)state.scene.add(...spellPreviews);
         state.renderer.compile(state.scene, state.camera);
         FireballFxManager.lights[0].visible=true;
         state.renderer.compile(state.scene, state.camera);
+        if(litTier)state.scene.add(...spellPreviews);
+        else state.scene.remove(...spellPreviews);
         FireballFxManager.lights[1].visible=true;
         state.renderer.compile(state.scene, state.camera);
+        // One active volcano adds a light to the selected tier's existing light budget.
+        // On lower tiers its one-light variant was already covered above.
+        if(volcanoLight) {
+            state.scene.add(volcanoLight);
+            state.renderer.compile(state.scene, state.camera);
+        }
         state.fireballShadersReady = true;
     } catch (error) {
-        console.warn('Fireball shader warmup unavailable:', error);
+        console.warn('Spell shader warmup unavailable:', error);
     } finally {
         existingLights.forEach(([light,visible])=>{light.visible=visible;});
+        if(volcanoLight){state.scene.remove(volcanoLight);volcanoLight.dispose();}
+        for(const mesh of spellPreviews) {
+            state.scene.remove(mesh);
+            for(const part of mesh.children) {
+                // Material references keep the compiled programs cached for real casts.
+                warmMaterials.push(part.material);
+                if(part.geometry!==AssetCache.geos.cloud)part.geometry.dispose();
+                if(part.isInstancedMesh)part.dispose();
+            }
+        }
         for (const effect of state.particles.splice(firstParticle)) {
             state.scene.remove(effect.mesh);
             if (effect instanceof Particle) continue;
@@ -6444,7 +6471,7 @@ class Volcano extends ActiveEffect {
 }
 
 class Swamp extends ActiveEffect {
-    constructor(x, z, faction) {
+    constructor(x, z, faction, preview=false) {
         super();
         this.pos = new THREE.Vector3(x, getHeight(x,z)+0.1, z);
         this.faction = faction;
@@ -6499,6 +6526,7 @@ class Swamp extends ActiveEffect {
         });
         this.instanceDummy=new THREE.Object3D();
         this.animateVisuals();
+        if(preview)return;
         state.scene.add(this.mesh);
         SoundManager.playSound('swamp');
         this.soundLoop = SoundManager.startSustain('swamp_loop');
@@ -6548,7 +6576,7 @@ class Swamp extends ActiveEffect {
 }
 
 class Tornado extends ActiveEffect {
-    constructor(x, z, faction) {
+    constructor(x, z, faction, preview=false) {
         super();
         this.pos = new THREE.Vector3(x, getHeight(x,z), z);
         this.faction = faction;
@@ -6604,6 +6632,7 @@ class Tornado extends ActiveEffect {
         this.mesh.add(this.debris);
         this.instanceDummy=new THREE.Object3D();
         this.animateVisuals();
+        if(preview)return;
         state.scene.add(this.mesh);
         SoundManager.playSound('tornado');
         this.soundLoop = SoundManager.startSustain('tornado_loop');
@@ -6679,7 +6708,7 @@ class Tornado extends ActiveEffect {
 }
 
 class Swarm extends ActiveEffect {
-    constructor(x, z, faction) {
+    constructor(x, z, faction, preview=false) {
         super();
         this.pos = new THREE.Vector3(x, getHeight(x,z)+3, z);
         this.faction = faction;
@@ -6724,8 +6753,9 @@ class Swarm extends ActiveEffect {
             this.bodies.setColorAt(i,new THREE.Color(colors[i%colors.length]));
         }
         this.bodies.instanceColor.needsUpdate = true;
-        state.scene.add(this.mesh);
+        if(!preview)state.scene.add(this.mesh);
         this.updateVisuals(0);
+        if(preview)return;
         SoundManager.playSound('swarm');
         this.soundLoop = SoundManager.startSustain('swarm_loop');
     }
@@ -10472,7 +10502,7 @@ async function init() {
         window.addEventListener('contextmenu', e => e.preventDefault());
 
         animate();
-        prewarmFireballShaders();
+        prewarmSpellShaders();
         // Compile alone does not upload instance buffers. Draw the actual bolt
         // and vegetation-fire resources in a single loading-screen pixel before accepting spell input.
         const fireMesh=treeFire.prepareRoot(),fireCount=fireMesh.count;
