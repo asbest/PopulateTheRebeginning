@@ -1,3 +1,5 @@
+import {deepEqual} from 'node:assert/strict';
+import {readdir} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
@@ -323,7 +325,10 @@ try {
                 const response=await fetch(`sfx/${name}.wav`);
                 return {name,ok:response.ok,type:response.headers.get('content-type'),bytes:(await response.arrayBuffer()).byteLength};
             })));
-        if(assets.length!==33||assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
+        const expectedEffects=(await readdir(new URL('../sfx/',import.meta.url)))
+            .filter(file=>file.endsWith('.wav')).map(file=>file.slice(0,-4)).sort();
+        deepEqual(assets.map(asset=>asset.name).sort(),expectedEffects,'Android sound inventory differs from the bundled WAVs');
+        if(assets.some(asset=>!asset.ok||asset.type!=='audio/wav'||asset.bytes<12000))
             throw new Error(`Missing Android effect assets: ${JSON.stringify(assets)}`);
         console.log(`PASS Android can load all ${assets.length} sound effects and ambient beds`);
         checkpoint='Android wildlife playback';
