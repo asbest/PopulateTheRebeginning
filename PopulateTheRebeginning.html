@@ -1000,7 +1000,7 @@ const CONFIG = {
         AIRSHIP_ROCKET_DURATION: 5.0,
     },
     EFFECTS: {
-        FIREBALL_SPEED: 25,
+        FIREBALL_SPEED: 25 / 3,
         FIREBALL_RADIUS: 0.5,
         FIREBALL_TRAIL_INTERVAL: 0.02,
         FIREBALL_LIGHT_INTENSITY: 1.5,
@@ -1289,7 +1289,7 @@ const CONFIG = {
         ANGULAR_DAMPING: 0.5,
         FIREBALL_BALL_RADIUS: 0.5,
         FIREBALL_GRAVITY_SCALE: 0,
-        FIREBALL_SPEED: 25,
+        FIREBALL_SPEED: 25 / 3,
         FIREBALL_LINVEL_MULT: 1.0,
     },
     NET_CAMPAIGN: {
@@ -5863,12 +5863,12 @@ function createFireballProfile(profile, turbulence=0) {
     return geometry;
 }
 const FIREBALL_CORE_GEO=createFireballProfile([
-    [-1.35,0,0xe84b0b],[-.76,.20,0xff7515],[-.28,.33,0xffb62e],
-    [.20,.39,0xffe58d],[.49,.28,0xfff7cc],[.66,0,0xfffce6]
+    [-1.35,0,0xa10b08],[-.76,.20,0xd81a09],[-.28,.33,0xff3a13],
+    [.20,.39,0xff642d],[.49,.28,0xff9553],[.66,0,0xffbc80]
 ]);
 const FIREBALL_CORONA_GEO=createFireballProfile([
-    [-3.25,0,0x000000],[-2.56,.16,0x852400],[-1.72,.30,0xe73600],[-.88,.48,0xff5b07],
-    [-.24,.58,0xff8c19],[.29,.55,0xffaf31],[.58,.34,0xffc658],[.79,0,0xffd276]
+    [-3.25,0,0x000000],[-2.56,.16,0x670700],[-1.72,.30,0xab1005],[-.88,.48,0xd71b06],
+    [-.24,.58,0xef2810],[.29,.55,0xff4319],[.58,.34,0xff6129],[.79,0,0xff7937]
 ],.28);
 const FIREBALL_TRAIL_GEO = new THREE.SphereGeometry(.3,6,5);
 const FIREBALL_CORE_MAT = new THREE.MeshBasicMaterial({vertexColors:true});
@@ -6038,7 +6038,7 @@ const FireballFxManager={
     trail(position,direction,unitShot){
         const tail=unitShot?1.15:2.3;
         this.add('glow',position.x-direction.x*tail,position.y-direction.y*tail,position.z-direction.z*tail,
-            unitShot?.17:.34,.38,0xff9d38);
+            unitShot?.17:.34,.38,0xff4b23);
     },
     impact(position,unitShot,stormShot){
         const x=position.x,y=position.y,z=position.z;
