@@ -16,10 +16,18 @@ try{
         const files=gameTestAPI.CONFIG.AUDIO.EXPLORATION_TRACKS;
         if(files.length!==2||files[0]!=='IngameMusic.mp3'||files[1]!=='IngameMusic2.mp3')
             throw new Error(`Unexpected gameplay playlist: ${files}`);
-        for(const file of files){
+        const combatFiles=gameTestAPI.CONFIG.AUDIO.COMBAT_TRACKS;
+        if(combatFiles.join(',')!=='FightMusic.mp3,Populate_fight2.mp3')
+            throw new Error(`Unexpected combat playlist: ${combatFiles}`);
+        for(const file of [...files,...combatFiles]){
             const response=await fetch(file);
-            if(!response.ok||!(await response.arrayBuffer()).byteLength)
-                throw new Error(`Gameplay music is missing: ${file} (${response.status})`);
+            const bytes=await response.arrayBuffer();
+            if(!response.ok||!bytes.byteLength)
+                throw new Error(`Music is missing: ${file} (${response.status})`);
+            if(file==='Populate_fight2.mp3'){
+                const decoded=await new OfflineAudioContext(1,1,32000).decodeAudioData(bytes);
+                if(decoded.duration<=0)throw new Error('The new combat track did not decode');
+            }
         }
         const originalRandom=Math.random,originalEnabled=sound.musicEnabled;
         try{
@@ -37,7 +45,16 @@ try{
             sound.updateMusic(true);
             if(sound.musicMode!=='combat'||!sound.explorationMusic.paused)
                 throw new Error('Combat did not switch away from gameplay music');
+            const fight=sound.combatMusic;
+            const fileName=()=>new URL(fight.src).pathname.split('/').at(-1);
+            if(fight.loop||fileName()!==combatFiles[0])throw new Error('Combat playlist did not start with the original score');
+            fight.dispatchEvent(new Event('ended'));
+            if(fileName()!==combatFiles[1])throw new Error('The second combat track did not start');
+            fight.dispatchEvent(new Event('ended'));
+            if(fileName()!==combatFiles[0])throw new Error('The combat playlist did not wrap');
             sound.updateMusic(false);
+            fight.dispatchEvent(new Event('ended'));
+            if(!fight.paused||fileName()!==combatFiles[0])throw new Error('Combat playlist advanced after combat ended');
             const resumed=sound.explorationMusic;
             if(resumed===second||sound.musicMode!=='exploration')
                 throw new Error('Returning from combat did not select another gameplay title');
@@ -51,5 +68,5 @@ try{
             sound.setMusicEnabled(originalEnabled);
         }
     });
-    console.log('PASS Gameplay music changes without immediate repeats and combat keeps its own score',result);
+    console.log('PASS Exploration rotates and the two combat tracks alternate, wrap and stop outside combat',result);
 }finally{await browser.close();}

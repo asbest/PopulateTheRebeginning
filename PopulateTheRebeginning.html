@@ -1190,7 +1190,7 @@ const CONFIG = {
     AUDIO: {
         EXPLORATION_MUSIC: 'IngameMusic.mp3',
         EXPLORATION_TRACKS: ['IngameMusic.mp3', 'IngameMusic2.mp3'],
-        COMBAT_MUSIC: 'FightMusic.mp3',
+        COMBAT_TRACKS: ['FightMusic.mp3', 'Populate_fight2.mp3'],
         EXPLORATION_VOLUME: 0.5,
         COMBAT_VOLUME: 0.6,
         ENEMY_DETECT_RANGE: 30,
@@ -2374,6 +2374,7 @@ const SoundManager = {
     lastExplorationTrack: -1,
     musicMode: null,
     combatMusic: null,
+    combatTrackIndex: 0,
     musicEnabled: localStorage.getItem(CONFIG.SAVED_KEYS.MUSIC_ENABLED) !== 'false',
     init: function() {
         if (!this.explorationTracks.length) {
@@ -2389,10 +2390,17 @@ const SoundManager = {
             });
         }
         if (!this.combatMusic) {
-            this.combatMusic = new Audio();
-            this.combatMusic.preload='none';this.combatMusic.src=assetURL(CONFIG.AUDIO.COMBAT_MUSIC);
-            this.combatMusic.loop = true;
-            this.combatMusic.volume = CONFIG.AUDIO.COMBAT_VOLUME;
+            const audio=this.combatMusic=new Audio();
+            const tracks=CONFIG.AUDIO.COMBAT_TRACKS;
+            audio.preload='none';
+            audio.src=assetURL(tracks[this.combatTrackIndex]);
+            audio.volume=CONFIG.AUDIO.COMBAT_VOLUME;
+            audio.addEventListener('ended',()=>{
+                if(!this.musicEnabled||this.musicMode!=='combat')return;
+                this.combatTrackIndex=(this.combatTrackIndex+1)%tracks.length;
+                audio.src=assetURL(tracks[this.combatTrackIndex]);
+                audio.play().catch(()=>{});
+            });
         }
         this.prepareMediaEffects();
     },

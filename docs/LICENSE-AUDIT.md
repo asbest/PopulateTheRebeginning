@@ -86,6 +86,11 @@ the owner's role as publisher; it does not identify the generator or its terms,
 independently establish rights in any inputs, or grant a public license. Review
 those terms and any third-party inputs before a release that depends on them.
 
+On 2026-11-04, the owner confirmed that they created `Populate_fight2.mp3` and
+described it as royalty-free. The owner supplied the file for inclusion in the
+public repository as a second combat track. The inventory records it as
+`project-original`. The owner supplied no named public license.
+
 ## Project license and external environment
 
 There was no root project license at the time of review. The owner's request to

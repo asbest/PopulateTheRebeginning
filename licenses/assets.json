@@ -20,6 +20,12 @@
       "evidence": "Project owner attested on 2026-10-26 that this upload was AI-generated and that they are its publisher; see docs/LICENSE-AUDIT.md#media-owner-attestation.",
       "sha256": "c3cd6f00a00f86853416cd856bb3ca7025b6efb15430a1974ad506de4e0a5d61"
     },
+    "Populate_fight2.mp3": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "On 2026-11-04 the project owner confirmed that they created this recording and described it as royalty-free, then authorized its inclusion in the public repository. See docs/LICENSE-AUDIT.md#media-owner-attestation.",
+      "sha256": "bb50947109d38d037d7336c9600eac22c028eb14404223e3849d604f9d868069"
+    },
     "TitleImage.png": {
       "status": "project-original",
       "license": null,
