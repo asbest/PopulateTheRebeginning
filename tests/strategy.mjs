@@ -55,13 +55,21 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
    for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
    for(const building of state.buildings)state.scene.remove(building.mesh);
    state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
+   // These fixtures measure banks and water escape, independently of the
+   // trees left behind by the randomly generated startup landscape.
+   const clearFixtureTrees=()=>{
+    for(const chunk of Object.values(state.chunks)){
+     for(const tree of chunk.userData.trees||[])tree.mesh.visible=false;
+     chunk.userData.trees=[];
+    }
+   };
    // Controlled banks must be flat between integer modification samples too.
    state.simplex={noise2D:()=>0};state.heightCache.clear();
    for(let x=-35;x<=35;x++)for(let z=-28;z<=28;z++){
     const height=Math.min(6,Math.max(0,Math.abs(x)-1,Math.abs(z)-6));
     state.terrainMods.set(`${x},${z}`,height-gameTestAPI.getBaseHeight(x,z));
    }
-   state.heightCache.clear();gameTestAPI.updateChunks(true);
+   state.heightCache.clear();gameTestAPI.updateChunks(true);clearFixtureTrees();
    const start=new THREE.Vector3(-12,0,0),end=new THREE.Vector3(12,0,0);
    const route=Pathfinder.findPath(start,end,false,1.5,true);
    if(!route?.length)throw new Error('No dry detour around the water channel');
@@ -119,7 +127,7 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
     const height=x<0?-1:x<1?-1+9*x:8;
     state.terrainMods.set(`${x},${z}`,height-gameTestAPI.getBaseHeight(x,z));
    }
-   state.heightCache.clear();gameTestAPI.updateChunks(true);
+   state.heightCache.clear();gameTestAPI.updateChunks(true);clearFixtureTrees();
    const mountainUp=gameTestAPI.terrainSpeedFactor(.5,3,1,0);
    const mountainDown=gameTestAPI.terrainSpeedFactor(1.5,3,-1,0);
    const mountainFlat=gameTestAPI.terrainSpeedFactor(3,3,1,0);
