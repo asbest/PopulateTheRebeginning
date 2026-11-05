@@ -1,0 +1,41 @@
+name: Recover blocked Pages deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/pages-recovery.yml
+      - tools/recover-pages.mjs
+      - tests/pages-recovery.mjs
+  workflow_dispatch:
+    inputs:
+      deployment_sha:
+        description: Commit SHA of the old blocked Pages deployment
+        required: true
+        default: aded31a74af76baba5f10275f5f4336fe5593b59
+
+permissions:
+  contents: read
+  pages: write
+
+concurrency:
+  group: pages-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    if: github.repository == 'asbest/PopulateTheRebeginning' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate recovery guards without network access
+        run: node tests/pages-recovery.mjs
+      - name: Release the stale deployment and request a fresh Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BLOCKED_PAGES_SHA: ${{ inputs.deployment_sha || 'aded31a74af76baba5f10275f5f4336fe5593b59' }}
+        run: node tools/recover-pages.mjs
