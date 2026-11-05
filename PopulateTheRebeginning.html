@@ -363,7 +363,13 @@
 <body>
 
 <div id="loading">
-    Generating World...
+    <div style="padding:20px;text-align:center;max-width:560px;">
+        Generating World...
+        <p id="loading-status" role="status" aria-live="polite" aria-atomic="true"
+            style="font-size:16px;font-weight:normal;line-height:1.5;min-height:3em;margin:16px 0 0;">
+            Loading game resources…
+        </p>
+    </div>
     <div class="donation-container-large">
         <a href="https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link" target="_blank" class="donation-btn-large">Support on Patreon</a>
         <div class="copyright-text">Copyright 2026 AS Consulting</div>
@@ -10382,6 +10388,13 @@ function createSkyDome() {
     sky.name='Procedural atmosphere';return sky;
 }
 
+async function showLoadingStatus(message){
+    const status=document.getElementById('loading-status');
+    if(status)status.textContent=message;
+    // Yield before expensive preparation so the browser can display the current step.
+    await new Promise(resolve=>setTimeout(resolve,0));
+}
+
 async function init() {
     console.log("Initializing Game...");
 
@@ -10397,6 +10410,7 @@ async function init() {
             throw new Error("RAPIER library not found on window.");
         }
 
+        await showLoadingStatus('Loading physics resources…');
         console.log("Initializing WASM...");
         await RAPIER.init();
         console.log("RAPIER WASM initialized successfully.");
@@ -10411,6 +10425,7 @@ async function init() {
 
     const checkCampaign = window.loadCampaignLevelIfRequested();
     try {
+        await showLoadingStatus('Loading textures and base models…');
         await Art.ready;
 
         state.clock = new THREE.Clock();
@@ -10450,6 +10465,7 @@ async function init() {
         document.body.appendChild(state.renderer.domElement);
         Art.configureTextures(state.renderer);
         Characters.configureTextures();
+        await showLoadingStatus('Loading character models and materials…');
         await Characters.ready;
         initTerrainResources();
 
@@ -10475,6 +10491,7 @@ async function init() {
 
         state.raycaster = new THREE.Raycaster();
 
+        await showLoadingStatus('Generating terrain, water, vegetation and settlements…');
         if (checkCampaign) {
             findSafeSpawnAndStart();
             showCampaignStory(state.campaignLevel);
@@ -10542,6 +10559,7 @@ async function init() {
         setupCheats();
         selectAction('move');
         updateContextMenus();
+        await showLoadingStatus('Loading building materials, clouds and wildlife…');
         CloudManager.init();
         WaterSprayManager.init();
         CritterManager.init();
@@ -10549,6 +10567,7 @@ async function init() {
 
         window.addEventListener('contextmenu', e => e.preventDefault());
 
+        await showLoadingStatus('Preparing spell effects, lighting and shaders…');
         animate();
         prewarmSpellShaders();
         // Compile alone does not upload instance buffers. Draw the actual bolt
@@ -10559,6 +10578,7 @@ async function init() {
             .map(root=>SettlementPreparation.prepareRoot(root,false,false,true)));
         fireMesh.count=fireCount;
         await lightningReady;
+        await showLoadingStatus('Preparing building graphics…');
         await SettlementPreparation.initial();
         const loadingEl = document.getElementById('loading');
         if(loadingEl) loadingEl.style.display = 'none';
