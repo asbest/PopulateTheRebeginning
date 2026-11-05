@@ -8171,8 +8171,16 @@ window.Humanoid = class Humanoid {
         if (this.rigidBody && typeof this.rigidBody.translation === 'function') {
             const rbPos = this.rigidBody.translation();
             this.mesh.position.set(rbPos.x, rbPos.y - this.height/2 - (this.groundBodyOffset||0), rbPos.z);
-            const rbRot = this.rigidBody.rotation();
-            if(['stunned','getting_up','dead'].includes(this.state)) this.mesh.quaternion.set(rbRot.x, rbRot.y, rbRot.z, rbRot.w);
+            // The fall rig supplies the complete orientation for thrown humanoids and recovery.
+            // Reading Rapier's rotation here would allocate and convert it immediately before
+            // animateFall replaces it. Dead bodies and other stunned bodies still use physics.
+            const animatedRotation=this.legL&&(this.state==='getting_up'&&this.heading!==undefined||
+                this.state==='stunned'&&this.blastAirborne);
+            const physicsRotation=this.state==='dead'||this.state==='stunned'||this.state==='getting_up';
+            if(physicsRotation&&!animatedRotation){
+                const rbRot=this.rigidBody.rotation();
+                this.mesh.quaternion.set(rbRot.x,rbRot.y,rbRot.z,rbRot.w);
+            }
 
             // Quaternion updates already synchronize Euler. Re-decomposing an upright
             // XYZ rotation here flips pitch/roll at headings beyond 90 degrees.
