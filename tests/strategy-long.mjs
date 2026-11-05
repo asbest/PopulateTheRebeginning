@@ -16,6 +16,23 @@ try {
   try {
    await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
    await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);
+   // This suite stresses economy, class production, combat and recovery over
+   // 65 simulated minutes. Give those checks a controlled level arena; natural
+   // terrain traversal remains covered by strategy.mjs and all profile/Worker tests.
+   await page.evaluate(()=>{
+    state.isPaused=true;stopTestPresentation();
+    state.simplex={noise2D:()=>0};state.terrainMods.clear();state.heightCache.clear();
+    gameTestAPI.updateChunks(true);
+    // Existing decorations retain their old sites after terrain edits. Disable
+    // their obstacles in this arena as well; newly streamed flat
+    // chunks are below the tree-spawn threshold.
+    for(const chunk of Object.values(state.chunks)){
+     for(const tree of chunk.userData.trees||[])tree.mesh.visible=false;
+     chunk.userData.trees=[];
+    }
+    for(const b of state.buildings)b.mesh.position.y=getSurfaceHeight(b.mesh.position.x,b.mesh.position.z);
+    for(const u of state.units)u.placeOnGround(u.mesh.position.x,u.mesh.position.z);
+   });
    await startManualSimulation(page,seed);
    await page.evaluate(({personality,raid})=>{
     state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;state.isGodMode=false;gameTestAPI.PathWorker.disable();
@@ -58,9 +75,9 @@ try {
     };
    },{personality,raid});
    for(let elapsed=0;elapsed<minutes*60;elapsed+=60){await page.evaluate(()=>advanceLongRun(60));if(elapsed%300===0)console.log(`${personality}: ${elapsed+60}/${minutes*60} simulated seconds`);}
-   const detail=await page.evaluate(()=>({terrainSeed:state.matchSettings.terrainSeed,terrainProfile:state.matchSettings.terrainProfile,classes:longRun.classes,attackDistance:longRun.attackDistance,defended:longRun.defended,recovered:longRun.recovered,raidRepelled:longRun.raidUnits.some(u=>u.hp<u.maxHp||u.state==='dead'||u.faction!==0),raidOutcomes:longRun.raidUnits.map(u=>({faction:u.faction,hp:u.hp,maxHp:u.maxHp,state:u.state})),peakBuildings:longRun.peakBuildings,peakPopulation:longRun.peakPopulation,shamanAlive:state.units.some(u=>u.faction===1&&u.isShaman&&u.state!=='dead'),plan:enemyAIs[0].lastPlan}));
+   const detail=await page.evaluate(()=>({fixture:'level-arena',terrainSeed:state.matchSettings.terrainSeed,terrainProfile:state.matchSettings.terrainProfile,workers:state.units.filter(u=>u.faction===1&&u.type==='wild'&&u.state!=='dead').map(u=>({state:u.state,role:u.aiRole,position:u.mesh.position.toArray(),destination:u.finalDest?.toArray(),school:u.aiTrainingTarget})),classes:longRun.classes,attackDistance:longRun.attackDistance,defended:longRun.defended,recovered:longRun.recovered,raidRepelled:longRun.raidUnits.some(u=>u.hp<u.maxHp||u.state==='dead'||u.faction!==0),raidOutcomes:longRun.raidUnits.map(u=>({faction:u.faction,hp:u.hp,maxHp:u.maxHp,state:u.state})),peakBuildings:longRun.peakBuildings,peakPopulation:longRun.peakPopulation,shamanAlive:state.units.some(u=>u.faction===1&&u.isShaman&&u.state!=='dead'),plan:enemyAIs[0].lastPlan}));
    const pass=detail.shamanAlive&&detail.peakBuildings>=5&&detail.attackDistance>20&&['warrior','firewarrior','spy'].every(t=>detail.classes[t])&&(!raid||(detail.defended&&detail.raidRepelled&&detail.recovered));
-   results.push({name:`${personality}: ${minutes} minutes${raid?' with raid and worker losses':''}`,pass,seed,detail});
+   results.push({name:`${personality}: ${minutes} minutes in level arena${raid?' with raid and worker losses':''}`,pass,seed,detail});
    console.log((pass?'PASS ':'FAIL ')+JSON.stringify(results.at(-1)));
   }catch(e){results.push({name:personality,pass:false,error:String(e)});console.log('FAIL '+personality+' '+e);}finally{await page.close();}
  }

@@ -65,6 +65,11 @@ try {
         SpatialHash.update();state.clock.getElapsedTime=()=>60;state.clock.elapsedTime=60;
         let searchMs=0;
         for(const unit of units){
+            // The render fixture may straddle water on a random landscape.
+            // For the separate decision-budget check, put every actor on the
+            // known dry spawn so water-rescue orders cannot suppress aggro.
+            unit.placeOnGround(center.x,center.z);
+            unit.nextTargetCheck=0;
             const findTarget=unit.findTarget;
             unit.findTarget=function(){
                 const start=performance.now();
@@ -72,6 +77,7 @@ try {
                 finally{searchMs+=performance.now()-start;}
             };
         }
+        SpatialHash.update();
         const start=performance.now();
         BattleWork.begin();
         try{for(const unit of units)unit.update(1/60);}
