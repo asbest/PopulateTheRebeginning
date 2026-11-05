@@ -8226,7 +8226,21 @@ window.Humanoid = class Humanoid {
             underwaterGround<VISUAL_WATER_LEVEL-.2&&this.mesh.position.y<VISUAL_WATER_LEVEL+.1&&
             this.mesh.position.y-underwaterGround>.35;
         if(this.isSinking)this.isGrounded=false;
-        Locomotion.ground(this, getSurfaceHeight, dt);
+        // A capsule resting on a slope can be above the center-height landing threshold.
+        // Only an actual supporting terrain contact may start recovery in that case.
+        let terrainSupported=false;
+        if(this.state==='stunned'&&!this.isGrounded&&this.velocity.y<=.1&&
+            this.mesh.position.y-underwaterGround<=this.height&&state.physicsWorld?.contactsWith){
+            const collider=this.rigidBody?.collider?.(0);
+            if(collider)state.physicsWorld.contactsWith(collider,other=>{
+                if(terrainSupported||other.parent())return;
+                state.physicsWorld.contactPair(collider,other,(manifold,flipped)=>{
+                    if(manifold.numSolverContacts()>0&&manifold.normal().y*(flipped?-1:1)<-.1)
+                        terrainSupported=true;
+                });
+            });
+        }
+        Locomotion.ground(this, getSurfaceHeight, dt,terrainSupported);
         const groundH = getSurfaceHeight(this.mesh.position.x, this.mesh.position.z);
 
         if (this.type === 'airship') {

@@ -293,9 +293,9 @@ export function createLocomotion(T) {
             matrix.copy(leg.matrix).invert().multiply(u.torso.matrix).multiply(cloth);matrix.decompose(panel.position,panel.quaternion,panel.scale);
         }
     }
-    function ground(u,heightAt,dt){
+    function ground(u,heightAt,dt,supported=false){
         heightAt=heightAt.forPose?.()||heightAt;
-        if(u.isVehicle||u.isSwimming||u.isSinking||['dead','stunned','getting_up'].includes(u.state))return;
+        if(u.isVehicle||u.isSwimming||u.state==='dead'||!supported&&(u.isSinking||['stunned','getting_up'].includes(u.state)))return;
         const p=u.mesh.position;
         if(u.state!=='idle')u.idleAnchor=null;
         if(u.idleAnchor){p.x=u.idleAnchor.x;p.z=u.idleAnchor.z;}
@@ -304,7 +304,7 @@ export function createLocomotion(T) {
         // reach it. Keep a walking unit attached to the surface during that lift.
         const walkingGap=Math.max(.45,(u.groundBodyOffset||0)+u.height);
         const climbing=(u.state==='move'||u.state==='manual'||u.state==='combat')&&gap<u.height*4;
-        if((climbing||gap<.35)&&u.velocity.y<Math.max(2,u.moveSpeed)||u.isGrounded&&gap<walkingGap){
+        if(supported||(climbing||gap<.35)&&u.velocity.y<Math.max(2,u.moveSpeed)||u.isGrounded&&gap<walkingGap){
             u.isGrounded=true;p.y=h;
             if(u.rigidBody){
                 const v=u.rigidBody.linvel();

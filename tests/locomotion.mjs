@@ -228,6 +228,48 @@ try{
   }
   state.shaman=new Humanoid(0,'shaman',0,0);state.units=[state.shaman];state.shaman.placeOnGround(0,0);return report;
  }));
+ await check('Lightning survivors on steep slopes land, get up and accept movement at 30/60/120 FPS',()=>page.evaluate(()=>{
+  for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];state.selectedUnits=[];
+  for(const b of state.buildings)state.scene.remove(b.mesh);state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
+  state.matchSettings.peaceTimeMinutes=0;state.isGodMode=false;
+  const report=[];
+  for(const slope of [1,1.8]){
+   for(let x=-30;x<=30;x++)for(let z=-30;z<=30;z++)
+    state.terrainMods.set(x+','+z,6+x*slope-gameTestAPI.getBaseHeight(x,z));
+   state.heightCache.clear();state.cameraLookAt.set(0,6,0);gameTestAPI.updateChunks(true);
+   for(const physics of [true,false])for(const fps of [30,60,120])for(const type of ['warrior','shaman'])for(const offset of [0,.1]){
+    const unit=new Humanoid(0,type,0,0);state.units=[unit];unit.placeOnGround(0,0);
+    unit.hp=unit.maxHp=10000;unit.nextTargetCheck=Infinity;unit.groundBodyOffset=offset;
+    if(physics)unit.rigidBody.setTranslation({x:0,y:6+unit.height/2+offset,z:0},true);
+    else{state.physicsWorld.removeRigidBody(unit.rigidBody);state.rigidBodies.delete(unit.id);unit.rigidBody=null;}
+    gameTestAPI.SpatialHash.update();
+    gameTestAPI.executeSpell('lightning',0,0,{faction:1,mesh:{position:new THREE.Vector3(0,6,2)}});
+    if(unit.state!=='stunned'||unit.hp>=10000)throw new Error('Lightning fixture did not hit');
+    let recovered=false,prone=0,sawGettingUp=false;
+    const dt=1/fps;
+    for(let frame=0;frame<fps*8;frame++){
+     if(physics){state.physicsWorld.timestep=dt;state.physicsWorld.step();}
+     unit.update(dt);prone=Math.max(prone,unit.fallRig.rotation.x);
+     sawGettingUp ||= unit.state==='getting_up';
+     if(unit.state==='idle'){recovered=true;break;}
+    }
+    const sample={slope,physics,fps,type,offset,state:unit.state,prone,recovered,sawGettingUp};
+    if(!recovered||!sawGettingUp||prone<1.35||Math.abs(unit.fallRig.rotation.x)>.001)
+     throw new Error('Lightning survivor stuck after landing: '+JSON.stringify(sample));
+    const start=unit.mesh.position.clone();
+    state.manualInputFrame++;unit.manualMove(new THREE.Vector3(0,0,1),dt);
+    for(let frame=0;frame<fps/2;frame++){
+     if(physics){state.physicsWorld.timestep=dt;state.physicsWorld.step();}
+     unit.update(dt);unit.manualMove(new THREE.Vector3(0,0,1),dt);
+    }
+    if(unit.mesh.position.distanceTo(start)<.1)throw new Error('Recovered lightning victim cannot move: '+JSON.stringify(sample));
+    report.push(sample);unit.die();state.scene.remove(unit.mesh);
+   }
+  }
+  state.shaman=new Humanoid(0,'shaman',0,0);state.units=[state.shaman];state.shaman.placeOnGround(0,0);
+  return {cases:report.length,allRecovered:true};
+ }));
+
  await check('Knockback over water keeps its flight arc, sinks to the bottom and resets gravity after landing',()=>page.evaluate(()=>{
   for(let x=180;x<=220;x++)for(let z=-20;z<=20;z++)state.terrainMods.set(`${x},${z}`,-3-gameTestAPI.getBaseHeight(x,z));
   state.heightCache.clear();state.cameraLookAt.set(200,0,0);gameTestAPI.updateChunks(true);
