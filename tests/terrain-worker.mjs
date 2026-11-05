@@ -41,6 +41,7 @@ try{
    version:()=>`${state.navigationVersion}|${state.matchSettings.biome}|${!!state.matchSettings.winter}`,
    makeWorker:()=>new Worker(new URL('./art/terrain-worker.js',location.href),{type:'module'})});
   const [key,chunk]=Object.entries(state.chunks)[0],[cx,cz]=key.split(',').map(Number),cases=[];
+  delete state.matchSettings.terrainProfile;delete state.matchSettings.terrainSeed;delete state.matchSettings.liquid;gameTestAPI.restoreTerrainNoise();
   for(const [biome,winter]of [['normal',false],['normal',true],['winter',true],['jungle',false],['night',false],['mountain',false],['storm',false],['void',false],['celestial',false],['cosmic',false]]){
    state.matchSettings.biome=biome;state.matchSettings.winter=winter;state.heightCache.clear();
    state.terrainMods.set(`${cx*40},${cz*40}`,1.25);state.navigationVersion++;
@@ -60,6 +61,19 @@ try{
     for(let i=0;i<a.length;i++)if(a[i]!==b[i])throw new Error(`${biome} ${name}[${i}]: ${a[i]} != ${b[i]}`);
    }
    cases.push({biome,winter,equal:true});geo.dispose();water.dispose();
+  }
+  const {CAMPAIGN_LANDSCAPES}=await import('./art/landscape-profiles.js');
+  for(const profile of CAMPAIGN_LANDSCAPES){
+   state.matchSettings.terrainProfile=profile;state.matchSettings.terrainSeed=137914;state.matchSettings.liquid='lava';gameTestAPI.restoreTerrainNoise();state.navigationVersion++;
+   stream.clear();stream.prepare(cx,cz);
+   const geo=chunk.children[0].geometry.clone(),water=chunk.children[1].geometry.clone();
+   updateChunkGeometry({geometry:geo},cx,cz);updateChunkWater({geometry:water},cx,cz);
+   let arrays;const start=performance.now();
+   while(!(arrays=stream.take(cx,cz))){if(!stream.enabled||performance.now()-start>10000)throw Error('Profile Worker timeout '+profile);await new Promise(r=>setTimeout(r,10));stream.prepare(cx,cz);}
+   for(const [name,a] of Object.entries({position:geo.attributes.position.array,normal:geo.attributes.normal.array,color:geo.attributes.color.array,pattern:geo.attributes.artTerrainPattern.array,foam:water.attributes.foam.array,depth:water.attributes.depth.array})){
+    const b=arrays[name];if(a.length!==b.length||a.some((v,i)=>v!==b[i]))throw Error('Profile Worker differs '+profile+' '+name);
+   }
+   cases.push({profile,equal:true});geo.dispose();water.dispose();
   }
   stream.disable();if(stream.prepare(cx,cz)!==false)throw new Error('Disabled Worker did not fall back');
   const fallback=gameTestAPI.createChunk(cx,cz);if(!fallback.children[0].geometry.attributes.position.count)throw new Error('Synchronous terrain missing');

@@ -1,66 +1,17 @@
 // Off-main-thread A* for AI orders. The browser game remains authoritative for
 // movement and validates/smooths the returned route on the main thread.
+import {createTerrainHeight} from './art/terrain-height.js';
 self.window=self;
-importScripts('./vendor/simplex-noise.min.js');
+const noiseReady=import('./vendor/simplex-noise.min.js');
 
-function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296;};}
-const simplex=new self.SimplexNoise(mulberry32(12345));
+let heightField=null;
 const neighbors=[{x:0,y:1},{x:1,y:0},{x:0,y:-1},{x:-1,y:0},
     {x:1,y:1},{x:1,y:-1},{x:-1,y:1},{x:-1,y:-1}];
 let terrain={},pathfinder={},biome='normal',waterState='liquid',waterLevel=1.805,
     visualWaterLevel=.45125,noiseScale=.02,heightMultiplier=1,bridgeHeight=3,bridgeWidth=2.5,
     version=-1,mods=new Map(),buildings=[],heightCache=new Map();
 
-function blend(a,b,value){const t=Math.max(0,Math.min(1,(value-a)/(b-a)));return t*t*(3-2*t);}
-function baseHeight(x,z){
-    let y=0,ns=noiseScale,hm=heightMultiplier;
-    if(biome==='mountain')hm*=terrain.BIOME_MOUNTAIN_HEIGHT_MULT;
-    if(biome==='void')hm*=terrain.BIOME_VOID_HEIGHT_MULT;
-    if(biome==='jungle')ns*=terrain.BIOME_JUNGLE_NOISE_MULT;
-    for(const o of terrain.NOISE_OCTAVES){
-        const ridgeDetail=o.factor>=4?.76-.28*blend(5,13,y*hm):1;
-        y+=simplex.noise2D(x*ns*o.factor,z*ns*o.factor)*o.amp*ridgeDetail;
-    }
-    y*=hm;
-    if(biome!=='void'&&biome!=='celestial'&&biome!=='cosmic'){
-        const region=simplex.noise2D(x*.004+211,z*.004-173);
-        const relief=simplex.noise2D(x*.011+47,z*.011-29);
-        const land=Math.max(0,Math.min(1,(y-waterLevel+1.5)/4));
-        const mountains=blend(.16,.58,region),archipelago=blend(.18,.58,-region);
-        const plateau=blend(.18,.55,relief)*(1-mountains);
-        y+=(Math.abs(relief)-.38)*(biome==='mountain'?2:1.25)*land;
-        y+=mountains*(3.4+Math.abs(relief)*3.8)*(biome==='mountain'?1.4:1);
-        y+=plateau*2.5*land;
-        const terrace=plateau*land*.74*blend(2,12,y);
-        y+=(10-y)*terrace;
-        y-=Math.max(0,-relief-.1)*3.2*(1-mountains);
-        y-=archipelago*3.2;
-    }
-    if(biome==='celestial'&&y<terrain.CELESTIAL_PEAK_THRESHOLD)y-=terrain.CELESTIAL_VOID_DROP;
-    const bridgeNoise=Math.abs(simplex.noise2D(x*noiseScale*terrain.BRIDGE_NOISE_MULT+100,
-        z*noiseScale*terrain.BRIDGE_NOISE_MULT+100));
-    y+=(1-blend(0,1,bridgeNoise*bridgeWidth))*bridgeHeight;
-    if(y<waterLevel)y-=(waterLevel-y)*terrain.WATER_SMOOTH_FACTOR;
-    const aboveCap=Math.max(0,y-terrain.LAND_HEIGHT_CAP);
-    y+=aboveCap*terrain.LAND_ABOVE_CAP_SLOPE*blend(0,5,aboveCap);
-    const summit=Math.max(0,y-13);
-    y-=summit*.24*blend(0,5,summit);
-    return y;
-}
-function terrainMod(x,z){
-    if(!mods.size)return 0;
-    const x1=Math.floor(x),z1=Math.floor(z),fx=x-x1,fz=z-z1;
-    const v11=mods.get(`${x1},${z1}`)||0,v21=mods.get(`${x1+1},${z1}`)||0;
-    const v12=mods.get(`${x1},${z1+1}`)||0,v22=mods.get(`${x1+1},${z1+1}`)||0;
-    return (v11*(1-fx)+v21*fx)*(1-fz)+(v12*(1-fx)+v22*fx)*fz;
-}
-function height(x,z){
-    const key=(Math.round(x*10)<<16)|(Math.round(z*10)&0xffff);
-    if(heightCache.has(key))return heightCache.get(key);
-    const value=baseHeight(x,z)+terrainMod(x,z);
-    heightCache.set(key,value);if(heightCache.size>20000)heightCache.clear();
-    return value;
-}
+function height(x,z){return heightField.getHeight(x,z);}
 function nearbyBuildings(x,z){
     return buildings.filter(b=>(x-b.x)**2+(z-b.z)**2<(b.radius||2)**2+16);
 }
@@ -159,14 +110,22 @@ function findPath(start,end,isFlying,avoidWater,waterExit){
     }
     return null;
 }
-self.onmessage=event=>{
+self.onmessage=async event=>{
     const data=event.data;
+    try{await noiseReady;}catch(error){self.postMessage({type:'error',id:data.id,message:String(error)});return;}
     if(data.type==='sync'){
         version=data.version;terrain=data.terrain;pathfinder=data.pathfinder;
         biome=data.biome;waterState=data.waterState;waterLevel=data.waterLevel;
         visualWaterLevel=data.visualWaterLevel;noiseScale=data.noiseScale;
         heightMultiplier=data.heightMultiplier;bridgeHeight=data.bridgeHeight;bridgeWidth=data.bridgeWidth;
         mods=new Map(data.mods);buildings=data.buildings;heightCache.clear();
+        const seed=data.noise;
+        const phase=Number.isInteger(data.settings?.terrainSeed)?data.settings.terrainSeed>>>0:0;
+        const simplex=seed?new self.SimplexNoise(()=>.5):{noise2D:(x,y)=>Math.sin(x+phase)*Math.cos(y)};
+        if(seed){simplex.perm=new Uint8Array(seed.perm);simplex.permMod12=new Uint8Array(seed.permMod12);}
+        heightField=createTerrainHeight({state:{simplex,terrainMods:mods,heightCache,matchSettings:data.settings||{biome}},
+            CONFIG:{TERRAIN:terrain},WATER_LEVEL:waterLevel,NOISE_SCALE:noiseScale,
+            HEIGHT_MULTIPLIER:heightMultiplier,BRIDGE_HEIGHT:bridgeHeight,BRIDGE_WIDTH:bridgeWidth});
         self.postMessage({type:'ready',version});
     }else if(data.type==='path'){
         try{

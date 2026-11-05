@@ -12,6 +12,10 @@ try {
         {waitUntil:'load',timeout:90000});
     await page.waitForFunction(()=>window.state?.shaman&&window.gameTestAPI,null,{timeout:90000});
     const result=await page.evaluate(()=>{
+        // This suite measures the original shared regional algorithm; campaign
+        // profile diversity and seeds are covered in landscape-levels.mjs.
+        delete state.matchSettings.terrainProfile;delete state.matchSettings.terrainSeed;
+        gameTestAPI.restoreTerrainNoise();
         const sea=CONFIG.TERRAIN.WATER_LEVEL;
         const {getBaseHeight,forEachTreeSite}=gameTestAPI;
         const samples={mountain:[],archipelago:[],plateau:[],valley:[]};

@@ -34,7 +34,7 @@ try {
         const setup=await page.evaluate(()=>{
             const settings=state.matchSettings;
             const factions=[...new Set(state.units.filter(u=>u.state!=='dead'&&u.faction!==0).map(u=>u.faction))];
-            const data={level:state.campaignLevel,ai:window.enemyAIs.length,biome:settings.biome||'normal',
+            const data={terrainSeed:settings.terrainSeed,terrainProfile:settings.terrainProfile,liquid:settings.liquid,drySpawn:gameTestAPI.getBaseHeight(state.shaman.mesh.position.x,state.shaman.mesh.position.z)>CONFIG.TERRAIN.WATER_LEVEL,level:state.campaignLevel,ai:window.enemyAIs.length,biome:settings.biome||'normal',
                 winter:settings.winter,noFlyers:settings.noFlyers,suddenDeath:settings.suddenDeath,
                 infiniteMana:settings.infiniteMana,doubleSpeed:settings.doubleSpeed,peaceMinutes:settings.peaceTimeMinutes,
                 factions:factions.length,story:document.getElementById('story-title').innerText,
@@ -49,6 +49,7 @@ try {
             return data;
         });
         const want=expected[level];
+        if(!Number.isInteger(setup.terrainSeed)||!setup.terrainProfile||setup.liquid!==([7,10,12].includes(level)?'lava':'water')||!setup.drySpawn)throw Error('Landscape configuration '+JSON.stringify(setup));
         for(const [key,value] of Object.entries({level,ai:want.ai,biome:want.biome,
             winter:!!want.winter,noFlyers:!!want.noFlyers,suddenDeath:!!want.suddenDeath,
             infiniteMana:!!want.infiniteMana,doubleSpeed:!!want.doubleSpeed})) {

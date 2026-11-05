@@ -13,6 +13,10 @@ try {
     const result=await page.evaluate(async()=>{
         state.isPaused=true;
         const worker=gameTestAPI.PathWorker;
+        // This Worker plans terrain/buildings; tree avoidance is a separate
+        // main-thread validation/replan. Isolate that layer for exact A* parity.
+        const trees=Object.values(state.chunks).flatMap(c=>c.userData.trees||[]).map(t=>[t.mesh,t.mesh.visible]);
+        for(const [mesh] of trees)mesh.visible=false;
         const routes=[];
         const check=async(start,end,avoidWater=false)=>{
             const expected=Pathfinder.findPath(start,end,false,1.5,avoidWater,false);
@@ -39,6 +43,15 @@ try {
         state.waterState='liquid';
         gameTestAPI.modifyTerrain(player.x+5,player.z+2,2,.8);
         await check(player,gameTestAPI.findNearestLand(player.x+12,player.z+5));
+        const savedSettings={...state.matchSettings};
+        const {CAMPAIGN_LANDSCAPES}=await import('./art/landscape-profiles.js');
+        for(const profile of CAMPAIGN_LANDSCAPES) {
+            Object.assign(state.matchSettings,{terrainProfile:profile,terrainSeed:184711,biome:'normal'});
+            gameTestAPI.restoreTerrainNoise();state.navigationVersion++;
+            const start=gameTestAPI.findNearestLand(0,0),end=gameTestAPI.findNearestLand(start.x+24,start.z+12);
+            await check(new THREE.Vector3(start.x,0,start.z),new THREE.Vector3(end.x,0,end.z),true);
+        }
+        state.matchSettings=savedSettings;gameTestAPI.restoreTerrainNoise();state.navigationVersion++;
         const ai=window.enemyAIs[0],originalLength=state.units.length;
         const probe={id:'worker-ai-probe',faction:ai.faction,type:'airship',state:'idle',aiRole:null,
             mesh:{position:enemy.clone()},calls:[],
@@ -61,7 +74,16 @@ try {
         const realStart=gameTestAPI.findNearestLand(enemy.x+2,enemy.z+2);
         const real=new Humanoid(ai.faction,'wild',realStart.x,realStart.z);
         state.units.push(real);
-        const realGoal=gameTestAPI.findNearestLand(realStart.x+12,realStart.z+6);
+        // A random island can separate two individually dry points. Choose a
+        // reachable destination instead of assuming the old fixed map's route.
+        let realGoal=null;
+        for(let radius=6;radius<=18&&!realGoal;radius+=4)for(let i=0;i<12;i++) {
+            const candidate=new THREE.Vector3(realStart.x+Math.cos(i*Math.PI/6)*radius,0,realStart.z+Math.sin(i*Math.PI/6)*radius);
+            if(getHeight(candidate.x,candidate.z)<gameTestAPI.aiDryHeight())continue;
+            const route=Pathfinder.findPath(real.mesh.position,candidate,false,1.5,true,false);
+            if(route?.length){realGoal=candidate;break;}
+        }
+        if(!realGoal)throw Error('No reachable AI test destination on generated island');
         ai.moveUnit(real,realGoal,'builder');ai.flushPathQueue();
         const realMoved=await new Promise((resolve,reject)=>{
             const started=performance.now();
@@ -79,6 +101,7 @@ try {
         const fallbackApplied=probe.calls.length===2&&probe.calls[1].x===fallbackGoal.x&&
             probe.calls[1].path===undefined;
         state.units.length=originalLength;ai.pathQueue.clear();
+        for(const [mesh,visible] of trees)mesh.visible=visible;
         return {routes,disabled:worker.disabled,staleIgnored,realMoved,fallbackApplied};
     });
     if(errors.length||result.routes.some(route=>!route.equal||route.fallback)||!result.disabled||

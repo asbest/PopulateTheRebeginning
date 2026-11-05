@@ -68,6 +68,14 @@ try{
  await waitForState(host,()=>!!state.shaman.finalDest||!!state.shaman.target);
  result.pass=true;result.transport=liveSignaling?'PeerJS public signaling':'Local WebRTC signaling';
  result.tests=['Two-browser WebRTC connection','Initial tribe synchronization','Client command reaches host'];
+ const terrain=await host.evaluate(()=>({seed:state.matchSettings.terrainSeed,profile:state.matchSettings.terrainProfile,liquid:state.matchSettings.liquid,
+  heights:Array.from({length:25},(_,i)=>getHeight(i*17-200,i*11-130)),mods:[...state.terrainMods]}));
+ await client.evaluate(expected=>{
+  if(state.matchSettings.terrainSeed!==expected.seed||state.matchSettings.terrainProfile!==expected.profile||state.matchSettings.liquid!==expected.liquid)throw Error('World settings differ');
+  if(expected.heights.some((h,i)=>getHeight(i*17-200,i*11-130)!==h))throw Error('Client terrain differs');
+  if(state.terrainMods.size!==expected.mods.length||expected.mods.some(([k,v])=>state.terrainMods.get(k)!==v))throw Error('Client retained local terrain modifications');
+ },terrain);
+ result.tests.push('Seed, profile and exact terrain including modifications synchronize');
  await host.evaluate(()=>{state.isPaused=true;state.mana=500;gameTestAPI.SpatialHash.update();});
  checkpoint='client shield command';
  await client.evaluate(()=>{state.isPaused=true;});

@@ -39,6 +39,12 @@ Press **C**, or use **Camera** in the pause menu, to switch between the overhead
 
 The editable Blender 5.2 source is [`art/blender/Overhaul.blend`](art/blender/Overhaul.blend). Its indexed model pack includes complete articulated rabbit and bird silhouettes, role-specific details for every building and character, the airship, trees and instanced flowers. Twenty-one full-resolution PBR material sets cover the structures, characters, vegetation, wildlife and terrain; distant fine details use LOD. Rabbits have animated head, ears, paws and tail with terrain-following hops; birds have a flapping/gliding wing cycle, banking and altitude control. Human gait and combat body motion, and airship visual sway, retain the original game mechanics. Brighter grass, sand and triplanar natural rock use deterministic world-space noise for varied, seamless biome transitions, and close-range sun shadows track the camera. The original structural meshes and pivots remain in `art/characters.js` and `art/art-kit.js`; [`art/blender-pack.js`](art/blender-pack.js) integrates the Blender models in the browser. See the [Blender source and regeneration guide](docs/BLENDER-OVERHAUL.md).
 
+## Procedural campaign landscapes
+
+Each new match generates a fresh terrain seed. The twelve campaign chapters have separate landscape profiles: rolling meadows, river deltas, alpine valleys, mesas, tropical islands, marshes, volcanic highlands, jungle ravines, rugged coasts, lava rifts, sky plateaus and fractured fire islands. Levels **7, 10 and 12** replace water with slowly flowing lava that damages units on contact. Land routes and airships provide safe passage.
+
+Seeds and profiles travel with saves and multiplayer snapshots. Older saves retain their original terrain. Rendering, terrain streaming, physics and asynchronous pathfinding share the same height field; Workers still have synchronous fallbacks.
+
 ## Verification
 
 ```sh

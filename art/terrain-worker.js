@@ -9,7 +9,8 @@ onmessage=async({data:job})=>{
  try{
   const failure=await noiseReady;if(failure)throw failure;
   const env=job.env,seed=env.noise;
-  const simplex=seed?new window.SimplexNoise(()=>.5):{noise2D:(x,y)=>Math.sin(x)*Math.cos(y)};
+  const fallbackPhase=Number.isInteger(env.settings.terrainSeed)?env.settings.terrainSeed>>>0:0;
+  const simplex=seed?new window.SimplexNoise(()=>.5):{noise2D:(x,y)=>Math.sin(x+fallbackPhase)*Math.cos(y)};
   if(seed){simplex.perm=new Uint8Array(seed.perm);simplex.permMod12=new Uint8Array(seed.permMod12);}
   const heightCache=new Map();for(let i=0;i<env.heightKeys.length;i++)heightCache.set(env.heightKeys[i],env.heightValues[i]);
   env.state={simplex,terrainMods:new Map(env.mods),heightCache,matchSettings:env.settings};
