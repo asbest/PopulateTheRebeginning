@@ -1,3 +1,4 @@
+import {seedWorld} from './fixtures/seed-world.mjs';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
@@ -6,7 +7,7 @@ const modulePath = process.argv.find(a => a.startsWith('--playwright='))?.slice(
 const {chromium} = modulePath ? await import(pathToFileURL(modulePath).href) : require('playwright');
 const browser = await chromium.launch({headless:true,...(process.platform === 'win32' ? {channel:'chrome'} : {})});
 const context = await browser.newContext({viewport:{width:1440,height:900}});
-const page = await context.newPage();
+const page = await context.newPage();await seedWorld(page,98217);
 const errors = [], missing = [];
 const workflowEscape = value => String(value).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');
 const reportFailure = error => {
@@ -64,7 +65,17 @@ try {
   }
   console.log('PASS enemy AI orders a builder and the unit physically moves', {start:enemy,moving});
 
-  const point = await page.evaluate(() => {const p=state.shaman.mesh.position,target=gameTestAPI.findNearestLand(p.x+8,p.z+2),v=new THREE.Vector3(target.x,getHeight(target.x,target.z),target.z).project(state.camera);return {x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2};});
+  const point = await page.evaluate(() => {
+    const p=state.shaman.mesh.position;
+    for(const radius of [10,12,8])for(let i=0;i<24;i++) {
+      const angle=i*Math.PI/12,target=gameTestAPI.findNearestLand(p.x+Math.cos(angle)*radius,p.z+Math.sin(angle)*radius);
+      if(Math.hypot(target.x-p.x,target.z-p.z)<7)continue;
+      const v=new THREE.Vector3(target.x,getHeight(target.x,target.z),target.z).project(state.camera);
+      const x=(v.x+1)*innerWidth/2,y=(1-v.y)*innerHeight/2;
+      if(x>180&&x<innerWidth-180&&y>100&&y<innerHeight-180&&v.z>-1&&v.z<1)return {x,y};
+    }
+    throw Error('No visible, sufficiently distant fireball test target');
+  });
   await page.keyboard.press('1');
   if(await page.evaluate(() => state.currentAction) !== 'blast') throw new Error('Blast hotkey did not select the spell');
   await page.evaluate(() => {const original=state.projectiles.push;state.projectiles.push=function(...shots){for(const shot of shots){window.__blastStart={x:shot.mesh.position.x,z:shot.mesh.position.z};window.__blastTarget={x:shot.target.x,z:shot.target.z};const explode=shot.explode;shot.explode=function(){window.__blastImpact={x:this.mesh.position.x,z:this.mesh.position.z};return explode.call(this);};}return original.apply(this,shots);};window.__manaBeforeBlast=state.mana;});

@@ -1,10 +1,11 @@
+import {seedWorld} from './fixtures/seed-world.mjs';
 import fs from 'node:fs/promises';import path from 'node:path';import {pathToFileURL} from 'node:url';import {createRequire} from 'node:module';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const b=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});const results=[],errors=[],root=path.resolve(import.meta.dirname,'..');
 const workflowEscape=value=>String(value).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');
 function reportFailure(name,error){if(process.env.GITHUB_ACTIONS==='true')console.log(`::error title=${workflowEscape(name)}::${workflowEscape(error?.stack||error)}`);}
 async function check(name,fn){try{results.push({name,pass:true,detail:await fn()});console.log('PASS '+name);}catch(e){results.push({name,pass:false,detail:String(e)});console.log('FAIL '+name+' '+e);reportFailure(name,e);}}
-try{const p=await b.newPage({viewport:{width:1280,height:800}});await p.addInitScript(()=>{let seed=98217;Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};});p.on('pageerror',e=>errors.push(String(e)));await p.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});await p.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
+try{const p=await b.newPage({viewport:{width:1280,height:800}});await seedWorld(p,98217);p.on('pageerror',e=>errors.push(String(e)));await p.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});await p.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
 await p.evaluate(()=>{closeHelp();closeStoryOverlay();state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;gameTestAPI.PathWorker.disable();const AI=enemyAIs[0].constructor;for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];for(const b of state.buildings){state.scene.remove(b.mesh);}state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
 for(let x=-55;x<=55;x++)for(let z=-45;z<=45;z++){const key=`${x},${z}`;state.terrainMods.set(key,(state.terrainMods.get(key)||0)+6-getHeight(x,z));}state.heightCache.clear();state.cameraLookAt.set(0,6,0);gameTestAPI.updateChunks(true);
 window.testAI=new AI(2);testAI.init(-15,0);window.enemyAIs=[testAI];state.shaman=new Humanoid(0,'shaman',35,0);state.units.push(state.shaman);state.selectedUnits=[state.shaman];state.shaman.hp=1000000;state.shaman.maxHp=1000000;state.shaman.setShield(true);state.aiTime=0;state.clock.getElapsedTime=()=>state.aiTime;
@@ -54,6 +55,8 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
    for(const u of state.units){u.die();state.scene.remove(u.mesh);}state.units=[];
    for(const building of state.buildings)state.scene.remove(building.mesh);
    state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
+   // Controlled banks must be flat between integer modification samples too.
+   state.simplex={noise2D:()=>0};state.heightCache.clear();
    for(let x=-35;x<=35;x++)for(let z=-28;z<=28;z++){
     const height=Math.min(6,Math.max(0,Math.abs(x)-1,Math.abs(z)-6));
     state.terrainMods.set(`${x},${z}`,height-gameTestAPI.getBaseHeight(x,z));
@@ -161,7 +164,7 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
 });
 await check('Natural starting landscape supports mixed troops and an offensive within eight minutes',async()=>{
  const natural=await b.newPage();natural.on('pageerror',e=>errors.push(String(e)));
- await natural.addInitScript(()=>{let seed=98217;Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};});
+ await seedWorld(natural,98217);
  try{await natural.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});await natural.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
  return await natural.evaluate(()=>{state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;state.isGodMode=true;let time=0,sawAttack=false,firstAttackAt=null,sawSpy=false;state.clock.getElapsedTime=()=>time;
   for(let k=0;k<4800;k++){time+=.1;gameTestAPI.SpatialHash.update();gameTestAPI.BuildingSpatialHash.update();for(const ai of enemyAIs)ai.update(.1);sawAttack ||= state.units.some(u=>u.faction===1&&u.aiRole==='attack');if(sawAttack&&firstAttackAt===null)firstAttackAt=time;sawSpy ||= state.units.some(u=>u.faction===1&&u.type==='spy');state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();for(const u of [...state.units])u.update(.1);for(const b of [...state.buildings])if(!b.dead)b.update(.1);for(let i=state.projectiles.length-1;i>=0;i--)if(!state.projectiles[i].update(.1))state.projectiles.splice(i,1);for(let i=state.activeEffects.length-1;i>=0;i--)if(!state.activeEffects[i].update(.1))state.activeEffects.splice(i,1);for(const e of state.particles)state.scene.remove(e.mesh);state.particles=[];}

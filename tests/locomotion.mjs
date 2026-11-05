@@ -1,3 +1,4 @@
+import {seedWorld} from './fixtures/seed-world.mjs';
 import fs from 'node:fs/promises';import path from 'node:path';import {pathToFileURL} from 'node:url';import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url),modulePath=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):require('playwright');
@@ -5,7 +6,7 @@ const root=path.resolve(import.meta.dirname,'..'),results=[],errors=[];await fs.
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 async function check(name,fn){try{results.push({name,pass:true,detail:await fn()});console.log('PASS '+name);}catch(e){results.push({name,pass:false,detail:String(e)});console.log('FAIL '+name+' '+e);}}
 try{
- const page=await browser.newPage({viewport:{width:1440,height:900}});page.on('pageerror',e=>errors.push(String(e)));page.on('dialog',d=>d.accept());
+ const page=await browser.newPage({viewport:{width:1440,height:900}});await seedWorld(page,98217);page.on('pageerror',e=>errors.push(String(e)));page.on('dialog',d=>d.accept());
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);await page.evaluate(()=>{state.isPaused=true;state.cameraLookAt.copy(state.shaman.mesh.position);gameTestAPI.updateChunks(true);});
  await check('Player and enemy follow real terrain routes in both directions through Rapier simulation',async()=>{
   try{
@@ -19,7 +20,7 @@ try{
      for(const [dx,dz] of [[8,0],[0,-8],[-8,0],[0,8]]){u.goto(start.x+dx,start.z+dz);if(u.state==='move'&&u.target){end={x:start.x+dx,z:start.z+dz};break;}}
      if(!end)throw new Error('No reachable route for faction '+u.faction);
      if(u.faction===0){state.selectedUnits=[u];gameTestAPI.performAction(end.x,end.z,'move');}
-     return {u,start,end};
+     return {u,start,end,arrival:u.path.at(-1)?.clone()||new THREE.Vector3(end.x,0,end.z)};
     });
     return movementProbes.map(({u,start,end})=>({faction:u.faction,start,end}));
    });
@@ -36,27 +37,27 @@ try{
        s.maxPause=Math.max(s.maxPause,s.pause);s.last={x:p.x,z:p.z};
       });
       // Pathfinder can finish at the nearest walkable grid point beside the click.
-      if(movementProbes.every(probe=>Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)<1.75))return {frame,pauses:samples.map(s=>s.maxPause)};
+      if(movementProbes.every(probe=>Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)<1.05))return {frame,pauses:samples.map(s=>s.maxPause)};
      }
      throw new Error('Route did not finish: '+JSON.stringify(movementProbes.map(probe=>({faction:probe.u.faction,state:probe.u.state,grounded:probe.u.isGrounded,path:probe.u.path?.length,distance:Math.hypot(probe.u.mesh.position.x-probe[targetKey].x,probe.u.mesh.position.z-probe[targetKey].z)}))));
     };
-    const movement=advance('end');
+    const movement=advance('arrival');
     return {frames:movement.frame,maxPauses:movement.pauses,units:movementProbes.map(({u,start})=>({faction:u.faction,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)}))};
    });
    if(outward.maxPauses.some(frames=>frames>3))throw new Error('Unit repeatedly stops en route: '+JSON.stringify(outward));
-   await page.evaluate(()=>movementProbes.forEach(({u,start})=>u.goto(start.x,start.z)));
+   await page.evaluate(()=>movementProbes.forEach(probe=>{probe.u.goto(probe.start.x,probe.start.z);probe.returnArrival=probe.u.path.at(-1)?.clone()||probe.start.clone();}));
    const returnMove=await page.evaluate(()=>{
     const samples=movementProbes.map(()=>({last:null,pause:0,maxPause:0}));
     for(let frame=1;frame<=2700;frame++){
      gameTestAPI.SpatialHash.update();state.physicsWorld.timestep=1/60;state.physicsWorld.step();
      movementProbes.forEach(({u})=>{u.nextTargetCheck=Infinity;u.update(1/60);});
-     movementProbes.forEach(({u,start},i)=>{
-      const s=samples[i],p=u.mesh.position,distance=Math.hypot(p.x-start.x,p.z-start.z);
+     movementProbes.forEach(({u,returnArrival},i)=>{
+      const s=samples[i],p=u.mesh.position,distance=Math.hypot(p.x-returnArrival.x,p.z-returnArrival.z);
       if(frame>15&&distance>2&&s.last&&Math.hypot(p.x-s.last.x,p.z-s.last.z)<.001)s.pause++;
       else s.pause=0;
       s.maxPause=Math.max(s.maxPause,s.pause);s.last={x:p.x,z:p.z};
      });
-     if(movementProbes.every(({u,start})=>Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)<1.75))return {frames:frame,maxPauses:samples.map(s=>s.maxPause)};
+     if(movementProbes.every(({u,returnArrival})=>Math.hypot(u.mesh.position.x-returnArrival.x,u.mesh.position.z-returnArrival.z)<1.05))return {frames:frame,maxPauses:samples.map(s=>s.maxPause)};
     }
     throw new Error('Return route did not finish: '+JSON.stringify(movementProbes.map(({u,start})=>({faction:u.faction,state:u.state,grounded:u.isGrounded,path:u.path?.length,distance:Math.hypot(u.mesh.position.x-start.x,u.mesh.position.z-start.z)}))));
    });

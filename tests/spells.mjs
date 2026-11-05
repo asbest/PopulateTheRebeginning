@@ -1,3 +1,4 @@
+import {seedWorld} from './fixtures/seed-world.mjs';
 import fs from 'node:fs/promises';import path from 'node:path';import {pathToFileURL} from 'node:url';import {createRequire} from 'node:module';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
@@ -5,7 +6,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
 const results=[],errors=[],root=path.resolve(import.meta.dirname,'..');
 async function check(name,fn){try{const detail=await fn();results.push({name,pass:true,detail});console.log('PASS '+name);}catch(e){results.push({name,pass:false,detail:String(e)});console.log('FAIL '+name+' '+e);}}
 try{
- const p=await browser.newPage();p.on('pageerror',e=>errors.push(String(e)));p.on('dialog',d=>d.accept());
+ const p=await browser.newPage();await seedWorld(p,98217);p.on('pageerror',e=>errors.push(String(e)));p.on('dialog',d=>d.accept());
  async function fresh(){await p.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');await p.waitForFunction(()=>window.gameTestAPI&&state.shaman);await p.evaluate(()=>{state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;window.enemyAIs=[];state.campaignLevel=0;state.mana=1000;state.isGodMode=false;state.cheatUnlimitedRange=false;state.selectedUnits=[state.shaman];state.cameraLookAt.copy(state.shaman.mesh.position);gameTestAPI.updateChunks(true);window.fixture={caster:state.shaman,x:state.shaman.mesh.position.x+2,z:state.shaman.mesh.position.z};for(const [key,faction] of [['enemy',1],['ally',0]]){const u=new Humanoid(faction,'warrior',fixture.x,fixture.z);u.hp=u.maxHp=1000;u.nextTargetCheck=Infinity;state.units.push(u);fixture[key]=u;}gameTestAPI.SpatialHash.update();});}
  await check('All referenced configuration fields exist',async()=>{
   await fresh();const source=await fs.readFile(path.join(root,'PopulateTheRebeginning.html'),'utf8');
@@ -246,6 +247,8 @@ try{
  });
  await check('Fireball knockback visibly moves a struck person and recovers',async()=>{
   await fresh();return p.evaluate(()=>{
+   // Ballistic height bounds need a level floor, not a random hillside.
+   state.simplex={noise2D:()=>0};state.terrainMods.clear();state.heightCache.clear();gameTestAPI.updateChunks(true);
    const {x,z,enemy}=fixture,y=getHeight(x,z),startX=x+1.5,startY=getHeight(startX,z);
    state.units=[enemy];enemy.mesh.position.set(startX,startY,z);
    enemy.rigidBody.setTranslation({x:startX,y:startY+enemy.height/2,z},true);
@@ -443,7 +446,23 @@ try{
   });
  });
  await check('Every spell rejects insufficient mana, out-of-range targets and a dead caster',async()=>{await fresh();return p.evaluate(spells=>{const {caster,x,z}=fixture;for(const spell of spells){state.mana=0;gameTestAPI.performAction(x,z,spell);if(state.mana!==0)throw new Error(spell+' overdraft');state.mana=1000;gameTestAPI.performAction(x+1000,z,spell);if(state.mana!==1000)throw new Error(spell+' ignored range');caster.state='dead';gameTestAPI.performAction(x,z,spell);if(state.mana!==1000)throw new Error(spell+' dead caster');caster.state='idle';}return spells.length;},spells);});
- await check('Airship unload action synchronizes physics and does not charge mana',async()=>{await fresh();return p.evaluate(()=>{const {ally,x,z}=fixture,ship=new Humanoid(0,'airship',x+5,z);state.units.push(ship);ship.loadUnit(ally);if(ship.loadUnit(ally))throw new Error('Duplicate cargo');state.selectedUnits=[ship];gameTestAPI.performAction(x,z,'unload');if(ship.passengers.length||!ally.mesh.visible||ally.state==='transported'||state.mana!==1000)throw new Error('Unload action failed');for(let i=0;i<30;i++){state.physicsWorld.step();ally.update(1/60);}if(Math.hypot(ally.mesh.position.x-ship.mesh.position.x,ally.mesh.position.z-ship.mesh.position.z)>.5)throw new Error('Passenger snapped back');});});
+ await check('Airship unload action synchronizes physics and does not charge mana',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {ally,x,z}=fixture,spot=gameTestAPI.findNearestLand(x+10,z,30,gameTestAPI.aiDryHeight());
+   const ship=new Humanoid(0,'airship',spot.x,spot.z);state.units.push(ship);
+   ship.loadUnit(ally);if(ship.loadUnit(ally))throw new Error('Duplicate cargo');
+   // Transport keeps the body disabled. Give it a stale position far from the
+   // landing site so failing to synchronize on unload cannot pass accidentally.
+   const stale={x:spot.x-30,y:50,z:spot.z};ally.rigidBody.setTranslation(stale,false);
+   state.selectedUnits=[ship];gameTestAPI.performAction(x,z,'unload');
+   if(ship.passengers.length||!ally.mesh.visible||ally.state==='transported'||state.mana!==1000)throw new Error('Unload action failed');
+   const landing=ally.mesh.position.clone(),body=ally.rigidBody.translation();
+   if(Math.hypot(body.x-landing.x,body.z-landing.z)>.001||Math.hypot(landing.x-spot.x,landing.z-spot.z)>5.01)throw Error('Unload body and landing site differ');
+   for(let i=0;i<30;i++){state.physicsWorld.step();ally.update(1/60);}
+   const after=ally.mesh.position,physics=ally.rigidBody.translation();
+   if(Math.hypot(after.x-stale.x,after.z-stale.z)<Math.hypot(after.x-landing.x,after.z-landing.z)||Math.hypot(after.x-physics.x,after.z-physics.z)>.01)throw new Error('Passenger snapped back');
+  });
+ });
  await check('No shipyard means no airship mana charge',async()=>{await fresh();return p.evaluate(()=>{const {x,z}=fixture;const u=new Humanoid(0,'wild',x,z);state.units.push(u);gameTestAPI.performAction(x,z,'build_airship');if(state.mana!==1000)throw new Error('Invalid construction charged mana');});});
  await check('Shield/invisibility refresh, expire on simulation time and survive save/load',async()=>{
   await fresh();return p.evaluate(()=>{

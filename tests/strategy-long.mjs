@@ -1,3 +1,4 @@
+import {seedWorld} from './fixtures/seed-world.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -11,7 +12,7 @@ try {
  for(const [personality,seed,minutes,raid] of [['default',84721,20,false],['swarmer',29107,15,true],['sorcerer',71283,15,false],['fortress',41827,15,false]].filter(([name])=>!selectedPersonality||selectedPersonality===name)) {
   const page=await browser.newPage();
   page.on('pageerror',e=>errors.push(String(e)));
-  await page.addInitScript(seed=>{Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};},seed);
+  await seedWorld(page,seed);
   try {
    await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
    await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);
@@ -56,7 +57,7 @@ try {
     };
    },{personality,raid});
    for(let elapsed=0;elapsed<minutes*60;elapsed+=60){await page.evaluate(()=>advanceLongRun(60));if(elapsed%300===0)console.log(`${personality}: ${elapsed+60}/${minutes*60} simulated seconds`);}
-   const detail=await page.evaluate(()=>({classes:longRun.classes,attackDistance:longRun.attackDistance,defended:longRun.defended,recovered:longRun.recovered,raidRepelled:longRun.raidUnits.some(u=>u.hp<u.maxHp||u.state==='dead'||u.faction!==0),raidOutcomes:longRun.raidUnits.map(u=>({faction:u.faction,hp:u.hp,maxHp:u.maxHp,state:u.state})),peakBuildings:longRun.peakBuildings,peakPopulation:longRun.peakPopulation,shamanAlive:state.units.some(u=>u.faction===1&&u.isShaman&&u.state!=='dead'),plan:enemyAIs[0].lastPlan}));
+   const detail=await page.evaluate(()=>({terrainSeed:state.matchSettings.terrainSeed,terrainProfile:state.matchSettings.terrainProfile,classes:longRun.classes,attackDistance:longRun.attackDistance,defended:longRun.defended,recovered:longRun.recovered,raidRepelled:longRun.raidUnits.some(u=>u.hp<u.maxHp||u.state==='dead'||u.faction!==0),raidOutcomes:longRun.raidUnits.map(u=>({faction:u.faction,hp:u.hp,maxHp:u.maxHp,state:u.state})),peakBuildings:longRun.peakBuildings,peakPopulation:longRun.peakPopulation,shamanAlive:state.units.some(u=>u.faction===1&&u.isShaman&&u.state!=='dead'),plan:enemyAIs[0].lastPlan}));
    const pass=detail.shamanAlive&&detail.peakBuildings>=5&&detail.attackDistance>20&&['warrior','firewarrior','spy'].every(t=>detail.classes[t])&&(!raid||(detail.defended&&detail.raidRepelled&&detail.recovered));
    results.push({name:`${personality}: ${minutes} minutes${raid?' with raid and worker losses':''}`,pass,seed,detail});
    console.log((pass?'PASS ':'FAIL ')+JSON.stringify(results.at(-1)));
