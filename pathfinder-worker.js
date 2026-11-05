@@ -19,11 +19,13 @@ function blocked(x,z){
     return nearbyBuildings(x,z).some(b=>(x-b.x)**2+(z-b.z)**2<(b.radius||2)**2);
 }
 function walkableLine(a,b,avoidWater){
-    const dx=b.x-a.x,dz=b.z-a.z,dist=Math.hypot(dx,dz),steps=Math.ceil(dist/(avoidWater?.25:1));
+    const dx=b.x-a.x,dz=b.z-a.z,dist=Math.sqrt(dx*dx+dz*dz),steps=Math.ceil(dist/(avoidWater?.25:1));
     if(steps<=1)return true;
     const safeH=avoidWater&&waterState!=='frozen'?visualWaterLevel+.45:waterLevel-pathfinder.WATER_SAFE_DEPTH;
+    const stepX=dx*(1/dist)*(dist/steps),stepZ=dz*(1/dist)*(dist/steps);
+    let x=a.x,z=a.z;
     for(let i=1;i<steps;i++){
-        const x=a.x+dx*i/steps,z=a.z+dz*i/steps;
+        x+=stepX;z+=stepZ;
         if(height(x,z)<safeH||blocked(x,z))return false;
     }
     return true;
@@ -81,7 +83,7 @@ function findPath(start,end,isFlying,avoidWater,waterExit){
             if(!old){
                 h=height(wx,wz);
                 if(!isFlying&&h<safeH&&!waterExit)continue;
-                const targetDistance=Math.hypot(nx-endNode.x,ny-endNode.y);
+                const targetDistance=Math.sqrt((nx-endNode.x)**2+(ny-endNode.y)**2);
                 if(!isFlying&&targetDistance>pathfinder.TARGET_PROXIMITY&&blocked(wx,wz)){
                     const canExit=startBlocked&&nearbyBuildings(wx,wz).every(b=>{
                         const origin=(start.x-b.x)**2+(start.z-b.z)**2;
@@ -99,11 +101,11 @@ function findPath(start,end,isFlying,avoidWater,waterExit){
                 const h2=height(current.x*grid,(current.y+offset.y)*grid);
                 if((h1<safeH||h2<safeH)&&!waterExit)continue;
             }
-            let cost=Math.hypot(offset.x,offset.y)+Math.abs(h-current.h)*pathfinder.SLOPE_COST_FACTOR;
+            let cost=Math.sqrt(offset.x*offset.x+offset.y*offset.y)+Math.abs(h-current.h)*pathfinder.SLOPE_COST_FACTOR;
             if(h<waterLevel&&waterState!=='frozen')cost+=pathfinder.WATER_COST_PENALTY;
             const g=current.g+cost;
             if(!old||g<old.g){
-                const node={x:nx,y:ny,parent:current,g,h,f:g+Math.hypot(nx-endNode.x,ny-endNode.y)};
+                const node={x:nx,y:ny,parent:current,g,h,f:g+Math.sqrt((nx-endNode.x)**2+(ny-endNode.y)**2)};
                 heap.push(node);open.set(nKey,node);
             }
         }

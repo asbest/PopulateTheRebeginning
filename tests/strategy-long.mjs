@@ -1,4 +1,4 @@
-import {seedWorld} from './fixtures/seed-world.mjs';
+import {seedWorld,startManualSimulation} from './fixtures/seed-world.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -16,6 +16,7 @@ try {
   try {
    await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
    await page.waitForFunction(()=>window.gameTestAPI&&state.shaman);
+   await startManualSimulation(page,seed);
    await page.evaluate(({personality,raid})=>{
     state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;state.isGodMode=false;gameTestAPI.PathWorker.disable();
     state.shaman.hp=1000000;state.shaman.maxHp=1000000;
@@ -24,7 +25,7 @@ try {
     state.clock.getElapsedTime=()=>longRun.time;
     window.advanceLongRun=seconds=>{
      for(let k=0;k<seconds*10;k++){
-      longRun.time+=.1;
+      longRun.time+=.1;state.clock.elapsedTime=longRun.time;
       const ai=enemyAIs[0];
       if(raid&&longRun.time>=360&&!longRun.raidStarted){
        longRun.raidStarted=true;

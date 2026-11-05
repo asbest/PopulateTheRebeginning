@@ -112,8 +112,12 @@ function getHeight(x, z) {
     const qz = Math.round(z * 10);
     const cacheKey = (qx << 16) | (qz & 0xFFFF);
     if (state.heightCache.has(cacheKey)) return state.heightCache.get(cacheKey);
-    let h = getBaseHeight(x, z);
-    h += getTerrainMod(x, z);
+    // A cache cell must describe one fixed world sample. Previously the first
+    // visitor (renderer, physics or navigation) supplied arbitrary coordinates
+    // within this cell, so later heights depended on frame timing/cache order.
+    const sampleX=qx/10,sampleZ=qz/10;
+    let h = getBaseHeight(sampleX, sampleZ);
+    h += getTerrainMod(sampleX, sampleZ);
     state.heightCache.set(cacheKey, h);
     if (state.heightCache.size > 20000) state.heightCache.clear();
     return h;

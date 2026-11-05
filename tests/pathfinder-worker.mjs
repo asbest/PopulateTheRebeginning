@@ -1,3 +1,4 @@
+import {seedWorld,startManualSimulation} from './fixtures/seed-world.mjs';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
@@ -5,11 +6,12 @@ const arg=process.argv.find(value=>value.startsWith('--playwright='))?.slice(13)
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try {
-    const page=await browser.newPage();
+    const page=await browser.newPage();await seedWorld(page,98217);
     const errors=[];page.on('pageerror',error=>errors.push(String(error)));
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
         {waitUntil:'load',timeout:90000});
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
+    await startManualSimulation(page,98217);
     const result=await page.evaluate(async()=>{
         state.isPaused=true;
         const worker=gameTestAPI.PathWorker;
@@ -29,8 +31,9 @@ try {
                 if(!accepted){clearTimeout(timeout);clearInterval(tick);reject(new Error('Worker unavailable'));}
             });
             const reference=expected?.map(p=>[p.x,p.z])??null;
-            routes.push({equal:JSON.stringify(reference)===JSON.stringify(actual.path),
-                fallback:actual.fallback,length:actual.path?.length??null});
+            const equal=JSON.stringify(reference)===JSON.stringify(actual.path);
+            routes.push({equal,fallback:actual.fallback,length:actual.path?.length??null,
+                ...(equal?{}:{reference,actual:actual.path,profile:state.matchSettings.terrainProfile})});
         };
         const player=state.shaman.mesh.position;
         await check(player,gameTestAPI.findNearestLand(player.x+12,player.z+5));
