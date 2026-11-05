@@ -16,7 +16,15 @@ try {
  const detail=await page.evaluate(()=>{
   closeHelp();closeStoryOverlay();state.isPaused=true;
   const p=state.shaman.mesh.position;
-  const hut=gameTestAPI.createBuilding('hut',p.x+5,p.z+2,0);
+  // A fixed offset may be water or another building's footprint on a new
+  // landscape. Exercise normal placement and choose an actual legal site.
+  let hut=null;
+  for(let radius=6;radius<=30&&!hut;radius+=3)for(let i=0;i<24;i++){
+   const angle=i*Math.PI/12;
+   hut=gameTestAPI.createBuilding('hut',p.x+Math.cos(angle)*radius,p.z+Math.sin(angle)*radius,0);
+   if(hut)break;
+  }
+  if(!hut)throw Error('No legal material-test building site near the dry spawn');
   hut.update(hut.totalBuildTime+1);
   state.cameraLookAt.copy(hut.mesh.position);
   state.viewScale=8;

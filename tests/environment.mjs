@@ -50,7 +50,14 @@ try{
    emissive:stoneMesh.material.emissiveIntensity,instanceColors:stoneMesh.instanceColor?.count||0,
    vertexColors:stoneMesh.geometry.attributes.color?.count||0,bushVertexColors:bushMesh.geometry.attributes.color?.count||0,ratio:stones/grass};
   const contacts=[];state.shaman.mesh.traverse(n=>{if(n.userData?.contactShadow)contacts.push(n);});
-  const hut=gameTestAPI.createBuilding('hut',state.shaman.mesh.position.x+6,state.shaman.mesh.position.z,0);
+  let hut=null;
+  const origin=state.shaman.mesh.position;
+  for(let radius=6;radius<=30&&!hut;radius+=3)for(let i=0;i<24;i++){
+   const angle=i*Math.PI/12;
+   hut=gameTestAPI.createBuilding('hut',origin.x+Math.cos(angle)*radius,origin.z+Math.sin(angle)*radius,0);
+   if(hut)break;
+  }
+  if(!hut)throw Error('No legal environment-test building site near the dry spawn');
   hut.mesh.traverse(n=>{if(n.userData?.contactShadow)contacts.push(n);});
   const construction={name:hut.constructionRig?.name,parts:hut.constructionRig?.children.length};
   hut.takeDamage(hut.maxHp*.45,true);const damaged=hut.damageVisual?.visible;
