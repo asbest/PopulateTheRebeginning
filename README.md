@@ -58,14 +58,24 @@ The browser suite includes dedicated effect and mana checks for all 18 spells, t
 
 The existing support links below are preserved.
 
+## License
+
+Project-original code and resources are governed by the
+[Proprietary Game License](LICENSE). You may play the unmodified game privately
+for personal, non-commercial entertainment. Reuse, modification, redistribution,
+rehosting and use in other projects require prior written permission from the
+relevant project rights holders. Third-party components and resources retain
+their own licenses, including the bundled CC0 sounds. GitHub platform rights
+and prior grants remain applicable.
+
 ## License compliance
 
 Third-party dependencies must permit free use, modification and redistribution,
 including commercial use. See [the policy](LICENSE-POLICY.md) and
 [the license audit](docs/LICENSE-AUDIT.md). The full inventory check passes with
 the project owner's recorded attestation for seven AI-generated media uploads.
-This records their provenance; it does not independently verify generator terms
-or grant a project-wide MIT license.
+The inventory records provenance separately from the project's proprietary
+license. It does not independently verify generator terms.
 
 Run `npm run license:check` for the full inventory or
 `npm run license:dependencies` for the dependency portion only. Preserve the

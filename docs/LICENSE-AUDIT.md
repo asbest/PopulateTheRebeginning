@@ -93,10 +93,12 @@ public repository as a second combat track. The inventory records it as
 
 ## Project license and external environment
 
-There was no root project license at the time of review. The owner's request to
-check third-party licensing is not treated as permission to grant the entire game
-to others under MIT. A project-wide license remains a separate owner decision.
-Public GitHub visibility alone is not a copyright license.
+On 2026-11-05, the owner explicitly requested restrictions on reuse of the
+project-original code and resources. The root `LICENSE` now permits personal
+play of the unmodified game and requires prior written permission for other
+uses. Third-party licenses, applicable GitHub platform rights and prior grants
+continue to apply. The inventory's `project-original` records identify provenance
+and use `license: null` to distinguish them from third-party license grants.
 
 No font files are bundled: Segoe UI/system-ui are locally available system-font
 references. No Google Chrome executable is distributed in this repository; it is

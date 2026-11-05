@@ -1,4 +1,4 @@
-# Free-use licensing policy
+# Project and third-party licensing policy
 
 Third-party software used by this project must be under an OSI-approved license
 permitting use, modification and redistribution, including commercial use.
@@ -11,11 +11,16 @@ MIT, Apache-2.0, BSD, ISC, 0BSD and LGPL are different licenses; keep their noti
 and satisfy the applicable conditions. A license with obligations is not the same
 as a fee-charging or non-commercial-only license.
 
-This policy **does not license the owner's game code or original artwork to third
-parties**. No project-wide MIT grant is inferred from a public repository or from
-this audit request. Such a grant needs the rights holder's explicit decision.
-`project-original` in the asset inventory records documented project authorship,
-not an open-source license grant or an independent ownership guarantee.
+The project-original game code and resources are governed by the root
+[proprietary game license](LICENSE), added at the owner's request on 2026-11-05.
+It permits personal play of the unmodified game and reserves other uses for
+prior written permission. The free-use requirements above apply to third-party
+dependencies and assets. Their existing license grants continue to apply.
+
+`project-original` in the asset inventory records documented project authorship.
+Its `license: null` field distinguishes provenance records from third-party
+license grants. The root license applies to those original resources to the
+extent the project rights holders hold the relevant rights.
 
 ## Review and checks
 

@@ -1,0 +1,58 @@
+Populate The Rebeginning
+Proprietary Game License
+
+Copyright (c) 2026 AS Consulting and the respective project contributors.
+All rights reserved.
+
+1. Scope
+
+This license applies to the original code and resources of Populate The
+Rebeginning, to the extent the project rights holders hold the relevant rights.
+It includes source code, scripts, shaders, documentation, graphics, textures,
+models, editable source assets, animations, music, sound effects and other
+project-original resources, including their converted and generated versions.
+
+Third-party components and resources are governed by section 4.
+
+2. Limited permission to play
+
+You may access and play the unmodified game for personal, non-commercial
+entertainment through a distribution authorized by the project rights holders.
+You may make the local copies strictly necessary to run that distribution
+privately in your browser.
+
+3. Other uses require written permission
+
+No permission is granted to use the original code or resources for any other
+purpose. Without prior written permission from the relevant project rights
+holders, you may not reuse, extract for reuse, modify, adapt, incorporate into
+another project, redistribute, sell, sublicense, publicly rehost or otherwise
+exploit the original code or resources, in whole or in part. These restrictions
+apply to both commercial and non-commercial uses.
+
+Public access to this repository does not grant an open-source license or
+permission to reuse its original content. Rights that GitHub's applicable terms
+provide for viewing and forking a public repository on GitHub are unaffected.
+Such platform rights do not grant permission for other uses of the original
+content.
+
+4. Third-party rights and prior grants
+
+Third-party software and resources retain their own licenses and notices.
+Consult licenses/vendor.json, licenses/assets.json, package-lock.json and the
+bundled notices for component-specific provenance and terms. This license
+does not restrict permissions granted by those licenses, including permissions
+for CC0 resources, or rights that cannot lawfully be restricted.
+
+The restrictions in this license do not revoke permissions previously granted
+by the relevant rights holders. No ownership of third-party content or rights
+in the Populous name or franchise is claimed by this license.
+
+5. Warranty
+
+The game and its original content are provided as is, without warranties,
+to the extent permitted by applicable law. Mandatory statutory rights remain
+unaffected.
+
+For uses beyond section 2, obtain written permission from the relevant project
+rights holders before using the original code or resources.
