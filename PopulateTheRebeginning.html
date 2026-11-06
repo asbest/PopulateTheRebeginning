@@ -1064,6 +1064,9 @@ const CONFIG = {
     AI: {
         AGGRESSION_RANGE: 30,
         THINK_INTERVAL: 5.0,
+        RECRUIT_INTERVAL: 12,
+        WORKER_TARGET: 4,
+        FOLLOW_UP_ATTACK_SIZE: 4,
         SHAMAN_SPELL_RANGE_BASE: 10.0,
         AI_SPELL_COOLDOWN_DEFAULT: 5.0,
         AI_SPELL_COOLDOWN_SORCERER: 2.5,
@@ -9266,6 +9269,8 @@ class EnemyAI {
         if (this.personality === 'primordial') this.targetHutCount = CONFIG.AI.TARGET_HUT_COUNT_PRIMORDIAL;
         this.knownUnitCounts = { warrior: 0, firewarrior: 0, preacher: 0, spy: 0, airship: 0 };
         this.lossQueue = [];
+        this.recruitCooldown = CONFIG.AI.RECRUIT_INTERVAL;
+        this.hasLaunchedAttack = false;
         this.blockedBuildSites = [];
         this.pathQueue = new Map();
     }
@@ -9288,6 +9293,7 @@ class EnemyAI {
     }
 
     update(dt) {
+        this.recruitCooldown = Math.max(0, this.recruitCooldown - dt);
         this.spellCooldown=Math.max(0,(this.spellCooldown||0)-dt);
         this.bridgeCooldown=Math.max(0,(this.bridgeCooldown||0)-dt);
         this.timer+=dt;
@@ -9430,7 +9436,8 @@ class EnemyAI {
         this.spellCooldown=this.personality==='sorcerer'?3:6;return true;
     }
     think() {
-        const units=state.units.filter(u=>u.faction===this.faction&&u.state!=='dead'&&u.state!=='transported'&&!u.isPhantom);
+        const members = state.units.filter(u => u.faction === this.faction && u.state !== 'dead' && !u.isPhantom);
+        const units = members.filter(u => u.state !== 'transported');
         const buildings=state.buildings.filter(b=>b.faction===this.faction&&!b.dead);
         const foes=isPeaceTime()?[]:state.units.filter(u=>!window.isAllied(u.faction,this.faction)&&!['dead','transported'].includes(u.state)&&!u.invisible);
         for(const u of units) {
@@ -9495,36 +9502,69 @@ class EnemyAI {
                 else if(this.distance(shaman.mesh.position,home)>12)this.moveUnit(shaman,refuge(shaman),'support');
             }
         }
+        // One safe, finished hut can replace a worker even after the shaman falls.
+        const isSafe = building => !threats.some(enemy => this.distance(enemy.mesh.position, building.mesh.position) < 12);
+        if (members.length && this.recruitCooldown === 0 && members.filter(u => u.type === 'wild').length < CONFIG.AI.WORKER_TARGET) {
+            this.recruitCooldown = CONFIG.AI.RECRUIT_INTERVAL;
+            for (const hut of buildings) {
+                if (hut.type !== 'hut' || hut.underConstruction || !isSafe(hut)) continue;
+                const center = hut.mesh.position;
+                const radius = hut.collisionRadius + 1;
+                let recruit = null;
+                for (let i = 0; i < 8; i++) {
+                    const angle = i * Math.PI / 4;
+                    const x = center.x + Math.cos(angle) * radius;
+                    const z = center.z + Math.sin(angle) * radius;
+                    if (getSurfaceHeight(x, z) < aiDryHeight() || isBlocked(x, z)) continue;
+                    recruit = new Humanoid(this.faction, 'wild', x, z);
+                    state.units.push(recruit);
+                    workers.push(recruit);
+                    break;
+                }
+                if (recruit) break;
+            }
+        }
         // Builders take shelter during raids; never feed the entire economy into training.
         const builders=workers.slice(0,Math.min(2,workers.length));
         builders.forEach(u=>{u.aiTrainingTarget=null;u.aiRole='builder';if(threats.length)this.moveUnit(u,refuge(u),'shelter');});
-        const projected={warrior:0,firewarrior:0,preacher:0,spy:0};army.forEach(u=>projected[u.type]++);
+        const projected = {warrior:0,firewarrior:0,preacher:0,spy:0};
+        for (const u of members) if (Object.hasOwn(projected, u.type)) projected[u.type]++;
         buildings.forEach(b=>(b.trainingQueue||[]).forEach(q=>{if(q.type in projected)projected[q.type]++;}));
         const weights={warrior:this.personality==='swarmer'?4:3,firewarrior:this.personality==='sorcerer'?4:2,
             preacher:2,spy:this.personality==='trickster'?2:1};
         const facilities={warrior:'warrior',firewarrior:'fire',preacher:'preacher',spy:'spy'};
-        for(const u of workers.slice(builders.length)){
-            if(threats.length){u.aiTrainingTarget=null;this.moveUnit(u,refuge(u),'shelter');continue;}
-            const choices=Object.keys(projected).filter(t=>buildings.some(b=>b.type===facilities[t]&&!b.underConstruction));
-            choices.sort((a,b)=>(projected[a]/weights[a])-(projected[b]/weights[b]));
-            if(!choices.length)continue;
-            const type=choices[0],school=nearest(buildings.filter(b=>b.type===facilities[type]&&!b.underConstruction),u.mesh.position);
-            u.aiTrainingTarget=school.id;
-            if(this.moveUnit(u,school.mesh.position,'train'))projected[type]++;
+        const schools = buildings.filter(b => !b.underConstruction && isSafe(b));
+        for (const u of workers.slice(builders.length)) {
+            u.aiTrainingTarget = null;
+            const choices = Object.keys(projected).sort((a, b) => projected[a] / weights[a] - projected[b] / weights[b]);
+            for (const type of choices) {
+                const school = nearest(schools.filter(b => b.type === facilities[type] &&
+                    !this.pathFailed(u, b.mesh.position, 'train')), u.mesh.position);
+                if (!school) continue;
+                u.aiTrainingTarget = school.id;
+                if (this.moveUnit(u, school.mesh.position, 'train')) {
+                    projected[type]++;
+                    break;
+                }
+                u.aiTrainingTarget = null;
+            }
+            if (!u.aiTrainingTarget && threats.length) this.moveUnit(u, refuge(u), 'shelter');
         }
         // A small reserve guards the settlement even while the main force raids.
         const reserve=Math.max(2,Math.ceil(fit.length*.3));
         const enemyBuildings=state.buildings.filter(b=>!b.dead&&!window.isAllied(b.faction,this.faction));
         const target=isPeaceTime()?null:nearest(enemyBuildings.length?enemyBuildings:foes,home);
-        const ready=fit.length>=(['swarmer','hive'].includes(this.personality)?5:7);
+        const firstAttackSize = ['swarmer','hive'].includes(this.personality) ? 5 : 7;
+        const ready = fit.length >= (this.hasLaunchedAttack ? CONFIG.AI.FOLLOW_UP_ATTACK_SIZE : firstAttackSize);
         fit.forEach((u,i)=>{
             if(threats.length){
                 const danger=nearest((u.type==='firewarrior'||u.type==='warrior')?
                     threats.filter(t=>t.type==='preacher'):[],u.mesh.position)||nearest(threats,u.mesh.position);
                 this.engage(u,danger,'defend');return;
             }
-            if(ready&&i>=reserve&&target){
-                this.state='attack';
+            if (target && (ready ? i >= reserve : u.aiRole === 'attack')) {
+                this.hasLaunchedAttack = true;
+                this.state = 'attack';
                 const nearby=foes.filter(e=>this.distance(e.mesh.position,u.mesh.position)<12);
                 const priority=['firewarrior','warrior'].includes(u.type)?nearby.filter(e=>e.type==='preacher'):[];
                 this.engage(u,nearest(priority.length?priority:nearby,u.mesh.position)||target,'attack');
@@ -11405,7 +11445,9 @@ window.saveGame = function(slot=activeSaveSlot) {
             baseX: ai.baseX,
             baseZ: ai.baseZ,
             lastBridgeTime: ai.lastBridgeTime,
-            lastSpellTime: ai.lastSpellTime
+            lastSpellTime: ai.lastSpellTime,
+            recruitCooldown: ai.recruitCooldown,
+            hasLaunchedAttack: ai.hasLaunchedAttack
         })),
         teams: state.teams,
 
@@ -11570,6 +11612,8 @@ window.loadGame = function(slot=activeSaveSlot) {
                 ai.baseZ = aiData.baseZ;
                 ai.lastBridgeTime = aiData.lastBridgeTime;
                 ai.lastSpellTime = aiData.lastSpellTime;
+                if (Number.isFinite(aiData.recruitCooldown)) ai.recruitCooldown = THREE.MathUtils.clamp(aiData.recruitCooldown, 0, CONFIG.AI.RECRUIT_INTERVAL);
+                ai.hasLaunchedAttack = aiData.hasLaunchedAttack ?? (aiData.state === 'attack');
                 window.enemyAIs.push(ai);
             });
         }

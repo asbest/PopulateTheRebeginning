@@ -44,6 +44,47 @@ await check('Units leave building footprints and shed obsolete roles after conve
  u.aiRole='guard';u.aiTrainingTarget=123;u.setFaction(2);
  if(u.aiRole||u.aiTrainingTarget)throw new Error('Conversion retained old AI orders');
 }));
+await check('After heavy losses a surviving tribe recruits, trains and attacks again without its shaman',()=>p.evaluate(()=>{
+ if(!testAI.hasLaunchedAttack)throw Error('The tribe never launched its first attack');
+ for(const u of state.units)if(u.faction===2&&u.state!=='dead')u.die();
+ for(const building of state.buildings)state.scene.remove(building.mesh);
+ state.buildings=[];
+ gameTestAPI.BuildingSpatialHash.markDirty();
+ testAI.pendingBuild=null;
+ testAI.blockedBuildSites=[];
+ state.shaman.placeOnGround(35,0);
+ for(const [type,x] of [['hut',-31],['warrior',-18]]){
+  const building=gameTestAPI.createBuilding(type,x,-10,2,false,true);
+  building.underConstruction=false;
+ }
+ const survivor=new Humanoid(2,'warrior',-26,-14);
+ survivor.aiRole='attack';
+ state.units.push(survivor);
+ testAI.think();
+ if(survivor.aiRole!=='attack')throw Error('A surviving attacker was recalled after casualties');
+ const waves=[];
+ for(let wave=0;wave<2;wave++){
+  const oldTroops=new Set(state.units);
+  let attacker;
+  for(let elapsed=0;elapsed<160&&!attacker;elapsed+=5){
+   aiStep(5);
+   attacker=state.units.find(u=>!oldTroops.has(u)&&u.faction===2&&u.type==='warrior'&&u.state!=='dead'&&u.aiRole==='attack');
+  }
+  if(!attacker)throw Error('No replacement attack wave '+(wave+1)+': '+JSON.stringify(testAI.lastPlan));
+  const start=attacker.mesh.position.clone();
+  aiStep(4);
+  if(attacker.mesh.position.distanceTo(start)<.5)throw Error('Replacement attacker did not advance');
+  waves.push(attacker.id);
+  for(const u of state.units)if(u.faction===2&&u!==survivor&&u.state!=='dead')u.die();
+  survivor.placeOnGround(-26,-14);
+  state.shaman.placeOnGround(35,0);
+ }
+ survivor.die();
+ const before=state.units.length;
+ testAI.update(CONFIG.AI.RECRUIT_INTERVAL+2);
+ if(state.units.length!==before)throw Error('An eliminated tribe recruited new workers');
+ return {waves:waves.length};
+}));
 await p.close();
 await check('Enemy routes stay dry and troops climb steep banks from water and land',async()=>{
  const water=await b.newPage();water.on('pageerror',e=>errors.push(String(e)));
