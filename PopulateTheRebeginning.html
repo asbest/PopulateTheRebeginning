@@ -730,7 +730,7 @@ import { createTerrainStream } from './art/terrain-stream.js';
 import { createSceneryBatches } from './art/scenery-batches.js';
 import { createCharacterBatches } from './art/character-batches.js';
 import { createBattleWork, createBattleProfiler } from './art/battle-work.js';
-import { observeEnemy, counterWeights, chooseBattleSpell, formationPoint } from './art/enemy-tactics.js';
+import { observeEnemy, counterWeights, chooseBattleSpell, formationPoint, isMagicThreat } from './art/enemy-tactics.js';
 import {assetURL} from './art/asset-urls.js';
 import {installAssetCache,cacheCurrentAssets} from './art/asset-cache.js';
 const localStorage=createBrowserStorage();
@@ -6344,7 +6344,7 @@ class Fireball {
             u.applyForce(new THREE.Vector3(nx * shove, lift, nz * shove),
                 vehicle ? (this.unitShot ? 5.5 : 8) : (this.unitShot ? 4.5 : 5.5),
                 vehicle ? 6 : 8, vehicle ? 1 : (this.unitShot ? .7 : .6));
-            u.takeDamage(this.unitDamage*radialDamageFactor(distance,radius));
+            u.takeDamage(this.unitDamage*radialDamageFactor(distance,radius),false,true,'magic');
             const burnDuration=3*falloff;
             // Spread the visual emitters across one interval. Damage and impulse stay immediate.
             if(burnPhaseStep&&!(u.burnTimer>0)&&u.state!=='dead')
@@ -6535,7 +6535,7 @@ class Volcano extends ActiveEffect {
                     const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
                     u.applyForce(dir.multiplyScalar(3.5).add(new THREE.Vector3(0, 2.2, 0)));
                     u.takeDamage(CONFIG.COMBAT.VOLCANO_TICK_DAMAGE*
-                        radialDamageFactor(dist,CONFIG.COMBAT.VOLCANO_TICK_RADIUS));
+                        radialDamageFactor(dist,CONFIG.COMBAT.VOLCANO_TICK_RADIUS),false,true,'magic');
                 }
             });
             state.buildings.forEach(b => {
@@ -6646,7 +6646,7 @@ class Swamp extends ActiveEffect {
                 const dist = Math.sqrt((u.mesh.position.x - this.pos.x)**2 + (u.mesh.position.z - this.pos.z)**2);
                 if(dist < this.radius * 0.8) {
                     u.takeDamage(CONFIG.COMBAT.SWAMP_DPS*dt*
-                        radialDamageFactor(dist,this.radius*.8),true,false);
+                        radialDamageFactor(dist,this.radius*.8),true,false,'magic');
                 }
             }
         });
@@ -6774,7 +6774,7 @@ class Tornado extends ActiveEffect {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < CONFIG.COMBAT.TORNADO_RADIUS && u.faction !== this.faction) {
                  u.applyForce(new THREE.Vector3((Math.random()-0.5)*3, 1.2, (Math.random()-0.5)*3));
-                 u.takeDamage(damagePerSecond*dt*radialDamageFactor(d,CONFIG.COMBAT.TORNADO_RADIUS),true,false);
+                 u.takeDamage(damagePerSecond*dt*radialDamageFactor(d,CONFIG.COMBAT.TORNADO_RADIUS),true,false,'magic');
             }
         });
         state.buildings.forEach(b => {
@@ -6922,7 +6922,7 @@ class Swarm extends ActiveEffect {
         SpatialHash.query(this.pos.x, this.pos.z, 4).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < 4 && u.faction !== this.faction) {
-                u.takeDamage(CONFIG.COMBAT.SWARM_DPS*dt*radialDamageFactor(d,4),true,false);
+                u.takeDamage(CONFIG.COMBAT.SWARM_DPS*dt*radialDamageFactor(d,4),true,false,'magic');
             }
         });
 
@@ -7252,7 +7252,7 @@ function executeSpell(type, x, z, caster) {
         SpatialHash.query(x, z, 4).forEach(u => {
              const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
              if(dist < 4 && u.faction !== caster.faction) {
-                 u.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE*radialDamageFactor(dist,4));
+                 u.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE*radialDamageFactor(dist,4),false,true,'magic');
                  const forceDir = u.mesh.position.clone().sub(new THREE.Vector3(x, h, z)).normalize();
                  forceDir.y = 0.8;
                  u.applyForce(forceDir.multiplyScalar(2.5));
@@ -7274,7 +7274,7 @@ function executeSpell(type, x, z, caster) {
                 });
                 if(!next)break;
                 next.takeDamage(CONFIG.COMBAT.LIGHTNING_CHAIN_DAMAGE*(1-jump*.2)*
-                    radialDamageFactor(nearest,CONFIG.COMBAT.LIGHTNING_CHAIN_RADIUS));
+                    radialDamageFactor(nearest,CONFIG.COMBAT.LIGHTNING_CHAIN_RADIUS),false,true,'magic');
                 spawnPulse(next.mesh.position.x,next.mesh.position.y,next.mesh.position.z,0xFFFFFF);
                 struck.add(next);current=next;
             }
@@ -7621,10 +7621,10 @@ window.Humanoid = class Humanoid {
         this.mesh.rotation.y = Math.atan2(dx, dz);
     }
 
-    takeDamage(amount, silent = false, impact = true) {
+    takeDamage(amount, silent = false, impact = true, source = 'physical') {
         if(this.state === 'dead') return;
         if(this.faction === 0 && state.isGodMode) return;
-        if(this.shielded) {
+        if(this.shielded && source==='magic') {
             if (!silent) HitPulseManager.add(this.mesh.position.x, this.mesh.position.y + 1, this.mesh.position.z, 0x00FFFF);
             return;
         }
@@ -8138,13 +8138,13 @@ window.Humanoid = class Humanoid {
                  SoundManager.playSound('fireball',.45);
             } else if (this.type === 'preacher') {
                 if(!PreacherConversion.eligible(this,target)){
-                    target.takeDamage(this.damage,true);SoundManager.playSound('magic');
+                    target.takeDamage(this.damage,true,true,'magic');SoundManager.playSound('magic');
                 }
             } else if (this.type === 'spy') {
                 target.takeDamage(this.damage,true);
                 SoundManager.playSound('attack');
             } else if (this.type === 'shaman') {
-                target.takeDamage(this.damage, true);
+                target.takeDamage(this.damage,true,true,'magic');
                 SoundManager.playSound('magic');
                 staffRay(this,target.mesh.position.clone().add(new THREE.Vector3(0,1,0)));
             } else {
@@ -8179,7 +8179,7 @@ window.Humanoid = class Humanoid {
 
         if (this.burnTimer > 0) {
             this.burnTimer = Math.max(0,this.burnTimer-dt);
-            this.takeDamage(CONFIG.COMBAT.FIREBALL_BURN_DPS*dt,true,false);
+            this.takeDamage(CONFIG.COMBAT.FIREBALL_BURN_DPS*dt,true,false,'magic');
             FireballFxManager.burn(this,dt);
         }
 
@@ -9715,7 +9715,9 @@ class EnemyAI {
             const shaman=this.myShaman,near=foes.filter(e=>this.distance(e.mesh.position,shaman.mesh.position)<14);
             const support=army.filter(u=>this.distance(u.mesh.position,shaman.mesh.position)<14).length;
             if(shaman.hp/shaman.maxHp<.5||near.length>support+2){
-                this.moveUnit(shaman,refuge(shaman),'retreat');this.cast(shaman.hp<shaman.maxHp*.7?'heal':'shield',shaman.mesh.position);
+                this.moveUnit(shaman,refuge(shaman),'retreat');
+                if(shaman.hp<shaman.maxHp*.7)this.cast('heal',shaman.mesh.position);
+                else if(near.some(isMagicThreat))this.cast('shield',shaman.mesh.position);
             }else{
                 shaman.aiRole='support';
                 if(workers.length<3)this.cast('create',home);

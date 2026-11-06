@@ -194,17 +194,19 @@ try {
             Humanoid.prototype.takeDamage.call(unit,150,true);
             if(calls.length!==2||calls[1].name!=='hurt_heavy')throw new Error('Heavy hit did not use the stronger reaction');
             unit.shielded=true;unit.lastPainAt=sound.lastPainAt=-Infinity;
+            Humanoid.prototype.takeDamage.call(unit,40,true,true,'magic');
+            if(calls.length!==2)throw new Error('Blocked magic played a pain sound');
             Humanoid.prototype.takeDamage.call(unit,40,true);
-            if(calls.length!==2)throw new Error('Shielded figure cried out');
-            unit.shielded=false;
+            if(calls.length!==3||calls[2].name!=='hurt')throw new Error('Shield suppressed the physical hit reaction');
+            unit.shielded=false;unit.lastPainAt=sound.lastPainAt=-Infinity;
             Humanoid.prototype.takeDamage.call(unit,1,true,false);
-            if(calls.length!==2)throw new Error('Drowning tick played a hit sound');
+            if(calls.length!==3)throw new Error('Drowning tick played a hit sound');
             unit.mesh.position.x=100;
             Humanoid.prototype.takeDamage.call(unit,30,true);
-            if(calls.length!==2)throw new Error('Distant combat played a pain sound');
+            if(calls.length!==3)throw new Error('Distant combat played a pain sound');
             unit.mesh.position.x=1;unit.type='airship';
             Humanoid.prototype.takeDamage.call(unit,30,true);
-            if(calls.length!==2)throw new Error('Airship made a human pain sound');
+            if(calls.length!==3)throw new Error('Airship made a human pain sound');
             return calls;
         } finally {
             sound.playSound=previous.play;sound.lastPainAt=previous.lastPainAt;

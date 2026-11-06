@@ -138,8 +138,10 @@ await check('Battle spells score groups and campaign AI guards or intercepts obj
  const allies=[unit(0,0),unit(1,0),unit(2,0)],foes=[unit(12,0),unit(12,1),unit(13,0),unit(13,1)];
  const cast=(friends,enemies,otherTribe)=>chooseBattleSpell(friends,enemies,()=>true,otherTribe)?.type;
  if(cast(allies,foes)!=='blast'||cast(allies,foes,[unit(12,0)])==='blast')throw Error('Fireball cluster or allied safety was ignored');
- if(cast(allies,[unit(10,0)])!=='shield'||cast([unit(0,0,20),unit(1,0,20)],[])!=='heal')
-  throw Error('Support spells ignored an exposed or wounded group');
+ const mage={...unit(10,0),type:'firewarrior'};
+ if(cast(allies,[mage])!=='shield'||cast(allies,[unit(10,0)])==='shield'||
+    cast([unit(0,0,20),unit(1,0,20)],[])!=='heal')
+  throw Error('Support spells ignored damage type or group injuries');
  const ai=new testAI.constructor(2),home={x:-20,z:0};
  state.isCampaign=true;
  state.campaignMission={rule:{kind:'capture'},sites:[{x:-17,z:0,captured:true},{x:-12,z:0,progress:5},{x:-10,z:0}]};

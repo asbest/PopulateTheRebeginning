@@ -254,6 +254,7 @@ try{
                         throw new Error('Worker does not share warrior pose: '+part+'/'+phase);
             }
             let now=10;state.clock.getElapsedTime=()=>now;
+            warrior.setShield(true);
             worker.attackTarget=warrior;worker.lastAttackTime=now;worker.attackFired=false;
             const hp=warrior.hp;now+=.49;worker.attack();
             if(warrior.hp!==hp)throw new Error('Fist deals damage before contact');
@@ -277,6 +278,7 @@ try{
                 const u=new Humanoid(0,'warrior',x,z),target=new Humanoid(1,'warrior',x,z+.95);
                 state.units=[u,target];state.selectedUnits=[u];
                 u.placeOnGround(x,z);target.placeOnGround(x,z+.95);target.hp=target.maxHp=1000;
+                target.setShield(true);
                 u.lastAttackTime=-100;u.nextTargetCheck=Infinity;
                 const start=now;u.beginManualAttack(target.mesh.position.x,target.mesh.position.z);
                 let peak=0,hitAt=null,contact=null,shieldFacing=0,elbowAtHit=0;

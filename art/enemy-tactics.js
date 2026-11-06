@@ -1,6 +1,7 @@
 const CELL_SIZE=32;
 const CONTACT_LIFETIME=45;
 export const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
+export const isMagicThreat=unit=>unit.type==='shaman'||unit.type==='firewarrior';
 
 export function observeEnemy(observers,candidates,memory,now){
     const cells=new Map();
@@ -53,7 +54,7 @@ export function chooseBattleSpell(friends,foes,inRange,allied=[]){
         const group=nearby.filter(friend=>distance(point,friend.mesh.position)<7.5);
         const injury=group.reduce((sum,friend)=>sum+1-friend.hp/friend.maxHp,0);
         if(injury>healScore){healScore=injury;heal=point;}
-        if(!foes.some(enemy=>distance(point,enemy.mesh.position)<13))continue;
+        if(!foes.some(enemy=>isMagicThreat(enemy)&&distance(point,enemy.mesh.position)<13))continue;
         const exposed=group.filter(friend=>!friend.shielded).length;
         if(exposed>shieldScore){shieldScore=exposed;shield=point;}
     }

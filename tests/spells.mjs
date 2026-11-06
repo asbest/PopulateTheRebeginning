@@ -321,7 +321,19 @@ try{
   expect(castingSounds.includes(expectedSound),'Wrong or missing casting sound for '+spell+': '+castingSounds);
   if(spell==='teleport'){for(let i=0;i<30;i++){state.physicsWorld.timestep=1/60;state.physicsWorld.step();caster.update(1/60);}expect(Math.hypot(caster.mesh.position.x-x,caster.mesh.position.z-z)<.2,'Teleport snapped back');}
   if(spell==='heal')expect(ally.hp===1000&&enemy.hp===1000,'Heal faction/health');
-  if(spell==='shield'){expect(ally.shielded&&!enemy.shielded,'Shield faction');ally.takeDamage(100,true);expect(ally.hp===500,'Shield did not block damage');}
+  if(spell==='shield'){
+   expect(ally.shielded&&!enemy.shielded,'Shield faction');
+   gameTestAPI.executeSpell('lightning',x,z,enemy);
+   const impact=ally.mesh.position.clone().add(new THREE.Vector3(0,1,0));
+   const fireball=new gameTestAPI.Fireball(impact,impact,enemy.faction);
+   fireball.explode();
+   expect(ally.burnTimer>0,'Fireball missed the shielded unit');
+   ally.updateTicker=0;
+   ally.update(.1);
+   expect(ally.hp===500,'Shield did not block lightning, fireball or its burn damage');
+   ally.takeDamage(100,true);
+   expect(ally.hp===400&&ally.shielded,'Physical damage did not pass through the shield');
+  }
   if(spell==='invisibility')expect(ally.invisible&&!enemy.invisible,'Invisibility faction');
   if(spell==='hypnotise'){expect(enemy.faction===0&&enemy.originalFaction===1,'Conversion failed');enemy.conversionTimer=.01;enemy.update(.02);expect(enemy.faction===1,'Conversion did not revert');}
   if(spell==='create')expect(state.units.length===before.units+1&&state.units.at(-1).faction===0,'Create failed');
