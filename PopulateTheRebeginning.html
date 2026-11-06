@@ -717,6 +717,7 @@ import { createTrainingProgress } from './art/training-progress.js';
 import { icon } from './art/icons.js';
 import { createTreeFire } from './art/tree-fire.js';
 import { createLightningFx } from './art/lightning-fx.js';
+import { createHealingFx } from './art/healing-fx.js';
 import { CAMPAIGN_STORIES, CAMPAIGN_ENDINGS } from './art/campaign-story.js';
 import { CAMPAIGN_MISSIONS } from './art/campaign-missions.js';
 import { createBrowserStorage } from './art/browser-storage.js';
@@ -4170,31 +4171,7 @@ const HitPulseManager = {
     }
 };
 
-function spawnHealing(x, y, z) {
-    const group = new THREE.Group();
-    group.position.set(x, y, z);
-
-    // Cross shape
-    const mat = new THREE.MeshBasicMaterial({color: COLORS.hpGreen, transparent: true, opacity: 0.8});
-    const vGeo = new THREE.BoxGeometry(0.1, 0.6, 0.1);
-    const hGeo = new THREE.BoxGeometry(0.6, 0.1, 0.1);
-    const vMesh = new THREE.Mesh(vGeo, mat);
-    const hMesh = new THREE.Mesh(hGeo, mat);
-    group.add(vMesh); group.add(hMesh);
-
-    // Light
-    const light = new THREE.PointLight(0x00FF00, 1, 5);
-    group.add(light);
-
-    state.particles.push(new VisualEffect(group, 1.5, (eff, dt) => {
-        eff.mesh.position.y += 2.0 * dt;
-        eff.mesh.rotation.y += 3.0 * dt;
-        const opacity = eff.life / eff.maxLife;
-        vMesh.material.opacity = opacity;
-        hMesh.material.opacity = opacity;
-        light.intensity = opacity;
-    }));
-}
+const HealingFx=createHealingFx(THREE,state,COLORS.hpGreen);
 
 function spawnDust(x, y, z, color, radius) {
     const numDust = Math.floor(radius * 2.5);
@@ -6188,6 +6165,7 @@ const FireballFxManager={
                 light.position.set(effect.x,getHeight(effect.x,effect.z)+5,effect.z);
                 light.intensity=1.8+Math.sin(effect.timer*7)*.35;
             }
+            slot=HealingFx.fillLights(this.lights,slot);
         }
         // Keep the light count stable within a quality tier. Changing visibility
         // recompiles terrain and character shaders during overlapping impacts.
@@ -6357,6 +6335,7 @@ function prewarmSpellShaders() {
     HitPulseManager.prewarm();
     FirewarriorFlames.prewarm();
     FireballFxManager.prewarm();
+    HealingFx.prepareRoot();
     const existingLights=[];
     state.scene.traverse(node=>{if(node.isPointLight)existingLights.push([node,node.visible]);});
     const start = state.shaman.mesh.position.clone().add(new THREE.Vector3(0, 3, 0));
@@ -7087,7 +7066,7 @@ function executeSpell(type, x, z, caster) {
                     if(u.hp<u.maxHp && !u.isPhantom) healedFollowers++;
                     u.hp = u.maxHp;
                     u.hpBar.scale.x = 1.0;
-                    spawnHealing(u.mesh.position.x, u.mesh.position.y + 2, u.mesh.position.z);
+                    HealingFx.add(u.mesh.position.x, u.mesh.position.y + 2, u.mesh.position.z);
                 }
             }
         });
@@ -8426,7 +8405,7 @@ window.Humanoid = class Humanoid {
                 this.hpBar.scale.x = Math.max(0, this.hp / this.maxHp);
                 this.healTimer = (this.healTimer || 0) + dt * 20;
                 if(this.healTimer > 0.5) {
-                    spawnHealing(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z);
+                    HealingFx.add(this.mesh.position.x, this.mesh.position.y + 2, this.mesh.position.z);
                     this.healTimer = 0;
                 }
             }
@@ -10650,8 +10629,11 @@ async function init() {
         // and vegetation-fire resources in a single loading-screen pixel before accepting spell input.
         const fireMesh=treeFire.prepareRoot(),fireCount=fireMesh.count;
         fireMesh.count=Math.max(1,fireCount);
-        const lightningReady=Promise.all([...LightningFx.prepareRoots(),fireMesh]
+        const healingMesh=HealingFx.prepareRoot();
+        if(healingMesh)healingMesh.count=1;
+        const lightningReady=Promise.all([...LightningFx.prepareRoots(),fireMesh,healingMesh].filter(Boolean)
             .map(root=>SettlementPreparation.prepareRoot(root,false,false,true)));
+        if(healingMesh)healingMesh.count=0;
         fireMesh.count=fireCount;
         await lightningReady;
         await showLoadingStatus('Preparing building graphics…');
@@ -10663,7 +10645,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -11566,6 +11548,7 @@ window.loadGame = function(slot=activeSaveSlot) {
         SpellWindup.clear();
         FirewarriorFlames.clear();
         FireballFxManager.clear();
+        HealingFx.clear();
         state.selectedUnits = [];
         state.selectedBuilding = null;
         state.shaman = null;
@@ -12697,6 +12680,7 @@ function animate() {
     for(let i = state.particles.length-1; i>=0; i--) { if(!state.particles[i].update(dt)) state.particles.splice(i, 1); }
     HitPulseManager.update(dt);
     FirewarriorFlames.update();
+    HealingFx.update(dt);
     FireballFxManager.update(dt);
     BattleWork.end();BattleProfiler.add('simulation',performance.now()-simulationStart);
     }

@@ -49,6 +49,8 @@ try {
         };
         const sample=()=>{
             const times=[];
+            let pointLights=0;
+            state.scene.traverseVisible(node=>{if(node.isPointLight)pointLights++;});
             for(let i=0;i<5;i++){
                 healthBarCalls=0;healthBarParts=0;
                 const start=performance.now();
@@ -56,8 +58,9 @@ try {
                 state.renderer.getContext().finish();
                 times.push(performance.now()-start);
             }
+            const firstMs=times[0];
             times.sort((a,b)=>a-b);
-            return {medianMs:times[2],calls:state.renderer.info.render.calls,
+            return {firstMs,medianMs:times[2],pointLights,calls:state.renderer.info.render.calls,
                 triangles:state.renderer.info.render.triangles,particles:state.particles.length,
                 programs:state.renderer.info.programs.length,healthBarCalls,healthBarParts};
         };
@@ -103,17 +106,40 @@ try {
         gameTestAPI.HitPulseManager.update(.71);
         const expired=gameTestAPI.HitPulseManager.active.length===0&&
             gameTestAPI.HitPulseManager.meshes.every(mesh=>mesh.count===0&&!mesh.visible);
+        // A group hit inside a settlement starts many passive healing effects
+        // on the same simulation tick. Check the very first render of that burst.
+        const hut=gameTestAPI.createBuilding('hut',x+4,z,1,false,true);
+        hut.underConstruction=false;
+        gameTestAPI.BuildingSpatialHash.markDirty();
+        gameTestAPI.BuildingSpatialHash.update();
+        const beforeHealing=sample();
+        const healingFx=gameTestAPI.HealingFx;
+        for(const unit of units){
+            unit.updateTicker=19;
+            unit.healTimer=.49;
+            unit.update(1/60);
+        }
+        healingFx.update(1/60);
+        fx.update(1/60);
+        const healing=sample();
+        const healingCount=healingFx.activeCount,healingMesh=healingFx.prepareRoot();
+        const crosses=healingMesh.count/2;
+        healingFx.update(1.5);
+        const healingExpired=healingFx.activeCount===0&&!healingMesh.visible;
         return {loadedChunks,startupPulses,units:units.length,hits,thrown,peakBurnEmissions,burnEmissions,
             impactMs,before,launch,flight,after,aftermath,unbatchedAftermath,extraCalls:after.calls-before.calls,
             extraParticles:after.particles-before.particles,
-            hitPulses,expired};
+            hitPulses,expired,beforeHealing,healing,healingCount,crosses,healingExpired};
     });
     if(report.hits!==report.units || report.thrown!==report.units || report.peakBurnEmissions>24 ||
         report.burnEmissions<report.units || report.hitPulses!==0 || !report.expired || report.extraCalls>30 ||
         report.extraParticles>24 || report.after.programs>report.before.programs+2 ||
         report.aftermath.healthBarParts<report.units*2 || report.aftermath.healthBarCalls>2 ||
         report.aftermath.healthBarParts!==report.unbatchedAftermath.healthBarParts ||
-        report.aftermath.programs>report.after.programs+2) {
+        report.aftermath.programs>report.after.programs+2 ||
+        report.healingCount<12 || report.crosses!==report.healingCount || !report.healingExpired ||
+        report.healing.pointLights!==report.beforeHealing.pointLights ||
+        report.healing.programs>report.beforeHealing.programs || report.healing.calls>report.beforeHealing.calls+4) {
         console.error(`::error title=Group impact rendering budget::${JSON.stringify(report)}`);
         throw new Error(`Group impact regressed: ${JSON.stringify(report)}`);
     }
