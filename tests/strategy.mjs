@@ -1,4 +1,4 @@
-import {seedWorld} from './fixtures/seed-world.mjs';
+import {seedWorld,startManualSimulation} from './fixtures/seed-world.mjs';
 import fs from 'node:fs/promises';import path from 'node:path';import {pathToFileURL} from 'node:url';import {createRequire} from 'node:module';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const b=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});const results=[],errors=[],root=path.resolve(import.meta.dirname,'..');
@@ -281,13 +281,51 @@ await check('Enemy routes stay dry and troops climb steep banks from water and l
 });
 await check('Natural starting landscape supports mixed troops and an offensive within eight minutes',async()=>{
  const natural=await b.newPage();natural.on('pageerror',e=>errors.push(String(e)));
- await seedWorld(natural,98217);
- try{await natural.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});await natural.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
- return await natural.evaluate(()=>{state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;state.isGodMode=true;let time=0,sawAttack=false,firstAttackAt=null,firstContactAt=null,sawSpy=false;state.clock.getElapsedTime=()=>time;
-  for(let k=0;k<4800;k++){time+=.1;gameTestAPI.SpatialHash.update();gameTestAPI.BuildingSpatialHash.update();for(const ai of enemyAIs)ai.update(.1);sawAttack ||= state.units.some(u=>u.faction===1&&u.aiRole==='attack');if(sawAttack&&firstAttackAt===null)firstAttackAt=time;if(firstContactAt===null&&enemyAIs[0].visibleEnemies.has(state.shaman.id))firstContactAt=time;sawSpy ||= state.units.some(u=>u.faction===1&&u.type==='spy');state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();for(const u of [...state.units])u.update(.1);for(const b of [...state.buildings])if(!b.dead)b.update(.1);for(let i=state.projectiles.length-1;i>=0;i--)if(!state.projectiles[i].update(.1))state.projectiles.splice(i,1);for(let i=state.activeEffects.length-1;i>=0;i--)if(!state.activeEffects[i].update(.1))state.activeEffects.splice(i,1);for(const e of state.particles)state.scene.remove(e.mesh);state.particles=[];}
-  const own=state.units.filter(u=>u.faction===1&&u.state!=='dead'),buildings=state.buildings.filter(b=>b.faction===1&&!b.dead);const detail={units:own.map(u=>u.type),buildings:buildings.map(b=>b.type),plan:enemyAIs[0].lastPlan,pending:enemyAIs[0].pendingBuild,workers:own.filter(u=>u.type==='wild').map(u=>({p:u.mesh.position,role:u.aiRole,state:u.state,dest:u.finalDest})),sawAttack,firstAttackAt,firstContactAt,sawSpy};
-  if(!sawAttack||firstContactAt===null||!sawSpy||!own.some(u=>u.isShaman)||buildings.length<4||!own.some(u=>u.type==='warrior')||!own.some(u=>u.type==='firewarrior'))throw new Error(JSON.stringify(detail));return detail;
- });}finally{await natural.close();}
+ const seed=98217;
+ await seedWorld(natural,seed);
+ try{
+  await natural.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
+  await natural.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
+  // The fixed-step run below never yields to browser tasks. Finish terrain
+  // streaming first and use the supported synchronous path for new orders.
+  await natural.evaluate(()=>{
+   gameTestAPI.TerrainStream.disable('fixed-step strategy fixture');
+   gameTestAPI.PathWorker.disable();
+  });
+  await startManualSimulation(natural,seed);
+  return await natural.evaluate(()=>{
+   state.matchSettings.peaceTimeMinutes=0;state.isGodMode=true;
+   const chunks=Object.keys(state.chunks).length;
+   if(chunks!==(2*CONFIG.TERRAIN.RENDER_DISTANCE+1)**2)throw new Error('Incomplete terrain fixture: '+chunks);
+   let time=0,firstAttackAt=null,firstContactAt=null,sawSpy=false;
+   state.clock.getElapsedTime=()=>time;
+   for(let k=0;k<4800;k++){
+    time+=.1;state.clock.elapsedTime=time;
+    gameTestAPI.SpatialHash.update();gameTestAPI.BuildingSpatialHash.update();
+    for(const ai of enemyAIs)ai.update(.1);
+    if(firstAttackAt===null&&state.units.some(u=>u.faction===1&&u.aiRole==='attack'))firstAttackAt=time;
+    if(firstContactAt===null&&enemyAIs[0].visibleEnemies.has(state.shaman.id))firstContactAt=time;
+    sawSpy ||= state.units.some(u=>u.faction===1&&u.type==='spy');
+    state.physicsWorld.timestep=1/60;
+    for(let i=0;i<6;i++)state.physicsWorld.step();
+    for(const u of [...state.units])u.update(.1);
+    for(const b of [...state.buildings])if(!b.dead)b.update(.1);
+    for(let i=state.projectiles.length-1;i>=0;i--)if(!state.projectiles[i].update(.1))state.projectiles.splice(i,1);
+    for(let i=state.activeEffects.length-1;i>=0;i--)if(!state.activeEffects[i].update(.1))state.activeEffects.splice(i,1);
+    for(const e of state.particles)state.scene.remove(e.mesh);
+    state.particles=[];
+   }
+   const own=state.units.filter(u=>u.faction===1&&u.state!=='dead');
+   const buildings=state.buildings.filter(b=>b.faction===1&&!b.dead);
+   const detail={units:own.map(u=>u.type),buildings:buildings.map(b=>b.type),
+    plan:enemyAIs[0].lastPlan,pending:enemyAIs[0].pendingBuild,
+    workers:own.filter(u=>u.type==='wild').map(u=>({p:u.mesh.position,role:u.aiRole,state:u.state,dest:u.finalDest})),
+    firstAttackAt,firstContactAt,sawSpy,chunks};
+   if(firstAttackAt===null||firstContactAt===null||!sawSpy||!own.some(u=>u.isShaman)||buildings.length<4||
+      !own.some(u=>u.type==='warrior')||!own.some(u=>u.type==='firewarrior'))throw new Error(JSON.stringify(detail));
+   return detail;
+  });
+ }finally{await natural.close();}
 });
 await check('No AI runtime errors',()=>{if(errors.length)throw new Error(errors.join('\n'));});
 }finally{await b.close();await fs.mkdir(path.join(root,'test-results'),{recursive:true});await fs.writeFile(path.join(root,'test-results/strategy-report.json'),JSON.stringify({results,errors},null,2));}process.exitCode=results.some(r=>!r.pass)?1:0;
