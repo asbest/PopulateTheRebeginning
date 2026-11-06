@@ -3087,11 +3087,28 @@ function isTreeBlocked(x,z) {
     }
     return false;
 }
-function treeBlocksSegment(ax,az,bx,bz) {
-    const length=Math.hypot(bx-ax,bz-az),steps=Math.max(2,Math.ceil(length/.5));
-    for(let i=1;i<=steps;i++) {
-        const t=i/steps;
-        if(isTreeBlocked(ax+(bx-ax)*t,az+(bz-az)*t))return true;
+function treeBlocksSegment(ax,az,bx,bz,allowExit=false) {
+    const dx=bx-ax,dz=bz-az,lengthSq=dx*dx+dz*dz;
+    if(!lengthSq)return isTreeBlocked(ax,az);
+    // A trunk is indexed by its centre and its radius is smaller than a cell.
+    const size=TREE_OBSTACLE_CELL_SIZE;
+    const minX=Math.floor(Math.min(ax,bx)/size)-1,maxX=Math.floor(Math.max(ax,bx)/size)+1;
+    const minZ=Math.floor(Math.min(az,bz)/size)-1,maxZ=Math.floor(Math.max(az,bz)/size)+1;
+    for(let cx=minX;cx<=maxX;cx++)for(let cz=minZ;cz<=maxZ;cz++){
+        const cell=treeObstacleCells.get(`${cx},${cz}`);
+        if(!cell)continue;
+        for(const tree of cell){
+            if(!tree.tree.mesh.visible)continue;
+            const offsetX=tree.x-ax,offsetZ=tree.z-az;
+            const t=Math.max(0,Math.min(1,(offsetX*dx+offsetZ*dz)/lengthSq));
+            const x=offsetX-t*dx,z=offsetZ-t*dz;
+            const radiusSq=tree.radius*tree.radius;
+            if(x*x+z*z>=radiusSq)continue;
+            // A regrowing trunk may already overlap a unit. Allow it to move
+            // outward from its current position without crossing the centre.
+            if(allowExit&&t===0&&(offsetX-dx)**2+(offsetZ-dz)**2>=radiusSq)continue;
+            return true;
+        }
     }
     return false;
 }
@@ -5575,28 +5592,49 @@ const Pathfinder = {
     findPath: function(startPos, endPos, isFlying = false, unitHeight = 1.5, avoidWater = false, waterExit = false) {
         avoidWater=avoidWater||(!isFlying&&!waterExit&&state.matchSettings.liquid==='lava');
         let startNode = { x: Math.round(startPos.x / this.GRID_SIZE), y: Math.round(startPos.z / this.GRID_SIZE) };
-        const endNode = { x: Math.round(endPos.x / this.GRID_SIZE), y: Math.round(endPos.z / this.GRID_SIZE) };
+        let endNode = { x: Math.round(endPos.x / this.GRID_SIZE), y: Math.round(endPos.z / this.GRID_SIZE) };
         const startBlocked = !isFlying && isBlocked(startPos.x, startPos.z);
         const dryRoute = avoidWater && state.waterState !== 'frozen';
         const safeH = dryRoute ? aiDryHeight() : WATER_LEVEL - CONFIG.PATHFINDER.WATER_SAFE_DEPTH;
         if(dryRoute && getHeight(endPos.x,endPos.z)<safeH) return null;
-        // A unit can stand on a dry sliver while its rounded grid cell is wet.
-        // Start from the nearest reachable dry cell instead of declaring it stuck.
-        if(dryRoute && getHeight(startPos.x,startPos.z)>=safeH &&
-            (getHeight(startNode.x*this.GRID_SIZE,startNode.y*this.GRID_SIZE)<safeH ||
-             !isWalkableLine(startPos,new THREE.Vector3(startNode.x*this.GRID_SIZE,startPos.y,startNode.y*this.GRID_SIZE),false,unitHeight,true))) {
+        const gridPoint=(node,y=0)=>new THREE.Vector3(node.x*this.GRID_SIZE,y,node.y*this.GRID_SIZE);
+        const nearestAnchor=(node,position,isStart,checkDryLine)=>{
             let best=null,bestDistance=Infinity;
             for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++) {
-                const gx=startNode.x+dx,gy=startNode.y+dy;
-                const point=new THREE.Vector3(gx*this.GRID_SIZE,startPos.y,gy*this.GRID_SIZE);
-                if(getHeight(point.x,point.z)<safeH || (!startBlocked && !isWalkableLine(startPos,point,false,unitHeight,true)))continue;
-                const distance=(point.x-startPos.x)**2+(point.z-startPos.z)**2;
-                if(distance<bestDistance){best={x:gx,y:gy};bestDistance=distance;}
+                const cell={x:node.x+dx,y:node.y+dy},point=gridPoint(cell,position.y);
+                if((!waterExit||checkDryLine)&&getHeight(point.x,point.z)<safeH)continue;
+                const clear=checkDryLine&&!startBlocked
+                    ? isWalkableLine(position,point,false,unitHeight,true)
+                    : !treeBlocksSegment(position.x,position.z,point.x,point.z,isStart);
+                if(!clear)continue;
+                const distance=(point.x-position.x)**2+(point.z-position.z)**2;
+                if(distance<bestDistance){best=cell;bestDistance=distance;}
             }
-            if(best)startNode=best;
+            return best;
+        };
+        let startGrid=gridPoint(startNode);
+        if(!isFlying){
+            // The exact position may be separated from its rounded cell by
+            // a trunk or, on a dry route, a narrow strip of water.
+            const startTree=treeBlocksSegment(startPos.x,startPos.z,startGrid.x,startGrid.z,true);
+            const dryEntry=dryRoute&&getHeight(startPos.x,startPos.z)>=safeH&&
+                (getHeight(startGrid.x,startGrid.z)<safeH||
+                    !isWalkableLine(startPos,gridPoint(startNode,startPos.y),false,unitHeight,true));
+            if(startTree||dryEntry){
+                const anchor=nearestAnchor(startNode,startPos,true,dryEntry);
+                if(anchor){startNode=anchor;startGrid=gridPoint(anchor);}
+                else if(startTree)return null;
+            }
+            const endGrid=gridPoint(endNode);
+            if(treeBlocksSegment(endGrid.x,endGrid.z,endPos.x,endPos.z)){
+                endNode=nearestAnchor(endNode,endPos,false,false);
+                if(!endNode)return null;
+            }
         }
 
-        if(startNode.x === endNode.x && startNode.y === endNode.y) return [];
+        if(startNode.x===endNode.x&&startNode.y===endNode.y){
+            return !isFlying&&treeBlocksSegment(startPos.x,startPos.z,endPos.x,endPos.z,true)?[startGrid]:[];
+        }
 
         this.openHeap.clear();
         this.openSet.clear();
@@ -5638,8 +5676,9 @@ const Pathfinder = {
                     curr = curr.parent;
                 }
                 path.reverse();
-                if(dryRoute && Math.hypot(startPos.x-startNode.x*this.GRID_SIZE,startPos.z-startNode.y*this.GRID_SIZE)>.5)
-                    path.unshift(new THREE.Vector3(startNode.x*this.GRID_SIZE,0,startNode.y*this.GRID_SIZE));
+                const first=path[0];
+                if(dryRoute&&Math.hypot(startPos.x-startGrid.x,startPos.z-startGrid.z)>.5||
+                    !isFlying&&treeBlocksSegment(startPos.x,startPos.z,first.x,first.z,true))path.unshift(startGrid);
                 return path;
             }
 
@@ -5665,7 +5704,6 @@ const Pathfinder = {
 
                     // Allow entry if close to target (within 3 units / ~1.5 grid cells) to handle large buildings
                     const distToTarget = Math.sqrt((nx - endNode.x)**2 + (ny - endNode.y)**2);
-                    if(!isFlying && isTreeBlocked(wx,wz))continue;
                     if(!isFlying && distToTarget > CONFIG.PATHFINDER.TARGET_PROXIMITY && isBuildingBlocked(wx, wz)) {
                         // Units may start inside a school or a newly placed building.
                         // Allow them to leave that footprint, but never enter another one.
@@ -5683,8 +5721,8 @@ const Pathfinder = {
                 // edge every time, including when its endpoint is already open.
                 if(dryRoute && !isFlying &&
                     getHeight((currentNode.x+nx)*this.GRID_SIZE*.5,(currentNode.y+ny)*this.GRID_SIZE*.5)<safeH)continue;
-                if(!isFlying && isTreeBlocked((currentNode.x+nx)*this.GRID_SIZE*.5,
-                    (currentNode.y+ny)*this.GRID_SIZE*.5))continue;
+                if(!isFlying && treeBlocksSegment(currentNode.x*this.GRID_SIZE,currentNode.y*this.GRID_SIZE,
+                    nx*this.GRID_SIZE,ny*this.GRID_SIZE))continue;
 
                 // Diagonal corner cutting check
                 if (Math.abs(offset.x) === 1 && Math.abs(offset.y) === 1) {
@@ -5826,7 +5864,8 @@ const BattleWork=createBattleWork({state,worker:PathWorker,
 function isWalkableLine(start, end, isFlying, unitHeight = 1.5, avoidWater = false) {
     const dist = start.distanceTo(end);
     const steps = Math.ceil(dist / (avoidWater ? 0.25 : 1.0));
-    if (steps <= 1) return isFlying || !treeBlocksSegment(start.x,start.z,end.x,end.z);
+    if(!isFlying && treeBlocksSegment(start.x,start.z,end.x,end.z))return false;
+    if(steps<=1)return true;
 
     const dir = end.clone().sub(start).normalize();
     const checkPos = start.clone();
@@ -5837,7 +5876,7 @@ function isWalkableLine(start, end, isFlying, unitHeight = 1.5, avoidWater = fal
         const h = getHeight(checkPos.x, checkPos.z);
         if(!isFlying) {
             if(h < safeH) return false;
-            if(isBlocked(checkPos.x, checkPos.z)) return false;
+            if(isBuildingBlocked(checkPos.x, checkPos.z)) return false;
         }
     }
     return true;
