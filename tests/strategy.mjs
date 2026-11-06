@@ -85,6 +85,72 @@ await check('After heavy losses a surviving tribe recruits, trains and attacks a
  if(state.units.length!==before)throw Error('An eliminated tribe recruited new workers');
  return {waves:waves.length};
 }));
+await check('Scouts report contacts, counter production and last known positions',()=>p.evaluate(async()=>{
+ const {counterWeights}=await import('./art/enemy-tactics.js');
+ const ai=new testAI.constructor(2),spy=new Humanoid(2,'spy',-15,0);
+ const enemies=[new Humanoid(0,'preacher',20,0),new Humanoid(0,'preacher',21,0)];
+ state.units.push(spy,...enemies);
+ ai.gatherIntel([],[]);
+ if(ai.contacts.size)throw Error('Unobserved units entered intelligence');
+ ai.gatherIntel([spy],[]);
+ if(enemies.some(unit=>!ai.visibleEnemies.has(unit.id)))throw Error('Scout did not reveal opponents');
+ const weights=counterWeights(ai.personality,ai.contacts.values());
+ if(weights.firewarrior<=counterWeights(ai.personality,[]).firewarrior)throw Error('Priests did not change production');
+ enemies.forEach(unit=>unit.placeOnGround(48,35));
+ spy.placeOnGround(-45,0);
+ ai.gatherIntel([spy],[]);
+ if(ai.visibleEnemies.has(enemies[0].id)||ai.contacts.get(enemies[0].id)?.position.x!==20)
+  throw Error('Out-of-sight unit overwrote last known position');
+ for(let i=0;i<24;i++)ai.gatherIntel([spy],[]);
+ if(ai.contacts.has(enemies[0].id))throw Error('Old contact never expired');
+ for(const unit of [spy,...enemies])unit.die();
+ return weights;
+}));
+await check('An assault rallies, keeps a reserve and regroups when outmatched',()=>p.evaluate(()=>{
+ const ai=new testAI.constructor(2),home=new THREE.Vector3(-20,6,-15),goal={kind:'recon',position:{x:40,z:0}};
+ const group=Array.from({length:7},(_,i)=>new Humanoid(2,i%2?'firewarrior':'warrior',-43,-20+i));
+ state.units.push(...group);
+ ai.squadOrder(group,home,[],2,true,goal);
+ if(ai.squad?.phase!=='rally'||group.slice(0,2).some(unit=>unit.aiRole!=='guard')||
+    group.slice(2).some(unit=>unit.aiRole!=='rally'))throw Error('The wave departed without assembling or reserving guards');
+ ai.squadOrder(group,home,[],2,true,goal);
+ if(ai.squad.phase!=='rally')throw Error('An unassembled assault departed on the second planning tick');
+ const rally=ai.squad.rally;
+ group.slice(2).forEach((unit,i)=>unit.placeOnGround(rally.x,rally.z+i));
+ ai.squadOrder(group,home,[],2,true,goal);
+ if(!ai.hasLaunchedAttack||group.slice(2).some(unit=>unit.aiRole!=='attack'))throw Error('Assembled troops did not advance');
+ const reinforcement=new Humanoid(2,'warrior',home.x,home.z);
+ state.units.push(reinforcement);group.push(reinforcement);
+ ai.squadOrder(group,home,[],2,true,goal);
+ if(ai.squad.ids.has(reinforcement.id))throw Error('A fresh recruit split an assault already underway');
+ const foes=Array.from({length:10},()=>({type:'warrior',hp:100,maxHp:100,mesh:{position:rally}}));
+ ai.squadOrder(group,home,foes,2,true,goal);
+ if(ai.squad?.phase!=='retreat'||group.slice(2,7).some(unit=>unit.aiRole!=='regroup'||unit.attackTarget))
+  throw Error('An outmatched squad did not withdraw together');
+ ai.squadOrder(group,home,[],2,true,null);
+ if(ai.squad?.phase!=='retreat')throw Error('Losing contact interrupted the regrouping order');
+ group.forEach(unit=>unit.die());
+ return {attackers:5,reserve:2};
+}));
+await check('Battle spells score groups and campaign AI guards or intercepts objectives',()=>p.evaluate(async()=>{
+ const {chooseBattleSpell}=await import('./art/enemy-tactics.js');
+ const unit=(x,z,hp=100)=>({hp,maxHp:100,type:'warrior',mesh:{position:new THREE.Vector3(x,6,z)}});
+ const allies=[unit(0,0),unit(1,0),unit(2,0)],foes=[unit(12,0),unit(12,1),unit(13,0),unit(13,1)];
+ const cast=(friends,enemies,otherTribe)=>chooseBattleSpell(friends,enemies,()=>true,otherTribe)?.type;
+ if(cast(allies,foes)!=='blast'||cast(allies,foes,[unit(12,0)])==='blast')throw Error('Fireball cluster or allied safety was ignored');
+ if(cast(allies,[unit(10,0)])!=='shield'||cast([unit(0,0,20),unit(1,0,20)],[])!=='heal')
+  throw Error('Support spells ignored an exposed or wounded group');
+ const ai=new testAI.constructor(2),home={x:-20,z:0};
+ state.isCampaign=true;
+ state.campaignMission={rule:{kind:'capture'},sites:[{x:-17,z:0,captured:true},{x:-12,z:0,progress:5},{x:-10,z:0}]};
+ if(ai.missionTarget(home,[])?.position.x!==-12)throw Error('Active ritual site was ignored');
+ const escort=unit(10,0);escort.id='escort-probe';
+ state.campaignMission={rule:{kind:'escort'},destination:{x:32,z:0},escortIds:[escort.id],arrivedIds:[]};
+ const interception=ai.missionTarget(home,[escort]);
+ if(interception?.kind!=='intercept'||interception.position.x<=10||interception.position.x>=32||
+    ai.missionTarget(home,[]).position.x!==32)throw Error('Escort interception ignored scouting or the destination');
+ return {blast:'cluster',shield:'exposed group',heal:'wounded group',objective:'intercept'};
+}));
 await p.close();
 await check('Enemy routes stay dry and troops climb steep banks from water and land',async()=>{
  const water=await b.newPage();water.on('pageerror',e=>errors.push(String(e)));
@@ -215,10 +281,10 @@ await check('Natural starting landscape supports mixed troops and an offensive w
  const natural=await b.newPage();natural.on('pageerror',e=>errors.push(String(e)));
  await seedWorld(natural,98217);
  try{await natural.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});await natural.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
- return await natural.evaluate(()=>{state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;state.isGodMode=true;let time=0,sawAttack=false,firstAttackAt=null,sawSpy=false;state.clock.getElapsedTime=()=>time;
-  for(let k=0;k<4800;k++){time+=.1;gameTestAPI.SpatialHash.update();gameTestAPI.BuildingSpatialHash.update();for(const ai of enemyAIs)ai.update(.1);sawAttack ||= state.units.some(u=>u.faction===1&&u.aiRole==='attack');if(sawAttack&&firstAttackAt===null)firstAttackAt=time;sawSpy ||= state.units.some(u=>u.faction===1&&u.type==='spy');state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();for(const u of [...state.units])u.update(.1);for(const b of [...state.buildings])if(!b.dead)b.update(.1);for(let i=state.projectiles.length-1;i>=0;i--)if(!state.projectiles[i].update(.1))state.projectiles.splice(i,1);for(let i=state.activeEffects.length-1;i>=0;i--)if(!state.activeEffects[i].update(.1))state.activeEffects.splice(i,1);for(const e of state.particles)state.scene.remove(e.mesh);state.particles=[];}
-  const own=state.units.filter(u=>u.faction===1&&u.state!=='dead'),buildings=state.buildings.filter(b=>b.faction===1&&!b.dead);const detail={units:own.map(u=>u.type),buildings:buildings.map(b=>b.type),plan:enemyAIs[0].lastPlan,pending:enemyAIs[0].pendingBuild,workers:own.filter(u=>u.type==='wild').map(u=>({p:u.mesh.position,role:u.aiRole,state:u.state,dest:u.finalDest})),sawAttack,firstAttackAt,sawSpy};
-  if(!sawAttack||!sawSpy||!own.some(u=>u.isShaman)||buildings.length<4||!own.some(u=>u.type==='warrior')||!own.some(u=>u.type==='firewarrior'))throw new Error(JSON.stringify(detail));return detail;
+ return await natural.evaluate(()=>{state.isPaused=true;state.matchSettings.peaceTimeMinutes=0;state.isGodMode=true;let time=0,sawAttack=false,firstAttackAt=null,firstContactAt=null,sawSpy=false;state.clock.getElapsedTime=()=>time;
+  for(let k=0;k<4800;k++){time+=.1;gameTestAPI.SpatialHash.update();gameTestAPI.BuildingSpatialHash.update();for(const ai of enemyAIs)ai.update(.1);sawAttack ||= state.units.some(u=>u.faction===1&&u.aiRole==='attack');if(sawAttack&&firstAttackAt===null)firstAttackAt=time;if(firstContactAt===null&&enemyAIs[0].visibleEnemies.has(state.shaman.id))firstContactAt=time;sawSpy ||= state.units.some(u=>u.faction===1&&u.type==='spy');state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();for(const u of [...state.units])u.update(.1);for(const b of [...state.buildings])if(!b.dead)b.update(.1);for(let i=state.projectiles.length-1;i>=0;i--)if(!state.projectiles[i].update(.1))state.projectiles.splice(i,1);for(let i=state.activeEffects.length-1;i>=0;i--)if(!state.activeEffects[i].update(.1))state.activeEffects.splice(i,1);for(const e of state.particles)state.scene.remove(e.mesh);state.particles=[];}
+  const own=state.units.filter(u=>u.faction===1&&u.state!=='dead'),buildings=state.buildings.filter(b=>b.faction===1&&!b.dead);const detail={units:own.map(u=>u.type),buildings:buildings.map(b=>b.type),plan:enemyAIs[0].lastPlan,pending:enemyAIs[0].pendingBuild,workers:own.filter(u=>u.type==='wild').map(u=>({p:u.mesh.position,role:u.aiRole,state:u.state,dest:u.finalDest})),sawAttack,firstAttackAt,firstContactAt,sawSpy};
+  if(!sawAttack||firstContactAt===null||!sawSpy||!own.some(u=>u.isShaman)||buildings.length<4||!own.some(u=>u.type==='warrior')||!own.some(u=>u.type==='firewarrior'))throw new Error(JSON.stringify(detail));return detail;
  });}finally{await natural.close();}
 });
 await check('No AI runtime errors',()=>{if(errors.length)throw new Error(errors.join('\n'));});
