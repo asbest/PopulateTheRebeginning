@@ -56,17 +56,17 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         }
         return key;
     }
-    function eligible(part){
+    function eligible(part,healthBar){
         const m=part.material;
-        return part.isMesh&&!part.isSkinnedMesh&&!part.isInstancedMesh&&m?.type==='MeshStandardMaterial'&&
+        return part.isMesh&&!part.isSkinnedMesh&&!part.isInstancedMesh&&m?.type===(healthBar?'MeshBasicMaterial':'MeshStandardMaterial')&&
             !m.transparent&&m.opacity===1&&!m.clippingPlanes?.length&&!part.geometry.morphAttributes.position&&!part.geometry.attributes.tangent&&
             m.onBeforeCompile===T.Material.prototype.onBeforeCompile&&part.name!=='StaffCrystal'&&
             (part.layers.mask&1)!==0&&part.matrixWorld.determinant()>0;
     }
-    function collect(node,shadow){
+    function collect(node,shadow,healthBar=false){
         if(!node.visible)return;
         if(node.isLOD)node.update(state.camera);
-        if(eligible(node)){
+        if(eligible(node,healthBar)){
             const mk=materialKey(node.material),cast=node.castShadow;
             let part=parts.get(node);
             if(!part||part.geometry!==node.geometry||part.mk!==mk||part.cast!==cast||part.receive!==node.receiveShadow||part.order!==node.renderOrder){
@@ -75,7 +75,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             }
             const key=part.key;
             let b=buckets.get(key);
-            if(!b){b={geometry:node.geometry,material:materials.get(mk),cast,receive:node.receiveShadow,order:node.renderOrder,items:[],shadowCount:0,mesh:null,capacity:0};buckets.set(key,b);}
+            if(!b){b={geometry:node.geometry,material:materials.get(mk),cast,receive:node.receiveShadow,order:node.renderOrder,healthBar,items:[],shadowCount:0,mesh:null,capacity:0};buckets.set(key,b);}
             const end=b.items.length;
             if(cast&&shadow){
                 const slot=b.shadowCount++;
@@ -164,6 +164,11 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 }
                 if(animal)collect(u.mesh,true);
                 else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed);
+                // Preserve the original billboard transforms, fill scales and faction colors.
+                // Warm both instance shaders even when the starting units are at full health.
+                if(u.hpGroup&&(u.hpGroup.visible||api.warming)){
+                    for(const part of u.hpGroup.children)collect(part,false,true);
+                }
                 if(!detailed&&u.state!=='dead'&&!u.invisible&&!u.isPhantom&&shadows<2048){
                     if(!blob)initBlob();
                     const h=heightAt(p.x,p.z),altitude=Math.max(0,p.y-h),size=u.isVehicle?3.5:1.2;
@@ -173,14 +178,16 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 }
             }
             for(const [key,b]of buckets){
-                if(b.items.length<(api.warming?1:2)){
+                if(b.items.length<(api.warming||b.healthBar?1:2)){
                     if(b.items.length&&b.cast&&!b.shadowCount)suppressShadow(b.items[0]);
-                    if(frame-b.used>300&&b.mesh){scene.remove(b.mesh);b.mesh.dispose();buckets.delete(key);}
+                    if(!b.healthBar&&frame-b.used>300&&b.mesh){scene.remove(b.mesh);b.mesh.dispose();buckets.delete(key);}
                     continue;
                 }
                 if(b.capacity<b.items.length){
                     if(b.mesh){scene.remove(b.mesh);b.mesh.dispose();}
-                    b.capacity=2**Math.ceil(Math.log2(Math.max(api.warming?32:8,b.items.length)));
+                    // Reserve room for a full group hit during shader warmup.
+                    const minCapacity=b.healthBar?128:api.warming?32:8;
+                    b.capacity=2**Math.ceil(Math.log2(Math.max(minCapacity,b.items.length)));
                     b.mesh=new T.InstancedMesh(b.geometry,b.material,b.capacity);b.mesh.name='Animated character batch';
                     b.mesh.receiveShadow=b.receive;b.mesh.renderOrder=b.order;
                     b.mesh.frustumCulled=false;b.mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);scene.add(b.mesh);

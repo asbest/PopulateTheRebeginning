@@ -1,3 +1,4 @@
+import {seedWorld} from '../tests/fixtures/seed-world.mjs';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
@@ -8,6 +9,7 @@ const {chromium}=playwrightPath
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try {
     const page=await browser.newPage({viewport:{width:1280,height:800}});
+    await seedWorld(page,98217);
     await page.addInitScript(tier=>localStorage.setItem('graphics-quality',tier),
         process.env.GAME_GRAPHICS_QUALITY||'medium');
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
@@ -35,9 +37,20 @@ try {
             state.units.push(unit);units.push(unit);
         }
         gameTestAPI.SpatialHash.update();
+        const healthBarGeometries=new Set(units[0].hpGroup.children.map(part=>part.geometry));
+        const renderBufferDirect=state.renderer.renderBufferDirect;
+        let healthBarCalls=0,healthBarParts=0;
+        state.renderer.renderBufferDirect=function(camera,scene,geometry,material,object,group){
+            if(healthBarGeometries.has(geometry)){
+                healthBarCalls++;
+                healthBarParts+=object.isInstancedMesh?object.count:1;
+            }
+            return renderBufferDirect.call(this,camera,scene,geometry,material,object,group);
+        };
         const sample=()=>{
             const times=[];
             for(let i=0;i<5;i++){
+                healthBarCalls=0;healthBarParts=0;
                 const start=performance.now();
                 state.renderer.render(state.scene,state.camera);
                 state.renderer.getContext().finish();
@@ -46,7 +59,7 @@ try {
             times.sort((a,b)=>a-b);
             return {medianMs:times[2],calls:state.renderer.info.render.calls,
                 triangles:state.renderer.info.render.triangles,particles:state.particles.length,
-                programs:state.renderer.info.programs.length};
+                programs:state.renderer.info.programs.length,healthBarCalls,healthBarParts};
         };
         const before=sample();
         const fx=gameTestAPI.FireballFxManager;
@@ -76,18 +89,31 @@ try {
             gameTestAPI.updateTreeRegrowth(1/60);
             fx.update(1/60);
         }
+        const aftermath=sample();
+        // Measure the same pose with just these bars drawn individually.
+        // A separate camera layer keeps them out of the character batch.
+        gameTestAPI.CharacterBatches.restore();
+        state.camera.layers.enable(1);
+        for(const unit of units)for(const part of unit.hpGroup.children)part.layers.set(1);
+        const unbatchedAftermath=sample();
+        for(const unit of units)for(const part of unit.hpGroup.children)part.layers.set(0);
+        state.camera.layers.disable(1);
+        state.renderer.renderBufferDirect=renderBufferDirect;
         const hitPulses=gameTestAPI.HitPulseManager.active.length;
         gameTestAPI.HitPulseManager.update(.71);
         const expired=gameTestAPI.HitPulseManager.active.length===0&&
             gameTestAPI.HitPulseManager.meshes.every(mesh=>mesh.count===0&&!mesh.visible);
         return {loadedChunks,startupPulses,units:units.length,hits,thrown,peakBurnEmissions,burnEmissions,
-            impactMs,before,launch,flight,after,extraCalls:after.calls-before.calls,
+            impactMs,before,launch,flight,after,aftermath,unbatchedAftermath,extraCalls:after.calls-before.calls,
             extraParticles:after.particles-before.particles,
             hitPulses,expired};
     });
     if(report.hits!==report.units || report.thrown!==report.units || report.peakBurnEmissions>24 ||
         report.burnEmissions<report.units || report.hitPulses!==0 || !report.expired || report.extraCalls>30 ||
-        report.extraParticles>24 || report.after.programs>report.before.programs+2) {
+        report.extraParticles>24 || report.after.programs>report.before.programs+2 ||
+        report.aftermath.healthBarParts<report.units*2 || report.aftermath.healthBarCalls>2 ||
+        report.aftermath.healthBarParts!==report.unbatchedAftermath.healthBarParts ||
+        report.aftermath.programs>report.after.programs+2) {
         console.error(`::error title=Group impact rendering budget::${JSON.stringify(report)}`);
         throw new Error(`Group impact regressed: ${JSON.stringify(report)}`);
     }
