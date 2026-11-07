@@ -930,6 +930,7 @@ const CONFIG = {
         'blast': { icon: '🔥', label: 'Blast', cost: 10 },
         'warrior_attack': { icon: '⚔️', label: 'Club Strike', cost: 0 },
         'firewarrior_attack': { icon: '🔥', label: 'Fireball', cost: 0 },
+        'preacher_convert': { icon: '\uD83D\uDCFF', label: 'Convert', cost: 0 },
         'lightning': { icon: '⚡', label: 'Lght', cost: 50 },
         'raise': { icon: '▲', label: 'Rais', cost: 5 },
         'lower': { icon: '▼', label: 'Lowr', cost: 5 },
@@ -1661,7 +1662,7 @@ function peaceTimeRemaining() {
 function isPeaceTime() { return (state.network.role==='none'&&state.controlTutorial?.active)||peaceTimeRemaining()>0; }
 const PEACE_BLOCKED_ACTIONS=new Set([
     'blast','lightning','hypnotise','swamp','swarm','tornado','firestorm','volcano',
-    'raise','lower','flatten','landbridge','airship_rocket','warrior_attack','firewarrior_attack'
+    'raise','lower','flatten','landbridge','airship_rocket','warrior_attack','firewarrior_attack','preacher_convert'
 ]);
 const SPELL_WINDUPS=Object.freeze({lightning:.45,hypnotise:.45,swarm:.5,swamp:.55,
     tornado:.7,firestorm:.8,volcano:.9});
@@ -1970,7 +1971,7 @@ const NetworkManager = {
                  if(d.action==='demolish_building') {
                      const building=state.buildings.find(b=>b.id===d.buildingId&&b.faction===0&&!b.dead);
                      building?.destroy(false);
-                 } else performAction(d.x, d.z, d.action, units);
+                 } else performAction(d.x, d.z, d.action, units, d.targetId);
              } else if (data.type === 'terrain_update') {
                  data.mods.forEach(([key, val]) => {
                      state.terrainMods.set(key, val);
@@ -8121,17 +8122,18 @@ window.Humanoid = class Humanoid {
          if(isPeaceTime())return null;
          let minDist = 1000;
          let closest = null;
-         const range = CONFIG.AI.AGGRESSION_RANGE;
+         const preacher=this.type==='preacher';
+         const range=preacher?this.range+5+(this.garrisonedIn?2:0):CONFIG.AI.AGGRESSION_RANGE;
          const candidates = SpatialHash.query(this.mesh.position.x, this.mesh.position.z, range);
 
          for(let i=0; i<candidates.length; i++) {
              const u = candidates[i];
              if(!window.isAllied(u.faction, this.faction) && u.state !== 'dead' && !u.invisible) {
                  const d = this.mesh.position.distanceTo(u.mesh.position);
-                 if(this.type==='preacher'&&(u.isShaman||u.isVehicle||u.isPhantom))continue;
+                 if(preacher&&(!PreacherConversion.eligible(this,u)||!PreacherConversion.inReach(this,u)))continue;
                  const priority=(this.type==='firewarrior'&&u.type==='preacher')||
                      (this.type==='warrior'&&u.type==='preacher')?.72:1;
-                 if(d < range && d*priority < minDist) {
+                 if((preacher||d < range) && d*priority < minDist) {
                      minDist = d*priority; closest = u;
                  }
              }
@@ -8864,8 +8866,8 @@ window.Humanoid = class Humanoid {
             }
         } else {
             // Idle Check Aggro
-            // All unselected units auto aggro
-            if (!state.selectedUnits.includes(this) && !['retreat','builder','shelter','train','guard','support','escape-water'].includes(this.aiRole)) {
+            // Priests also look for targets when selected.
+            if ((this.type==='preacher'||!isSelected) && !['retreat','builder','shelter','train','guard','support','escape-water'].includes(this.aiRole)) {
                 if (state.clock.getElapsedTime() > this.nextTargetCheck) {
                     this.nextTargetCheck = state.clock.getElapsedTime() + 0.5 + Math.random() * 0.5;
                     const search=BattleWork.canSearch();
@@ -10271,7 +10273,7 @@ const UNIT_TYPE_NAMES = Object.freeze({
     preacher:'Preacher', shaman:'Shaman', spy:'Spy', airship:'Airship'
 });
 const ACTION_TYPE_NAMES = Object.freeze({
-    warrior_attack:'Club Strike', firewarrior_attack:'Fireball',
+    warrior_attack:'Club Strike', firewarrior_attack:'Fireball', preacher_convert:'Convert',
     build_hut:'Hut', build_tower:'Guard Tower',
     build_warrior:'Warrior Training Hut', build_fire:'Fire Warrior Temple',
     build_preacher:'Preacher Shrine',
@@ -10349,6 +10351,8 @@ function updateContextMenus() {
         visibleActions = ['blast', 'lightning', 'raise', 'lower', 'flatten', 'landbridge', 'swamp', 'invisibility', 'shield', 'hypnotise', 'swarm', 'tornado', 'firestorm', 'volcano', 'heal', 'teleport', 'create', 'phantom'];
     } else if (fighter&&['warrior','firewarrior'].includes(fighter.type)) {
         visibleActions = [`${fighter.type}_attack`];
+    } else if (fighter?.type==='preacher') {
+        visibleActions = ['preacher_convert'];
     } else if (hasBrave) {
         visibleActions = ['build_hut', 'build_tower', 'build_warrior', 'build_fire', 'build_preacher', 'build_spy'];
         if (!(state.matchSettings && state.matchSettings.noFlyers)) visibleActions.push('build_shipyard', 'build_airship');
@@ -10367,7 +10371,7 @@ function updateContextMenus() {
     state.visibleActions = visibleActions;
     menu.style.display=visibleActions.length?'':'none';
     if((!visibleActions.length&&!['move','select'].includes(state.currentAction))||
-       (['warrior_attack','firewarrior_attack'].includes(state.currentAction)&&!visibleActions.includes(state.currentAction))||
+       (['warrior_attack','firewarrior_attack','preacher_convert'].includes(state.currentAction)&&!visibleActions.includes(state.currentAction))||
        (state.currentAction.startsWith('build_')&&!visibleActions.includes(state.currentAction)))
         state.currentAction='move';
     if(buildingPreview&&!state.currentAction.startsWith('build_'))buildingPreview.visible=false;
@@ -10385,7 +10389,7 @@ function updateContextMenus() {
          btn.setAttribute('aria-label', `${iconName || data.label}, ${data.cost} mana`);
          const hotkey = index < 9 ? (index + 1) : (index === 9 ? 0 : '');
          btn.title = `${iconName || data.label} (${data.cost} mana)${hotkey !== '' ? ` · ${hotkey}` : ''}`;
-         if(act==='warrior_attack'||act==='firewarrior_attack'){
+         if(['warrior_attack','firewarrior_attack','preacher_convert'].includes(act)){
              btn.setAttribute('aria-label',iconName);
              btn.title=`${iconName} · ${hotkey} · no mana`;
          }
@@ -10451,11 +10455,24 @@ function updateContextMenus() {
     });
 }
 
-function performAction(x, z, action = state.currentAction, overrideUnits = null) {
+function performAction(x, z, action = state.currentAction, overrideUnits = null, targetId = null) {
     const actingUnits = overrideUnits || state.selectedUnits;
 
     if(isPeaceBlockedAction(action)) {
         showGameMessage('This action is unavailable during peace time.');
+        return;
+    }
+
+    if(action==='preacher_convert'){
+        const priest=actingUnits.length===1?actingUnits[0]:null;
+        const target=targetId===null?null:state.units.find(unit=>unit.id===targetId);
+        if(priest?.type!=='preacher'||priest.faction!==0)return;
+        if(state.network.role==='client'){
+            if(target&&PreacherConversion.eligible(priest,target))
+                NetworkManager.sendInput({action,unitIds:[priest.id],targetId});
+        }else if(!PreacherConversion.start(priest,target)){
+            showGameMessage('Choose a convertible enemy within the priest\u2019s range.');
+        }
         return;
     }
 
@@ -12345,6 +12362,12 @@ function handleTap(x, y, isRightClick, isShift) {
     let action = state.currentAction;
     if(isRightClick) action = 'move';
 
+    if(action==='preacher_convert'){
+        const hit=unitHits.find(hit=>!window.isAllied(meshToUnit.get(hit.object).faction,0));
+        performAction(null,null,action,null,hit?meshToUnit.get(hit.object).id:null);
+        return;
+    }
+
     if(action==='warrior_attack'||action==='firewarrior_attack'){
         const unitHit=unitHits.find(hit=>!window.isAllied(meshToUnit.get(hit.object).faction,0));
         const buildingHit=buildingHits.find(hit=>!window.isAllied(meshToBuilding.get(hit.object).faction,0));
@@ -12724,7 +12747,7 @@ let _qualityFrames=0,_qualityWindowStart=performance.now();
 function updateRangeRing() {
     if(!state.rangeRing)return;
     let rangeCaster=(state.shaman&&state.shaman.state!=='dead')?state.shaman:null;
-    const unitAttackAction=state.currentAction==='warrior_attack'||state.currentAction==='firewarrior_attack';
+    const unitAttackAction=['warrior_attack','firewarrior_attack','preacher_convert'].includes(state.currentAction);
     if(unitAttackAction)rangeCaster=state.selectedUnits.length===1&&state.selectedUnits[0].state!=='dead'?state.selectedUnits[0]:null;
     if(state.currentAction==='hypnotise'&&state.selectedUnits.length===1&&state.selectedUnits[0].type==='spy')
         rangeCaster=state.selectedUnits[0];
@@ -12738,7 +12761,7 @@ function updateRangeRing() {
     if(state.cheatUnlimitedRange&&!unitAttackAction)state.rangeRing.scale.set(1000,1,1000);
     else {
         let radius=10+rangeCaster.mesh.position.y;
-        if(unitAttackAction)radius=rangeCaster.range;
+        if(unitAttackAction)radius=rangeCaster.range+(state.currentAction==='preacher_convert'&&rangeCaster.garrisonedIn?2:0);
         if(rangeCaster.type==='spy')radius=5;
         state.rangeRing.scale.set(radius,60,radius);
     }

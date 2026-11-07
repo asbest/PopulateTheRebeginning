@@ -17,6 +17,18 @@ export function createPreacherConversion(T,state,{getFactionColor,combatRange,li
     function eligible(priest,target){return priest.type==='preacher'&&target?.mesh&&typeof target.setFaction==='function'&&
         !target.isShaman&&!target.isVehicle&&!target.isPhantom&&target.type!=='preacher'&&!target.dead&&
         !['dead','transported'].includes(target.state)&&!target.invisible&&!window.isAllied(priest.faction,target.faction);}
+    function inReach(priest,target){
+        return priest.mesh.position.distanceToSquared(target.mesh.position)<=combatRange(priest,target)**2&&lineClear(priest,target);
+    }
+    function start(priest,target){
+        if(isPeaceTime()||priest.dead||['dead','stunned','getting_up','transported'].includes(priest.state)||
+           !eligible(priest,target)||!inReach(priest,target))return false;
+        if(priest.attackTarget!==target)cancel(priest);
+        priest.attackTarget=target;
+        priest.state=priest.garrisonedIn?'garrison':'combat';
+        priest.path=[];priest.target=null;priest.finalDest=null;
+        return true;
+    }
     function update(dt){
         if(!state.units.some(unit=>unit.type==='preacher'&&unit.state!=='dead')){if(channels.size)clear();return;}
         const client=state.network.role==='client';
@@ -26,7 +38,7 @@ export function createPreacherConversion(T,state,{getFactionColor,combatRange,li
             if(priest.type!=='preacher')continue;
             const target=client?state.units.find(u=>u.id===priest.networkPreaching?.targetId):priest.attackTarget;
             if(isPeaceTime()||!['combat','garrison'].includes(priest.state)||!present.has(target)||!eligible(priest,target)||
-                (!client&&(priest.mesh.position.distanceTo(target.mesh.position)>combatRange(priest,target)||!lineClear(priest,target)))){
+                (!client&&!inReach(priest,target))){
                 cancel(priest);continue;
             }
             let channel=channels.get(priest);
@@ -59,5 +71,5 @@ export function createPreacherConversion(T,state,{getFactionColor,combatRange,li
         }
     }
     function clear(){for(const priest of channels.keys())cancel(priest);}
-    return {update,cancel,clear,eligible};
+    return {update,cancel,clear,eligible,inReach,start};
 }

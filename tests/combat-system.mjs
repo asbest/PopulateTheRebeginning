@@ -378,6 +378,60 @@ try{
             return {duration:5,permanent:true,interruptionResets:true};
         });
     });
+    await check('Selected priests convert automatically and can switch to a clicked target',async()=>{
+        await fresh();
+        await page.evaluate(()=>{
+            closeHelp();closeStoryOverlay();
+            const {x,z}=state.shaman.mesh.position;
+            for(const u of state.units){u.die();state.scene.remove(u.mesh);}
+            state.units=[];
+            for(const b of state.buildings)state.scene.remove(b.mesh);
+            state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();
+            const priest=new Humanoid(0,'preacher',x,z),automatic=new Humanoid(1,'warrior',x+1,z);
+            const manual=new Humanoid(1,'warrior',x,z+1);
+            const distant=new Humanoid(1,'warrior',x+20,z);
+            state.units.push(priest,automatic,manual,distant);
+            for(const u of state.units)u.mesh.position.y=100;
+            manual.mesh.position.z+=.8;
+            state.selectedUnits=[priest];state.selectedBuilding=null;
+            state.camera.position.set(x,106,z+10);state.camera.lookAt(x,100,z);state.camera.updateMatrixWorld(true);
+            gameTestAPI.updateContextMenus();gameTestAPI.SpatialHash.update();
+            window.preacherFixture={priest,automatic,manual,distant};
+            const body=priest.rigidBody;
+            priest.rigidBody=null;
+            priest.nextTargetCheck=-1;
+            priest.update(.01);
+            priest.rigidBody=body;
+            state.preacherConversion.update(3);
+            if(priest.attackTarget!==automatic||!state.scene.getObjectByName('PreacherConversion'))
+                throw new Error('Selected priest did not automatically start converting the nearest enemy');
+        });
+        await clickAttack('#btn-preacher_convert');
+        return page.evaluate(()=>{
+            const {priest,automatic,manual,distant}=preacherFixture;
+            const action='preacher_convert',mana=state.mana;
+            if(state.currentAction!==action)throw new Error('Convert action was not selected');
+            gameTestAPI.updateRangeRing();
+            if(!state.rangeRing.visible)throw new Error('Convert range is hidden');
+            gameTestAPI.performAction(null,null,action,null,distant.id);
+            if(priest.attackTarget!==automatic)throw new Error('Out-of-range target was accepted');
+            state.scene.updateMatrixWorld(true);
+            const point=manual.mesh.position.clone().add(new THREE.Vector3(0,.9,0)).project(state.camera);
+            gameTestAPI.handleTap((point.x+1)*innerWidth/2,(1-point.y)*innerHeight/2,false,false);
+            if(priest.attackTarget!==manual)throw new Error('World click did not switch the priest to the chosen target');
+            state.preacherConversion.update(4.99);
+            if(manual.faction!==1||automatic.faction!==1)throw new Error('Conversion finished too early');
+            state.preacherConversion.update(.01);
+            if(manual.faction!==0||automatic.faction!==1||state.mana!==mana)
+                throw new Error('Manual conversion failed or spent mana');
+            state.matchSettings.peaceTimeMinutes=100;
+            gameTestAPI.updateContextMenus();
+            gameTestAPI.performAction(null,null,action,null,automatic.id);
+            if(priest.attackTarget||!document.querySelector('#btn-preacher_convert[aria-disabled="true"]'))
+                throw new Error('Peace time did not block conversion');
+            return {duration:5,automatic:true,manual:true};
+        });
+    });
     await check('Occupied towers grant range and release guards after destruction',async()=>{
         await fresh();
         return page.evaluate(()=>{
