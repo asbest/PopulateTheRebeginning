@@ -141,6 +141,41 @@ try{
    return report;
   });
  });
+ for(const spell of ['blast','firewarrior','firestorm','lightning','tornado','volcano'])
+  await check('Shield blocks magical knockback: '+spell,async()=>{
+   await fresh();return p.evaluate(spell=>{
+    const {x,z,enemy,caster}=fixture,y=getHeight(x,z);
+    const unprotected=new Humanoid(1,'warrior',x+1,z);
+    state.units.push(unprotected);
+    for(const unit of [enemy,unprotected]){
+     unit.placeOnGround(unit===enemy?x:x+1,z);
+     unit.hp=unit.maxHp=1000;
+     unit.rigidBody.setLinvel({x:0,y:0,z:0},true);
+     unit.hitImpulseCooldown=0;
+    }
+    enemy.setShield(true);gameTestAPI.SpatialHash.update();
+    if(['blast','firewarrior','firestorm'].includes(spell)){
+     const start=new THREE.Vector3(x-4,y+2,z),end=new THREE.Vector3(x,y,z);
+     const ball=new gameTestAPI.Fireball(start,end,0,115,100,spell==='firestorm',spell==='firewarrior');
+     ball.mesh.position.copy(end);ball.explode();
+    }else{
+     gameTestAPI.executeSpell(spell,x,z,caster);
+     if(spell==='tornado')state.activeEffects.at(-1).update(.1);
+     if(spell==='volcano')state.activeEffects.at(-1).update(CONFIG.COMBAT.VOLCANO_TICK_INTERVAL+.1);
+    }
+    const protectedVelocity=enemy.rigidBody.linvel(),otherVelocity=unprotected.rigidBody.linvel();
+    if(enemy.hp!==1000||enemy.state==='stunned'||enemy.blastAirborne||
+       Math.hypot(protectedVelocity.x,protectedVelocity.y,protectedVelocity.z)>.001)
+     throw Error('Shielded unit was hurt or thrown: '+JSON.stringify({spell,hp:enemy.hp,state:enemy.state,protectedVelocity}));
+    if(unprotected.hp>=1000||unprotected.state!=='stunned'||
+       Math.hypot(otherVelocity.x,otherVelocity.y,otherVelocity.z)<.01)
+     throw Error('Unshielded unit did not receive the spell: '+JSON.stringify({spell,hp:unprotected.hp,state:unprotected.state,otherVelocity}));
+    enemy.hitImpulseCooldown=0;
+    enemy.applyForce(new THREE.Vector3(1,1,0));
+    if(enemy.state!=='stunned')throw Error('Shield suppressed a non-magical force');
+    return {spell,protectedHp:1000,unprotectedHp:unprotected.hp};
+   },spell);
+  });
  await check('Shaman endures three times a warrior and takes swamp and volcano damage',async()=>{
   await fresh();return p.evaluate(()=>{
    const {x,z,enemy}=fixture;

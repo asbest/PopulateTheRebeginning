@@ -6382,7 +6382,7 @@ class Fireball {
             const vehicle=u.isVehicle;
             const shove = (vehicle ? (this.unitShot ? 5.2 : 8) : (this.unitShot ? 4.2 : 5.4)) * falloff;
             const lift = (vehicle ? (this.unitShot ? 5.2 : 7.2) : (this.unitShot ? 6.8 : 9.2)) * falloff;
-            u.applyForce(new THREE.Vector3(nx * shove, lift, nz * shove),
+            if(!u.shielded)u.applyForce(new THREE.Vector3(nx * shove, lift, nz * shove),
                 vehicle ? (this.unitShot ? 5.5 : 8) : (this.unitShot ? 4.5 : 5.5),
                 vehicle ? 6 : 8, vehicle ? 1 : (this.unitShot ? .7 : .6));
             u.takeDamage(this.unitDamage*radialDamageFactor(distance,radius),false,true,'magic');
@@ -6578,8 +6578,10 @@ class Volcano extends ActiveEffect {
             SpatialHash.query(this.x, this.z, CONFIG.COMBAT.VOLCANO_TICK_RADIUS).forEach(u => {
                 const dist = Math.hypot(u.mesh.position.x-this.x,u.mesh.position.z-this.z);
                 if(dist < CONFIG.COMBAT.VOLCANO_TICK_RADIUS && u.faction !== this.faction && u.state!=='dead') {
-                    const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
-                    u.applyForce(dir.multiplyScalar(3.5).add(new THREE.Vector3(0, 2.2, 0)));
+                    if(!u.shielded){
+                        const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
+                        u.applyForce(dir.multiplyScalar(3.5).add(new THREE.Vector3(0, 2.2, 0)));
+                    }
                     u.takeDamage(CONFIG.COMBAT.VOLCANO_TICK_DAMAGE*
                         radialDamageFactor(dist,CONFIG.COMBAT.VOLCANO_TICK_RADIUS),false,true,'magic');
                 }
@@ -6819,7 +6821,7 @@ class Tornado extends ActiveEffect {
         SpatialHash.query(this.pos.x, this.pos.z, CONFIG.COMBAT.TORNADO_RADIUS).forEach(u => {
             const d = u.mesh.position.distanceTo(this.pos);
             if(d < CONFIG.COMBAT.TORNADO_RADIUS && u.faction !== this.faction) {
-                 u.applyForce(new THREE.Vector3((Math.random()-0.5)*3, 1.2, (Math.random()-0.5)*3));
+                 if(!u.shielded)u.applyForce(new THREE.Vector3((Math.random()-0.5)*3, 1.2, (Math.random()-0.5)*3));
                  u.takeDamage(damagePerSecond*dt*radialDamageFactor(d,CONFIG.COMBAT.TORNADO_RADIUS),true,false,'magic');
             }
         });
@@ -7299,9 +7301,11 @@ function executeSpell(type, x, z, caster) {
              const dist = u.mesh.position.distanceTo(new THREE.Vector3(x, u.mesh.position.y, z));
              if(dist < 4 && u.faction !== caster.faction) {
                  u.takeDamage(CONFIG.COMBAT.LIGHTNING_DAMAGE*radialDamageFactor(dist,4),false,true,'magic');
-                 const forceDir = u.mesh.position.clone().sub(new THREE.Vector3(x, h, z)).normalize();
-                 forceDir.y = 0.8;
-                 u.applyForce(forceDir.multiplyScalar(2.5));
+                 if(!u.shielded){
+                     const forceDir = u.mesh.position.clone().sub(new THREE.Vector3(x, h, z)).normalize();
+                     forceDir.y = 0.8;
+                     u.applyForce(forceDir.multiplyScalar(2.5));
+                 }
                  hit = true;
                  hitUnits.push(u);
              }
