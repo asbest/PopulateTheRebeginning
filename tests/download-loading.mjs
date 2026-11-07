@@ -138,13 +138,27 @@ try{
         }finally{await context.close();}
     });
     await check('A failed HD upgrade keeps the working preview',async()=>{
+        const failures=[];
         const {page,context,errors}=await game({setup:async page=>{
-            for(const extension of ['ktx2','png'])await page.route(`**/art/materials/grass.${extension}*`,route=>route.fulfill({status:404,body:''}));
+            for(const extension of ['ktx2','png'])await page.route(`**/art/materials/grass.${extension}*`,route=>{
+                failures.push(extension);
+                return route.fulfill({status:404,body:''});
+            });
         }});
         try{
-            await page.evaluate(()=>{window.previewImage=Art.textures.grass.image;Art.streamTextures(state.scene,state.cameraLookAt,0);});
-            await page.waitForFunction(()=>Art.textureStatus.upgrading===0&&Art.textureStatus.pending===0,null,{timeout:60000});
-            assert(await page.evaluate(()=>Art.textures.grass.image===previewImage&&previewImage.width===256),'Upgrade destroyed preview');
+            const kept=await page.evaluate(async()=>{
+                const texture=Art.textures.grass,preview=texture.image;
+                let timer;
+                try{
+                    await Promise.race([
+                        Art.promoteTexture(texture),
+                        new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Grass upgrade did not finish')),60000);})
+                    ]);
+                }finally{clearTimeout(timer);}
+                return Art.textures.grass===texture&&texture.image===preview&&preview.width===256;
+            });
+            assert(failures.includes('png'),'Full-resolution fallback was not attempted');
+            assert(kept,'Upgrade destroyed preview');
             assert(errors.length===0,errors.join('; '));
         }finally{await context.close();}
     });
