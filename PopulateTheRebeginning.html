@@ -5076,6 +5076,36 @@ function createRitualSite(grp,cx,cz) {
             map:Art.blender.texture('stone','map')}),
         monument:createTotemFactory(THREE,Art.blender.texture('stone','map'))
     };
+    if(!ritualAssets.auraGeometry){
+        const positions=[];
+        const radius=CONFIG.TOTEM_AURA.RADIUS;
+        for(let i=0;i<36;i++){
+            const angle=i*2.399963,r=radius*Math.sqrt((i+.5)/36);
+            positions.push(Math.cos(angle)*r,(i%9)*.29,Math.sin(angle)*r);
+        }
+        ritualAssets.auraGeometry=new THREE.BufferGeometry();
+        ritualAssets.auraGeometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+        ritualAssets.auraGeometry.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,1.5,0),radius+3);
+        ritualAssets.auraMaterial=new THREE.ShaderMaterial({
+            uniforms:{time:{value:0}},transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+            vertexShader:`uniform float time; varying float glow;
+                void main(){
+                    vec3 p=position;
+                    float phase=fract(position.y/2.61+time*.16);
+                    p.y=.25+phase*2.8;
+                    glow=sin(phase*3.14159);
+                    vec4 view=modelViewMatrix*vec4(p,1.0);
+                    gl_Position=projectionMatrix*view;
+                    gl_PointSize=clamp(120.0/max(1.0,-view.z),4.0,14.0);
+                }`,
+            fragmentShader:`varying float glow;
+                void main(){
+                    float d=length(gl_PointCoord-vec2(.5));
+                    float alpha=(1.0-smoothstep(.08,.5,d))*glow*.85;
+                    gl_FragColor=vec4(.35,1.0,.68,alpha);
+                }`
+        });
+    }
     ritualAssets.stone.boundingSphere=new THREE.Sphere(new THREE.Vector3(),3.4);
     const site=new THREE.Group();site.position.set(x,h,z);site.name='Ancient stone circle';
     const ring=new THREE.InstancedMesh(ritualAssets.stone,ritualAssets.stoneMat,7);
@@ -5092,6 +5122,10 @@ function createRitualSite(grp,cx,cz) {
     }
     ring.instanceMatrix.needsUpdate=true;site.add(ring);
     const totem=ritualAssets.monument();totem.rotation.y=rand()*Math.PI*2;site.add(totem);
+    const aura=new THREE.Points(ritualAssets.auraGeometry,ritualAssets.auraMaterial);
+    aura.name='Totem healing aura';
+    aura.onBeforeRender=()=>{ritualAssets.auraMaterial.uniforms.time.value=state.clock.elapsedTime;};
+    site.add(aura);
     grp.add(site);grp.userData.ritualSite={mesh:site,ring,stones,x,z};
 }
 
