@@ -421,7 +421,7 @@
                 <p>Constructing a base is vital to train specialists and expand your tribe. Follow these steps to build:</p>
                 <ul style="padding-left: 20px; margin-top: 5px; margin-bottom: 10px;">
                     <li><strong>1. Select a Brave:</strong> Only <strong>Brave</strong> units (not Shamans) can build structures. Select one or more Braves.</li>
-                    <li><strong>2. Open Build Menu:</strong> When a Brave is selected, building icons will appear in the action/spell bar (Hut, Tower, Warrior, Fire, Spy, etc.).</li>
+                    <li><strong>2. Open Build Menu:</strong> When a Brave is selected, building icons will appear in the action/spell bar (Hut, Tower, Warrior, Fire, Temple, etc.).</li>
                     <li><strong>3. Choose Structure:</strong> Click the desired building icon, or press its corresponding number hotkey.</li>
                     <li><strong>4. Place on Terrain:</strong> Click a location on <strong>dry land</strong> (above water level) that is <strong>close to your selected Brave</strong>. Leave enough space between buildings for people to pass. Your Brave will then walk over and build the structure!</li>
                     <li><strong>Demolish:</strong> Choose Demolish in the build menu and click one of your buildings, or select the building and use its action menu.</li>
@@ -952,7 +952,7 @@ const CONFIG = {
         'build_warrior': { icon: '⚔️', label: 'War', cost: 30 },
         'build_fire': { icon: '🔥', label: 'Fire', cost: 40 },
         'build_preacher': { icon: '📿', label: 'Prc', cost: 40 },
-        'build_spy': { icon: '🌙', label: 'Spy', cost: 40 },
+        'build_spy': { icon: '🌙', label: 'Temple', cost: 40 },
         'build_shipyard': { icon: '⚓', label: 'Dock', cost: 50 },
         'build_airship': { icon: '🎈', label: 'Ship', cost: 25 },
         'demolish_building': { icon: '🗑️', label: 'Demolish', cost: 0 },
@@ -10277,7 +10277,7 @@ const ACTION_TYPE_NAMES = Object.freeze({
     build_hut:'Hut', build_tower:'Guard Tower',
     build_warrior:'Warrior Training Hut', build_fire:'Fire Warrior Temple',
     build_preacher:'Preacher Shrine',
-    build_spy:'Spy Training Hut', build_shipyard:'Shipyard',
+    build_spy:'Temple', build_shipyard:'Shipyard',
     build_airship:'Airship', demolish_building:'Demolish Building',
     upgrade_unit:'Upgrade Unit', airship_rocket:'Airship Rocket'
 });
