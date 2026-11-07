@@ -151,6 +151,12 @@ export function createArtKit(T) {
             if(kind==='preacher'){
                 cyl(p,[0,3.16,0],0.17,0.17,0.4,palette.gold);
                 orb(p,[0,3.47,0],[0.22,0.22,0.22],0xffe0a0);
+                cyl(p,[0,3.76,0],.045,.045,.58,palette.gold);
+                const emblem=new T.Group();emblem.name='Spy eye roof emblem';emblem.position.set(0,4.05,0);
+                const eye=new T.Mesh(new T.TorusGeometry(.46,.065,8,24),material(palette.gold,'wood',.65));
+                eye.scale.y=.55;emblem.add(eye);
+                const pupil=new T.Mesh(new T.SphereGeometry(.12,12,8),material(palette.dark,'wood'));
+                pupil.position.z=.05;emblem.add(pupil);p.add(emblem);
             }
         } else if(kind==='tower') {
             cyl(p,[0,1.85,0],0.7,1,3.5,palette.stone,'stone');

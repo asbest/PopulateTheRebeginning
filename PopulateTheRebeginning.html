@@ -9970,6 +9970,39 @@ function showEnemySpellIcon(spellType) {
 }
 window.showEnemySpellIcon = showEnemySpellIcon;
 
+let buildingPreview=null;
+function updateBuildingPreview(x,y) {
+    const action=state.currentAction;
+    if(!state.scene||!state.camera||!state.raycaster||!action?.startsWith('build_')||action==='build_airship'||
+       !state.selectedUnits.some(unit=>unit.faction===0&&unit.type==='wild'&&unit.state!=='dead')){
+        if(buildingPreview)buildingPreview.visible=false;
+        return;
+    }
+    const type=action.slice(6),radius=BUILDING_FOOTPRINTS[type];
+    if(!radius)return;
+    if(!buildingPreview){
+        const material=new THREE.MeshBasicMaterial({color:0x42e56b,transparent:true,opacity:.38,depthWrite:false,wireframe:true});
+        buildingPreview=new THREE.Group();buildingPreview.name='Building placement preview';
+        const body=new THREE.Mesh(new THREE.CylinderGeometry(.65,.8,1.5,16),material);
+        body.position.y=.85;buildingPreview.add(body);
+        const roof=new THREE.Mesh(new THREE.ConeGeometry(1,1,16),material);
+        roof.position.y=2.1;buildingPreview.add(roof);
+        state.scene.add(buildingPreview);
+    }
+    if(buildingPreview.parent!==state.scene)state.scene.add(buildingPreview);
+    const mouse=new THREE.Vector2(x/window.innerWidth*2-1,-y/window.innerHeight*2+1);
+    state.raycaster.setFromCamera(mouse,state.camera);
+    const terrain=Object.values(state.chunks).map(chunk=>chunk.children[0]).filter(Boolean);
+    const hit=state.raycaster.intersectObjects(terrain)[0];
+    if(!hit){buildingPreview.visible=false;return;}
+    const {x:px,z:pz}=hit.point;
+    const valid=!buildingPlacementIssue(type,px,pz)&&isBraveNearby(0,px,pz,10)&&
+        state.mana>=CONFIG.COSTS.BUILDING[type];
+    buildingPreview.position.set(px,getHeight(px,pz),pz);
+    buildingPreview.scale.set(radius/2.9,1,radius/2.9);
+    buildingPreview.children[0].material.color.setHex(valid?0x42e56b:0xff4545);
+    buildingPreview.visible=true;
+}
 function selectAction(action) {
     if(isPeaceBlockedAction(action)) {
         showGameMessage('This action is unavailable during peace time.');
@@ -9986,6 +10019,7 @@ function selectAction(action) {
     document.querySelectorAll('.action-btn').forEach(b => b.classList.remove('active'));
     const btn = document.getElementById(`btn-${state.currentAction}`);
     if(btn) btn.classList.add('active');
+    if(buildingPreview)buildingPreview.visible=false;
 }
 window.selectAction = selectAction;
 window.updateContextMenus = updateContextMenus;
@@ -10203,6 +10237,7 @@ function updateContextMenus() {
 
     const hasShaman = state.selectedUnits.some(u => u.isShaman && u.state !== 'dead');
     const hasBrave = state.selectedUnits.some(u => u.type === 'wild');
+    if(buildingPreview&&!hasBrave)buildingPreview.visible=false;
     const hasSpy = state.selectedUnits.some(u => u.type === 'spy');
     const hasSelection = state.selectedUnits.length > 0;
     const hasAirship = state.selectedUnits.length === 1 && state.selectedUnits[0].type === 'airship';
@@ -10241,8 +10276,10 @@ function updateContextMenus() {
     state.visibleActions = visibleActions;
     menu.style.display=visibleActions.length?'':'none';
     if((!visibleActions.length&&!['move','select'].includes(state.currentAction))||
-       (['warrior_attack','firewarrior_attack'].includes(state.currentAction)&&!visibleActions.includes(state.currentAction)))
+       (['warrior_attack','firewarrior_attack'].includes(state.currentAction)&&!visibleActions.includes(state.currentAction))||
+       (state.currentAction.startsWith('build_')&&!visibleActions.includes(state.currentAction)))
         state.currentAction='move';
+    if(buildingPreview&&!state.currentAction.startsWith('build_'))buildingPreview.visible=false;
 
     visibleActions.forEach((act, index) => {
          const data = ACTIONS[act];
@@ -10333,7 +10370,13 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
 
     if(state.network.role === 'client') {
         const unitIds = actingUnits.map(u => u.id);
+        if(action.startsWith('build_')&&action!=='build_airship'){
+            const type=action.slice(6),issue=buildingPlacementIssue(type,x,z);
+            if(issue){showGameMessage(issue);return;}
+            if(!isBraveNearby(0,x,z,10)||state.mana<CONFIG.COSTS.BUILDING[type])return;
+        }
         NetworkManager.sendInput({x, z, action, unitIds});
+        if(action.startsWith('build_')&&action!=='build_airship'&&action===state.currentAction)selectAction('move');
         if(action==='move'){
             if(actingUnits.length)markMoveDestination(x,z);
         }else spawnPulse(x, getHeight(x, z), z, 0x888888);
@@ -10489,7 +10532,8 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null)
     }
     else if (action.startsWith('build_')) {
         const type = action.replace('build_', '');
-        createBuilding(type, x, z);
+        const building=createBuilding(type, x, z);
+        if(building&&!overrideUnits&&action===state.currentAction)selectAction('move');
     }
 }
 
@@ -12020,7 +12064,9 @@ function onTouchStart(e) {
 function onPointerMove(e) {
     state.lastMousePos.x = e.clientX;
     state.lastMousePos.y = e.clientY;
+    updateBuildingPreview(e.clientX,e.clientY);
     if(!state.isDragging) return;
+    if(state.dragButton===0&&state.currentAction.startsWith('build_')&&state.currentAction!=='build_airship')return;
 // Selection Box logic
     if (state.dragButton === 0 && state.selectionStart && state.currentAction === 'select') {
         const dist = Math.sqrt((e.clientX - state.selectionStart.x)**2 + (e.clientY - state.selectionStart.y)**2);
@@ -12144,7 +12190,9 @@ const box = document.getElementById('selection-box');
         box.style.display = 'none';
         performBoxSelection(state.selectionStart.x, state.selectionStart.y, x, y, e.shiftKey);
     } else {
-        if(Math.sqrt((x-state.tapStart.x)**2 + (y-state.tapStart.y)**2) < 10) handleTap(x, y, e.button === 2, e.shiftKey);
+        if(state.currentAction.startsWith('build_')&&state.currentAction!=='build_airship'&&state.dragButton===0)
+            handleTap(x,y,false,e.shiftKey);
+        else if(Math.sqrt((x-state.tapStart.x)**2 + (y-state.tapStart.y)**2) < 10) handleTap(x, y, e.button === 2, e.shiftKey);
     }
     state.selectionStart = null;
 
