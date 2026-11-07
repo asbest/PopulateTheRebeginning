@@ -5136,24 +5136,93 @@ function createRitualSite(grp,cx,cz) {
     grp.add(site);grp.userData.ritualSite={mesh:site,ring,stones,x,z};
 }
 
+const totemBuffPositions=[],totemBuffKinds=[];
+let totemBuffMarkers;
+function prepareTotemBuffMarkers(){
+    if(totemBuffMarkers)return totemBuffMarkers;
+    const geometry=new THREE.BufferGeometry();
+    geometry.setDrawRange(0,0);
+    const material=new THREE.ShaderMaterial({
+        transparent:true,depthWrite:false,
+        uniforms:{time:{value:0},viewportHeight:{value:1}},
+        vertexShader:`attribute float kind; uniform float viewportHeight; varying float buff;
+            void main(){
+                buff=min(kind,1.0);
+                gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+                gl_Position.y+=max(kind-1.0,0.0)*36.0/viewportHeight*gl_Position.w; gl_PointSize=24.0;
+            }`,
+        fragmentShader:`uniform float time; varying float buff;
+            void main(){
+                vec2 p=abs(gl_PointCoord-vec2(.5));
+                float edge=max(p.x,p.y);
+                float crossShape=max(min(p.x,p.y)-.085,edge-.31);
+                float diamondShape=p.x+p.y-.29;
+                float shape=mix(crossShape,diamondShape,buff);
+                float outline=1.0-smoothstep(.025,.055,shape);
+                float fill=1.0-smoothstep(-.02,.015,shape);
+                vec3 color=mix(vec3(.24,1.,.46),vec3(.32,.75,1.),buff);
+                gl_FragColor=vec4(mix(vec3(.05,.13,.16),color,fill),outline*(.88+.12*sin(time*4.)));
+            }`
+    });
+    totemBuffMarkers=new THREE.Points(geometry,material);
+    totemBuffMarkers.name='Totem buffs above units';
+    totemBuffMarkers.frustumCulled=false;
+    return totemBuffMarkers;
+}
+
+function markTotemBuff(unit,kind,stacked=false){
+    const {x,y,z}=unit.mesh.position;
+    totemBuffPositions.push(x,(y||0)+(unit.height||1.5)+.9,z);
+    totemBuffKinds.push(stacked?2:kind);
+}
+
+function updateTotemBuffMarkers(){
+    const count=totemBuffKinds.length;
+    if(!count){
+        if(totemBuffMarkers)totemBuffMarkers.visible=false;
+        return;
+    }
+    const mesh=prepareTotemBuffMarkers(),geometry=mesh.geometry;
+    if(mesh.parent!==state.scene)state.scene.add(mesh);
+    if((geometry.getAttribute('kind')?.count||0)<count){
+        const capacity=2**Math.ceil(Math.log2(Math.max(16,count)));
+        geometry.dispose();
+        geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(capacity*3),3).setUsage(THREE.DynamicDrawUsage));
+        geometry.setAttribute('kind',new THREE.BufferAttribute(new Float32Array(capacity),1).setUsage(THREE.DynamicDrawUsage));
+    }
+    const position=geometry.getAttribute('position'),kind=geometry.getAttribute('kind');
+    position.array.set(totemBuffPositions);kind.array.set(totemBuffKinds);
+    position.updateRange.count=count*3;kind.updateRange.count=count;
+    position.needsUpdate=kind.needsUpdate=true;
+    geometry.setDrawRange(0,count);
+    mesh.material.uniforms.time.value=state.clock.elapsedTime;
+    mesh.material.uniforms.viewportHeight.value=Math.max(1,state.renderer.domElement.height);
+    mesh.visible=true;
+}
+
 function applyTotemAura(dt,manaRate) {
+    totemBuffPositions.length=totemBuffKinds.length=0;
     const sites=Object.values(state.chunks).map(chunk=>chunk.userData?.ritualSite).filter(Boolean);
-    if(!sites.length)return manaRate;
     const radiusSq=CONFIG.TOTEM_AURA.RADIUS**2;
     const isNear=position=>sites.some(site=>{
         const dx=position.x-site.x,dz=position.z-site.z;
         return dx*dx+dz*dz<=radiusSq;
     });
-    if(state.network.role!=='client') {
-        for(const unit of state.units) {
-            if(unit.faction!==0||unit.state==='dead'||unit.state==='transported'||unit.hp>=unit.maxHp||!isNear(unit.mesh.position))continue;
+    const shaman=state.shaman;
+    let shamanHealing=false;
+    if(sites.length)for(const unit of state.units) {
+        if(unit.faction!==0||unit.state==='dead'||unit.state==='transported'||unit.hp>=unit.maxHp||!isNear(unit.mesh.position))continue;
+        markTotemBuff(unit,0);
+        if(unit===shaman)shamanHealing=true;
+        if(state.network.role!=='client'){
             unit.hp=Math.min(unit.maxHp,unit.hp+unit.maxHp*CONFIG.TOTEM_AURA.HEAL_FRACTION_PER_SECOND*dt);
             unit.hpBar.scale.x=unit.hp/unit.maxHp;
         }
     }
-    const shaman=state.shaman;
-    return shaman&&shaman.state!=='dead'&&shaman.state!=='transported'&&isNear(shaman.mesh.position)
-        ? manaRate*CONFIG.TOTEM_AURA.MANA_RATE_MULTIPLIER : manaRate;
+    const manaBoost=shaman&&shaman.state!=='dead'&&shaman.state!=='transported'&&isNear(shaman.mesh.position);
+    if(manaBoost&&state.mana<CONFIG.CAMPAGIN.MANA_CAP)markTotemBuff(shaman,1,shamanHealing);
+    updateTotemBuffMarkers();
+    return manaBoost?manaRate*CONFIG.TOTEM_AURA.MANA_RATE_MULTIPLIER:manaRate;
 }
 
 function createGroundCover(grp,cx,cz) {
@@ -6420,7 +6489,11 @@ function prewarmSpellShaders() {
     // Compile the shared aura before the first distant totem enters view.
     const auraAssets=prepareTotemAura();
     const auraPreview=new THREE.Points(auraAssets.geometry,auraAssets.material);
+    const buffPreview=prepareTotemBuffMarkers(),buffAttached=buffPreview.parent===state.scene;
+    const buffVisible=buffPreview.visible;
+    buffPreview.visible=true;
     state.scene.add(auraPreview);
+    if(!buffAttached)state.scene.add(buffPreview);
     const existingLights=[];
     state.scene.traverse(node=>{if(node.isPointLight)existingLights.push([node,node.visible]);});
     const start = state.shaman.mesh.position.clone().add(new THREE.Vector3(0, 3, 0));
@@ -6494,6 +6567,8 @@ function prewarmSpellShaders() {
         lightningRoots.forEach(root=>{root.position.set(0,0,0);root.visible=false;state.scene.remove(root);});
         state.scene.remove(preview.mesh);
         state.scene.remove(auraPreview);
+        if(!buffAttached)state.scene.remove(buffPreview);
+        buffPreview.visible=buffVisible;
         CharacterBatches.warming=false;SceneryBatches.warming=false;CharacterBatches.update();SceneryBatches.update();
         FirewarriorFlames.clear();
         FireballFxManager.endPrewarm();
@@ -11901,6 +11976,7 @@ window.loadGame = function(slot=activeSaveSlot) {
         FirewarriorFlames.clear();
         FireballFxManager.clear();
         HealingFx.clear();
+        if(totemBuffMarkers)totemBuffMarkers.visible=false;
         state.selectedUnits = [];
         state.selectedBuilding = null;
         state.shaman = null;
