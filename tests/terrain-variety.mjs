@@ -15,6 +15,10 @@ try {
         // This suite measures the original shared regional algorithm; campaign
         // profile diversity and seeds are covered in landscape-levels.mjs.
         delete state.matchSettings.terrainProfile;delete state.matchSettings.terrainSeed;
+        // Remove spawn flattening and land bridges from the randomized match.
+        state.terrainMods.clear();
+        state.matchSettings.biome='normal';
+        state.matchSettings.winter=false;
         gameTestAPI.restoreTerrainNoise();
         const sea=CONFIG.TERRAIN.WATER_LEVEL;
         const {getBaseHeight,forEachTreeSite}=gameTestAPI;
