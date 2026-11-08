@@ -1063,6 +1063,7 @@ const CONFIG = {
         RECRUIT_INTERVAL: 12,
         WORKER_TARGET: 4,
         FOLLOW_UP_ATTACK_SIZE: 4,
+        MIN_ASSAULT_GROUP: 3,
         SHAMAN_SPELL_RANGE_BASE: 10.0,
         AI_SPELL_COOLDOWN_DEFAULT: 5.0,
         AI_SPELL_COOLDOWN_SORCERER: 2.5,
@@ -7560,12 +7561,12 @@ function faithManaMultiplier() {
         (CONFIG.FAITH.MAX_MANA_MULTIPLIER-CONFIG.FAITH.MIN_MANA_MULTIPLIER)*state.faith/100;
 }
 
-function combatRange(unit,target){
-    const rise=unit.mesh.position.y-target.mesh.position.y;
+function combatRange(unit,target,origin=unit.mesh.position){
+    const rise=origin.y-target.mesh.position.y;
     return unit.range+THREE.MathUtils.clamp(rise*.55,-2,5)+(unit.garrisonedIn?2:0);
 }
-function combatLineClear(unit,target){
-    const a=unit.mesh.position,b=target.mesh.position;
+function combatLineClear(unit,target,origin=unit.mesh.position){
+    const a=origin,b=target.mesh.position;
     const dx=b.x-a.x,dz=b.z-a.z,distance=Math.hypot(dx,dz);
     if(distance<2)return true;
     const startY=a.y+Math.min(unit.height||1.5,1.8)*.8;
@@ -8890,7 +8891,7 @@ window.Humanoid = class Humanoid {
         } else {
             // Idle Check Aggro
             // Priests also look for targets when selected.
-            if ((this.type==='preacher'||!isSelected) && !['retreat','builder','shelter','train','guard','support','escape-water'].includes(this.aiRole)) {
+            if ((this.type==='preacher'||!isSelected) && !['retreat','builder','shelter','train','guard','support','escape-water','rally','regroup','scout'].includes(this.aiRole)) {
                 if (state.clock.getElapsedTime() > this.nextTargetCheck) {
                     this.nextTargetCheck = state.clock.getElapsedTime() + 0.5 + Math.random() * 0.5;
                     const search=BattleWork.canSearch();
@@ -9571,6 +9572,27 @@ class EnemyAI {
         if(pending&&pending.role===role&&!pending.target&&this.distance(pending.destination,p)<2)return true;
         return this.issuePath(u,p,role);
     }
+    firingPosition(unit,target){
+        const from=unit.mesh.position,enemy=target.mesh.position;
+        const reach=combatRange(unit,target);
+        const enemyReach=['firewarrior','preacher'].includes(target.type)?combatRange(target,unit):target.range||0;
+        const clear=from.distanceTo(enemy)<=reach&&cachedCombatLineClear(unit,target);
+        const score=(position,range)=>Math.min(this.distance(position,enemy),range)+.65*(position.y-enemy.y);
+        let bestScore=clear?score(from,reach)+1:-Infinity,best=null;
+        const radius=Math.max(3,reach*.85);
+        const direction=Math.atan2(from.z-enemy.z,from.x-enemy.x);
+        for(const flank of [0,-.42,.42,-.8,.8]){
+            const x=enemy.x+Math.cos(direction+flank)*radius,z=enemy.z+Math.sin(direction+flank)*radius;
+            const height=getHeight(x,z);
+            if(height<aiDryHeight()||isBlocked(x,z))continue;
+            const point=new THREE.Vector3(x,height,z),range=combatRange(unit,target,point);
+            if(this.distance(from,point)<1.5||point.distanceTo(enemy)>range||radius<Math.min(enemyReach+1,reach*.75))continue;
+            const value=score(point,range);
+            if(value<=bestScore||!isWalkableLine(from,point,false,unit.height,true)||!combatLineClear(unit,target,point))continue;
+            bestScore=value;best=point;
+        }
+        return best;
+    }
     engage(u,target,role) {
         if(isPeaceTime())return;
         if(!target||['dead','stunned','getting_up','transported'].includes(u.state))return;
@@ -9581,25 +9603,16 @@ class EnemyAI {
             if(victims.length)target=victims[0];
             else{const escort=target.mesh.position.clone().lerp(new THREE.Vector3(this.baseX,0,this.baseZ),.15);this.moveUnit(u,escort,role);return;}
         }
-        if(u.type==='firewarrior'&&this.distance(u.mesh.position,target.mesh.position)<4){
-            const away=u.mesh.position.clone().sub(target.mesh.position).setY(0).normalize();
-            const kite=u.mesh.position.clone().addScaledVector(away,5);
-            if(getHeight(kite.x,kite.z)>WATER_LEVEL&&!isBlocked(kite.x,kite.z)){this.moveUnit(u,kite,role);return;}
+        const ranged=u.type==='firewarrior'||u.type==='preacher';
+        if(ranged&&!u.garrisonedIn&&this.distance(u.mesh.position,target.mesh.position)<23){
+            const position=this.firingPosition(u,target);
+            if(position&&this.moveUnit(u,position,role))return;
         }
-        if(u.type==='firewarrior'&&!u.garrisonedIn&&this.distance(u.mesh.position,target.mesh.position)<20){
-            const current=getHeight(u.mesh.position.x,u.mesh.position.z);
-            let lookout=null,gain=1.4;
-            for(let i=0;i<8;i++){
-                const angle=i*Math.PI/4,x=u.mesh.position.x+Math.cos(angle)*4,z=u.mesh.position.z+Math.sin(angle)*4;
-                const height=getHeight(x,z),advance=this.distance({x,z},target.mesh.position);
-                if(height<aiDryHeight()||isBlocked(x,z)||advance>u.range+5)continue;
-                if(height-current>gain){gain=height-current;lookout={x,z};}
-            }
-            if(lookout&&this.moveUnit(u,lookout,'high-ground'))return;
-        }
+        const inReach=ranged?u.mesh.position.distanceTo(target.mesh.position)<=combatRange(u,target)&&cachedCombatLineClear(u,target):
+            this.distance(u.mesh.position,target.mesh.position)<=u.range;
+        if(inReach){u.attackTarget=target;u.state='combat';return;}
         if(u.attackTarget===target && (u.state==='combat' ||
             u.state==='move' && u.finalDest && this.distance(u.finalDest,target.mesh.position)<4)) return;
-        if(this.distance(u.mesh.position,target.mesh.position)<=u.range){u.attackTarget=target;u.state='combat';return;}
         this.issuePath(u,target.mesh.position,role,target);
     }
     cast(type,p) {
@@ -9780,6 +9793,7 @@ class EnemyAI {
             group=reinforced;
         }
         if(!group.length){this.squad=null;fit.forEach(guard);return;}
+        const minimum=CONFIG.AI.MIN_ASSAULT_GROUP;
         const ids=new Set(group.map(unit=>unit.id));
         fit.forEach((unit,index)=>{if(!ids.has(unit.id))guard(unit,index);});
         const center=new THREE.Vector3();
@@ -9798,7 +9812,7 @@ class EnemyAI {
         const near=foes.filter(enemy=>this.distance(center,enemy.mesh.position)<18);
         const strength=units=>units.reduce((power,unit)=>power+(unit.type==='wild'?.35:unit.isShaman?1.5:1)*
             (.35+.65*Math.max(0,unit.hp/unit.maxHp)),0);
-        if(squad.phase==='advance'&&near.length>=3&&strength(near)>strength(group)*1.55){
+        if(!withdrawing&&(group.length<minimum||squad.phase==='advance'&&near.length>=3&&strength(near)>strength(group)*1.55)){
             squad.phase='retreat';squad.deadline=this.intelTime+12;
         }
         if(squad.phase==='retreat'){
@@ -9814,7 +9828,13 @@ class EnemyAI {
             }
             const assembled=group.filter(unit=>this.distance(unit.mesh.position,squad.rally)<10).length;
             const alreadyForward=near.length||this.distance(center,point)<27||group.every(unit=>unit.aiRole==='attack');
-            if(!alreadyForward&&assembled<Math.ceil(group.length*.7)&&this.intelTime<squad.deadline){
+            // A scattered reserve can pull the average away from troops that
+            // have already assembled together near one of the approaches.
+            const together=assembled>=minimum||group.some(unit=>{
+                let neighbours=0;
+                return group.some(ally=>this.distance(ally.mesh.position,unit.mesh.position)<12&&++neighbours>=minimum);
+            });
+            if(!together||!alreadyForward&&assembled<Math.ceil(group.length*.7)&&this.intelTime<squad.deadline){
                 this.state='rally';
                 group.forEach((unit,index)=>this.moveUnit(unit,formationPoint(squad.rally,direction,index,unit.type==='firewarrior'),'rally'));
                 return;
@@ -9862,17 +9882,10 @@ class EnemyAI {
         group.forEach((unit,index)=>{
             const ranged=unit.type==='firewarrior';
             if(target&&(!waypoint||this.distance(unit.mesh.position,target.mesh.position)<16)){
-                // A short dry flank keeps the fire line separate from the club fighters.
-                if(ranged&&this.distance(unit.mesh.position,target.mesh.position)>unit.range+1&&
-                    this.distance(unit.mesh.position,target.mesh.position)<23){
-                    const focus=target.mesh.position;
-                    const standoff=Math.max(5,unit.range*.75),side=index%2?4:-4;
-                    const p=new THREE.Vector3(focus.x-direction.x*standoff-direction.z*side,0,
-                        focus.z-direction.z*standoff+direction.x*side);
-                    if(getHeight(p.x,p.z)>=aiDryHeight()&&!isBlocked(p.x,p.z)&&
-                        isWalkableLine(unit.mesh.position,p,false,unit.height,true)&&this.moveUnit(unit,p,'attack'))return;
-                }
-                this.engage(unit,target,'attack');return;
+                if(group.some(ally=>ally!==unit&&this.distance(ally.mesh.position,unit.mesh.position)<=12))
+                    this.engage(unit,target,'attack');
+                else this.moveUnit(unit,formationPoint(center,direction,index%10,ranged),'regroup');
+                return;
             }
             const destination=waypoint||point;
             const slot=formationPoint(destination,direction,index%10,ranged);
@@ -10007,7 +10020,7 @@ class EnemyAI {
         if(scout){this.scoutOrder(scout,home);fit.splice(fit.indexOf(scout),1);}
         const reserve=Math.max(2,Math.ceil(fit.length*.3));
         const firstAttackSize=['swarmer','hive'].includes(this.personality)?5:7;
-        const ready=fit.length>reserve&&fit.length+(scout?1:0)>=
+        const ready=fit.length-reserve>=CONFIG.AI.MIN_ASSAULT_GROUP&&fit.length+(scout?1:0)>=
             (this.hasLaunchedAttack?CONFIG.AI.FOLLOW_UP_ATTACK_SIZE:firstAttackSize);
         let assaultCenter;
         if(threats.length){

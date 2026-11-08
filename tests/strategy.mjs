@@ -61,16 +61,22 @@ await check('After heavy losses a surviving tribe recruits, trains and attacks a
  survivor.aiRole='attack';
  state.units.push(survivor);
  testAI.think();
- if(survivor.aiRole!=='attack')throw Error('A surviving attacker was recalled after casualties');
+ if(!['regroup','guard'].includes(survivor.aiRole)||survivor.attackTarget)
+  throw Error('A surviving attacker continued alone after casualties');
  const waves=[];
  for(let wave=0;wave<2;wave++){
   const oldTroops=new Set(state.units);
   let attacker;
-  for(let elapsed=0;elapsed<160&&!attacker;elapsed+=5){
+  for(let elapsed=0;elapsed<220&&!attacker;elapsed+=5){
    aiStep(5);
-   attacker=state.units.find(u=>!oldTroops.has(u)&&u.faction===2&&u.type==='warrior'&&u.state!=='dead'&&u.aiRole==='attack');
+   attacker=state.units.find(u=>!oldTroops.has(u)&&u.faction===2&&['warrior','firewarrior','preacher'].includes(u.type)&&u.state!=='dead'&&u.aiRole==='attack');
   }
-  if(!attacker)throw Error('No replacement attack wave '+(wave+1)+': '+JSON.stringify(testAI.lastPlan));
+  if(!attacker||testAI.squad?.ids.size<CONFIG.AI.MIN_ASSAULT_GROUP)
+   throw Error('No grouped replacement attack wave '+(wave+1)+': '+JSON.stringify({
+    plan:testAI.lastPlan,rally:testAI.squad?.rally,deadline:testAI.squad?.deadline,now:testAI.intelTime,
+    troops:state.units.filter(u=>u.faction===2&&u.state!=='dead').map(u=>[u.type,u.aiRole,u.state,
+     Math.round(u.mesh.position.x),Math.round(u.mesh.position.z)])
+   }));
   const start=attacker.mesh.position.clone();
   aiStep(4);
   if(attacker.mesh.position.distanceTo(start)<.5)throw Error('Replacement attacker did not advance');
@@ -129,8 +135,40 @@ await check('An assault rallies, keeps a reserve and regroups when outmatched',(
   throw Error('An outmatched squad did not withdraw together');
  ai.squadOrder(group,home,[],2,true,null);
  if(ai.squad?.phase!=='retreat')throw Error('Losing contact interrupted the regrouping order');
+ const survivors=group.slice(2,4);
+ ai.squad.phase='advance';
+ ai.squadOrder(survivors,home,[],0,false,goal);
+ if(ai.squad?.phase!=='retreat'||survivors.some(unit=>unit.aiRole!=='regroup'||unit.attackTarget))
+  throw Error('A depleted assault continued with fewer than three attackers');
  group.forEach(unit=>unit.die());
  return {attackers:5,reserve:2};
+}));
+await check('Fire warriors back away from melee and hold a clear shot at range',()=>p.evaluate(()=>{
+ const ai=new testAI.constructor(2);
+ const target=new Humanoid(0,'warrior',10,5),ranged=new Humanoid(2,'firewarrior',12,5);
+ state.units.push(target,ranged);
+ const buildings=state.buildings,trees=Object.values(state.chunks).flatMap(chunk=>chunk.userData?.trees||[]);
+ const visibility=trees.map(tree=>tree.mesh.visible);
+ state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();gameTestAPI.BuildingSpatialHash.update();
+ trees.forEach(tree=>tree.mesh.visible=false);
+ try{
+  let destination=null;
+  ai.moveUnit=(_unit,point)=>{destination=point.clone();return true;};
+  ai.engage(ranged,target,'attack');
+  const reach=gameTestAPI.combatRange(ranged,target);
+  const firingDistance=destination?.distanceTo(target.mesh.position);
+  if(!(firingDistance>reach*.7&&firingDistance<=reach))
+   throw Error('Fire warrior did not seek a safe firing distance: '+firingDistance);
+  ranged.placeOnGround(destination.x,destination.z);destination=null;
+  ai.engage(ranged,target,'attack');
+  if(destination||ranged.attackTarget!==target||ranged.state!=='combat')
+   throw Error('Fire warrior left a clear shot instead of using its reach');
+  return {reach,firingDistance};
+ }finally{
+  trees.forEach((tree,i)=>tree.mesh.visible=visibility[i]);
+  state.buildings=buildings;gameTestAPI.BuildingSpatialHash.markDirty();gameTestAPI.BuildingSpatialHash.update();
+  target.die();ranged.die();
+ }
 }));
 await check('Battle spells score groups and campaign AI guards or intercepts objectives',()=>p.evaluate(async()=>{
  const {chooseBattleSpell}=await import('./art/enemy-tactics.js');
