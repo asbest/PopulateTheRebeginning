@@ -91,6 +91,10 @@ described it as royalty-free. The owner supplied the file for inclusion in the
 public repository as a second combat track. The inventory records it as
 `project-original`. The owner supplied no named public license.
 
+On 2026-11-08, the owner confirmed that `Populate_ingame3.mp3` is their own
+track and approved its inclusion in the public repository as gameplay music.
+The inventory records it as `project-original` with no public license grant.
+
 ## Project license and external environment
 
 On 2026-11-05, the owner explicitly requested restrictions on reuse of the

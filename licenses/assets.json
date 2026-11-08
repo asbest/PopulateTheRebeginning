@@ -26,6 +26,12 @@
       "evidence": "On 2026-11-04 the project owner confirmed that they created this recording and described it as royalty-free, then authorized its inclusion in the public repository. See docs/LICENSE-AUDIT.md#media-owner-attestation.",
       "sha256": "bb50947109d38d037d7336c9600eac22c028eb14404223e3849d604f9d868069"
     },
+    "Populate_ingame3.mp3": {
+      "status": "project-original",
+      "license": null,
+      "evidence": "On 2026-11-08 the project owner confirmed this is their own track and authorized its inclusion in the public repository. See docs/LICENSE-AUDIT.md#media-owner-attestation.",
+      "sha256": "1f202f4ea759e93cf302413a11ed43623072a49c4ea2a7189035fddb7904803f"
+    },
     "TitleImage.png": {
       "status": "project-original",
       "license": null,
