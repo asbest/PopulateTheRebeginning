@@ -456,13 +456,19 @@ try{
             const shooter=new Humanoid(0,'firewarrior',x,z);
             const target=new Humanoid(1,'warrior',x+6,z);
             state.units.push(shooter,target);
+            // Start level and above the randomized terrain so only height and the
+            // test building can affect the result.
+            const height=2+Math.max(...Array.from({length:7},(_,i)=>getHeight(x+i,z)));
+            shooter.mesh.position.y=target.mesh.position.y=height;
             const flat=gameTestAPI.combatRange(shooter,target);
             shooter.mesh.position.y+=4;
             const high=gameTestAPI.combatRange(shooter,target);
             shooter.mesh.position.y-=8;
             const low=gameTestAPI.combatRange(shooter,target);
             if(!(high>flat&&flat>low))throw new Error('Height does not affect reach');
-            shooter.mesh.position.y+=4;
+            shooter.mesh.position.y=height;
+            state.buildings=[];
+            if(!gameTestAPI.combatLineClear(shooter,target))throw new Error('Unobstructed shot was blocked');
             const blocker={dead:false,underConstruction:false,collisionRadius:2,type:'hut',
                 mesh:{position:{x:x+3,y:Math.max(shooter.mesh.position.y,target.mesh.position.y),z}}};
             state.buildings.push(blocker);

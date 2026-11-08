@@ -1,3 +1,4 @@
+import {seedWorld,startManualSimulation} from './fixtures/seed-world.mjs';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
@@ -6,10 +7,12 @@ const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createR
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try {
     const page=await browser.newPage();
+    await seedWorld(page,98217);
     const errors=[];
     page.on('pageerror',error=>errors.push(String(error)));
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:60000});
+    await startManualSimulation(page,98217);
     const result=await page.evaluate(()=>{
         state.isPaused=true;
         gameTestAPI.PathWorker.disable();
@@ -18,9 +21,11 @@ try {
         for(const building of state.buildings)state.scene.remove(building.mesh);
         state.buildings=[];
         gameTestAPI.BuildingSpatialHash.markDirty();
-        for(let x=-15;x<=15;x++)for(let z=-15;z<=15;z++)
+        state.cameraLookAt.set(0,6,0);
+        for(let x=-20;x<=20;x++)for(let z=-20;z<=20;z++)
             state.terrainMods.set(`${x},${z}`,6-gameTestAPI.getBaseHeight(x,z));
         state.heightCache.clear();gameTestAPI.updateChunks(true);
+        for(let i=0;i<10;i++)gameTestAPI.updateChunks();
         for(const chunk of Object.values(state.chunks))for(const tree of chunk.userData?.trees||[])tree.mesh.visible=false;
         const building=gameTestAPI.createBuilding('warrior',0,0,0,false);
         building.underConstruction=false;building.visualMesh.scale.y=1;
