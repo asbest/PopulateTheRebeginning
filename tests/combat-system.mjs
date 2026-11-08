@@ -382,6 +382,8 @@ try{
         await fresh();
         await page.evaluate(()=>{
             closeHelp();closeStoryOverlay();
+            // Closing the overlays resumes the live loop. This fixture advances combat itself.
+            state.isPaused=true;
             const {x,z}=state.shaman.mesh.position;
             for(const u of state.units){u.die();state.scene.remove(u.mesh);}
             state.units=[];
@@ -406,7 +408,7 @@ try{
             if(priest.attackTarget!==automatic||!state.scene.getObjectByName('PreacherConversion'))
                 throw new Error('Selected priest did not automatically start converting the nearest enemy');
         });
-        await clickAttack('#btn-preacher_convert');
+        await page.locator('#btn-preacher_convert').click();
         return page.evaluate(()=>{
             const {priest,automatic,manual,distant}=preacherFixture;
             const action='preacher_convert',mana=state.mana;
