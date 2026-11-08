@@ -47,8 +47,12 @@ try{
             const third=sound.explorationMusic;
             if(new URL(third.src).pathname.split('/').at(-1)!==files[2])
                 throw new Error('The third gameplay track was not selected');
+            await third.play();
+            third.currentTime=Math.min(5,third.duration/2);
             Math.random=()=>0;
             sound.updateMusic(true);
+            const pausedAt=third.currentTime;
+            if(pausedAt<=0)throw new Error('The gameplay track was not seekable');
             if(sound.musicMode!=='combat'||!sound.explorationMusic.paused)
                 throw new Error('Combat did not switch away from gameplay music');
             const fight=sound.combatMusic;
@@ -62,17 +66,17 @@ try{
             fight.dispatchEvent(new Event('ended'));
             if(!fight.paused||fileName()!==combatFiles[0])throw new Error('Combat playlist advanced after combat ended');
             const resumed=sound.explorationMusic;
-            if(resumed===third||sound.musicMode!=='exploration')
-                throw new Error('Returning from combat did not select another gameplay title');
+            if(resumed!==third||resumed.paused||sound.musicMode!=='exploration'||Math.abs(resumed.currentTime-pausedAt)>.25)
+                throw new Error('Returning from combat did not resume the same gameplay title at its paused position');
             sound.setMusicEnabled(false);
             if(!resumed.paused||!sound.combatMusic.paused)
                 throw new Error('Music toggle did not stop the playlist');
             return {first:first.src.split('/').at(-1),second:second.src.split('/').at(-1),
-                third:third.src.split('/').at(-1),resumed:resumed.src.split('/').at(-1)};
+                third:third.src.split('/').at(-1),resumed:resumed.src.split('/').at(-1),pausedAt};
         }finally{
             Math.random=originalRandom;
             sound.setMusicEnabled(originalEnabled);
         }
     });
-    console.log('PASS Exploration rotates and the two combat tracks alternate, wrap and stop outside combat',result);
+    console.log('PASS Gameplay music rotates, pauses in combat and resumes at the same position',result);
 }finally{await browser.close();}

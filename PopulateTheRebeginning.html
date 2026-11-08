@@ -2813,15 +2813,12 @@ const SoundManager = {
 
         if (enemyInRange) {
             this.musicMode = 'combat';
-            if (this.combatMusic.paused) {
-                if (this.explorationMusic) this.explorationMusic.pause();
-                this.combatMusic.play().catch(e => {});
-            }
+            if (this.explorationMusic && !this.explorationMusic.paused) this.explorationMusic.pause();
+            if (this.combatMusic.paused) this.combatMusic.play().catch(() => {});
         } else {
-            const enteringExploration = this.musicMode !== 'exploration';
             this.musicMode = 'exploration';
             if (this.combatMusic) this.combatMusic.pause();
-            if (enteringExploration || !this.explorationMusic) this.playNextExplorationTrack();
+            if (!this.explorationMusic || this.explorationMusic.ended) this.playNextExplorationTrack();
             else if (this.explorationMusic.paused) this.explorationMusic.play().catch(() => {});
         }
     },
