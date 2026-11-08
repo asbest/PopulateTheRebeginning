@@ -9818,7 +9818,9 @@ class EnemyAI {
         if(squad.phase==='retreat'){
             this.state='regroup';
             for(const [index,unit] of group.entries())this.moveUnit(unit,formationPoint(home,direction,index),'regroup');
-            if(this.intelTime>=squad.deadline&&this.distance(center,home)<18)this.squad=null;
+            // A trapped survivor must not keep fresh troops waiting indefinitely.
+            if(this.intelTime>=squad.deadline&&(this.distance(center,home)<18||this.intelTime>=squad.deadline+18))
+                this.squad=null;
             return;
         }
         if(squad.phase==='rally'){
@@ -9834,6 +9836,12 @@ class EnemyAI {
                 let neighbours=0;
                 return group.some(ally=>this.distance(ally.mesh.position,unit.mesh.position)<12&&++neighbours>=minimum);
             });
+            if(!together&&this.intelTime>=squad.deadline){
+                const anchor=group.reduce((closest,unit)=>this.distance(unit.mesh.position,home)<
+                    this.distance(closest.mesh.position,home)?unit:closest);
+                const {x,z}=anchor.mesh.position;
+                squad.rally={x,z};squad.deadline=this.intelTime+12;
+            }
             if(!together||!alreadyForward&&assembled<Math.ceil(group.length*.7)&&this.intelTime<squad.deadline){
                 this.state='rally';
                 group.forEach((unit,index)=>this.moveUnit(unit,formationPoint(squad.rally,direction,index,unit.type==='firewarrior'),'rally'));

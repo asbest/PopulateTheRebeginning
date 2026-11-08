@@ -140,8 +140,22 @@ await check('An assault rallies, keeps a reserve and regroups when outmatched',(
  ai.squadOrder(survivors,home,[],0,false,goal);
  if(ai.squad?.phase!=='retreat'||survivors.some(unit=>unit.aiRole!=='regroup'||unit.attackTarget))
   throw Error('A depleted assault continued with fewer than three attackers');
+ // A survivor stranded beyond the return radius used to lock the entire army in retreat.
+ survivors.forEach(unit=>unit.placeOnGround(home.x+30,home.z));
+ ai.intelTime=ai.squad.deadline;
+ ai.squadOrder(group,home,[],2,true,goal);
+ if(ai.squad?.phase!=='retreat')throw Error('The squad skipped its withdrawal');
+ ai.intelTime+=18;
+ ai.squadOrder(group,home,[],2,true,goal);
+ if(ai.squad)throw Error('A stranded survivor permanently blocked reinforcements');
+ ai.squadOrder(group,home,[],2,true,goal);
+ if(!ai.squad?.rally)throw Error('Fresh troops did not assemble after the withdrawal');
+ const nextRally=ai.squad.rally;
+ group.filter(unit=>ai.squad.ids.has(unit.id)).forEach(unit=>unit.placeOnGround(nextRally.x,nextRally.z));
+ ai.squadOrder(group,home,[],2,true,goal);
+ if(ai.squad?.phase!=='advance')throw Error('The assembled replacement wave did not attack');
  group.forEach(unit=>unit.die());
- return {attackers:5,reserve:2};
+ return {attackers:5,reserve:2,relaunched:true};
 }));
 await check('Fire warriors back away from melee and hold a clear shot at range',()=>p.evaluate(()=>{
  const ai=new testAI.constructor(2);
