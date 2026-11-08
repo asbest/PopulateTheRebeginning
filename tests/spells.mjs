@@ -204,6 +204,53 @@ try{
    return {shamanHp:shaman.maxHp,warriorHp:warrior.maxHp,swampLoss,volcanoLoss};
   });
  });
+ await check('Volcano lava spreads, destroys both sides and stops at final height',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {x,z,caster,ally}=fixture;
+   gameTestAPI.executeSpell('volcano',x,z,caster);
+   const volcano=state.activeEffects.at(-1);
+   const nearHeight=getHeight(x,z),initialRadius=volcano.radius;
+   const angle=volcano.edge.indexOf(Math.max(...volcano.edge))/volcano.edge.length*Math.PI*2;
+   const distance=6;
+   const outer=new Humanoid(1,'warrior',x+Math.cos(angle)*distance,z+Math.sin(angle)*distance);
+   const building=gameTestAPI.createBuilding('spy',x,z,0,false,true);
+   const outside=new Humanoid(1,'warrior',x+20,z);
+   state.units.push(outer,outside);gameTestAPI.SpatialHash.update();
+   const outerHp=outer.hp,outsideHp=outside.hp,buildingHp=building.hp;
+   if(volcano.mesh.parent!==state.scene||volcano.covers(outer.mesh.position.x,outer.mesh.position.z))
+    throw Error('Lava is missing or already covers the outer target');
+   volcano.update(.21);
+   if(outer.hp!==outerHp||ally.hp>=ally.maxHp||building.hp>=buildingHp)
+    throw Error('Initial lava damage does not match the front');
+   const scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(-8,8,8,-8,.1,200);
+   camera.position.set(x,nearHeight+25,z+1);camera.lookAt(x,nearHeight,z);
+   scene.add(volcano.mesh.clone());
+   let shaderError=false;
+   const previous=state.renderer.debug.onShaderError;
+   state.renderer.debug.onShaderError=()=>{shaderError=true;};
+   try{state.renderer.render(scene,camera);}finally{state.renderer.debug.onShaderError=previous;}
+   if(shaderError||state.renderer.info.render.triangles===0)throw Error('Lava shader did not render');
+   for(let i=0;i<70;i++)volcano.update(.2);
+   if(!building.dead||ally.state!=='dead'||outer.state!=='dead'||outside.hp!==outsideHp||
+      volcano.radius<=initialRadius||getHeight(x,z)<=nearHeight||volcano.mesh.parent!==state.scene)
+    throw Error('Lava did not destroy the covered area during growth');
+   if(volcano.update(1)!==false||volcano.mesh.parent)throw Error('Lava persisted after growth');
+   const finalHeight=getHeight(x,z);
+   if(volcano.update(1)!==false||getHeight(x,z)!==finalHeight)throw Error('Volcano continued growing after expiry');
+   const role=state.network.role;
+   state.network.role='client';
+   try{
+    window.NetworkManager.handleData({type:'volcano_eruption',x,z,faction:caster.faction});
+    const remote=state.activeEffects.at(-1);
+    const health=caster.hp;
+    if(remote===volcano||remote.mesh.parent!==state.scene||!remote.update(.4)||
+       getHeight(x,z)!==finalHeight||caster.hp!==health)
+     throw Error('Remote eruption was not rendered independently of terrain and damage');
+    remote.dispose();
+   }finally{state.network.role=role;}
+   return {initialRadius,finalRadius:volcano.radius,finalHeight};
+  });
+ });
  await check('Older saves preserve the shaman health fraction after the balance change',async()=>{
   await fresh();return p.evaluate(()=>{
    const key=gameTestAPI.CONFIG.SAVED_KEYS.SAVE_DATA;
@@ -388,7 +435,11 @@ try{
     expect(projectile.stormShot&&!projectile.light,'Firestorm projectile allocated an extra light');
     if(stormLight)expect(stormLight.parent===state.scene,'Firestorm light missing');
    }
-   else{for(let i=0;i<90;i++)effect.update(1/60);expect(enemy.hp<before.hp,'Hazard has no damage');expect(ally.hp===500,'Friendly hazard damage');}
+   else{
+    for(let i=0;i<90;i++)effect.update(1/60);
+    expect(enemy.hp<before.hp,'Hazard has no damage');
+    expect(spell==='volcano'?ally.hp<500:ally.hp===500,'Incorrect friendly hazard damage');
+   }
    if(spell==='volcano')expect(getHeight(x,z)>before.h,'Volcano terrain unchanged');
    effect.timer=0;expect(effect.update(.01)===false,'Effect does not expire');
    if(effect.mesh)expect(!effect.mesh.parent,'Expired effect remains visible');

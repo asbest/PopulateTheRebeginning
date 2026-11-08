@@ -1036,8 +1036,6 @@ const CONFIG = {
         PHANTOM_DURATION: 15000,
         SWARM_PARTICLE_COUNT: 15,
         TORNADO_CLOUD_COUNT: 7,
-        VOLCANO_SMOKE_CHANCE: 0.1,
-        VOLCANO_LAVA_CHANCE: 0.25,
         DUST_PER_RADIUS: 2.5,
         FIRE_TRAIL_RADIUS: 0.3,
         FIRE_TRAIL_LIFE: 0.4,
@@ -1047,7 +1045,6 @@ const CONFIG = {
         LIGHTNING_JITTER: 4,
         LIGHTNING_RADIUS: 0.2,
         VOLCANO_DURATION: 15.0,
-        VOLCANO_LAVA_RAISE: 0.2,
         VOLCANO_TICK_RAISE: 0.2,
         TORNADO_DURATION: 20.0,
         SWAMP_DURATION: 30.0,
@@ -1982,6 +1979,8 @@ const NetworkManager = {
         } else {
              if(data.type === 'sync') {
                  this.applySync(data);
+             } else if (data.type === 'volcano_eruption' && !isPeaceTime()) {
+                 state.activeEffects.push(new Volcano(data.x,data.z,data.faction,true));
              } else if (data.type === 'terrain_update') {
                  data.mods.forEach(([key, val]) => {
                      state.terrainMods.set(key, val);
@@ -4441,7 +4440,7 @@ function restoreTree(tree) {
     tree.burned=false;
 }
 
-function burnTreesAt(x, z, radius) {
+function burnTreesAt(x, z, radius, covers = null) {
     const radiusSquared=radius*radius;
     const half=CHUNK_SIZE/2;
     const minX=Math.floor((x-radius+half)/CHUNK_SIZE),maxX=Math.floor((x+radius+half)/CHUNK_SIZE);
@@ -4450,7 +4449,7 @@ function burnTreesAt(x, z, radius) {
         const chunk=state.chunks[`${cx},${cz}`];
         const hit=(id,treeX,treeZ,tree)=>{
             const dx=treeX-x,dz=treeZ-z;
-            if(dx*dx+dz*dz>=radiusSquared)return;
+            if(dx*dx+dz*dz>=radiusSquared||(covers&&!covers(treeX,treeZ)))return;
             // A fresh hit renews the timer, even if the tree is already charred.
             state.treeBurns.set(id,state.treeTime+CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
             if(tree)charTree(tree);
@@ -6311,7 +6310,7 @@ const FireballFxManager={
             }
             for(const effect of state.activeEffects){
                 if(slot>=this.lights.length)break;
-                if(!(effect instanceof Firestorm)||effect.timer<=0)continue;
+                if(!(effect instanceof Firestorm||effect instanceof Volcano)||effect.timer<=0)continue;
                 const light=this.lights[slot++];
                 light.position.set(effect.x,getHeight(effect.x,effect.z)+5,effect.z);
                 light.intensity=1.8+Math.sin(effect.timer*7)*.35;
@@ -6504,7 +6503,8 @@ function prewarmSpellShaders() {
     const warmMaterials = [];
     const spellPreviews = [];
     const litTier = ['high','ultra'].includes(state.graphicsQuality?.tier);
-    const volcanoLight = litTier ? new THREE.PointLight() : null;
+    const lavaPreview=createVolcanoLava();
+    state.scene.add(lavaPreview);
     try {
         // Build the actual visual variants without starting spells, sounds or simulation.
         for(const Effect of [Swamp,Tornado,Swarm]) {
@@ -6529,18 +6529,14 @@ function prewarmSpellShaders() {
         else state.scene.remove(...spellPreviews);
         FireballFxManager.lights[1].visible=true;
         state.renderer.compile(state.scene, state.camera);
-        // One active volcano adds a light to the selected tier's existing light budget.
-        // On lower tiers its one-light variant was already covered above.
-        if(volcanoLight) {
-            state.scene.add(volcanoLight);
-            state.renderer.compile(state.scene, state.camera);
-        }
         state.fireballShadersReady = true;
     } catch (error) {
         console.warn('Spell shader warmup unavailable:', error);
     } finally {
         existingLights.forEach(([light,visible])=>{light.visible=visible;});
-        if(volcanoLight){state.scene.remove(volcanoLight);volcanoLight.dispose();}
+        state.scene.remove(lavaPreview);
+        lavaPreview.geometry.dispose();
+        warmMaterials.push(lavaPreview.material);
         for(const mesh of spellPreviews) {
             state.scene.remove(mesh);
             for(const part of mesh.children) {
@@ -6585,96 +6581,148 @@ class ActiveEffect {
     update(dt) { return false; }
 }
 
+const VOLCANO_SEGMENTS=36, VOLCANO_RINGS=16;
+function createVolcanoLava(){
+    const geometry=new THREE.BufferGeometry();
+    const count=(VOLCANO_SEGMENTS+1)*(VOLCANO_RINGS+1);
+    const uv=new Float32Array(count*2),indices=[];
+    for(let ring=0;ring<=VOLCANO_RINGS;ring++){
+        for(let segment=0;segment<=VOLCANO_SEGMENTS;segment++){
+            const index=ring*(VOLCANO_SEGMENTS+1)+segment;
+            uv[index*2]=segment/VOLCANO_SEGMENTS;
+            uv[index*2+1]=ring/VOLCANO_RINGS;
+            if(ring&&segment){
+                const inner=index-VOLCANO_SEGMENTS-1;
+                indices.push(inner-1,inner,index-1,inner,index,index-1);
+            }
+        }
+    }
+    geometry.setIndex(indices);
+    geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(count*3),3).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+    const material=new THREE.ShaderMaterial({
+        uniforms:{elapsed:{value:0}},
+        side:THREE.DoubleSide,toneMapped:false,
+        vertexShader:`
+            varying vec2 flow;
+            void main(){
+                flow=uv;
+                gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+            }`,
+        fragmentShader:`
+            uniform float elapsed;
+            varying vec2 flow;
+            void main(){
+                float angle=flow.x*6.2831853;
+                float drift=flow.y*23.0-elapsed*3.8;
+                float streak=sin(angle*11.0+sin(drift*.55+angle*3.0)*1.2+drift*.8);
+                float crust=sin(drift+sin(angle*7.0+drift*.2)*2.0)*.35+streak*.65;
+                float glow=smoothstep(-.55,.62,crust);
+                vec3 rock=vec3(.13,.016,.009);
+                vec3 molten=mix(vec3(.8,.07,.015),vec3(1.0,.67,.13),glow);
+                gl_FragColor=vec4(mix(rock,molten,smoothstep(.03,.12,1.0-flow.y)*.64+.36),1.0);
+                #include <encodings_fragment>
+            }`
+    });
+    const mesh=new THREE.Mesh(geometry,material);
+    mesh.name='Volcano lava';
+    mesh.frustumCulled=false;
+    return mesh;
+}
+
 class Volcano extends ActiveEffect {
-    constructor(x, z, faction) {
-        super();
-        this.x = x; this.z = z;
-        this.faction = faction;
-        this.timer = CONFIG.EFFECTS.VOLCANO_DURATION;
-        this.interval = 0;
+    constructor(x,z,faction,visualOnly=false){
+        super(faction);
+        this.x=x;this.z=z;
+        this.visualOnly=visualOnly;
+        this.timer=CONFIG.EFFECTS.VOLCANO_DURATION;
+        this.age=0;this.ticks=0;
+        this.mesh=createVolcanoLava();
+        const phase=Math.sin(x*.73+z*.41)*Math.PI;
+        this.edge=Array.from({length:VOLCANO_SEGMENTS},(_,segment)=>{
+            const angle=segment/VOLCANO_SEGMENTS*Math.PI*2;
+            return .79+.15*Math.sin(angle*5+phase)+.06*Math.sin(angle*9-phase);
+        });
         SoundManager.playSound('volcano');
-        this.soundLoop = SoundManager.startSustain('volcano_loop');
-
-        // Add persistent light
-        this.light = new THREE.PointLight(0xFF4500, 2, 20);
-        this.light.position.set(x, getHeight(x, z) + 5, z);
-        state.scene.add(this.light);
-
-        // Initial rise
-        const mods = modifyTerrain(x, z, 8, 5);
-        updateChunks(true, mods);
+        this.soundLoop=SoundManager.startSustain('volcano_loop');
+        if(!this.visualOnly)updateChunks(true,modifyTerrain(x,z,8,5));
+        this.updateLava(0);
+        state.scene.add(this.mesh);
     }
-    update(dt) {
-        this.timer -= dt;
-        this.interval += dt;
 
-        this.light.position.y = getHeight(this.x, this.z) + 2;
-        this.light.intensity = 2 + Math.sin(this.timer * 10) * 0.5;
-
-        // Visuals: Lava Particles
-        if(Math.random() < 0.25) {
-            const dist = Math.random() * 4;
-            const angle = Math.random() * Math.PI * 2;
-            const px = this.x + Math.cos(angle) * dist;
-            const pz = this.z + Math.sin(angle) * dist;
-            const h = getHeight(px, pz);
-            const p = new Particle(new THREE.Vector3(px, h, pz), COLORS.lava, 0.3 + Math.random()*0.3, 1.5);
-            p.vel.set((Math.random()-0.5)*4, Math.random()*8+4, (Math.random()-0.5)*4);
-            state.particles.push(p);
+    updateLava(age){
+        const spread=Math.min(1,age/(CONFIG.EFFECTS.VOLCANO_DURATION-1));
+        this.radius=2.8+(CONFIG.COMBAT.VOLCANO_TICK_RADIUS-2.8)*spread;
+        const positions=this.mesh.geometry.getAttribute('position');
+        for(let ring=0;ring<=VOLCANO_RINGS;ring++){
+            for(let segment=0;segment<=VOLCANO_SEGMENTS;segment++){
+                const angle=segment/VOLCANO_SEGMENTS*Math.PI*2;
+                const distance=this.radius*this.edge[segment%VOLCANO_SEGMENTS]*ring/VOLCANO_RINGS;
+                const x=this.x+Math.cos(angle)*distance,z=this.z+Math.sin(angle)*distance;
+                const height=Math.max(getSurfaceHeight(x,z),VISUAL_WATER_LEVEL)+.22;
+                positions.setXYZ(ring*(VOLCANO_SEGMENTS+1)+segment,x,height,z);
+            }
         }
-
-        // Visuals: Smoke Clouds
-        if(Math.random() < 0.1) {
-            const size = 1 + Math.random() * 2;
-            const smokeMesh = new THREE.Mesh(AssetCache.geos.cloud, new THREE.MeshBasicMaterial({color: COLORS.smoke, transparent: true, opacity: 0.8}));
-            smokeMesh.position.set(this.x + (Math.random()-0.5)*2, getHeight(this.x, this.z), this.z + (Math.random()-0.5)*2);
-            smokeMesh.scale.set(size, size, size);
-            smokeMesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
-
-            state.particles.push(new VisualEffect(smokeMesh, 3.0, (eff, dt) => {
-                eff.mesh.position.y += dt * 3.0;
-                eff.mesh.position.x += (Math.random() - 0.5) * dt;
-                eff.mesh.position.z += (Math.random() - 0.5) * dt;
-                eff.mesh.rotation.y += dt;
-                const prog = eff.life / eff.maxLife;
-                eff.mesh.scale.setScalar(size * (1.0 + (1.0 - prog) * 2.0));
-                eff.mesh.material.opacity = 0.8 * prog;
-            }));
-        }
-
-        if(this.interval > CONFIG.COMBAT.VOLCANO_TICK_INTERVAL) {
-            this.interval = 0;
-            // Continually raise/modify
-            const mods = modifyTerrain(this.x, this.z, 5, 0.2);
-            updateChunks(true, mods);
-
-            burnTreesAt(this.x, this.z, CONFIG.COMBAT.VOLCANO_TICK_RADIUS);
-
-            // Push & Damage
-            SpatialHash.query(this.x, this.z, CONFIG.COMBAT.VOLCANO_TICK_RADIUS).forEach(u => {
-                const dist = Math.hypot(u.mesh.position.x-this.x,u.mesh.position.z-this.z);
-                if(dist < CONFIG.COMBAT.VOLCANO_TICK_RADIUS && u.faction !== this.faction && u.state!=='dead') {
-                    if(!u.shielded){
-                        const dir = u.mesh.position.clone().sub(new THREE.Vector3(this.x, u.mesh.position.y, this.z)).normalize();
-                        u.applyForce(dir.multiplyScalar(3.5).add(new THREE.Vector3(0, 2.2, 0)));
-                    }
-                    u.takeDamage(CONFIG.COMBAT.VOLCANO_TICK_DAMAGE*
-                        radialDamageFactor(dist,CONFIG.COMBAT.VOLCANO_TICK_RADIUS),false,true,'magic');
-                }
-            });
-            state.buildings.forEach(b => {
-                 const dist = b.mesh.position.distanceTo(new THREE.Vector3(this.x, b.mesh.position.y, this.z));
-                 if(dist < CONFIG.COMBAT.VOLCANO_TICK_RADIUS && b.faction !== this.faction)
-                     b.takeDamage(CONFIG.COMBAT.VOLCANO_BUILDING_DAMAGE*
-                         radialDamageFactor(dist,CONFIG.COMBAT.VOLCANO_TICK_RADIUS));
-            });
-        }
-        if(this.timer <= 0) { this.dispose(); return false; }
-        return true;
+        positions.needsUpdate=true;
     }
-    dispose() {
+
+    covers(x,z,padding=0){
+        const dx=x-this.x,dz=z-this.z;
+        if(dx*dx+dz*dz>(this.radius+padding)**2)return false;
+        const angle=Math.atan2(dz,dx);
+        const segment=(angle/(Math.PI*2)*VOLCANO_SEGMENTS+VOLCANO_SEGMENTS)%VOLCANO_SEGMENTS;
+        const start=Math.floor(segment);
+        const edge=THREE.MathUtils.lerp(this.edge[start],this.edge[(start+1)%VOLCANO_SEGMENTS],segment-start);
+        return dx*dx+dz*dz<=(this.radius*edge+padding)**2;
+    }
+
+    tick(age){
+        if(!this.visualOnly)updateChunks(true,modifyTerrain(this.x,this.z,5,CONFIG.EFFECTS.VOLCANO_TICK_RAISE));
+        this.updateLava(age);
+        if(this.ticks%3===0){
+            const height=Math.max(getSurfaceHeight(this.x,this.z),VISUAL_WATER_LEVEL);
+            spawnSmoke(new THREE.Vector3(this.x,height+.35,this.z),0x382822,1.6,2.4);
+        }
+        burnTreesAt(this.x,this.z,this.radius,(x,z)=>this.covers(x,z));
+        if(this.visualOnly)return;
+        for(const unit of SpatialHash.query(this.x,this.z,this.radius)){
+            const {x,y,z}=unit.mesh.position;
+            if(unit.state==='dead'||unit.state==='transported'||unit.shielded||!this.covers(x,z)||
+               (unit.isVehicle&&y>getSurfaceHeight(x,z)+2))continue;
+            const direction=new THREE.Vector3(x-this.x,0,z-this.z).normalize().multiplyScalar(3.5);
+            direction.y=2.2;
+            unit.applyForce(direction);
+            unit.takeDamage(Math.max(CONFIG.COMBAT.VOLCANO_TICK_DAMAGE,unit.maxHp*.2),true,false,'magic');
+        }
+        for(const building of state.buildings){
+            const {x,z}=building.mesh.position;
+            if(!building.dead&&this.covers(x,z,(building.collisionRadius||0)*.65))
+                building.takeDamage(Math.max(CONFIG.COMBAT.VOLCANO_BUILDING_DAMAGE,building.maxHp*.25),true,false);
+        }
+    }
+
+    update(dt){
+        if(!this.mesh.parent)return false;
+        this.age+=Math.min(this.timer,dt);
+        this.timer=Math.max(0,this.timer-dt);
+        const step=CONFIG.COMBAT.VOLCANO_TICK_INTERVAL;
+        this.mesh.material.uniforms.elapsed.value=this.age;
+        while((this.ticks+1)*step<=this.age+1e-8){
+            this.ticks++;
+            this.tick(this.ticks*step);
+        }
+        if(this.timer>0)return true;
+        this.dispose();
+        return false;
+    }
+
+    dispose(){
+        if(!this.mesh.parent)return;
         this.soundLoop?.stop();
-        if (this.light) {state.scene.remove(this.light);this.light.dispose();this.light=null;}
+        this.soundLoop=null;
+        this.mesh.parent.remove(this.mesh);
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
     }
 }
 
@@ -7217,7 +7265,8 @@ function executeSpell(type, x, z, caster) {
         SoundManager.playSound('lower');
     }
     else if (type === 'volcano') {
-        state.activeEffects.push(new Volcano(x, z, caster.faction));
+        state.activeEffects.push(new Volcano(x,z,caster.faction));
+        if(state.network.role==='host')state.network.conn?.send({type:'volcano_eruption',x,z,faction:caster.faction});
     }
     else if (type === 'heal') {
         SoundManager.playSound('heal');
