@@ -154,6 +154,48 @@ await check('Battle spells score groups and campaign AI guards or intercepts obj
  return {blast:'cluster',shield:'exposed group',heal:'wounded group',objective:'intercept'};
 }));
 await p.close();
+await check('The enemy shaman walks to the bank before bridging toward the attack goal',async()=>{
+ const bridge=await b.newPage();bridge.on('pageerror',e=>errors.push(String(e)));
+ try{
+  await seedWorld(bridge,98217);
+  await bridge.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
+  await bridge.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
+  return await bridge.evaluate(()=>{
+ state.isPaused=true;stopTestPresentation();
+ state.matchSettings.peaceTimeMinutes=0;gameTestAPI.PathWorker.disable();
+ const ai=new enemyAIs[0].constructor(2),goal={x:24,z:0};
+ for(const u of state.units){u.die();state.scene.remove(u.mesh);}
+ state.units=[];
+ for(const building of state.buildings)state.scene.remove(building.mesh);
+ state.buildings=[];gameTestAPI.BuildingSpatialHash.markDirty();gameTestAPI.BuildingSpatialHash.update();
+ for(let x=-45;x<=45;x++)for(let z=-40;z<=40;z++)
+    state.terrainMods.set(`${x},${z}`,(x>0&&x<10?-4:6)-gameTestAPI.getBaseHeight(x,z));
+ state.heightCache.clear();state.cameraLookAt.set(0,6,0);gameTestAPI.updateChunks(true);
+ for(let i=0;i<5;i++)gameTestAPI.updateChunks();
+ for(const chunk of Object.values(state.chunks))for(const tree of chunk.userData?.trees||[])tree.mesh.visible=false;
+ const shaman=new Humanoid(2,'shaman',-20,0);
+ state.units.push(shaman);shaman.nextTargetCheck=Infinity;
+ ai.myShaman=shaman;ai.squad={routeChecked:1};ai.spellCooldown=0;
+ const waterHeight=getHeight(5,0);
+ if(!ai.approachBridge(goal)||shaman.state!=='move'||shaman.finalDest?.x< -5||
+    ai.bridgeCooldown||getHeight(5,0)!==waterHeight)
+    throw Error('Shaman did not approach the shore before casting');
+ let castX=null;
+ for(let frame=0;frame<600;frame++){
+    state.physicsWorld.timestep=1/60;state.physicsWorld.step();shaman.update(1/60);
+    if(frame%15!==0)continue;
+    ai.approachBridge(goal);
+    if(ai.bridgeCooldown){castX=shaman.mesh.position.x;break;}
+ }
+ if(castX===null||castX< -4||castX>1||getHeight(5,0)<gameTestAPI.aiDryHeight()||ai.squad.routeChecked!==0)
+    throw Error('Land bridge did not connect the opposing bank: '+JSON.stringify({castX,height:getHeight(5,0),state:shaman.state}));
+ const route=Pathfinder.findPath(new THREE.Vector3(-8,0,0),new THREE.Vector3(goal.x,0,0),false,1.5,true);
+ if(!route?.some(point=>point.x>=10&&Math.abs(point.z)<4))
+    throw Error('The dry route did not cross the new bridge toward the goal');
+ return {castX,bridgeHeight:getHeight(5,0),waypoints:route.length};
+  });
+ }finally{await bridge.close();}
+});
 await check('Enemy routes stay dry and troops climb steep banks from water and land',async()=>{
  const water=await b.newPage();water.on('pageerror',e=>errors.push(String(e)));
  try {

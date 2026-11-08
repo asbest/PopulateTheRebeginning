@@ -9619,6 +9619,78 @@ class EnemyAI {
             CONFIG.AI.SHAMAN_SPELL_RANGE_BASE+this.myShaman.mesh.position.y;
     }
 
+    bridgeLanding(from,goal,range){
+        const distance=this.distance(from,goal);
+        if(distance<1)return null;
+        const dx=(goal.x-from.x)/distance,dz=(goal.z-from.z)/distance;
+        const limit=Math.min(distance,range),dryHeight=aiDryHeight();
+        let crossedWater=false,dryLength=0;
+        for(let d=.5;d<=limit;d+=.5){
+            const x=from.x+dx*d,z=from.z+dz*d;
+            if(getHeight(x,z)<dryHeight){crossedWater=true;dryLength=0;}
+            else if(crossedWater){
+                dryLength+=.5;
+                if(dryLength>=1&&!isBlocked(x,z))return {x,z};
+            }
+        }
+        return null;
+    }
+
+    approachBridge(goal){
+        const shaman=this.myShaman,from=shaman.mesh.position;
+        if(shaman.aiWaterEscape||['dead','stunned','getting_up','transported'].includes(shaman.state)||
+           getHeight(from.x,from.z)<aiDryHeight())return false;
+        const distance=this.distance(from,goal);
+        if(distance<2)return false;
+        const planned=this.bridgeApproach;
+        if(planned&&this.distance(planned.goal,goal)<3&&this.distance(from,planned.origin)>=1.5&&
+           this.moveUnit(shaman,planned.origin,'bridge'))return true;
+        this.bridgeApproach=null;
+
+        const dx=(goal.x-from.x)/distance,dz=(goal.z-from.z)/distance;
+        const dryHeight=aiDryHeight(),candidates=[];
+        for(let d=2;d<Math.min(distance,36);d+=2){
+            for(const side of [0,-4,4,-8,8]){
+                const x=from.x+dx*d-dz*side,z=from.z+dz*d+dx*side;
+                const height=getHeight(x,z);
+                if(height<dryHeight||isBlocked(x,z))continue;
+                const remaining=this.distance({x,z},goal);
+                if(remaining<distance-1.5)candidates.push({x,z,height,remaining});
+            }
+        }
+        candidates.sort((a,b)=>a.remaining-b.remaining);
+        const start=new THREE.Vector3(from.x,0,from.z);
+        let advance=null;
+        for(const origin of candidates){
+            const range=CONFIG.AI.SHAMAN_SPELL_RANGE_BASE+origin.height-1.5;
+            const landing=this.bridgeLanding(origin,goal,range);
+            if(!landing&&advance)continue;
+            if(!isWalkableLine(start,new THREE.Vector3(origin.x,0,origin.z),false,shaman.height,true))continue;
+            if(!landing){advance=origin;continue;}
+            if(this.moveUnit(shaman,origin,'bridge')){
+                this.bridgeApproach={origin,goal:{x:goal.x,z:goal.z}};
+                this.squad.blockedSince=this.intelTime;
+                return true;
+            }
+        }
+        // Recheck from the actual casting position, after reaching the bank.
+        const landing=this.bridgeLanding(from,goal,CONFIG.AI.SHAMAN_SPELL_RANGE_BASE+from.y);
+        if(landing){
+            shaman.aiRole='bridge';
+            if(this.cast('landbridge',landing)){
+                this.bridgeCooldown=12;
+                this.squad.routeChecked=0;
+            }
+            return true;
+        }
+        if(advance&&this.moveUnit(shaman,advance,'bridge')){
+            this.bridgeApproach={origin:advance,goal:{x:goal.x,z:goal.z}};
+            this.squad.blockedSince=this.intelTime;
+            return true;
+        }
+        return false;
+    }
+
     gatherIntel(units,buildings) {
         this.intelTime+=Math.min(2,CONFIG.AI.THINK_INTERVAL);
         const hostile=entity=>!window.isAllied(entity.faction,this.faction);
@@ -9949,10 +10021,13 @@ class EnemyAI {
             }
         }else assaultCenter=this.squadOrder(fit,home,foes,reserve,ready,goal);
         if(this.myShaman&&this.myShaman.aiRole!=='retreat'){
-            if(assaultCenter&&workers.length>=3){
+            const bridging=goal&&this.squad?.phase==='advance'&&this.squad.needsBridge&&!threats.length&&
+                this.bridgeCooldown===0&&this.approachBridge(goal.position);
+            if(!bridging)this.bridgeApproach=null;
+            if(!bridging&&assaultCenter&&workers.length>=3){
                 const rear=assaultCenter.lerp(new THREE.Vector3(home.x,0,home.z),.15);
                 this.moveUnit(this.myShaman,rear,'support');
-            }else if(!threats.length&&this.distance(this.myShaman.mesh.position,home)>12)
+            }else if(!bridging&&!threats.length&&this.distance(this.myShaman.mesh.position,home)>12)
                 this.moveUnit(this.myShaman,refuge(this.myShaman),'support');
         }
         // Replenish workers after casualties without sacrificing the builders.
@@ -10011,13 +10086,6 @@ class EnemyAI {
                     }
                 }
             }
-        }
-        // Only bridge when the group's dry route failed. Lava uses the same dry-route checks.
-        if(goal&&this.squad?.needsBridge&&this.myShaman&&!threats.length&&
-            this.bridgeCooldown===0&&this.myShaman.aiRole!=='retreat'){
-            const from=this.myShaman.mesh.position;
-            const to=new THREE.Vector3(goal.position.x-from.x,0,goal.position.z-from.z).normalize().multiplyScalar(8).add(from);
-            if(this.cast('landbridge',to)){this.bridgeCooldown=12;this.squad.routeChecked=0;}
         }
         this.lastPlan={workers:workers.length,army:army.length,buildings:buildings.length,threats:threats.length,
             reserve,state:this.state,classes:{...projected},weights,contacts:this.contacts.size,
