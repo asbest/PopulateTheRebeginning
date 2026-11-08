@@ -6,9 +6,10 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     const frustum=new T.Frustum(),projection=new T.Matrix4(),sphere=new T.Sphere();
     const shadowProfiles={low:[20,24],medium:[32,32],high:[45,40],ultra:[60,56]};
     const shadowDistances=[],simplifiedCasters=[],partialShadowBatches=[];
+    const smallDetails=new Set(['Eye','Iris','UpperEyelid','Brow','Earring','NoseBridge','NoseTip','Mouth','BraidBead','Thumb','RitualBeads','MaskEyeSlit']);
     let scene,blob,shadowMap,frame=0;
-    const stats={parts:0,instances:0,batches:0,farShadows:0,ms:0,fallback:false};
-    const api={enabled:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError};
+    const stats={parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0,ms:0,fallback:false};
+    const api={enabled:true,crowdDetail:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError,reducePose};
     const textureKeys=['map','normalMap','roughnessMap','metalnessMap','alphaMap','aoMap','bumpMap','emissiveMap'];
     function restore(){
         for(const [part,mask]of masked)part.layers.mask=mask;
@@ -63,8 +64,30 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             m.onBeforeCompile===T.Material.prototype.onBeforeCompile&&part.name!=='StaffCrystal'&&
             (part.layers.mask&1)!==0&&part.matrixWorld.determinant()>0;
     }
-    function collect(node,shadow,healthBar=false){
+    function maskPart(part){
+        if(part.isMesh&&(part.layers.mask&1)!==0){masked.set(part,part.layers.mask);part.layers.set(hiddenLayer);}
+    }
+    function projectedHeight(unit){
+        const camera=state.camera,p=unit.mesh.position;
+        const height=(unit.height||1.5)*unit.mesh.scale.y;
+        const viewportHeight=state.renderer?.domElement.clientHeight;
+        if(!viewportHeight)return Infinity;
+        const pixels=height*viewportHeight*Math.abs(camera.projectionMatrix.elements[5])*.5;
+        if(!camera.isPerspectiveCamera)return pixels;
+        const m=camera.matrixWorldInverse.elements;
+        const depth=-(m[2]*p.x+m[6]*p.y+m[10]*p.z+m[14]);
+        return pixels/Math.max(depth,camera.near);
+    }
+    function reducePose(unit){
+        return api.enabled&&api.crowdDetail&&!state.isFPV&&stats.visibleUnits>=15&&
+            !state.selectedUnits.includes(unit)&&!unit.isShaman&&!unit.isVehicle&&projectedHeight(unit)<22;
+    }
+    function collect(node,shadow,healthBar=false,simple=false){
         if(!node.visible)return;
+        if(simple&&(smallDetails.has(node.name)||node.isLOD&&node.name.startsWith('Blender detail LOD character/'))){
+            node.traverse(maskPart);
+            return;
+        }
         if(node.isLOD)node.update(state.camera);
         if(eligible(node,healthBar)){
             const mk=materialKey(node.material),cast=node.castShadow;
@@ -84,7 +107,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             }else b.items.push(node);
             b.used=frame;stats.parts++;
         }else if(!shadow&&node.isMesh)suppressShadow(node);
-        for(const child of node.children)collect(child,shadow);
+        for(const child of node.children)collect(child,shadow,false,simple);
     }
     function suppressShadow(part){
         if(!part.castShadow)return;
@@ -118,7 +141,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         partialShadowBatches.length=0;
         for(const b of buckets.values()){b.items.length=0;b.shadowCount=0;if(b.mesh)b.mesh.visible=false;}
         if(blob){blob.count=0;blob.visible=false;}
-        Object.assign(stats,{parts:0,instances:0,batches:0,farShadows:0});
+        Object.assign(stats,{parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0});
         const animals=wildlife(),bunnies=animals?.bunnies||[],birds=animals?.birds||[];
         if(!api.enabled||!scene||!state.camera||state.units.length+bunnies.length+birds.length<12&&!api.warming){stats.ms=performance.now()-start;return;}
         if(state.renderer&&!state.renderer.capabilities.isWebGL2&&!state.renderer.extensions.get('ANGLE_instanced_arrays')){
@@ -152,24 +175,28 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 let visible=true;for(let p=u.mesh.parent;p;p=p.parent)if(!p.visible)visible=false;
                 if(!visible)continue;
                 const p=u.mesh.position,dx=p.x-focus.x,dz=p.z-focus.z;
-                const detailed=animal||api.fullShadows||dx*dx+dz*dz<=shadowRangeSq;
-                sphere.center.copy(p);sphere.center.y+=u.isVehicle?4:2;sphere.radius=u.isVehicle?10:8;
-                if(!detailed&&!frustum.intersectsSphere(sphere)){
+                sphere.center.copy(p);sphere.center.y+=u.isVehicle?4:2;sphere.radius=u.isVehicle?10:3;
+                const inView=frustum.intersectsSphere(sphere);
+                if(!animal&&inView&&u.state!=='dead')stats.visibleUnits++;
+                const useProjected=api.crowdDetail&&!api.warming&&!state.isFPV&&!animal;
+                const pixels=useProjected?projectedHeight(u):Infinity;
+                const simple=pixels<23&&!u.isVehicle;
+                const detailed=animal||api.fullShadows||dx*dx+dz*dz<=shadowRangeSq&&pixels>=29;
+                if(!detailed&&!inView){
                     // Outside both the view and detailed-shadow range: suppress only
                     // drawing, never the simulation or animation of the original rig.
-                    for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])root?.traverse(part=>{
-                        if(part.isMesh&&(part.layers.mask&1)!==0){masked.set(part,part.layers.mask);part.layers.set(hiddenLayer);}
-                    });
+                    for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])root?.traverse(maskPart);
                     continue;
                 }
+                if(simple)stats.simplifiedUnits++;
                 if(animal)collect(u.mesh,true);
-                else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed);
+                else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed,false,simple);
                 // Preserve the original billboard transforms, fill scales and faction colors.
                 // Warm both instance shaders even when the starting units are at full health.
                 if(u.hpGroup&&(u.hpGroup.visible||api.warming)){
                     for(const part of u.hpGroup.children)collect(part,false,true);
                 }
-                if(!detailed&&u.state!=='dead'&&!u.invisible&&!u.isPhantom&&shadows<2048){
+                if((!detailed||api.warming&&shadows===0)&&u.state!=='dead'&&!u.invisible&&!u.isPhantom&&shadows<2048){
                     if(!blob)initBlob();
                     const h=heightAt(p.x,p.z),altitude=Math.max(0,p.y-h),size=u.isVehicle?3.5:1.2;
                     dummy.position.set(p.x,h+.04,p.z);dummy.rotation.set(0,0,0);dummy.scale.set(size,1,size);

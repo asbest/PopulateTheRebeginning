@@ -292,6 +292,52 @@ export function createLocomotion(T) {
             matrix.copy(leg.matrix).invert().multiply(u.torso.matrix).multiply(cloth);matrix.decompose(panel.position,panel.quaternion,panel.scale);
         }
     }
+    const crowdPoses=new WeakMap(),poseInterval=.05;
+    let crowdPhase=0;
+    function animateCrowd(u,dt,heightAt,reduce){
+        if(!reduce||dt>=poseInterval||!u.legL||!u.isGrounded||u.isSwimming||u.isSinking||u.manualAttack||
+           u.attackTarget||u.worshipTarget||u.worshipBlend>.001||!['idle','move'].includes(u.state)){
+            crowdPoses.delete(u);
+            animate(u,dt,heightAt);
+            return;
+        }
+        let pose=crowdPoses.get(u);
+        if(!pose||pose.state!==u.state||pose.tick!==u.updateTicker-1){
+            animate(u,dt,heightAt);
+            const joints=[u.torso,u.head,u.armL,u.armR,u.legL,u.legR,
+                u.armL.userData.lower,u.armR.userData.lower,u.legL.userData.lower,u.legR.userData.lower,
+                u.legL.userData.poseAnkle,u.legR.userData.poseAnkle,u.shieldGrip,u.preacherGrip,
+                ...u.legL.children.filter(n=>n.name==='SplitRobe'),...u.legR.children.filter(n=>n.name==='SplitRobe')];
+            const sample=node=>({position:node.position.clone(),rotation:node.quaternion.clone(),scale:node.scale.clone()});
+            // Spread pose solves across frames when many units enter view together.
+            const elapsed=poseInterval*(crowdPhase++%3)/3;
+            pose={state:u.state,tick:u.updateTicker,elapsed,sampleTime:0,
+                joints:joints.filter(Boolean).map(node=>({node,from:sample(node),to:sample(node)}))};
+            crowdPoses.set(u,pose);
+            return;
+        }
+        pose.tick=u.updateTicker;
+        pose.elapsed+=dt;pose.sampleTime+=dt;
+        if(pose.elapsed>=poseInterval-1e-8){
+            for(const {node,from,to} of pose.joints){
+                from.position.copy(to.position);from.rotation.copy(to.rotation);from.scale.copy(to.scale);
+                node.position.copy(to.position);node.quaternion.copy(to.rotation);node.scale.copy(to.scale);
+            }
+            animate(u,pose.sampleTime,heightAt);
+            pose.sampleTime=0;
+            pose.elapsed=Math.max(0,pose.elapsed-poseInterval);
+            for(const {node,to} of pose.joints){
+                to.position.copy(node.position);to.rotation.copy(node.quaternion);to.scale.copy(node.scale);
+            }
+        }
+        const blend=Math.min(1,pose.elapsed/poseInterval);
+        for(const {node,from,to} of pose.joints){
+            node.position.lerpVectors(from.position,to.position,blend);
+            node.quaternion.copy(from.rotation).slerp(to.rotation,blend);
+            node.scale.lerpVectors(from.scale,to.scale,blend);
+        }
+        u.poseTick=u.updateTicker;
+    }
     function ground(u,heightAt,dt,supported=false){
         heightAt=heightAt.forPose?.()||heightAt;
         if(u.isVehicle||u.isSwimming||u.state==='dead'||!supported&&(u.isSinking||['stunned','getting_up'].includes(u.state)))return;
@@ -327,5 +373,5 @@ export function createLocomotion(T) {
             }
         }else u.isGrounded=false;
     }
-    return {turn,animate,animateFall,animateCombat,ground};
+    return {turn,animate,animateCrowd,animateFall,animateCombat,ground};
 }

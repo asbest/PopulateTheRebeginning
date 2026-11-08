@@ -8326,7 +8326,7 @@ window.Humanoid = class Humanoid {
                 Locomotion.turn(this,this.networkHeading,dt);
                 this.isGrounded=!this.isVehicle;
                 updateWorship(this,dt);
-                Locomotion.animate(this,dt,getSurfaceHeight);
+                this.animateCrowdPose(dt);
             }
             return;
         }
@@ -8930,11 +8930,14 @@ window.Humanoid = class Humanoid {
             }
         }
         updateWorship(this,dt);
-        if(this.poseTick !== this.updateTicker) Locomotion.animate(this, dt, getSurfaceHeight);
+        if(this.poseTick !== this.updateTicker) this.animateCrowdPose(dt);
 
     }
+    animateCrowdPose(dt){
+        Locomotion.animateCrowd(this,dt,getSurfaceHeight,CharacterBatches.reducePose(this));
+    }
     updateWalkAnim(speed, amp, dt = 0.016) {
-        if(!['stunned','getting_up'].includes(this.state)){Locomotion.animate(this,dt,getSurfaceHeight);return;}
+        if(!['stunned','getting_up'].includes(this.state)){this.animateCrowdPose(dt);return;}
         // Compute current movement speed (magnitude of X and Z velocity)
         const currentSpeed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z);
 

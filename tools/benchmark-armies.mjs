@@ -23,7 +23,7 @@ try{
   const pixels=()=>{const data=new Uint8Array(width*height*4);gl.readPixels(0,0,width,height,gl.RGBA,gl.UNSIGNED_BYTE,data);return data;};
   const snapshot=()=>units.map(u=>({pos:u.mesh.position.toArray(),velocity:u.velocity.toArray(),body:u.rigidBody.translation(),
    joints:[u.torso,u.head,u.armL,u.armR,u.legL,u.legR].map(p=>[...p.position.toArray(),...p.quaternion.toArray()])}));
-  batch.enabled=false;batch.fullShadows=true;render();const original=render(),before=pixels(),stateBefore=JSON.stringify(snapshot());
+  batch.crowdDetail=false;batch.enabled=false;batch.fullShadows=true;render();const original=render(),before=pixels(),stateBefore=JSON.stringify(snapshot());
   const visibility=state.units.map(u=>[u,u.mesh.visible]);for(const [u]of visibility)u.mesh.visible=false;
   render();const background=pixels();for(const [u,visible]of visibility)u.mesh.visible=visible;
   batch.enabled=true;render();const optimized=render(),after=pixels();
