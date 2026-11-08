@@ -213,7 +213,7 @@ try{
    const angle=volcano.edge.indexOf(Math.max(...volcano.edge))/volcano.edge.length*Math.PI*2;
    const distance=6;
    const outer=new Humanoid(1,'warrior',x+Math.cos(angle)*distance,z+Math.sin(angle)*distance);
-   const building=gameTestAPI.createBuilding('spy',x,z,0,false,true);
+   const building=gameTestAPI.createBuilding('temple',x,z,0,false,true);
    const outside=new Humanoid(1,'warrior',x+20,z);
    state.units.push(outer,outside);gameTestAPI.SpatialHash.update();
    const outerHp=outer.hp,outsideHp=outside.hp,buildingHp=building.hp;
@@ -578,8 +578,8 @@ try{
  await check('Phantoms expire even when shielded and are not permanent after loading',async()=>{
   await fresh();return p.evaluate(()=>{const {x,z}=fixture;gameTestAPI.performAction(x,z,'phantom');const id=state.units.at(-1).id;let u=state.units.at(-1);u.setShield(true);u.phantomTimer=.05;saveGame();loadGame();state.isPaused=true;u=state.units.find(u=>u.id===id);if(!u.isPhantom||u.damage!==0||u.phantomTimer<=0)throw new Error('Phantom save state');u.update(.1);if(u.state!=='dead')throw new Error('Phantom did not expire');});
  });
- await check('Spy hypnotise uses its short range and divine campaign spells remain free',async()=>{
-  await fresh();return p.evaluate(()=>{const {enemy,x,z}=fixture;const spy=new Humanoid(0,'spy',x,z);state.units.push(spy);state.selectedUnits=[spy];gameTestAPI.performAction(x+6,z,'hypnotise');if(state.mana!==1000)throw new Error('Spy ignored range');gameTestAPI.performAction(x,z,'hypnotise');gameTestAPI.SpellWindup.update(1);if(enemy.faction!==0||state.mana!==950)throw new Error('Spy cast failed');state.selectedUnits=[state.shaman];state.campaignLevel=12;state.mana=0;const count=state.units.length;gameTestAPI.performAction(x,z,'create');if(state.mana!==0||state.units.length!==count+1)throw new Error('Divine free spell failed');});
+ await check('Divine campaign spells remain free',async()=>{
+  await fresh();return p.evaluate(()=>{const {x,z}=fixture;state.selectedUnits=[state.shaman];state.campaignLevel=12;state.mana=0;const count=state.units.length;gameTestAPI.performAction(x,z,'create');if(state.mana!==0||state.units.length!==count+1)throw new Error('Divine free spell failed');});
  });
  await check('No spell runtime errors',()=>{if(errors.length)throw new Error(errors.join('\n'));});
 }finally{await browser.close();await fs.mkdir(path.join(root,'test-results'),{recursive:true});await fs.writeFile(path.join(root,'test-results/spells-report.json'),JSON.stringify({date:new Date().toISOString(),results,errors},null,2));}

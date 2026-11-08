@@ -14,10 +14,10 @@ try{
   state.isPaused=true;
   const scene=new THREE.Scene();scene.background=new THREE.Color(0x25404c);scene.add(new THREE.HemisphereLight(0xffffff,0x6e6248,1));
   const sun=new THREE.DirectionalLight(0xffedcf,2.5);sun.position.set(3,6,8);scene.add(sun);
-  const roles=['shaman','warrior','preacher','spy','firewarrior'],report=[];
+  const roles=['shaman','warrior','preacher','firewarrior'],report=[];
   for(const [i,type] of roles.entries()){
    const u=new Humanoid(0,type,0,0);state.units.push(u);
-   const right=u.armR.userData.lower,held=u.staffGrip||u.weaponGrip||u.preacherGrip||u.daggerGrip;
+   const right=u.armR.userData.lower,held=u.staffGrip||u.weaponGrip||u.preacherGrip;
    let maxGap=0;
    for(const phase of [0,.28,.5,.64,1])for(const heading of [0,1.3,3.14]){
     u.mesh.rotation.y=heading;u.armR.rotation.x=-.3-phase*2;right.rotation.x=-.7+phase*.6;
@@ -37,7 +37,6 @@ try{
     if(u.shieldGrip&&u.shieldGrip.getWorldPosition(new THREE.Vector3()).distanceTo(u.armL.userData.lower.userData.gripPoint.getWorldPosition(new THREE.Vector3()))>1e-6)
      throw new Error('Shield handle left the palm');
    }
-   if(type==='spy'&&!u.mesh.getObjectByName('DaggerHandle'))throw new Error('Dagger lacks a handle');
    if(type==='warrior'&&!u.mesh.getObjectByName('ShieldHandle'))throw new Error('Shield lacks a handle');
    u.mesh.rotation.set(0,0,0);u.armR.rotation.set(-.3,0,-.06);right.rotation.set(-.3,0,0);
    u.armL.rotation.set(-.15,0,.07);u.armL.userData.lower.rotation.set(-.4,0,0);

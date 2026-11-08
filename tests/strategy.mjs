@@ -11,8 +11,8 @@ for(let x=-55;x<=55;x++)for(let z=-45;z<=45;z++){const key=`${x},${z}`;state.ter
 window.testAI=new AI(2);testAI.init(-15,0);window.enemyAIs=[testAI];state.shaman=new Humanoid(0,'shaman',35,0);state.units.push(state.shaman);state.selectedUnits=[state.shaman];state.shaman.hp=1000000;state.shaman.maxHp=1000000;state.shaman.setShield(true);state.aiTime=0;state.clock.getElapsedTime=()=>state.aiTime;
 window.aiStep=(duration)=>{for(let k=0;k<duration*10;k++){state.aiTime+=.1;gameTestAPI.SpatialHash.update();gameTestAPI.BuildingSpatialHash.update();testAI.update(.1);state.physicsWorld.timestep=1/60;for(let i=0;i<6;i++)state.physicsWorld.step();for(const u of [...state.units]){u.nextTargetCheck=Infinity;u.update(.1);}for(const b of [...state.buildings])if(!b.dead)b.update(.1);for(let i=state.projectiles.length-1;i>=0;i--)if(!state.projectiles[i].update(.1))state.projectiles.splice(i,1);for(let i=state.activeEffects.length-1;i>=0;i--)if(!state.activeEffects[i].update(.1))state.activeEffects.splice(i,1);for(const v of state.particles)state.scene.remove(v.mesh);state.particles=[];}};
 });
-await check('Four-minute economy expands its own faction and physically trains mixed classes',()=>p.evaluate(()=>{aiStep(240);const own=state.units.filter(u=>u.faction===2&&u.state!=='dead'),buildings=state.buildings.filter(b=>b.faction===2&&!b.dead),classes=Object.fromEntries(['wild','warrior','firewarrior','spy'].map(t=>[t,own.filter(u=>u.type===t).length]));const detail={classes,buildings:buildings.map(b=>b.type),plan:testAI.lastPlan};if(buildings.length<5||classes.wild<2||!classes.warrior||!classes.firewarrior||!classes.spy||state.buildings.some(b=>b.faction===1))throw new Error(JSON.stringify(detail));return detail;}));
-await check('Attack force leaves defenders and builders at home',()=>p.evaluate(()=>{if(state.shaman.state!=='dead')state.shaman.die();state.shaman=new Humanoid(0,'shaman',35,0);state.shaman.hp=1000000;state.shaman.maxHp=1000000;state.units.push(state.shaman);for(const type of ['warrior','warrior','warrior','firewarrior','spy','warrior','firewarrior'])state.units.push(new Humanoid(2,type,-10,0));state.units.filter(u=>u.faction===2&&['warrior','firewarrior','spy'].includes(u.type)&&u.state!=='dead').forEach((u,i)=>u.placeOnGround(24+(i%5)*1.5,-16+Math.floor(i/5)*1.5));testAI.think();const own=state.units.filter(u=>u.faction===2&&u.state!=='dead'),attack=own.filter(u=>u.aiRole==='attack'),guard=own.filter(u=>u.aiRole==='guard');if(!attack.length||guard.length<2||own.filter(u=>u.aiRole==='builder').length<2)throw new Error(JSON.stringify({attack:attack.length,guard:guard.length,plan:testAI.lastPlan}));const probe=attack.find(u=>u.type==='warrior');const before=probe.mesh.position.clone();aiStep(4);if(probe.mesh.position.distanceTo(before)<.5)throw new Error('Attack order did not move '+JSON.stringify({p:probe.mesh.position,before,state:probe.state,path:probe.path,target:probe.target,attack:probe.attackTarget?.mesh.position,v:probe.velocity,ground:probe.isGrounded,role:probe.aiRole}));return {attack:attack.length,guard:guard.length};}));
+await check('Four-minute economy expands its own faction and physically trains mixed classes',()=>p.evaluate(()=>{aiStep(240);const own=state.units.filter(u=>u.faction===2&&u.state!=='dead'),buildings=state.buildings.filter(b=>b.faction===2&&!b.dead),classes=Object.fromEntries(['wild','warrior','firewarrior','preacher'].map(t=>[t,own.filter(u=>u.type===t).length]));const detail={classes,buildings:buildings.map(b=>b.type),plan:testAI.lastPlan};if(buildings.length<5||classes.wild<2||!classes.warrior||!classes.firewarrior||!classes.preacher||state.buildings.some(b=>b.faction===1))throw new Error(JSON.stringify(detail));return detail;}));
+await check('Attack force leaves defenders and builders at home',()=>p.evaluate(()=>{if(state.shaman.state!=='dead')state.shaman.die();state.shaman=new Humanoid(0,'shaman',35,0);state.shaman.hp=1000000;state.shaman.maxHp=1000000;state.units.push(state.shaman);for(const type of ['warrior','warrior','warrior','firewarrior','preacher','warrior','firewarrior'])state.units.push(new Humanoid(2,type,-10,0));state.units.filter(u=>u.faction===2&&['warrior','firewarrior','preacher'].includes(u.type)&&u.state!=='dead').forEach((u,i)=>u.placeOnGround(24+(i%5)*1.5,-16+Math.floor(i/5)*1.5));testAI.think();const own=state.units.filter(u=>u.faction===2&&u.state!=='dead'),attack=own.filter(u=>u.aiRole==='attack'),guard=own.filter(u=>u.aiRole==='guard');if(!attack.length||guard.length<2||own.filter(u=>u.aiRole==='builder').length<2)throw new Error(JSON.stringify({attack:attack.length,guard:guard.length,plan:testAI.lastPlan}));const probe=attack.find(u=>u.type==='warrior');const before=probe.mesh.position.clone();aiStep(4);if(probe.mesh.position.distanceTo(before)<.5)throw new Error('Attack order did not move '+JSON.stringify({p:probe.mesh.position,before,state:probe.state,path:probe.path,target:probe.target,attack:probe.attackTarget?.mesh.position,v:probe.velocity,ground:probe.isGrounded,role:probe.aiRole}));return {attack:attack.length,guard:guard.length};}));
 await check('Combat troops pass a stationary ally in a narrow formation',()=>p.evaluate(()=>{
  const mover=new Humanoid(2,'warrior',45,-30),blocker=new Humanoid(2,'warrior',45,-28.8),target=new Humanoid(0,'warrior',45,-19);
  const probes=[mover,blocker,target];
@@ -87,23 +87,23 @@ await check('After heavy losses a surviving tribe recruits, trains and attacks a
 }));
 await check('Scouts report contacts, counter production and last known positions',()=>p.evaluate(async()=>{
  const {counterWeights}=await import('./art/enemy-tactics.js');
- const ai=new testAI.constructor(2),spy=new Humanoid(2,'spy',-15,0);
+ const ai=new testAI.constructor(2),scout=new Humanoid(2,'preacher',-15,0);
  const enemies=[new Humanoid(0,'preacher',20,0),new Humanoid(0,'preacher',21,0)];
- state.units.push(spy,...enemies);
+ state.units.push(scout,...enemies);
  ai.gatherIntel([],[]);
  if(ai.contacts.size)throw Error('Unobserved units entered intelligence');
- ai.gatherIntel([spy],[]);
+ ai.gatherIntel([scout],[]);
  if(enemies.some(unit=>!ai.visibleEnemies.has(unit.id)))throw Error('Scout did not reveal opponents');
  const weights=counterWeights(ai.personality,ai.contacts.values());
  if(weights.firewarrior<=counterWeights(ai.personality,[]).firewarrior)throw Error('Priests did not change production');
  enemies.forEach(unit=>unit.placeOnGround(48,35));
- spy.placeOnGround(-45,0);
- ai.gatherIntel([spy],[]);
+ scout.placeOnGround(-45,0);
+ ai.gatherIntel([scout],[]);
  if(ai.visibleEnemies.has(enemies[0].id)||ai.contacts.get(enemies[0].id)?.position.x!==20)
   throw Error('Out-of-sight unit overwrote last known position');
- for(let i=0;i<24;i++)ai.gatherIntel([spy],[]);
+ for(let i=0;i<24;i++)ai.gatherIntel([scout],[]);
  if(ai.contacts.has(enemies[0].id))throw Error('Old contact never expired');
- for(const unit of [spy,...enemies])unit.die();
+ for(const unit of [scout,...enemies])unit.die();
  return weights;
 }));
 await check('An assault rallies, keeps a reserve and regroups when outmatched',()=>p.evaluate(()=>{
@@ -297,7 +297,7 @@ await check('Natural starting landscape supports mixed troops and an offensive w
    state.matchSettings.peaceTimeMinutes=0;state.isGodMode=true;
    const chunks=Object.keys(state.chunks).length;
    if(chunks!==(2*CONFIG.TERRAIN.RENDER_DISTANCE+1)**2)throw new Error('Incomplete terrain fixture: '+chunks);
-   let time=0,firstAttackAt=null,firstContactAt=null,sawSpy=false;
+   let time=0,firstAttackAt=null,firstContactAt=null,sawPriest=false;
    state.clock.getElapsedTime=()=>time;
    for(let k=0;k<4800;k++){
     time+=.1;state.clock.elapsedTime=time;
@@ -305,7 +305,7 @@ await check('Natural starting landscape supports mixed troops and an offensive w
     for(const ai of enemyAIs)ai.update(.1);
     if(firstAttackAt===null&&state.units.some(u=>u.faction===1&&u.aiRole==='attack'))firstAttackAt=time;
     if(firstContactAt===null&&enemyAIs[0].visibleEnemies.has(state.shaman.id))firstContactAt=time;
-    sawSpy ||= state.units.some(u=>u.faction===1&&u.type==='spy');
+    sawPriest ||= state.units.some(u=>u.faction===1&&u.type==='preacher');
     state.physicsWorld.timestep=1/60;
     for(let i=0;i<6;i++)state.physicsWorld.step();
     for(const u of [...state.units])u.update(.1);
@@ -320,8 +320,8 @@ await check('Natural starting landscape supports mixed troops and an offensive w
    const detail={units:own.map(u=>u.type),buildings:buildings.map(b=>b.type),
     plan:enemyAIs[0].lastPlan,pending:enemyAIs[0].pendingBuild,
     workers:own.filter(u=>u.type==='wild').map(u=>({p:u.mesh.position,role:u.aiRole,state:u.state,dest:u.finalDest})),
-    firstAttackAt,firstContactAt,sawSpy,chunks};
-   if(firstAttackAt===null||firstContactAt===null||!sawSpy||!own.some(u=>u.isShaman)||buildings.length<4||
+    firstAttackAt,firstContactAt,sawPriest,chunks};
+   if(firstAttackAt===null||firstContactAt===null||!sawPriest||!own.some(u=>u.isShaman)||buildings.length<4||
       !own.some(u=>u.type==='warrior')||!own.some(u=>u.type==='firewarrior'))throw new Error(JSON.stringify(detail));
    return detail;
   });

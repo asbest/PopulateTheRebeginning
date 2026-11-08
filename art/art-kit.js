@@ -4,6 +4,9 @@ import {createResourceBudget} from './resource-budget.js';
 import {createTexturePipeline} from './texture-pipeline.js';
 import {BARRACKS_ROOF} from './roof-profile.js';
 import {createRoofLandmarks} from './roof-landmarks.js';
+function buildingAssetKey(kind){
+    return 'building/'+(kind==='temple'?'spy':kind)+'/root';
+}
 export function createArtKit(T) {
     const resources=createResourceBudget();
     const pipeline=createTexturePipeline(T,resources);
@@ -122,14 +125,15 @@ export function createArtKit(T) {
             box(mount,[0,.025,-.015],[w+.12,.055,.16],palette.wood);
         }
     }
+    // The Temple retains the packed geometry of the former spy hut.
     function building(kind, factionColor=0x4169e1) {
         const p = new T.Group(); p.userData.artVersion=1;
         cyl(p,[0,0.12,0],1.85,2,0.24,palette.stone,'stone');
-        if(kind==='hut'||kind==='spy'||kind==='preacher') {
-            cyl(p,[0,0.9,0],1.22,1.4,1.5,kind==='spy'?palette.dark:kind==='preacher'?0xd4c49a:0xb9a16e,'stone');
+        if(kind==='hut'||kind==='temple') {
+            cyl(p,[0,0.9,0],1.22,1.4,1.5,kind==='temple'?palette.dark:0xb9a16e,'stone');
             for(let i=0;i<12;i++){let a=i*Math.PI/6;beam(p,[Math.sin(a)*1.38,0.2,Math.cos(a)*1.38],[Math.sin(a)*1.22,1.7,Math.cos(a)*1.22],0.055);}
-            cyl(p,[0,2.15,0],0.04,1.8,1.35,kind==='spy'?0x4f6370:kind==='preacher'?0xe5d798:palette.straw,'thatch');
-            cyl(p,[0,1.54,0],1.63,1.86,0.22,kind==='spy'?0x65727a:0xb8975c,'thatch',32);
+            cyl(p,[0,2.15,0],0.04,1.8,1.35,kind==='temple'?0x4f6370:palette.straw,'thatch');
+            cyl(p,[0,1.54,0],1.63,1.86,0.22,kind==='temple'?0x65727a:0xb8975c,'thatch',32);
             roofTrim(p,1.49,1.83,0x775737);
             roofTrim(p,2.11,1.05,0x846541);
             for(let i=0;i<20;i++){let a=i*Math.PI/10;beam(p,[0,2.83,0],[Math.sin(a)*1.8,1.47,Math.cos(a)*1.8],0.025,palette.wood);}
@@ -148,11 +152,11 @@ export function createArtKit(T) {
             }
             box(p,[0,0.17,1.64],[0.96,0.18,0.51],0x9b8970,'stone');
             cyl(p,[0,2.95,0],0.08,0.12,0.3,palette.gold);
-            if(kind==='preacher'){
+            if(kind==='temple'){
                 cyl(p,[0,3.16,0],0.17,0.17,0.4,palette.gold);
                 orb(p,[0,3.47,0],[0.22,0.22,0.22],0xffe0a0);
                 cyl(p,[0,3.76,0],.045,.045,.58,palette.gold);
-                const emblem=new T.Group();emblem.name='Spy eye roof emblem';emblem.position.set(0,4.05,0);
+                const emblem=new T.Group();emblem.name='Temple roof emblem';emblem.position.set(0,4.05,0);
                 const eye=new T.Mesh(new T.TorusGeometry(.46,.065,8,24),material(palette.gold,'wood',.65));
                 eye.scale.y=.55;emblem.add(eye);
                 const pupil=new T.Mesh(new T.SphereGeometry(.12,12,8),material(palette.dark,'wood'));
@@ -194,7 +198,7 @@ export function createArtKit(T) {
         wallBanners(p,kind,factionColor);
         if(kind==='fire')roofLandmarks.fire(p,material(palette.gold,'wood',.65));
         if(kind==='warrior')roofLandmarks.warrior(p,material(palette.wood,'wood'),material(palette.gold,'wood',.65),factionColor);
-        blender.attach(p,'building/'+kind+'/root',factionColor);
+        blender.attach(p,buildingAssetKey(kind),factionColor);
         return p;
     }
     const uniforms={windTime:{value:0}};
@@ -335,7 +339,7 @@ export function createArtKit(T) {
         };
         material.customProgramCacheKey=()=> 'island-terrain-detail-v8';
     }
-    return {building,tree,dress,terrainDetail,textures,palette,uniforms,resources,ready:blender.ready,blender,
+    return {building,buildingAssetKey,tree,dress,terrainDetail,textures,palette,uniforms,resources,ready:blender.ready,blender,
         configureTextures,textureStatus:pipeline.status,loadTexture:pipeline.load,
         requestTexture:pipeline.request,promoteTexture:pipeline.promote,warmTexture:pipeline.warmTexture,
         textureReady:pipeline.whenReady,texturesReady:pipeline.waitForPending,promoteTextures:pipeline.promoteAll,

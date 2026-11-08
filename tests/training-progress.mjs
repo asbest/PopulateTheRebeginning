@@ -11,7 +11,7 @@ try{
   closeHelp();closeStoryOverlay();state.isPaused=true;window.enemyAIs=[];
   if(CONFIG.BUILDING.TRAINING_TIME!==10)throw new Error('Training duration is not ten seconds');
   const p=state.shaman.mesh.position,report=[];
-  for(const [i,type] of ['warrior','fire','preacher','spy'].entries()){
+  for(const [i,type] of ['warrior','fire','temple'].entries()){
    const b=gameTestAPI.createBuilding(type,p.x+12+i*12,p.z,0,false,true);b.update(b.totalBuildTime+1);gameTestAPI.BuildingSpatialHash.update();
    const worker=new Humanoid(0,'wild',b.mesh.position.x,b.mesh.position.z);state.units.push(worker);worker.updateTicker=9;worker.update(0);
    if(worker.state==='dead'||b.trainingQueue.length)throw new Error('Nearby worker trained without an explicit order: '+type);
@@ -28,7 +28,7 @@ try{
    gameTestAPI.performAction(b.mesh.position.x,b.mesh.position.z,'move',[worker]);
    worker.updateTicker=9;worker.update(0);
    if(b.trainingQueue.length!==1||b.trainingQueue[0].timer!==10||b.trainingQueue[0].duration!==10)throw new Error('Worker did not enter ten-second training: '+type);
-   const expected={warrior:'warrior',fire:'firewarrior',preacher:'preacher',spy:'spy'}[type];
+   const expected={warrior:'warrior',fire:'firewarrior',temple:'preacher'}[type];
    const count=()=>state.units.filter(u=>u.faction===0&&u.type===expected&&u.state!=='dead').length,before=count();
    b.update(5);
    if(!b.trainingProgress.group.visible||Math.abs(b.trainingProgress.fill.scale.x-.5)>.0001||count()!==before)throw new Error('Halfway training progress is wrong');
@@ -45,7 +45,18 @@ try{
   if(loaded.trainingQueue[0].timer!==5)throw new Error('Client independently advanced training');
   loaded.update(5);if(loaded.trainingQueue.length!==1||loaded.trainingQueue[0].timer!==10)throw new Error('Sequential training queue failed');
   const key=CONFIG.SAVED_KEYS.SAVE_DATA,data=JSON.parse(localStorage.getItem(key));
-  data.buildings.find(b=>b.id===id).trainingQueue=[{timer:1,type:'warrior',faction:0}];localStorage.setItem(key,JSON.stringify(data));loadGame(1);state.isPaused=true;
+  data.buildings.find(b=>b.id===id).trainingQueue=[{timer:1,type:'warrior',faction:0}];
+  const oldTemple=data.buildings.find(b=>b.type==='temple');
+  oldTemple.type='spy';oldTemple.trainingQueue=[{timer:3,duration:10,type:'spy',faction:0}];
+  data.buildings.push({...oldTemple,id:'legacy-shrine',type:'preacher',x:oldTemple.x+12});
+  const oldSpy=data.units.find(u=>u.type==='preacher');
+  oldSpy.type='spy';
+  localStorage.setItem(key,JSON.stringify(data));loadGame(1);state.isPaused=true;
+  const temple=state.buildings.find(b=>b.id===oldTemple.id);
+  if(temple?.type!=='temple'||temple.trainingQueue[0]?.type!=='preacher'||temple.trainingQueue[0].timer!==3||
+     state.buildings.find(b=>b.id==='legacy-shrine')?.type!=='temple'||
+     state.units.find(u=>u.id===oldSpy.id)?.type!=='preacher')
+   throw new Error('Legacy temple, shrine, spy or training order did not migrate');
   const migrated=state.buildings.find(b=>b.id===id);if(migrated.trainingQueue[0].timer!==5||migrated.trainingProgress.fill.scale.x!==.5)throw new Error('Old training progress was not migrated');
   state.cameraLookAt.copy(migrated.mesh.position);state.viewScale=12;gameTestAPI.updateCameraZoom();updateCameraPosition();
   migrated.update(0);

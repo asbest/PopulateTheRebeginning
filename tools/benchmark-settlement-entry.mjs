@@ -15,12 +15,11 @@ try{
   renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
   state.viewScale=8;state.cameraLookAt.copy(origin).add(new THREE.Vector3(40,0,0));updateCameraPosition();
   const city=origin.clone().add(new THREE.Vector3(140,0,0)),buildings=[];
-  for(let i=0;i<7;i++){
-   const type=['hut','tower','warrior','fire','preacher','spy','shipyard'][i];
+  for(const [i,type] of ['hut','tower','warrior','fire','temple','shipyard'].entries()){
    const b=api.createBuilding(type,city.x+(i%3-1)*8,city.z+(Math.floor(i/3)-1)*8,i%3,false,true);
    b.underConstruction=false;b.visualMesh.scale.y=1;buildings.push(b);
   }
-  await Promise.all(buildings.map(b=>Art.blender.ensure('building/'+b.type+'/root')));
+  await Promise.all(buildings.map(b=>Art.blender.ensure(Art.buildingAssetKey(b.type))));
   await new Promise(r=>setTimeout(r,0));
   const start=performance.now();
   await Promise.all(buildings.map(b=>api.SettlementPreparation.prepareRoot(b.visualMesh,true)));

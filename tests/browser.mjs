@@ -95,9 +95,9 @@ try {
   if(after.length-before.length>2)throw new Error(`First fireball compiled ${after.length-before.length} shader programs: ${JSON.stringify({tier:state.graphicsQuality.tier,added:after.filter(key=>!before.includes(key))})}`);
   return {tier:state.graphicsQuality.tier,programsBefore:before.length,programsAfter:after.length};
  }));
- await check('Seven detailed faction-colored building meshes',async()=>page.evaluate(()=>{
+ await check('Six detailed faction-colored building meshes',async()=>page.evaluate(()=>{
   const report=[];
-  for(const kind of ['hut','tower','warrior','fire','preacher','spy','shipyard']){const model=Art.building(kind,0xff4500);let meshes=0,banner=false;model.traverse(n=>{if(n.isMesh)meshes++;if(n.userData.isFactionBanner)banner=true;});if(meshes<10||!banner)throw new Error(kind+' incomplete');report.push({kind,meshes});}
+  for(const kind of ['hut','tower','warrior','fire','temple','shipyard']){const model=Art.building(kind,0xff4500);let meshes=0,banner=false;model.traverse(n=>{if(n.isMesh)meshes++;if(n.userData.isFactionBanner)banner=true;});if(meshes<10||!banner)throw new Error(kind+' incomplete');report.push({kind,meshes});}
   return report;
  }));
  await check('Cinematic camera and instanced coastal scenery remain interactive',async()=>{
@@ -139,9 +139,9 @@ try {
   if(!report.shortcut)throw new Error('Camera shortcut did not restore strategy view: '+JSON.stringify(report));
   return report;
  });
- await check('All seven unit types retain animation rig and statistics',async()=>page.evaluate(()=>{
+ await check('All six unit types retain animation rig and statistics',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position;const report=[];
-  for(const kind of ['wild','warrior','firewarrior','preacher','spy','shaman','airship']){const u=new Humanoid(0,kind,p.x+3,p.z+3);state.units.push(u);if(!u.mesh||u.hp<=0||(!u.isVehicle&&!u.legL))throw new Error(kind);report.push({kind,hp:u.hp});}
+  for(const kind of ['wild','warrior','firewarrior','preacher','shaman','airship']){const u=new Humanoid(0,kind,p.x+3,p.z+3);state.units.push(u);if(!u.mesh||u.hp<=0||(!u.isVehicle&&!u.legL))throw new Error(kind);report.push({kind,hp:u.hp});}
   return report;
  }));
  await check('Flowing fire follows both arm segments in one draw call',async()=>page.evaluate(()=>{
@@ -207,7 +207,7 @@ try {
    const dimensions=Object.fromEntries(Object.entries(Characters.tiles).map(([k,t])=>[k,[t.image.width,t.image.height]]));
    if(dimensions.skin[0]<1024||dimensions.cloth[0]<1024)throw new Error('HD textures missing');
    const roles=[];
-   for(const type of ['wild','shaman','warrior','firewarrior','spy','airship']){
+   for(const type of ['wild','shaman','warrior','firewarrior','preacher','airship']){
     const u=state.units.find(u=>u.type===type);if(u.mesh.userData.characterVersion!==2)throw new Error('Old model: '+type);
     if(type!=='airship'){
      if(!u.armR.userData.lower||!u.legL.userData.lower||!u.head.getObjectByName('SculptedFace'))throw new Error('Rig missing: '+type);
@@ -225,14 +225,14 @@ try {
   const p=state.shaman.mesh.position,victim=new Humanoid(1,'warrior',p.x+1,p.z+1);state.units.push(victim);
   victim.hp=victim.maxHp=1000;const clock=state.clock.getElapsedTime;state.clock.getElapsedTime=()=>100;
   const report=[];
-  try{for(const type of ['wild','warrior','shaman','firewarrior','spy']){
+  try{for(const type of ['wild','warrior','shaman','firewarrior','preacher']){
    const u=state.units.find(u=>u.type===type&&u.faction===0);
    // Each role starts elsewhere; put its opponent within actual melee reach.
    victim.mesh.position.copy(u.mesh.position).add(new THREE.Vector3(0,0,.9));
    u.attackTarget=victim;u.lastAttackTime=100-.6/u.attackSpeed;u.attackFired=false;
    const hp=victim.hp,projectiles=state.projectiles.length;u.attack();
    if(!u.attackFired||!Number.isFinite(u.armR.rotation.x))throw new Error(type+' animation/impact missing');
-   if(['wild','warrior','shaman','spy'].includes(type)&&victim.hp>=hp)throw new Error(type+' damage missing');
+   if(['wild','warrior','shaman'].includes(type)&&victim.hp>=hp)throw new Error(type+' damage missing');
    if(type==='firewarrior'){
     if(state.projectiles.length!==projectiles+1)throw new Error('Fireball missing');
     const shot=state.projectiles.at(-1);
@@ -371,7 +371,7 @@ try {
    state.isPaused=true;
    const p=state.shaman.mesh.position;
    const finished=gameTestAPI.createBuilding('tower',p.x+7,p.z+7,0,false,true);
-   const unfinished=gameTestAPI.createBuilding('spy',p.x+12,p.z+7,0,false,true);
+   const unfinished=gameTestAPI.createBuilding('temple',p.x+12,p.z+7,0,false,true);
    finished.update(finished.totalBuildTime+1);
    unfinished.update(unfinished.totalBuildTime*.4);
    const positions=[finished,unfinished].map(b=>({type:b.type,x:b.mesh.position.x,z:b.mesh.position.z}));

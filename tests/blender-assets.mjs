@@ -19,7 +19,7 @@ try {
         await Promise.all([Art.ready,Characters.ready]);
         const keys=Object.keys(Art.blender.models);
         const required=[...['hut','spy','tower','warrior','fire','shipyard'].map(k=>'building/'+k+'/root'),
-            ...['wild','warrior','shaman','firewarrior','spy'].flatMap(k=>['torso','head','armL','armR','legL','legR'].map(p=>'character/'+k+'/'+p)),
+            ...['wild','warrior','shaman','firewarrior'].flatMap(k=>['torso','head','armL','armR','legL','legR'].map(p=>'character/'+k+'/'+p)),
             'character/airship/root','tree/trunk','tree/crown','critter/bunny/root','critter/bird/root',
             ...['body','head','earL','earR','frontLegL','frontLegR','hindLegL','hindLegR','tail'].map(k=>'critter/bunny/'+k),
             ...['body','head','wingL','wingR','tail'].map(k=>'critter/bird/'+k),
@@ -27,10 +27,10 @@ try {
         const absent=required.filter(k=>!keys.includes(k));
         if(absent.length)throw new Error('Missing Blender models: '+absent.join(','));
         const count=node=>{let total=0;node.traverse(n=>{if(n.userData.blenderAsset)total++;});return total;};
-        const buildings=['hut','spy','tower','warrior','fire','shipyard'].map(kind=>({kind,details:count(Art.building(kind))}));
+        const buildings=['hut','temple','tower','warrior','fire','shipyard'].map(kind=>({kind,details:count(Art.building(kind))}));
         if(buildings.some(b=>b.details<1))throw new Error('Building detail was not attached');
         let sharedBannerGeometry;
-        for(const faction of [0,1,2,3])for(const kind of ['hut','spy','preacher','tower','warrior','fire','shipyard']){
+        for(const faction of [0,1,2,3])for(const kind of ['hut','temple','tower','warrior','fire','shipyard']){
             const color=getFactionColor(faction),house=Art.building(kind,color),flags=[];
             house.traverse(node=>{if(node.userData.isFactionBanner)flags.push(node);});
             if(flags.length!==2)throw new Error('Missing wall banners: '+kind);
@@ -49,8 +49,13 @@ try {
         if(lod.levels[0].object.visible)throw new Error('Distant detail was not culled');
         camera.position.set(0,0,8);camera.updateMatrixWorld(true);lod.update(camera);
         if(!lod.levels[0].object.visible)throw new Error('Close detail was not restored');
-        const roles=['wild','warrior','shaman','firewarrior','spy','airship'].map(type=>{const u={mesh:new THREE.Group(),type};Characters.build(u,0x387bb7);return {type,details:count(u.mesh)};});
-        if(roles.some(r=>r.details<2))throw new Error('Character detail was not attached');
+        const roles=['wild','warrior','shaman','firewarrior','preacher','airship'].map(type=>{
+            const u={mesh:new THREE.Group(),type};Characters.build(u,0x387bb7);
+            if(type==='preacher'){
+                if(!u.mesh.getObjectByName('PreacherStaffHead'))throw new Error('Priest staff is missing');
+            }else if(count(u.mesh)<2)throw new Error('Character detail was not attached: '+type);
+            return {type,details:count(u.mesh)};
+        });
         const tree=Art.tree();
         if(count(tree.children[0])<1||count(tree.children[1])!==0)
             throw new Error('Tree trunk detail or the continuous burnable crown is missing');

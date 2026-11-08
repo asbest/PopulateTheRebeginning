@@ -104,7 +104,7 @@ export function createCharacters(T,art) {
         u.torso=new T.Group();u.torso.name='Torso';u.torso.position.y=.9;root.add(u.torso);
         const chest=role==='warrior'?.25:female?.185:.205;
         mesh(u.torso,loft([[-.27,.14,.095],[-.16,.145,.10],[-.02,chest*.85,.125],[.14,chest,.115],[.23,.13,.08],[.26,.07,.065]]),skin,[0,0,0],[1,1,1],'AnatomicalBody');
-        if(role!=='warrior')factionPiece(mesh(u.torso,loft([[-.29,.17,.115],[-.17,.155,.12],[0,.205,.14],[.16,.22,.135],[.24,.10,.09]]),role==='spy'?dark:faction,[0,0,0],[1,1,1],'WovenTunic'));
+        if(role!=='warrior')factionPiece(mesh(u.torso,loft([[-.29,.17,.115],[-.17,.155,.12],[0,.205,.14],[.16,.22,.135],[.24,.10,.09]]),faction,[0,0,0],[1,1,1],'WovenTunic'));
         // Split robe panels allow the independent knee and hip animation to remain visible.
         const long=female||role==='firewarrior'||role==='preacher';
         for(const side of [-1,1]) {
@@ -146,7 +146,7 @@ export function createCharacters(T,art) {
                 lower.userData.thumb=oval(lower,[side*.038,-len-.021,.02],[.016,.032,.016],skin,'Thumb');
                 lower.userData.gripPoint=new T.Object3D();lower.userData.gripPoint.name='PalmGrip';
                 lower.userData.gripPoint.position.set(0,-len-.031,.018);lower.add(lower.userData.gripPoint);
-                if(role==='firewarrior'||role==='spy'||role==='preacher')factionPiece(mesh(g,loft([[0,r*1.12,r*1.12],[-.20,r*.86,r*.89]]),faction,[0,0,0],[1,1,1],'Sleeve'));
+                if(role==='firewarrior'||role==='preacher')factionPiece(mesh(g,loft([[0,r*1.12,r*1.12],[-.20,r*.86,r*.89]]),faction,[0,0,0],[1,1,1],'Sleeve'));
             }else{
                 factionPiece(mesh(g,loft([[0,r*1.13,r*1.13],[-.27,r*.85,r*.88]]),faction,[0,0,0],[1,1,1],'Trouser'));
                 const ankle=new T.Group();ankle.name='Sandal';ankle.position.y=-len;lower.add(ankle);
@@ -166,7 +166,7 @@ export function createCharacters(T,art) {
             palm.geometry=geo(`grasp/${side}/${axis}`,()=>createGripGeometry(T,side,axis));palm.scale.set(1,1,1);
             lower.remove(lower.userData.thumb);lower.userData.thumb=null;palm.name='GrippingHand';
         }
-        if(['shaman','warrior','preacher','spy'].includes(role))closeHand(u.armR);
+        if(['shaman','warrior','preacher'].includes(role))closeHand(u.armR);
         if(role==='warrior')closeHand(u.armL,'x');
         if(female){
             root.scale.setScalar(1.5);
@@ -206,14 +206,6 @@ export function createCharacters(T,art) {
             u.preacherGrip=new T.Group();u.preacherGrip.name='PreacherGrip';u.preacherGrip.position.copy(hand.userData.gripPoint.position);u.preacherGrip.rotation.x=.6;hand.add(u.preacherGrip);
             tube(u.preacherGrip,[[0,-.14,0],[0,.33,0],[0,.62,0]],.025,leather,'PreacherStaff');
             oval(u.preacherGrip,[0,.64,0],[.09,.11,.055],gold,'PreacherStaffHead');
-        }else if(role==='spy'){
-            mesh(u.head,geo('hood',()=>new T.SphereGeometry(1,16,12,Math.PI*.30,Math.PI*1.4)),dark,[0,.012,-.035],[.16,.215,.16],'OpenHood');
-            const scarf=cloth(u.head,[[-.11,-.025],[.11,-.025],[.075,-.145],[-.075,-.145]],faction,'FaceScarf');scarf.position.z=.116;factionPiece(scarf);
-            const cape=cloth(u.torso,[[-.2,.16],[.2,.16],[.24,-.60],[-.17,-.65]],dark,'SpyCloak');cape.position.z=-.17;
-            u.daggerGrip=new T.Group();u.daggerGrip.name='DaggerGrip';u.daggerGrip.position.copy(hand.userData.gripPoint.position);hand.add(u.daggerGrip);
-            tube(u.daggerGrip,[[0,.045,0],[0,-.09,0]],.018,leather,'DaggerHandle');
-            oval(u.daggerGrip,[0,-.10,0],[.065,.018,.028],gold,'DaggerGuard');
-            const blade=mesh(u.daggerGrip,geo('dagger',()=>new T.ConeGeometry(.035,.22,4)),gold,[0,-.22,0],[1,1,.5],'Dagger');blade.rotation.x=Math.PI;
         }else{
             oval(u.torso,[0,-.02,-.17],[.135,.18,.085],leather,'GatheringSatchel');
             for(const side of [-1,1])tube(u.torso,[[side*.12,.18,-.04],[side*.13,.02,.13],[side*.10,-.18,.12]],.016,leather,'SatchelStrap');

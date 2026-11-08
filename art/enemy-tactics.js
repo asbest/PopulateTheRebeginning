@@ -32,15 +32,14 @@ export function observeEnemy(observers,candidates,memory,now){
 
 export function counterWeights(personality,contacts){
     const weights={warrior:['swarmer','hive'].includes(personality)?4:3,
-        firewarrior:personality==='sorcerer'?4:2,preacher:2,spy:personality==='trickster'?2:1};
-    const counts={warrior:0,firewarrior:0,preacher:0,spy:0,airship:0};
+        firewarrior:personality==='sorcerer'?4:2,preacher:personality==='trickster'?3:2};
+    const counts={warrior:0,firewarrior:0,preacher:0,airship:0};
     for(const contact of contacts)if(!contact.building&&Object.hasOwn(counts,contact.type))counts[contact.type]++;
     const total=Object.values(counts).reduce((sum,count)=>sum+count,0);
     if(total>=2){
         weights.warrior+=4*counts.firewarrior/total;
         weights.firewarrior+=5*(counts.preacher+counts.airship)/total;
         weights.preacher+=3*counts.warrior/total;
-        weights.spy+=2*counts.preacher/total;
     }
     return weights;
 }

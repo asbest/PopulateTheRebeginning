@@ -13,7 +13,7 @@ html=html.slice(0,start)+`function buildHut() { return Art.building('hut'); }
 function buildTower() { return Art.building('tower'); }
 function buildBarracks() { return Art.building('warrior'); }
 function buildFireTemple() { return Art.building('fire'); }
-function buildSpyHut() { return Art.building('spy'); }
+function buildTemple() { return Art.building('temple'); }
 function buildShipyard() { return Art.building('shipyard'); }
 
 `+html.slice(ai);

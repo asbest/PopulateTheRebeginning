@@ -18,7 +18,7 @@ try{
   // frames. Otherwise new chunks/models can compile shaders during the spell
   // measurement and be wrongly attributed to lightning.
   const browserFrame=requestAnimationFrame.bind(window);window.requestAnimationFrame=()=>0;
-  await Promise.all(state.buildings.map(b=>Art.blender.ensure('building/'+b.type+'/root')));
+  await Promise.all(state.buildings.map(b=>Art.blender.ensure(Art.buildingAssetKey(b.type))));
   await new Promise(resolve=>setTimeout(resolve,0));
   const tree=Object.values(state.chunks).flatMap(c=>c.userData?.trees||[]).filter(t=>!t.burned)
    .sort((a,b)=>a.mesh.position.distanceToSquared(state.cameraLookAt)-b.mesh.position.distanceToSquared(state.cameraLookAt))[0];

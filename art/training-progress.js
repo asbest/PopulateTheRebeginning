@@ -8,7 +8,7 @@ export function createTrainingProgress(T){
             const canvas=document.createElement('canvas');canvas.width=384;canvas.height=64;
             const ctx=canvas.getContext('2d');ctx.font='bold 28px sans-serif';ctx.textAlign='center';
             ctx.lineWidth=5;ctx.strokeStyle='#14242b';ctx.fillStyle='#fff4d2';
-            const text='TRAINING: '+({warrior:'Warrior',firewarrior:'Fire warrior',preacher:'Priest',spy:'Spy'}[type]||type);
+            const text='TRAINING: '+({warrior:'Warrior',firewarrior:'Fire warrior',preacher:'Priest'}[type]||type);
             ctx.strokeText(text,192,42);ctx.fillText(text,192,42);
             labels.set(type,new T.SpriteMaterial({map:new T.CanvasTexture(canvas),toneMapped:false,depthTest:false,depthWrite:false}));
         }

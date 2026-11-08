@@ -18,7 +18,7 @@ try {
             state.matchSettings.peaceTimeMinutes=0;
             // Keep incidental startup lights and model streaming out of the first-cast measurement.
             window.requestAnimationFrame=()=>0;
-            await Promise.all(state.buildings.map(b=>Art.blender.ensure('building/'+b.type+'/root')));
+            await Promise.all(state.buildings.map(b=>Art.blender.ensure(Art.buildingAssetKey(b.type))));
             for(let i=state.particles.length-1;i>=0;i--){
                 if(!state.particles[i].update(10))state.particles.splice(i,1);
             }

@@ -308,7 +308,7 @@ try{
             return samples;
         });
     });
-    await check('Preachers do not instantly convert and spies only convert through explicit hypnosis',async()=>{
+    await check('Priests do not instantly convert and hypnosis still works',async()=>{
         await fresh();
         return page.evaluate(()=>{
             const x=state.shaman.mesh.position.x+2,z=state.shaman.mesh.position.z;
@@ -320,11 +320,6 @@ try{
             preacher.attack();
             if(warrior.faction!==1||warrior.conversionTimer!==0||warrior.originalFaction!==null||warrior.hp!==warrior.maxHp)
                 throw new Error('Preacher attack caused instant damage or conversion');
-            const spy=new Humanoid(0,'spy',x,z);state.units.push(spy);
-            spy.attackTarget=warrior;spy.lastAttackTime=state.clock.getElapsedTime()-.6;spy.attackFired=false;
-            spy.attack();
-            if(warrior.faction!==1||warrior.conversionTimer||warrior.hp!==warrior.maxHp-spy.damage)
-                throw new Error('Spy did not damage or changed sides');
             // Only a deliberately executed hypnosis spell may change sides.
             gameTestAPI.SpatialHash.update();gameTestAPI.executeSpell('hypnotise',x+1,z,state.shaman);
             if(warrior.faction!==0||!warrior.hypnosisActive)throw new Error('Explicit hypnosis failed');

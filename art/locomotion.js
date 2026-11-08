@@ -236,9 +236,8 @@ export function createLocomotion(T) {
         }
         const breath=Math.sin(g.idleTime*2.3)*.004*(1-weight);
         u.torso.position.set(sway,.9+g.pelvis-.615+breath,0);
-        const handedness=u.type==='spy'?-1:1;
         u.torso.rotation.x=smooth(u.torso.rotation.x,.015*weight+.10*run-.065*strike,12,dt);
-        u.torso.rotation.y=smooth(u.torso.rotation.y,-Math.sin(g.phase*Math.PI*2)*.035*weight+.11*strike*handedness,12,dt);
+        u.torso.rotation.y=smooth(u.torso.rotation.y,-Math.sin(g.phase*Math.PI*2)*.035*weight+.11*strike,12,dt);
         u.torso.rotation.z=smooth(u.torso.rotation.z,-sway*.8,12,dt);
         u.head.rotation.y=smooth(u.head.rotation.y,clamp(wrap((u.turnTarget??yaw)-yaw),-.2,.2)*.35-u.torso.rotation.y*.5,10,dt);
         u.head.rotation.x=smooth(u.head.rotation.x,breath*.9-.02*run,8,dt);
@@ -279,7 +278,7 @@ export function createLocomotion(T) {
                 ?1.5+.45*Math.sin(u.animTime*15):casting?1.3: .6;
         }
         if(u.preacherGrip)u.preacherGrip.rotation.x=smooth(u.preacherGrip.rotation.x,attacking?Math.PI:.6,20,dt);
-        const cape=u.torso.getObjectByName(u.isShaman?'CeremonialCape':'SpyCloak');
+        const cape=u.isShaman?u.torso.getObjectByName('CeremonialCape'):null;
         if(cape){
             cape.rotation.x=smooth(cape.rotation.x,-.14-.08*weight+Math.sin(g.phase*Math.PI*2)*.02*weight,8,dt);
             cape.rotation.z=smooth(cape.rotation.z,Math.sin(g.phase*Math.PI*2)*.035*weight,7,dt);

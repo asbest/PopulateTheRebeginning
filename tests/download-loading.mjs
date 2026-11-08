@@ -76,25 +76,27 @@ try{
             return {previewBytes,equivalentFullKtxBytes:fullKtxBytes,textureCount:data.status.previewLoaded,initialModels:data.models.length};
         }finally{await context.close();}
     });
-    await check('Deferred spy details attach once and retain a faction change while loading',async()=>{
+    await check('Deferred model details attach once and retain a faction change while loading',async()=>{
         let release;
         const blocked=new Promise(resolve=>{release=resolve;});
         const {page,context,errors}=await game({setup:page=>page.route('**/art/startup/models/spy.*',async route=>{await blocked;await route.continue().catch(()=>{});})});
         try{
             await page.evaluate(()=>{
-                window.lazyWarrior=new Humanoid(0,'spy',state.shaman.mesh.position.x+2,state.shaman.mesh.position.z);
-                Characters.setFaction(lazyWarrior,0xf03070);
-                if(!lazyWarrior.armR||!lazyWarrior.mesh.children.length)throw new Error('No base warrior while loading');
+                // Exercise a packed faction mesh without spawning a retired unit.
+                window.lazyDetail=new THREE.Group();
+                Art.blender.attach(lazyDetail,'character/spy/torso',0x4169e1);
+                Art.blender.updatePendingFaction(lazyDetail,0xf03070);
+                if(lazyDetail.children.length)throw new Error('Model attached before its pack was released');
             });
             release();
             const data=await page.evaluate(async()=>{
                 await Art.blender.ensure('character/spy/torso');
                 await new Promise(resolve=>setTimeout(resolve,0));
-                const details=[];lazyWarrior.mesh.traverse(node=>{if(node.userData.blenderAsset)details.push(node);});
+                const details=[];lazyDetail.traverse(node=>{if(node.userData.blenderAsset)details.push(node);});
                 const faction=details.filter(node=>node.userData.characterFaction);
                 if(!details.length||!faction.length||faction.some(node=>node.material.color.getHex()!==0xf03070))throw new Error('Late detail lost faction: '+JSON.stringify({details:details.length,colors:faction.map(node=>node.material.color.getHex())}));
-                const parent=new THREE.Group();Art.blender.attach(parent,'character/spy/torso');Art.blender.attach(parent,'character/spy/torso');
-                if(parent.children.length!==1)throw new Error('Duplicate LOD attached');
+                Art.blender.attach(lazyDetail,'character/spy/torso');
+                if(lazyDetail.children.length!==1)throw new Error('Duplicate LOD attached');
                 return {details:details.length,factionParts:faction.length};
             });
             assert(errors.length===0,errors.join('; '));return data;

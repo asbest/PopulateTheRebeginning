@@ -14,7 +14,7 @@ try{
   const {CharacterBatches:batch,Locomotion}=gameTestAPI,p=state.shaman.mesh.position.clone();
   const units=[];
   for(let i=0;i<80;i++){
-   const unit=new Humanoid(i%4,['wild','warrior','firewarrior','shaman','preacher','spy'][i%6],p.x+(i%10-5)*1.2,p.z+(Math.floor(i/10)-4)*1.2);
+   const unit=new Humanoid(i%4,['wild','warrior','firewarrior','shaman','preacher'][i%5],p.x+(i%10-5)*1.2,p.z+(Math.floor(i/10)-4)*1.2);
    unit.nextTargetCheck=Infinity;state.units.push(unit);units.push(unit);
   }
   state.cameraLookAt.copy(p);updateCameraPosition();state.renderer.setPixelRatio(1);

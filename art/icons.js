@@ -22,7 +22,7 @@ const paths = {
  build_tower:'<path d="M6 3h20v7H6ZM10 10v18m12-18v18M6 28h20M12 14h8m-8 5h8m-8 5h8"/>',
  build_warrior:'<path d="m2 13 14-10 14 10H2Zm4 0v15h20V13m-13 4v11m6-11v11M8 15v10m16-10v10"/>',
  build_fire:'<path d="M3 27h26M5 22h22M8 22V12m16 10V12M4 12h24L16 3ZM16 15c6 4 4 8 0 8s-6-4 0-8Z"/>',
- build_spy:'<path d="m4 28 4-18 8-7 8 7 4 18ZM10 17s6-8 12 0c-6 8-12 0-12 0Z"/><circle cx="16" cy="17" r="2"/>',
+ build_temple:'<path d="m4 28 4-18 8-7 8 7 4 18ZM10 17s6-8 12 0c-6 8-12 0-12 0Z"/><circle cx="16" cy="17" r="2"/>',
  build_shipyard:'<path d="M16 9v18M7 18c0 13 18 13 18 0m-21 0h6m12 0h6M9 13h14"/><circle cx="16" cy="6" r="3"/>',
  build_airship:'<ellipse cx="16" cy="10" rx="10" ry="7"/><path d="M9 15 12 25m11-10-3 10M10 25h12v5H10ZM16 3v14"/>',
  upgrade_unit:'<path d="m16 3 4 8 9 1-7 7 2 10-8-5-8 5 2-10-7-7 9-1Z"/>',
@@ -33,10 +33,9 @@ const paths = {
  firewarrior:'<circle cx="16" cy="11" r="4"/><path fill="currentColor" fill-opacity=".15" d="M9 29v-8c0-7 14-7 14 0v8Z"/><path d="M9 29v-8c0-7 14-7 14 0v8M12 21l-6-4m14 4 6-4M5 17c-6-2-3-7-1-10 0 4 4 4 4 7 0 2-1 3-3 3Zm22 0c-4 0-4-4-2-7l2-5c0 5 5 6 4 9-1 2-2 3-4 3ZM13 26h6"/>',
  shaman:'<path d="m6 9-3-5 6 2 3-4 3 4 6-2-3 5M7 11v3a5 5 0 0 0 10 0v-3M7 21l-3 8h16l-3-8M12 21v8M25 11v18m-4-22 4-5 4 5-4 5Z"/><path fill="currentColor" fill-opacity=".2" d="m21 7 4-5 4 5-4 5ZM7 21l-3 8h16l-3-8Z"/>',
  preacher:'<circle cx="11" cy="9" r="7"/><circle cx="11" cy="10" r="3"/><path fill="currentColor" fill-opacity=".15" d="m6 19-3 10h16l-3-10Z"/><path d="m6 19-3 10h16l-3-10M7 21l4 3 4-3M25 12v17m-3-10h6"/><circle cx="25" cy="8" r="4"/>',
- spy:'<path fill="currentColor" fill-opacity=".15" d="m2 29 3-16 8-10 8 10 2 16Z"/><path d="m2 29 3-16 8-10 8 10 2 16M7 14h12l-2 8H9ZM9 17h1m6 0h1M13 23v6M27 25V12l-3-3v16m-1 0h8m-4 0v5"/>',
  airship:'<ellipse cx="16" cy="11" rx="13" ry="8" fill="currentColor" fill-opacity=".15"/><path d="M16 3c-8 3-8 13 0 16 8-3 8-13 0-16ZM3 11h26M7 18l5 8m13-8-5 8M10 26h12v4H10Z"/>'
 };
-const unitKeys=new Set(['wild','warrior','firewarrior','shaman','preacher','spy','airship']);
+const unitKeys=new Set(['wild','warrior','firewarrior','shaman','preacher','airship']);
 export function icon(key) {
     if(key==='warrior_attack')return '<svg class="tribal-icon" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"><path d="m6 28 12-15 3 2L9 30ZM16 12l1-7 7-3 6 6-3 7-7 1ZM17 5l-3-2m10-1 1-2m5 8 2 1M7 24l4 3"/></svg>';
     if(key==='firewarrior_attack')key='blast';

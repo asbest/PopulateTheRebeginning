@@ -13,8 +13,9 @@ try {
  const p=await page.evaluate(()=>{
   closeHelp();closeStoryOverlay();state.isPaused=true;state.mana=1000;state.matchSettings.peaceTimeMinutes=0;
   const u=new Humanoid(0,'wild',state.shaman.mesh.position.x+5,state.shaman.mesh.position.z);
-  state.units.push(u);state.selectedUnits=[u];updateContextMenus();selectAction('build_preacher');
-  const emblem=Art.building('preacher').getObjectByName('Spy eye roof emblem');
+  state.units.push(u);state.selectedUnits=[u];updateContextMenus();selectAction('build_temple');
+  if(state.visibleActions.includes('build_preacher')||state.visibleActions.includes('build_spy'))throw Error('Retired buildings still in the menu');
+  const emblem=Art.building('temple').getObjectByName('Temple roof emblem');
   if(!emblem)throw Error('Roof emblem missing');
   let p;
   for(let dx=-8;dx<=8&&!p;dx+=2)for(let dz=-8;dz<=8;dz+=2){
@@ -40,12 +41,12 @@ try {
  await page.mouse.up();
  const outcome=await page.evaluate(()=>({
   action:state.currentAction,
-  buildings:state.buildings.filter(b=>b.type==='preacher'&&b.faction===0).length,
+  buildings:state.buildings.filter(b=>b.type==='temple'&&b.faction===0).length,
   preview:state.scene.getObjectByName('Building placement preview')?.visible
  }));
  if(outcome.action!=='move'||!outcome.buildings||outcome.preview)
   throw Error('Construction failed '+JSON.stringify(outcome));
- await page.evaluate(()=>selectAction('build_preacher'));
+ await page.evaluate(()=>selectAction('build_temple'));
  await page.mouse.move(p.x+1,p.y+1);
  const invalid=await page.evaluate(()=>{
   const mesh=state.scene.getObjectByName('Building placement preview');
@@ -53,7 +54,7 @@ try {
  });
  if(!invalid.visible||invalid.color!==0xff4545)throw Error('Blocked preview '+JSON.stringify(invalid));
  await page.mouse.click(p.x,p.y);
- if(await page.evaluate(()=>state.currentAction)!=='build_preacher')
+ if(await page.evaluate(()=>state.currentAction)!=='build_temple')
   throw Error('Invalid build lost selected tool');
  if(errors.length)throw Error(errors.join('\n'));
  console.log('PASS roof emblem, green/red preview, drag placement and movement mode',preview,outcome);

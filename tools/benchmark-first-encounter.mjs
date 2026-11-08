@@ -16,11 +16,11 @@ try {
         window.enemyAIs=[];
         // Hold the terrain and model set steady while the camera reveals the army.
         window.requestAnimationFrame=()=>0;
-        await Promise.all(state.buildings.map(b=>Art.blender.ensure('building/'+b.type+'/root')));
+        await Promise.all(state.buildings.map(b=>Art.blender.ensure(Art.buildingAssetKey(b.type))));
         const {CharacterBatches:batch,BattleWork,SpatialHash}=gameTestAPI;
         const renderer=state.renderer,gl=renderer.getContext(),center=state.shaman.mesh.position.clone();
         renderer.setPixelRatio(1);
-        const units=[],roles=['wild','warrior','firewarrior','preacher','spy','shaman'];
+        const units=[],roles=['wild','warrior','firewarrior','preacher','shaman'];
         for(let i=0;i<72;i++){
             const unit=new Humanoid(1,roles[i%roles.length],center.x+12+(i%12)*2.7,center.z+(Math.floor(i/12)-2.5)*2);
             unit.nextTargetCheck=0;

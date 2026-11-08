@@ -88,7 +88,7 @@ export function createSettlementPreparation(T,state,art,getLights){
  function prepareType(kind){
   if(types.has(kind))return types.get(kind);
   // Network/model loading is independent of the GPU preparation budget.
-  const data=art.blender.ensure('building/'+kind+'/root');
+  const data=art.blender.ensure(art.buildingAssetKey(kind));
   const work=(async()=>{
    const root=await budget.enqueue('settlement-prototype/'+kind,()=>art.building(kind),1);
    await data;await collect(root);stats.types++;return true;
@@ -110,7 +110,7 @@ export function createSettlementPreparation(T,state,art,getLights){
   // Start with the currently needed types. Optional future types load only
   // after entering play, one group at a time; the welcome screen stays small.
   if(!state.isPaused&&!backgroundPending){
-   const kind=['hut','warrior','fire','preacher','spy','tower','shipyard'].find(k=>!types.has(k)&&!(k==='shipyard'&&state.matchSettings.noFlyers));
+   const kind=['hut','warrior','fire','temple','tower','shipyard'].find(k=>!types.has(k)&&!(k==='shipyard'&&state.matchSettings.noFlyers));
    if(kind){backgroundPending=true;prepareType(kind).finally(()=>{backgroundPending=false;});}
   }
   const env=environment(),candidates=[];

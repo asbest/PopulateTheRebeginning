@@ -81,7 +81,7 @@ try{
  }));
  await check('Foot soles follow flat ground, uphill, downhill and stopped stance',()=>page.evaluate(()=>{
   const Locomotion=gameTestAPI.Locomotion,report=[];
-  for(const slope of [0,.15,-.15])for(const type of ['wild','shaman','warrior','firewarrior','spy']){
+  for(const slope of [0,.15,-.15])for(const type of ['wild','shaman','warrior','firewarrior','preacher']){
    const u={mesh:new THREE.Group(),type,isShaman:type==='shaman',state:'move',isGrounded:true,moveSpeed:6,animTime:0,updateTicker:0};Characters.build(u,0x377abc);
    const height=(x,z)=>slope*z;let maxError=0,stanceCount=0;
    for(let i=0;i<180;i++){
@@ -101,7 +101,7 @@ try{
  }));
  await check('Full sandal meshes and hips stay above steep terrain in every human role',()=>page.evaluate(()=>{
   const report=[];
-  for(const type of ['wild','warrior','shaman','firewarrior','spy'])for(const [sx,sz] of [[0,2],[0,-2],[2,0],[-2,0],[.75,.75]]){
+  for(const type of ['wild','warrior','shaman','firewarrior','preacher'])for(const [sx,sz] of [[0,2],[0,-2],[2,0],[-2,0],[.75,.75]]){
    const u={mesh:new THREE.Group(),type,isShaman:type==='shaman',state:'move',isGrounded:true,moveSpeed:6};Characters.build(u,0x377abc);
    const height=(x,z)=>sx*x+sz*z;let minSole=Infinity,minHip=Infinity;
    for(let k=0;k<120;k++){
@@ -195,7 +195,7 @@ try{
   for(let x=-100;x<=100;x++)for(let z=-100;z<=100;z++)state.terrainMods.set(`${x},${z}`,6-gameTestAPI.getBaseHeight(x,z));
   state.heightCache.clear();state.cameraLookAt.set(0,6,0);gameTestAPI.updateChunks(true);
   const report=[],direction=new THREE.Vector3(0,0,1);
-  for(const physics of [true,false])for(const fps of [30,60,120])for(const type of ['wild','warrior','firewarrior','preacher','spy','shaman'])for(const unitShot of [false,true]){
+  for(const physics of [true,false])for(const fps of [30,60,120])for(const type of ['wild','warrior','firewarrior','preacher','shaman'])for(const unitShot of [false,true]){
    const u=new Humanoid(0,type,0,0);state.units=[u];u.placeOnGround(0,0);u.hp=u.maxHp=10000;u.nextTargetCheck=Infinity;
    if(!physics){state.physicsWorld.removeRigidBody(u.rigidBody);state.rigidBodies.delete(u.id);u.rigidBody=null;}
    gameTestAPI.SpatialHash.update();
