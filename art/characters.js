@@ -1,4 +1,5 @@
 // Original tribal character meshes. Shared geometry and atlas materials keep large armies affordable.
+import {qualityMaterial} from './graphics-settings.js';
 import {createBlenderPack} from './blender-pack.js';
 import {createGripGeometry} from './hand-grip.js';
 // The public pivots match the gameplay rig; collision shapes and unit statistics are untouched.
@@ -54,7 +55,7 @@ export function createCharacters(T,art) {
             if(kind==='hair'){m.bumpMap=hairTexture;m.bumpScale=.012;}
             m.name='Tribal/'+kind+'/'+color; m.userData.characterKind=kind; materials.set(key,m);
         }
-        return materials.get(key);
+        return qualityMaterial(materials.get(key));
     }
     const skin=mat('skin',0xdccabf), leather=mat('leather'), gold=mat('gold'), bone=mat('cloth',0xe6d8ad), dark=mat('cloth',0x293744);
     const eye=mat('plain',0x172028), ivory=mat('plain',0xede0c2), lip=mat('skin',0x754b48);

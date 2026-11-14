@@ -24,10 +24,17 @@ export function createSceneryBatches(T,state){
  function collect(root){
   if(!root?.parent)return;
   let list=roots.get(root);
-  if(!list){list=[];root.traverse(node=>{if(node.isMesh)list.push({node,matrix:new T.Matrix4(),seen:false});});roots.set(root,list);}
+  if(!list||list.revision!==(root.userData.detailRevision||0)){
+   list=[];list.lods=[];list.revision=root.userData.detailRevision||0;
+   root.traverse(node=>{
+    if(node.isLOD)list.lods.push(node);
+    if(node.isMesh)list.push({node,matrix:new T.Matrix4(),seen:false});
+   });roots.set(root,list);
+  }
+  for(const lod of list.lods)lod.update(state.camera);
   for(const r of list){
    const p=r.node;let visible=true;
-   for(let n=p;n;n=n.parent){if(!n.visible||n.isLOD){visible=false;break;}if(n===scene)break;}
+   for(let n=p;n;n=n.parent){if(!n.visible){visible=false;break;}if(n===scene)break;}
    if(!visible||(p.layers.mask&1)===0||!eligible(p))continue;
    const changed=!r.seen||!r.matrix.equals(p.matrixWorld);
    if(changed){r.matrix.copy(p.matrixWorld);r.valid=orthogonal(r.matrix);r.seen=true;}

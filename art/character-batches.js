@@ -181,7 +181,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 const useProjected=api.crowdDetail&&!api.warming&&!state.isFPV&&!animal;
                 const pixels=useProjected?projectedHeight(u):Infinity;
                 const simple=pixels<23&&!u.isVehicle;
-                const detailed=animal||api.fullShadows||dx*dx+dz*dz<=shadowRangeSq&&pixels>=29;
+                const detailed=animal||api.fullShadows||state.renderer.shadowMap.enabled&&dx*dx+dz*dz<=shadowRangeSq&&pixels>=29;
                 if(!detailed&&!inView){
                     // Outside both the view and detailed-shadow range: suppress only
                     // drawing, never the simulation or animation of the original rig.

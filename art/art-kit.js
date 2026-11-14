@@ -1,4 +1,5 @@
 // Original mesh art, authored for this project. Uses the game's existing Three.js version.
+import {qualityMaterial} from './graphics-settings.js';
 import {createBlenderPack} from './blender-pack.js';
 import {createResourceBudget} from './resource-budget.js';
 import {createTexturePipeline} from './texture-pipeline.js';
@@ -62,7 +63,7 @@ export function createArtKit(T) {
                 normalScale:new T.Vector2(kind==='stone'?.44:.28,kind==='stone'?.44:.28),
                 roughness:metal?0.55:1,metalness:metal,emissive:emission}));
         }
-        return mats.get(key);
+        return qualityMaterial(mats.get(key));
     }
     function cachedGeometry(key,make) {if(!geos.has(key))geos.set(key,make());return geos.get(key);}
     function geometry(kind,args) {return cachedGeometry(kind+args.join(','),()=>new T[kind](...args));}

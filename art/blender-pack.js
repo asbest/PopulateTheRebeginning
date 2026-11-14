@@ -1,5 +1,6 @@
 // Browser bridge for the editable Blender source in ./blender/Overhaul.blend.
 // Static meshes share BufferGeometry and PBR textures across every instance.
+import {qualityMaterial,graphicsSettings} from './graphics-settings.js';
 import {MODEL_GROUPS,MODEL_FILES} from './startup-manifest.js';
 import {assetURL} from './asset-urls.js';
 import {fitBarracksTiles} from './roof-profile.js';
@@ -63,7 +64,7 @@ export function createBlenderPack(T,loadTexture) {
             m.name='Blender/'+key;
             materials.set(key,m);
         }
-        return materials.get(key);
+        return qualityMaterial(materials.get(key));
     }
     function geometry(key,kind,data) {
         const cacheKey=key+'/'+kind;
@@ -112,7 +113,13 @@ export function createBlenderPack(T,loadTexture) {
         const distance=key.startsWith('critter/bird/')||key.startsWith('critter/bunny/')
             ? 100000 : key.startsWith('building/')?85:55;
         lod.addLevel(new T.Group(),distance);
+        const update=lod.update;
+        lod.update=function(camera){
+            this.levels[1].distance=distance*graphicsSettings.profile.detail*graphicsSettings.detailScale;
+            update.call(this,camera);
+        };
         parent.add(lod);
+        parent.userData.detailRevision=(parent.userData.detailRevision||0)+1;
         return true;
     }
     function getGeometry(key,kind) {

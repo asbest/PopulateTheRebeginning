@@ -1,3 +1,4 @@
+import {graphicsSettings} from './graphics-settings.js';
 import {KTX2Loader} from '../vendor/KTX2Loader.js';
 import {TEXTURE_PREVIEWS} from './startup-manifest.js';
 import {assetPath,assetURL} from './asset-urls.js';
@@ -33,7 +34,7 @@ export function createTexturePipeline(T,resources){
         if(texturesByURL.has(url))return texturesByURL.get(url);
         const apply=(texture,ready=false)=>{
             texture.wrapS=texture.wrapT=settings.wrap??T.RepeatWrapping;
-            texture.anisotropy=settings.anisotropy??4;
+            texture.anisotropy=Math.min(settings.anisotropy??4,graphicsSettings.profile.anisotropy);
             texture.minFilter=T.LinearMipmapLinearFilter;
             texture.magFilter=T.LinearFilter;
             texture.encoding=settings.srgb?T.sRGBEncoding:T.LinearEncoding;
@@ -112,7 +113,7 @@ export function createTexturePipeline(T,resources){
         target.isCompressedTexture=!!source.isCompressedTexture;target.isDataTexture=!!source.isDataTexture;
         target.repeat.copy(repeat);target.offset.copy(offset);target.center.copy(center);target.rotation=rotation;
         target.wrapS=target.wrapT=settings.wrap??T.RepeatWrapping;
-        target.anisotropy=settings.anisotropy??4;target.encoding=settings.srgb?T.sRGBEncoding:T.LinearEncoding;
+        target.anisotropy=Math.min(settings.anisotropy??4,graphicsSettings.profile.anisotropy);target.encoding=settings.srgb?T.sRGBEncoding:T.LinearEncoding;
         target.minFilter=T.LinearMipmapLinearFilter;target.magFilter=T.LinearFilter;target.needsUpdate=true;
     }
     function load(url,settings={}){
@@ -166,6 +167,11 @@ export function createTexturePipeline(T,resources){
         return entry.upgrade;
     }
     function drain(){
+        if(!graphicsSettings.profile.hd){
+            for(const entry of queue)entry.queued=false;
+            queue.length=0;
+            return;
+        }
         while(status.upgrading<2&&queue.length){
             const entry=queue.shift();status.upgrading++;
             promote(entry.texture).catch(error=>{entry.failed=true;console.warn('Keeping startup texture',error);})
@@ -173,6 +179,7 @@ export function createTexturePipeline(T,resources){
         }
     }
     function request(texture){
+        if(!graphicsSettings.profile.hd)return;
         const entry=entryByTexture.get(texture);
         if(!entry||entry.high||entry.queued||entry.failed)return;
         entry.queued=true;queue.push(entry);drain();

@@ -710,6 +710,7 @@ window.RAPIER = RAPIERModule;
 import { createArtKit } from './art/art-kit.js';
 import { createCharacters } from './art/characters.js';
 import { createLocomotion } from './art/locomotion.js';
+import {GRAPHICS_PROFILES,setGraphicsTier,adaptGraphicsBudget} from './art/graphics-settings.js';
 import { createPreacherConversion } from './art/preacher-conversion.js';
 import { createControlTutorial } from './art/control-tutorial.js';
 import { createTotemFactory } from './art/totem.js';
@@ -1779,11 +1780,12 @@ window.keyboardVector = state.keyboardVector;
 window.state = state;
 window.flowerUniforms = { uTime: { value: 0 } };
 window.setGraphicsQuality=function(tier='high'){
-    const profiles={low:{pixel:1,cover:.38,shadow:1024},medium:{pixel:1.2,cover:.68,shadow:1536},
-        high:{pixel:1.5,cover:1,shadow:2048},ultra:{pixel:1.8,cover:1,shadow:3072}};
-    const profile=profiles[tier]||profiles.high;
+    tier=Object.hasOwn(GRAPHICS_PROFILES,tier)?tier:'high';
+    const profile=setGraphicsTier(tier);
     state.graphicsQuality={...(state.graphicsQuality||{}),tier,coverDensity:profile.cover,maxPixelRatio:profile.pixel,
-        dynamicScale:state.graphicsQuality?.dynamicScale||1,lastAdjustment:performance.now(),averageFps:state.graphicsQuality?.averageFps||60};
+        dynamicScale:1,minScale:profile.minScale,lastAdjustment:performance.now(),averageFps:state.graphicsQuality?.averageFps||60};
+    if(state.renderer){state.renderer.shadowMap.enabled=profile.shadows;state.renderer.shadowMap.needsUpdate=true;}
+    if(state.sunLight)state.sunLight.castShadow=profile.shadows;
     if(state.renderer)state.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,profile.pixel)*state.graphicsQuality.dynamicScale);
     if(state.sunLight&&state.sunLight.shadow.mapSize.width!==profile.shadow){state.sunLight.shadow.mapSize.set(profile.shadow,profile.shadow);
         if(state.sunLight.shadow.map){state.sunLight.shadow.map.dispose();state.sunLight.shadow.map=null;}}
@@ -1795,16 +1797,19 @@ window.setGraphicsQuality=function(tier='high'){
     }
     try{localStorage.setItem(CONFIG.SAVED_KEYS.GRAPHICS_QUALITY,tier);}catch(e){}
     const graphicsBtn=document.getElementById('btn-graphics-quality');
-    if(graphicsBtn)graphicsBtn.innerText=`Graphics: ${{low:'Low',medium:'Medium',high:'High',ultra:'Ultra'}[state.graphicsQuality.tier]||'High'}`;
+    if(graphicsBtn){
+        graphicsBtn.innerText=`Graphics: ${{low:'Low',medium:'Medium',high:'High',ultra:'Ultra'}[state.graphicsQuality.tier]||'High'}`;
+        graphicsBtn.title=tier==='low'?'For older devices: compact textures and soft contact shadows.':
+            tier==='medium'?'Balanced detail, compact textures and reduced shadows.':'Detailed materials, scenery and shadows.';
+    }
     return state.graphicsQuality;
 };
 window.cycleGraphicsQuality=function(){
     const tiers=['low','medium','high','ultra'];
     const current=state.graphicsQuality?.tier||'high';
     const quality=window.setGraphicsQuality(tiers[(Math.max(0,tiers.indexOf(current))+1)%tiers.length]);
-    // Refresh the spell programs when the selected tier changes the battlefield light budget.
-    const litTier=tier=>tier==='high'||tier==='ultra';
-    if(state.fireballShadersReady&&litTier(current)!==litTier(quality.tier))prewarmSpellShaders();
+    // Material maps and shadow settings also change the spell shader variants.
+    if(state.fireballShadersReady&&current!==quality.tier)prewarmSpellShaders();
     return quality;
 };
 
@@ -11049,11 +11054,12 @@ async function init() {
         updateCameraZoom();
 
         const memory=navigator.deviceMemory||8,cores=navigator.hardwareConcurrency||8;
-        const automaticTier=memory<=4||cores<=4?'medium':'high';
+        const automaticTier=memory<=2||cores<=2?'low':memory<=4||cores<=4?'medium':'high';
         let tier=automaticTier;try{const saved=localStorage.getItem(CONFIG.SAVED_KEYS.GRAPHICS_QUALITY);if(['low','medium','high','ultra'].includes(saved))tier=saved;}catch(e){}
-        state.graphicsQuality={tier,coverDensity:tier==='high'?1:.68,maxPixelRatio:tier==='high'?1.5:1.2,
+        const profile=setGraphicsTier(tier);
+        state.graphicsQuality={tier,coverDensity:profile.cover,maxPixelRatio:profile.pixel,
             dynamicScale:1,lastAdjustment:performance.now(),averageFps:60};
-        state.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        state.renderer = new THREE.WebGLRenderer({ antialias: tier!=='low', powerPreference: "high-performance" });
         state.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, state.graphicsQuality.maxPixelRatio));
         state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         state.renderer.toneMappingExposure = 0.75;
@@ -12941,13 +12947,12 @@ function animate() {
         }
     }
 
-    if(chunksLoadingPending || frameTime-(state.lastTerrainBuildAt||0)<1500) {
+    if(state.isPaused||document.hidden||chunksLoadingPending || frameTime-(state.lastTerrainBuildAt||0)<1500) {
         _qualityFrames=0;_qualityWindowStart=frameTime;
     } else _qualityFrames++;
-    if(state.graphicsQuality&&_qualityFrames>0&&frameTime-_qualityWindowStart>5000) {
+    if(state.graphicsQuality&&!state.isPaused&&!document.hidden&&_qualityFrames>0&&frameTime-_qualityWindowStart>2000) {
         const fps=_qualityFrames*1000/(frameTime-_qualityWindowStart);state.graphicsQuality.averageFps=fps;
-        let scale=state.graphicsQuality.dynamicScale;
-        if(fps<36)scale=Math.max(.67,scale-.1);else if(fps>56)scale=Math.min(1,scale+.05);
+        const scale=adaptGraphicsBudget(fps,state.graphicsQuality.dynamicScale);
         if(Math.abs(scale-state.graphicsQuality.dynamicScale)>.001) {
             state.graphicsQuality.dynamicScale=scale;
             state.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,state.graphicsQuality.maxPixelRatio)*scale);
