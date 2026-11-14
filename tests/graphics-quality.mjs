@@ -7,6 +7,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
 try{
  const page=await browser.newPage({viewport:{width:960,height:600}}),errors=[];
  await seedWorld(page,98217);
+ await page.addInitScript(()=>localStorage.setItem('graphics-quality','high'));
  page.on('pageerror',e=>errors.push(String(e)));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});

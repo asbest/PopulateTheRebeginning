@@ -22,6 +22,7 @@ export function createTexturePipeline(T,resources){
         if(configured)return;
         configured=true;gpuRenderer=renderer;
         renderer.domElement?.addEventListener('webglcontextrestored',()=>{gpuVersions=new WeakMap();});
+        for(const {texture} of surfaces.values())queueWarm(texture);
         const formats=['WEBGL_compressed_texture_astc','WEBGL_compressed_texture_etc',
             'WEBGL_compressed_texture_etc1','WEBGL_compressed_texture_s3tc',
             'EXT_texture_compression_bptc','WEBGL_compressed_texture_pvrtc'];
@@ -158,21 +159,29 @@ export function createTexturePipeline(T,resources){
         const {texture,settings,url}=entry;
         if(useProceduralSurfaces()){
             adopt(texture,procedural(url),settings);texture.userData.procedural=true;
-            readyByTexture.set(texture,Promise.resolve(true));
+            readyByTexture.set(texture,queueWarm(texture));
             return;
         }
         const remote=entry.remote||(entry.remote=loadRemote(url,settings));
         remoteFor.set(texture,remote);forward.set(remote,entry);
-        const ready=(readyByTexture.get(remote)||Promise.resolve(true)).then(success=>{
+        const ready=(readyByTexture.get(remote)||Promise.resolve(true)).then(async success=>{
             if(!success){enableProceduralFallback();return true;}
             if(!useProceduralSurfaces()){
                 adopt(texture,remote,settings);texture.userData.procedural=false;
+                // Preview decoding can finish after a building's preparation draw.
+                // Upload its stable texture through the existing frame budget too.
+                await queueWarm(texture);
             }
             return true;
         });
         readyByTexture.set(texture,ready);
     }
     onGraphicsChange(()=>{for(const entry of surfaces.values())refresh(entry);});
+    function queueWarm(texture){
+        if(!gpuRenderer)return Promise.resolve(true);
+        const warm=()=>{warmTexture(texture);return true;};
+        return resources?resources.enqueue('texture-preview/'+texture.uuid,warm,-2):Promise.resolve(warm());
+    }
     function warmTexture(texture){
         const stable=forward.get(texture);
         if(stable&&!useProceduralSurfaces()){

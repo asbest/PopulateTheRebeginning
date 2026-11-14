@@ -6,6 +6,8 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
 try{
  const page=await browser.newPage({viewport:{width:960,height:600}}),errors=[];
  await seedWorld(page,98217);
+ const tier=process.argv.find(arg=>arg.startsWith('--tier='))?.slice(7)||'high';
+ await page.addInitScript(tier=>localStorage.setItem('graphics-quality',tier),tier);
  page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(m.type()==='error'&&/Shader|WebGL|THREE/.test(m.text()))errors.push(m.text());});
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
@@ -28,7 +30,7 @@ try{
   // Loaded landscape also casts shadows from beyond the destination view.
   const chunks=Object.values(state.chunks);
   await Promise.all(chunks.map(c=>api.SettlementPreparation.prepareRoot(c,false,true)));
-  while(Art.textureStatus.upgrading||Art.textureStatus.pending||api.ResourceBudget.stats.queued){
+  while(Art.textureStatus.upgrading||Art.textureStatus.pending||Art.textureStatus.previewPending||api.ResourceBudget.stats.queued){
    if(performance.now()-start>120000)throw Error('Preparation did not drain: '+JSON.stringify({textures:Art.textureStatus,budget:api.ResourceBudget.stats}));
    await new Promise(r=>setTimeout(r,20));
   }
@@ -38,10 +40,14 @@ try{
   state.sunLight.target.position.copy(city);state.sunLight.position.copy(city).add(sunOffset);state.sunLight.target.updateMatrixWorld();
   renderer.setPixelRatio(1);
   const gl=renderer.getContext(),keys=new Set(renderer.info.programs.map(p=>p.cacheKey));
-  let textureUploads=0,largeStaticUploads=0;
+  let textureUploads=0,largeStaticUploads=0;const textureSources=[];
   const originals={};
   for(const name of ['texImage2D','compressedTexImage2D','texSubImage2D']){
-   originals[name]=gl[name];gl[name]=function(...args){textureUploads++;return originals[name].apply(this,args);};
+   originals[name]=gl[name];gl[name]=function(...args){
+    textureUploads++;const image=args.at(-1);
+    if(textureSources.length<10)textureSources.push({src:image?.src,width:image?.width,height:image?.height});
+    return originals[name].apply(this,args);
+   };
   }
   originals.bufferData=gl.bufferData;gl.bufferData=function(target,data,usage){
    if(usage===gl.STATIC_DRAW&&(typeof data==='number'?data:data?.byteLength)>16384)largeStaticUploads++;
@@ -52,7 +58,7 @@ try{
   const firstMs=render(),a=read(),firstUploads={textureUploads,largeStaticUploads};
   const secondMs=render(),b=read();for(const [name,original]of Object.entries(originals))gl[name]=original;
   let differing=0;for(let i=0;i<a.length;i+=4)if(Math.max(...[0,1,2].map(c=>Math.abs(a[i+c]-b[i+c])))>8)differing++;
-  return {firstMs,secondMs,firstUploads,newPrograms:renderer.info.programs.filter(p=>!keys.has(p.cacheKey)).length,
+  return {firstMs,secondMs,firstUploads,textureSources,newPrograms:renderer.info.programs.filter(p=>!keys.has(p.cacheKey)).length,
    addedPrograms:renderer.info.programs.filter(p=>!keys.has(p.cacheKey)).map(p=>p.cacheKey),
    pixelError:differing/(gl.drawingBufferWidth*gl.drawingBufferHeight),textures:{...Art.textureStatus},
    budget:{...api.ResourceBudget.stats},preparation:{...api.SettlementPreparation.stats},chunks:chunks.length};

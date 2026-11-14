@@ -42,6 +42,8 @@ await check('Generated chunks preserve every authored model and use matching con
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 async function game(options={}){
     const context=await browser.newContext({viewport:{width:800,height:600},...options.context}),page=await context.newPage();
+    // Asset upgrade tests need HD enabled even on a two-core hosted runner.
+    await page.addInitScript(()=>localStorage.setItem('graphics-quality','high'));
     const errors=[],requests=[];
     page.on('pageerror',error=>errors.push(String(error)));
     page.on('request',request=>requests.push(request.url()));

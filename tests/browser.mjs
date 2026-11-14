@@ -194,7 +194,8 @@ try {
   // This is an asset/rig inspection, not a live-play check. A slow software
   // renderer correctly defers HD commits while playing; pause while awaiting
   // them, then restore the original simulation state even if inspection fails.
-  const wasPaused=state.isPaused,draw=state.renderer.render;state.isPaused=true;
+  const wasPaused=state.isPaused,draw=state.renderer.render,previousTier=state.graphicsQuality.tier;
+  state.isPaused=true;setGraphicsQuality('high');
   // HD commits use initTexture in the real context. Redrawing the island for
   // each queued commit is unrelated to this inspection and can take seconds
   // per frame on the hosted runner. Keep off-screen GPU preparation enabled.
@@ -219,7 +220,7 @@ try {
     roles.push(type);
    }
    return {dimensions,roles};
-  }finally{clearTimeout(timer);state.renderer.render=draw;state.isPaused=wasPaused;}
+  }finally{clearTimeout(timer);state.renderer.render=draw;setGraphicsQuality(previousTier);state.isPaused=wasPaused;}
  }));
  await check('New character combat animations retain damage and fireballs without changing sides',async()=>page.evaluate(()=>{
   const p=state.shaman.mesh.position,victim=new Humanoid(1,'warrior',p.x+1,p.z+1);state.units.push(victim);

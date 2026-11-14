@@ -77,9 +77,12 @@ await check('After heavy losses a surviving tribe recruits, trains and attacks a
     troops:state.units.filter(u=>u.faction===2&&u.state!=='dead').map(u=>[u.type,u.aiRole,u.state,
      Math.round(u.mesh.position.x),Math.round(u.mesh.position.z)])
    }));
-  const start=attacker.mesh.position.clone();
+  const waveMembers=state.units.filter(unit=>testAI.squad.ids.has(unit.id));
+  const beforeAdvance=waveMembers.map(unit=>({unit,position:unit.mesh.position.clone(),lastAttack:unit.lastAttackTime}));
   aiStep(4);
-  if(attacker.mesh.position.distanceTo(start)<.5)throw Error('Replacement attacker did not advance');
+  if(!beforeAdvance.some(({unit,position,lastAttack})=>unit.mesh.position.distanceTo(position)>.5||
+      unit.attackTarget&&!window.isAllied(unit.attackTarget.faction,unit.faction)&&unit.lastAttackTime>lastAttack))
+   throw Error('Replacement wave neither advanced nor attacked');
   waves.push(attacker.id);
   for(const u of state.units)if(u.faction===2&&u!==survivor&&u.state!=='dead')u.die();
   survivor.placeOnGround(-26,-14);
