@@ -1,4 +1,5 @@
 import {createProceduralSurfaces} from './procedural-surfaces.js';
+import {loadDeadline} from './load-deadline.js';
 import {graphicsSettings,useProceduralSurfaces,onGraphicsChange,enableProceduralFallback} from './graphics-settings.js';
 import {KTX2Loader} from '../vendor/KTX2Loader.js';
 import {TEXTURE_PREVIEWS} from './startup-manifest.js';
@@ -50,9 +51,9 @@ export function createTexturePipeline(T,resources){
         ready.finally(()=>pending.delete(ready));
         let texture;
         if(!status.enabled){
-            const timer=setTimeout(()=>{enableProceduralFallback();resolveReady(false);},5000);
-            texture=plain.load(assetURL(url),()=>{clearTimeout(timer);resolveReady(true);},undefined,error=>{
-                clearTimeout(timer);enableProceduralFallback();resolveReady(false);
+            const timer=loadDeadline(()=>{enableProceduralFallback();resolveReady(false);},5000);
+            texture=plain.load(assetURL(url),()=>{timer();resolveReady(true);},undefined,error=>{
+                timer();enableProceduralFallback();resolveReady(false);
             });
             readyByTexture.set(texture,ready);
             texturesByURL.set(url,texture);
@@ -64,7 +65,7 @@ export function createTexturePipeline(T,resources){
         const finish=()=>{
             if(completed)return false;
             completed=true;
-            clearTimeout(timeout);
+            timeout?.();
             status.pending--;
             resolveReady(true);
             return true;
@@ -80,17 +81,17 @@ export function createTexturePipeline(T,resources){
         const fallback=error=>{
             if(completed||fallbackStarted)return;
             fallbackStarted=true;
-            clearTimeout(timeout);
+            timeout?.();
             console.warn('KTX2 texture unavailable; loading original image',ktxURL,error);
             status.fallbacks++;
-            const fallbackTimer=setTimeout(()=>{if(!completed){completed=true;status.pending--;resolveReady(false);}},15000);
+            const fallbackTimer=loadDeadline(()=>{if(!completed){completed=true;status.pending--;resolveReady(false);}},15000);
             plain.load(assetURL(url),image=>{
-                clearTimeout(fallbackTimer);
+                fallbackTimer();
                 fallbackImage=image;
                 restoreFallback();
                 finish();
             },undefined,fallbackError=>{
-                clearTimeout(fallbackTimer);
+                fallbackTimer();
                 enableProceduralFallback();
                 if(!completed){
                     completed=true;
@@ -105,7 +106,7 @@ export function createTexturePipeline(T,resources){
             status.loaded++;
             apply(texture,true);
         },undefined,fallback);
-        timeout=setTimeout(()=>fallback(new Error('KTX2 decoding timed out')),12000);
+        timeout=loadDeadline(()=>fallback(new Error('KTX2 decoding timed out')),12000);
         readyByTexture.set(texture,ready);
         texturesByURL.set(url,texture);
         return apply(texture);
@@ -131,7 +132,7 @@ export function createTexturePipeline(T,resources){
         const ready=new Promise(resolve=>{resolveReady=resolve;});
         const entry={url,settings,texture,ready,queued:false,high:false,failed:false};
         previews.set(url,entry);entryByTexture.set(texture,entry);readyByTexture.set(texture,ready);pending.add(ready);status.previewPending++;
-        const finish=success=>{if(finished)return;finished=true;clearTimeout(timer);status.previewPending--;pending.delete(ready);resolveReady(success);};
+        const finish=success=>{if(finished)return;finished=true;timer();status.previewPending--;pending.delete(ready);resolveReady(success);};
         const fallback=()=>{
             if(finished)return;
             entry.fallbackStarted=true;
@@ -139,7 +140,7 @@ export function createTexturePipeline(T,resources){
             adopt(texture,procedural(url),settings);
             finish(true);
         };
-        const timer=setTimeout(fallback,5000);
+        const timer=loadDeadline(fallback,5000);
         plain.load(assetURL(preview),image=>{
             if(finished||entry.fallbackStarted)return;
             adopt(texture,image,settings);status.previewLoaded++;finish(true);

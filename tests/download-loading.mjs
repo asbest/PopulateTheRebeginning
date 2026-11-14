@@ -56,6 +56,26 @@ async function game(options={}){
     }catch(error){await context.close();throw error;}
 }
 try{
+    await check('A blocked rendering thread does not mark reachable texture assets as offline',async()=>{
+        const context=await browser.newContext(),page=await context.newPage();
+        try{
+            await page.addInitScript(()=>localStorage.setItem('graphics-quality','high'));
+            await page.route('**/texture-loading-fixture.html',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Texture loading</title>'}));
+            await page.goto(base+'/texture-loading-fixture.html');
+            const result=await page.evaluate(async()=>{
+                const T=await import('./vendor/three.module.js');
+                const {createTexturePipeline}=await import('./art/texture-pipeline.js');
+                const {graphicsSettings}=await import('./art/graphics-settings.js');
+                const pipeline=createTexturePipeline(T),texture=pipeline.load('art/materials/grass.png');
+                // Reproduce a shader compilation that outlasts the old 5s timer.
+                const until=performance.now()+6000;while(performance.now()<until){}
+                await pipeline.whenReady(texture);
+                return {offline:graphicsSettings.offline,width:texture.image.width,loaded:pipeline.status.previewLoaded};
+            });
+            assert(!result.offline&&result.width===256&&result.loaded===1,'Render stall triggered offline fallback: '+JSON.stringify(result));
+            return result;
+        }finally{await context.close();}
+    });
     for(const mobile of [false,true])await check(`Fast ${mobile?'mobile':'desktop'} startup fetches small textures and core models without audio or HD downloads`,async()=>{
         const {page,context,errors,requests}=await game({context:mobile?{viewport:{width:390,height:844},isMobile:true,hasTouch:true,
             userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'}:{}});
@@ -108,12 +128,22 @@ try{
         const {page,context,errors}=await game();
         try{
             await page.evaluate(()=>{
+                // Inspect streaming, without software-rendered island frames
+                // continually deferring the upload budget on hosted runners.
+                state.isPaused=true;
+                const draw=state.renderer.render;
+                state.renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
                 window.beforeTexture=Art.textures.grass;window.beforeSkin=Characters.tiles.skin;
                 beforeTexture.repeat.set(3,5);beforeTexture.userData={testMarker:17};
                 state.viewScale=8;state.cameraLookAt.copy(state.shaman.mesh.position);
             });
             await page.waitForFunction(()=>Art.textures.grass.image.width>=1000&&Characters.tiles.skin.image.width>=1000,
-                null,{timeout:60000});
+                null,{timeout:60000}).catch(async error=>{
+                const detail=await page.evaluate(()=>({textures:Art.textureStatus,budget:Art.resources.stats,
+                    quality:state.graphicsQuality.tier,grass:Art.textures.grass.image.width,skin:Characters.tiles.skin.image.width,
+                    procedural:!!Art.textures.grass.userData.procedural}));
+                throw new Error(error.message+' '+JSON.stringify(detail));
+            });
             const data=await page.evaluate(()=>{
                 if(Art.textures.grass!==beforeTexture||Characters.tiles.skin!==beforeSkin)throw new Error('Texture identity changed');
                 if(beforeTexture.repeat.x!==3||beforeTexture.repeat.y!==5||beforeTexture.userData.testMarker!==17)throw new Error('Texture state lost');
@@ -151,6 +181,9 @@ try{
         }});
         try{
             const kept=await page.evaluate(async()=>{
+                state.isPaused=true;
+                const draw=state.renderer.render;
+                state.renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
                 const texture=Art.textures.grass,preview=texture.image;
                 let timer;
                 try{
