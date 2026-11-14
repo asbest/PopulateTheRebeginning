@@ -1,4 +1,5 @@
-import {graphicsSettings} from './graphics-settings.js';
+import {createProceduralSurfaces} from './procedural-surfaces.js';
+import {graphicsSettings,useProceduralSurfaces,onGraphicsChange,enableProceduralFallback} from './graphics-settings.js';
 import {KTX2Loader} from '../vendor/KTX2Loader.js';
 import {TEXTURE_PREVIEWS} from './startup-manifest.js';
 import {assetPath,assetURL} from './asset-urls.js';
@@ -7,6 +8,7 @@ import {assetPath,assetURL} from './asset-urls.js';
 // after WebGL reports an actual GPU block-compression format.
 export function createTexturePipeline(T,resources){
     const plain=new T.TextureLoader();
+    const procedural=createProceduralSurfaces(T),surfaces=new Map(),remoteFor=new WeakMap(),forward=new WeakMap();
     const status={enabled:false,loaded:0,fallbacks:0,pending:0,previewLoaded:0,previewPending:0,promoted:0,upgrading:0};
     const readyByTexture=new WeakMap(),pending=new Set();
     const texturesByURL=new Map();
@@ -47,9 +49,9 @@ export function createTexturePipeline(T,resources){
         ready.finally(()=>pending.delete(ready));
         let texture;
         if(!status.enabled){
-            const timer=setTimeout(()=>resolveReady(false),15000);
+            const timer=setTimeout(()=>{enableProceduralFallback();resolveReady(false);},5000);
             texture=plain.load(assetURL(url),()=>{clearTimeout(timer);resolveReady(true);},undefined,error=>{
-                clearTimeout(timer);console.error('Texture load failed',url,error);resolveReady(false);
+                clearTimeout(timer);enableProceduralFallback();resolveReady(false);
             });
             readyByTexture.set(texture,ready);
             texturesByURL.set(url,texture);
@@ -88,7 +90,7 @@ export function createTexturePipeline(T,resources){
                 finish();
             },undefined,fallbackError=>{
                 clearTimeout(fallbackTimer);
-                console.error('Texture fallback failed',url,fallbackError);
+                enableProceduralFallback();
                 if(!completed){
                     completed=true;
                     status.pending--;
@@ -108,7 +110,7 @@ export function createTexturePipeline(T,resources){
         return apply(texture);
     }
     function adopt(target,source,settings){
-        const userData=target.userData,repeat=target.repeat.clone(),offset=target.offset.clone(),center=target.center.clone(),rotation=target.rotation;
+        const userData=target.userData||{},repeat=target.repeat.clone(),offset=target.offset.clone(),center=target.center.clone(),rotation=target.rotation;
         target.dispose();target.copy(source);target.userData=userData;
         target.isCompressedTexture=!!source.isCompressedTexture;target.isDataTexture=!!source.isDataTexture;
         target.repeat.copy(repeat);target.offset.copy(offset);target.center.copy(center);target.rotation=rotation;
@@ -116,7 +118,7 @@ export function createTexturePipeline(T,resources){
         target.anisotropy=Math.min(settings.anisotropy??4,graphicsSettings.profile.anisotropy);target.encoding=settings.srgb?T.sRGBEncoding:T.LinearEncoding;
         target.minFilter=T.LinearMipmapLinearFilter;target.magFilter=T.LinearFilter;target.needsUpdate=true;
     }
-    function load(url,settings={}){
+    function loadRemote(url,settings={}){
         const preview=TEXTURE_PREVIEWS[assetPath(url)];
         if(fullMode||!preview)return loadFull(url,settings);
         if(previews.has(url))return previews.get(url).texture;
@@ -130,22 +132,57 @@ export function createTexturePipeline(T,resources){
         previews.set(url,entry);entryByTexture.set(texture,entry);readyByTexture.set(texture,ready);pending.add(ready);status.previewPending++;
         const finish=success=>{if(finished)return;finished=true;clearTimeout(timer);status.previewPending--;pending.delete(ready);resolveReady(success);};
         const fallback=()=>{
-            if(finished||entry.fallbackStarted)return;entry.fallbackStarted=true;clearTimeout(timer);
-            const original=loadFull(url,settings);
-            readyByTexture.get(original).then(success=>{if(success){adopt(texture,original,settings);entry.high=true;}finish(success);});
+            if(finished)return;
+            entry.fallbackStarted=true;
+            enableProceduralFallback();
+            adopt(texture,procedural(url),settings);
+            finish(true);
         };
-        const timer=setTimeout(fallback,8000);
+        const timer=setTimeout(fallback,5000);
         plain.load(assetURL(preview),image=>{
             if(finished||entry.fallbackStarted)return;
             adopt(texture,image,settings);status.previewLoaded++;finish(true);
         },undefined,fallback);
         return texture;
     }
+    function load(url,settings={}){
+        if(surfaces.has(url))return surfaces.get(url).texture;
+        const texture=new T.Texture();
+        const entry={texture,settings,url,remote:null};
+        surfaces.set(url,entry);
+        adopt(texture,procedural(url),settings);texture.userData.procedural=true;
+        refresh(entry);
+        return texture;
+    }
+    function refresh(entry){
+        const {texture,settings,url}=entry;
+        if(useProceduralSurfaces()){
+            adopt(texture,procedural(url),settings);texture.userData.procedural=true;
+            readyByTexture.set(texture,Promise.resolve(true));
+            return;
+        }
+        const remote=entry.remote||(entry.remote=loadRemote(url,settings));
+        remoteFor.set(texture,remote);forward.set(remote,entry);
+        const ready=(readyByTexture.get(remote)||Promise.resolve(true)).then(success=>{
+            if(!success){enableProceduralFallback();return true;}
+            if(!useProceduralSurfaces()){
+                adopt(texture,remote,settings);texture.userData.procedural=false;
+            }
+            return true;
+        });
+        readyByTexture.set(texture,ready);
+    }
+    onGraphicsChange(()=>{for(const entry of surfaces.values())refresh(entry);});
     function warmTexture(texture){
+        const stable=forward.get(texture);
+        if(stable&&!useProceduralSurfaces()){
+            adopt(stable.texture,texture,stable.settings);texture=stable.texture;
+        }
         if(!texture||!gpuRenderer?.initTexture||gpuVersions.get(texture)===texture.version)return;
         gpuRenderer.initTexture(texture);gpuVersions.set(texture,texture.version);
     }
     async function promote(texture){
+        if(useProceduralSurfaces())return;
         const entry=entryByTexture.get(texture);
         if(!entry||entry.high||entry.failed)return;
         if(entry.upgrade)return entry.upgrade;
@@ -154,6 +191,7 @@ export function createTexturePipeline(T,resources){
             const source=loadFull(entry.url,entry.settings);
             if(await readyByTexture.get(source)){
                 const commit=()=>{
+                    if(useProceduralSurfaces())return;
                     adopt(entry.texture,source,entry.settings);
                     // Initialize the actual stable texture object, not a disposable
                     // copy that would force another upload at the first close view.
@@ -167,7 +205,7 @@ export function createTexturePipeline(T,resources){
         return entry.upgrade;
     }
     function drain(){
-        if(!graphicsSettings.profile.hd){
+        if(useProceduralSurfaces()||!graphicsSettings.profile.hd){
             for(const entry of queue)entry.queued=false;
             queue.length=0;
             return;
@@ -179,23 +217,26 @@ export function createTexturePipeline(T,resources){
         }
     }
     function request(texture){
-        if(!graphicsSettings.profile.hd)return;
+        if(useProceduralSurfaces()||!graphicsSettings.profile.hd)return;
         const entry=entryByTexture.get(texture);
         if(!entry||entry.high||entry.queued||entry.failed)return;
         entry.queued=true;queue.push(entry);drain();
     }
     const point=new T.Vector3();
     function streamVisible(scene,focus,radius,extra=[]){
-        if(!previews.size)return;
-        for(const texture of extra)request(texture);
+        if(useProceduralSurfaces()||!previews.size)return;
+        const requestSurface=texture=>request(remoteFor.get(texture)||texture);
+        for(const texture of extra)requestSurface(texture);
         const radiusSq=radius*radius;
         scene.traverseVisible(node=>{
             if(!node.isMesh||!node.material)return;
             if(point.setFromMatrixPosition(node.matrixWorld).distanceToSquared(focus)>radiusSq)return;
-            for(const material of [node.material].flat())for(const key of ['map','normalMap','roughnessMap','metalnessMap','emissiveMap'])request(material[key]);
+            for(const material of [node.material].flat())for(const key of ['map','normalMap','roughnessMap','metalnessMap','emissiveMap'])requestSurface(material[key]);
         });
     }
-    return {configure,load,status,streamVisible,promote,request,warmTexture,
+    return {configure,load,status,streamVisible,
+        promote:texture=>promote(remoteFor.get(texture)||texture),
+        request:texture=>request(remoteFor.get(texture)||texture),warmTexture,
         promoteAll:()=>Promise.all([...previews.values()].map(entry=>promote(entry.texture))),
         whenReady:texture=>readyByTexture.get(texture)||Promise.resolve(true),waitForPending:()=>Promise.all([...pending])};
 }

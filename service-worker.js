@@ -6,7 +6,8 @@ function managed(input){
     const url=new URL(input);
     if(url.origin!==ROOT.origin||!url.pathname.startsWith(ROOT.pathname))return false;
     const path=decodeURIComponent(url.pathname.slice(ROOT.pathname.length));
-    return !!self.GAME_ASSETS.files[path]&&url.searchParams.get('v')===self.GAME_ASSETS.files[path];
+    const version=path==='art/asset-revisions.js'?self.GAME_ASSETS.revision:self.GAME_ASSETS.files[path];
+    return !!version&&url.searchParams.get('v')===version;
 }
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
@@ -28,16 +29,37 @@ async function stored(request){
     }catch{}
     return null;
 }
+async function offlineResponse(response,navigation){
+    if(!navigation)return response;
+    const html=(await response.text()).replace('<head>','<head><script>window.POPULATE_OFFLINE=true;</script>');
+    const headers=new Headers(response.headers);headers.delete('content-length');headers.delete('content-encoding');
+    return new Response(html,{status:200,headers});
+}
 async function remember(request,response){
     if(response.ok&&response.status===200)try{const copy=response.clone();await (await caches.open(NAME)).put(request,copy);}catch{}
 }
 self.addEventListener('fetch',event=>{
-    const request=event.request;
-    if(request.method!=='GET'||request.headers.has('range')||!managed(request.url))return;
+    const original=event.request;
+    if(original.method!=='GET'||original.headers.has('range'))return;
+    const url=new URL(original.url);
+    if(url.origin!==ROOT.origin||!url.pathname.startsWith(ROOT.pathname))return;
+    let path=decodeURIComponent(url.pathname.slice(ROOT.pathname.length));
+    if(!path)path='index.html';
+    const version=path==='art/asset-revisions.js'?self.GAME_ASSETS.revision:self.GAME_ASSETS.files[path];
+    if(!version)return;
+    // Explicit versions must stay isolated. Bare module/navigation requests
+    // use this service worker release's content version.
+    if(url.searchParams.has('v')&&url.searchParams.get('v')!==version)return;
+    if(path.endsWith('.html'))url.search='';
+    url.pathname=ROOT.pathname+path;url.searchParams.set('v',version);
+    const request=new Request(url.href);
     event.respondWith((async()=>{
         const hit=await stored(request);
-        if(hit)return hit;
-        const response=await fetch(request);
+        if(hit&&original.mode!=='navigate')return hit;
+        let response;
+        try{response=await fetch(request);}
+        catch(error){if(hit)return offlineResponse(hit,original.mode==='navigate');throw error;}
+        if(!response.ok&&hit)return offlineResponse(hit,original.mode==='navigate');
         // Cache writes do not delay delivery to the renderer or audio decoder.
         event.waitUntil(remember(request,response));
         return response;
@@ -55,5 +77,6 @@ self.addEventListener('message',event=>{
             }
         }
         await Promise.all([fill(),fill()]);
+        event.ports[0]?.postMessage({cached:true});
     })());
 });

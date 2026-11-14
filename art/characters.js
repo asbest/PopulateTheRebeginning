@@ -25,7 +25,7 @@ export function createCharacters(T,art) {
         for(const kind of ['skin','cloth']){
             const url=new URL(kind==='skin'?'./character-skin-v2.png':'./character-cloth.png',import.meta.url).href;
             tiles[kind]=art.loadTexture(url,{srgb:true,anisotropy:8});
-            tiles[kind].userData={dedicated:true};
+            tiles[kind].userData.dedicated=true;
         }
         for(const material of materials.values()){
             const kind=material.userData.characterKind;

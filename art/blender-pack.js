@@ -1,6 +1,6 @@
 // Browser bridge for the editable Blender source in ./blender/Overhaul.blend.
 // Static meshes share BufferGeometry and PBR textures across every instance.
-import {qualityMaterial,graphicsSettings} from './graphics-settings.js';
+import {qualityMaterial,graphicsSettings,useProceduralSurfaces} from './graphics-settings.js';
 import {MODEL_GROUPS,MODEL_FILES} from './startup-manifest.js';
 import {assetURL} from './asset-urls.js';
 import {fitBarracksTiles} from './roof-profile.js';
@@ -145,6 +145,7 @@ export function createBlenderPack(T,loadTexture) {
         return loads.get('full');
     }
     async function ensure(key){
+        if(useProceduralSurfaces())return false;
         if(models[key])return true;
         if(!MODEL_GROUPS[key])return false;
         try{await loadGroup(MODEL_GROUPS[key]);return !!models[key];}
@@ -154,7 +155,7 @@ export function createBlenderPack(T,loadTexture) {
         root.traverse(node=>{for(const request of pendingParents.get(node)?.values()||[])request.color=color;});
     }
     const full=new URLSearchParams(location.search).get('assets')==='full';
-    const ready=(full?loadAll():loadGroup('startup').catch(()=>loadAll()))
+    const ready=(useProceduralSurfaces()?Promise.resolve():full?loadAll():loadGroup('startup').catch(()=>loadAll()))
         .catch(error=>{console.warn('Blender detail pack unavailable; using base meshes',error);});
     sharedPack={ready,attach,getGeometry,texture,ensure,loadAll,updatePendingFaction,get models(){return models;},geometries,materials};
     return sharedPack;

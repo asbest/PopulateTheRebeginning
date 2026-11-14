@@ -51,6 +51,7 @@ if(!process.argv.includes('--manifest-only')){
   `export const MODEL_FILES=${JSON.stringify(modelFiles)};\n`);
  console.log(JSON.stringify({textures:sources.length,sourceBytes,previewBytes,models:Object.fromEntries(Object.entries(groups).map(([group,models])=>[group,Object.keys(models).length]))}));
 }
+await import('./build-offline-runtime.mjs');
 const files={};
 async function scan(folder){
  for(const entry of await fs.readdir(path.join(root,folder),{withFileTypes:true})){

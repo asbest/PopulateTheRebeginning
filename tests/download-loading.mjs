@@ -135,11 +135,11 @@ try{
                 if(!warrior.armR||!warrior.legL||warrior.hp<=0||!state.renderer)throw new Error('Missing base rig');
                 return {width:Art.textures.grass.image.width,models:Object.keys(Art.blender.models).length};
             });
-            assert(data.width>=1000,'Missing preview did not use full texture fallback');
+            assert(data.width===64,'Missing preview did not use a procedural surface');
             assert(data.models===0&&errors.length===0,'Base mesh fallback failed: '+errors.join('; '));return data;
         }finally{await context.close();}
     });
-    await check('A failed HD upgrade keeps the working preview',async()=>{
+    await check('A failed HD upgrade selects procedural surfaces',async()=>{
         const failures=[];
         const {page,context,errors}=await game({setup:async page=>{
             for(const extension of ['ktx2','png'])await page.route(`**/art/materials/grass.${extension}*`,route=>{
@@ -157,23 +157,23 @@ try{
                         new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Grass upgrade did not finish')),60000);})
                     ]);
                 }finally{clearTimeout(timer);}
-                return Art.textures.grass===texture&&texture.image===preview&&preview.width===256;
+                return Art.textures.grass===texture&&texture.userData.procedural&&texture.image.width===64;
             });
             assert(failures.includes('png'),'Full-resolution fallback was not attempted');
-            assert(kept,'Upgrade destroyed preview');
+            assert(kept,'Failed upgrade did not preserve the texture object with a procedural surface');
             assert(errors.length===0,errors.join('; '));
         }finally{await context.close();}
     });
-    await check('A stalled preview uses its original fallback and ignores a late preview response',async()=>{
+    await check('A stalled preview uses a procedural fallback and ignores a late preview response',async()=>{
         let release;const blocked=new Promise(resolve=>{release=resolve;});
         const {page,context,errors}=await game({setup:page=>page.route('**/art/startup/textures/materials-grass.*',async route=>{
             await blocked;await route.continue().catch(()=>{});
         })});
         try{
-            assert(await page.evaluate(()=>Art.textures.grass.image.width>=1000),'Stalled preview blocked fallback');
+            assert(await page.evaluate(()=>Art.textures.grass.image.width===64&&Art.textures.grass.userData.procedural),'Stalled preview blocked procedural fallback');
             const response=page.waitForResponse(response=>new URL(response.url()).pathname.includes('/textures/materials-grass.'));
             release();await response;
-            assert(await page.evaluate(()=>Art.textures.grass.image.width>=1000),'Late preview replaced full fallback');
+            assert(await page.evaluate(()=>Art.textures.grass.image.width===64&&Art.textures.grass.userData.procedural),'Late preview replaced procedural fallback');
             assert(!errors.length,errors.join('; '));
         }finally{release();await context.close();}
     });
