@@ -23,10 +23,25 @@ are independent of these changes.
   when the camera returns. Existing particles are not deleted to save rendering.
 - Batch bookkeeping reuses arrays and bounds instead of allocating replacements
   every frame. Original meshes remain available for selection and fallback.
+- `art/static-transforms.js` avoids recomposing unchanged building/chunk
+  transforms. Position, rotation and scale edits are synchronized before world
+  matrices update, including explicit world-position queries. Dynamic actors
+  retain their ordinary update path; detached parts regain automatic updates.
+- `art/scene-index.js` shares cached subtree lists across scenery and shadow
+  processing. Normal add/remove/clear/reparent operations invalidate affected
+  ancestors, while visibility is evaluated live. Unrelated effects do not
+  rebuild static subtree lists.
+- `art/hud-cache.js` reuses connected HUD elements and skips unchanged text.
+  Frame-level visitor-field objects and temporary living-unit arrays are gone.
+- `art/terrain-refresh.js` compares exact local edits, configuration, noise and
+  geometry inputs before rebuilding ground/water attributes. Its footprint
+  includes border interpolation and normal samples. Terrain colliders reuse
+  unchanged geometry and refresh when position/index buffers or worlds change.
 
 ## Validation
 
 Desktop Chromium checks include `tests/render-efficiency.mjs`,
+`tests/cpu-efficiency.mjs`, `tests/terrain-refresh.mjs`,
 `tests/shadow-cache.mjs`, `tests/effect-efficiency.mjs`,
 `tests/graphics-quality.mjs` and the scenery, armies, crowd-detail, firewarriors,
 first-fireball and settlement-entry benchmarks. Pixel comparisons cover moving

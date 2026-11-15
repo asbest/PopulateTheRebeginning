@@ -15,7 +15,7 @@ export function createShadowCache(T){
         value(t.center.x);value(t.center.y);value(t.rotation);value(t.flipY);
     }
     return {stats,enabled:true,
-        update(scene,camera,renderer){
+        update(scene,camera,renderer,index=null){
             if(!renderer.shadowMap.enabled||renderer.getRenderTarget())return;
             if(!this.enabled){scene.traverseVisible(n=>{if(n.isLight&&n.castShadow)n.shadow.autoUpdate=true;});misses=cooldown=0;return;}
             if(boundRenderer!==renderer){
@@ -30,7 +30,7 @@ export function createShadowCache(T){
             same=matrix(camera.projectionMatrix)&&same;
             value(renderer.shadowMap.type);value(camera.layers.mask);
             if(renderer.clippingPlanes?.length)unsafe=true;
-            scene.traverseVisible(node=>{
+            const visit=node=>{
                 if(node.isLight&&node.castShadow){
                     lights.push(node);value(node);value(node.distance);value(node.angle);same=matrix(node.matrixWorld)&&same;
                     if(node.target)same=matrix(node.target.matrixWorld)&&same;
@@ -52,7 +52,9 @@ export function createShadowCache(T){
                     if(m.displacementMap||m.clippingPlanes?.length||m.isShaderMaterial)unsafe=true;
                 };
                 if(Array.isArray(node.material))for(const m of node.material)check(m);else check(node.material);
-            });
+            };
+            if(index){for(const node of index.visibleNodes(scene))visit(node);}
+            else scene.traverseVisible(visit);
             if(current.length!==previous.length)same=false;
             if(same)for(let i=0;i<current.length;i++)if(current[i]!==previous[i]){same=false;break;}
             for(const light of lights){

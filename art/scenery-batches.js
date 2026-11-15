@@ -1,7 +1,7 @@
 import {createBoxInstances} from './box-instances.js';
 // Original meshes, materials, shadows and raycast geometry remain authoritative.
 // Spatially bounded instances share vertex buffers; no mesh simplification/LOD.
-export function createSceneryBatches(T,state){
+export function createSceneryBatches(T,state,index=null){
  const buckets=new Map(),roots=new WeakMap(),masked=new Map(),hiddenLayer=30;
  const boxes=createBoxInstances(T);
  const matrix=new T.Matrix4(),sphere=new T.Sphere(),point=new T.Vector3();
@@ -26,9 +26,12 @@ export function createSceneryBatches(T,state){
  function collect(root){
   if(!root?.parent)return;
   let list=roots.get(root);
-  if(!list||list.revision!==(root.userData.detailRevision||0)){
-   list=[];list.lods=[];list.revision=root.userData.detailRevision||0;
-   root.traverse(node=>{
+  const topology=index?.list(root);
+  const revision=topology?topology.revision:root.userData.detailRevision||0;
+  if(!list||list.revision!==revision){
+   list=[];list.lods=topology?topology.lods:[];list.revision=revision;
+   if(topology)for(const node of topology.meshes)list.push({node,matrix:new T.Matrix4(),seen:false});
+   else root.traverse(node=>{
     if(node.isLOD)list.lods.push(node);
     if(node.isMesh)list.push({node,matrix:new T.Matrix4(),seen:false});
    });roots.set(root,list);

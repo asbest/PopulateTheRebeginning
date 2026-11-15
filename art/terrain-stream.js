@@ -13,7 +13,7 @@ export function createTerrainStream({snapshot,version,makeWorker,now=()=>perform
   try{
    worker=makeWorker();worker.onerror=event=>stop(event.message||'worker error');worker.onmessageerror=()=>stop('message error');
    worker.onmessage=({data})=>{
-    sync();const job=[...pending.values()].find(j=>j.id===data.id);
+    sync();let job;for(const candidate of pending.values())if(candidate.id===data.id){job=candidate;break;}
     if(!job){stats.stale++;return;}
     if(data.error){stop(data.error);return;}
     const arrays=data.arrays,n=job.count;

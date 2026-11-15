@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import * as T from '../vendor/three.module.js';
+import {createSceneIndex} from '../art/scene-index.js';
+import {createStaticTransforms} from '../art/static-transforms.js';
+import {createTerrainRefresh} from '../art/terrain-refresh.js';
+import {createHudCache} from '../art/hud-cache.js';
+
+const index=createSceneIndex(),scene=new T.Scene(),root=new T.Group(),dynamic=new T.Group();
+scene.add(root,dynamic);const part=new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial());root.add(part);
+const list=index.list(root);index.list(root);assert.equal(index.stats.rebuilds,1);
+dynamic.add(new T.Object3D());assert.equal(index.list(root),list);assert.equal(index.stats.rebuilds,1);
+const late=new T.Mesh(part.geometry,part.material);root.add(late);assert.equal(index.list(root).meshes.length,2);
+root.remove(late);assert.equal(index.list(root).meshes.length,1);
+const transforms=createStaticTransforms(index);transforms.bind(scene);transforms.add(root);
+scene.updateMatrixWorld();assert.equal(part.matrixAutoUpdate,false);assert.equal(dynamic.matrixAutoUpdate,true);
+scene.updateMatrixWorld();assert.equal(transforms.stats.composed,0);
+root.position.x=4;part.position.z=3;scene.updateMatrixWorld();assert.equal(transforms.stats.composed,2);
+assert.equal(part.matrixWorld.elements[12],4);assert.equal(part.matrixWorld.elements[14],3);
+part.position.z=5;assert.equal(part.getWorldPosition(new T.Vector3()).z,5);
+root.add(late);late.position.y=2;scene.updateMatrixWorld();assert.equal(late.matrixWorld.elements[13],2);
+dynamic.add(late);scene.updateMatrixWorld();assert.equal(late.matrixAutoUpdate,true);
+scene.remove(root);scene.updateMatrixWorld();assert.equal(part.matrixAutoUpdate,true);
+dynamic.clear();assert.equal(index.list(dynamic).nodes.length,1);
+console.log('PASS cached subtree lists handle late details/reparenting; static transforms preserve edits and restore detached objects');
+
+const state={terrainMods:new Map(),matchSettings:{biome:'normal'},simplex:{}},env={state,CONFIG:{TERRAIN:{}},COLORS:{},CHUNK_SIZE:16};
+const cache=createTerrainRefresh(env),mesh=new T.Mesh(new T.PlaneGeometry(16,16));let builds=0;
+const build=m=>{builds++;m.geometry.attributes.position.needsUpdate=true;};
+cache.update(mesh,0,0,build);cache.update(mesh,0,0,build);assert.equal(builds,1);
+state.terrainMods.set('100,100',4);cache.update(mesh,0,0,build);assert.equal(builds,1);
+state.terrainMods.set('9,0',4);cache.update(mesh,0,0,build);assert.equal(builds,2);
+state.terrainMods.set('9,0',5);cache.update(mesh,0,0,build);assert.equal(builds,3);
+state.terrainMods.delete('9,0');cache.update(mesh,0,0,build);assert.equal(builds,4);
+state.matchSettings.biome='winter';cache.update(mesh,0,0,build);assert.equal(builds,5);
+state.simplex={};cache.update(mesh,0,0,build);assert.equal(builds,6);
+mesh.geometry.attributes.position.needsUpdate=true;cache.update(mesh,0,0,build);assert.equal(builds,7);
+console.log('PASS terrain cache reuses unchanged/distant edits and refreshes border edits, deletion, biome, noise and geometry changes');
+
+let lookups=0,writes=0,shown='';let element={isConnected:true,get textContent(){return shown;},set textContent(v){writes++;shown=v;}};
+const hud=createHudCache({getElementById:()=>{lookups++;return element;}});
+hud.text('faith','50');hud.text('faith','50');assert.equal(writes,1);assert.equal(lookups,1);
+hud.text('faith','51');assert.equal(writes,2);
+element.isConnected=false;element={isConnected:true,textContent:''};hud.text('faith','52');assert.equal(element.textContent,'52');assert.equal(lookups,2);
+console.log('PASS HUD avoids unchanged writes/repeated lookups and recovers replaced DOM elements');

@@ -733,6 +733,10 @@ import { LANDSCAPES, CAMPAIGN_LANDSCAPES, LAVA_LEVELS } from './art/landscape-pr
 import { createTerrainStream } from './art/terrain-stream.js';
 import { createSceneryBatches } from './art/scenery-batches.js';
 import { createShadowCache } from './art/shadow-cache.js';
+import { createSceneIndex } from './art/scene-index.js';
+import { createStaticTransforms } from './art/static-transforms.js';
+import { createTerrainRefresh } from './art/terrain-refresh.js';
+import { createHudCache } from './art/hud-cache.js';
 import { createInstanceWriter } from './art/instance-writer.js';
 import { createCharacterBatches } from './art/character-batches.js';
 import { createBattleWork, createBattleProfiler } from './art/battle-work.js';
@@ -4214,6 +4218,7 @@ let chunkTerrainMat, chunkWaterGeo, chunkWaterMat;
 let groundCoverGrassGeo, groundCoverGrassMat, groundCoverStoneGeo, groundCoverStoneMat,groundCoverBushGeo,groundCoverBushMat;
 
 // Shared objects for performance
+const TerrainRefresh=createTerrainRefresh({state,CONFIG,COLORS,CHUNK_SIZE});
 const TerrainKernel=createTerrainKernel(THREE,{state,CONFIG,COLORS,CHUNK_SIZE,CHUNK_RES,
  WATER_LEVEL,VISUAL_WATER_LEVEL,NOISE_SCALE,HEIGHT_MULTIPLIER,BRIDGE_WIDTH,BRIDGE_HEIGHT});
 
@@ -4679,13 +4684,19 @@ function updateChunks(force = false, specificChunks = null) {
     }
 }
 
-function updateChunkWater(mesh,cx,cz){TerrainKernel.updateChunkWater(mesh,cx,cz);}
+function updateChunkWater(mesh,cx,cz){return TerrainRefresh.update(mesh,cx,cz,TerrainKernel.updateChunkWater);}
 
+const terrainColliderSources=new WeakMap();
 function updateChunkPhysics(cx, cz, geometry = null) {
     if (!state.physicsWorld || typeof RAPIER === 'undefined') return;
     const key = `${cx},${cz}`;
 
-    // Remove existing collider if any
+    geometry = geometry || state.chunks[key]?.children[0]?.geometry;
+    if(!geometry)return;
+    const old=terrainColliderSources.get(geometry),position=geometry.attributes.position,index=geometry.index;
+    if(state.terrainColliders.has(key)&&old&&old.world===state.physicsWorld&&old.collider===state.terrainColliders.get(key)&&
+       old.position===position&&old.positionVersion===position.version&&old.index===index&&old.indexVersion===index.version)return;
+    // Remove existing collider only when its source actually changed.
     if (state.terrainColliders.has(key)) {
         state.physicsWorld.removeCollider(state.terrainColliders.get(key));
         state.terrainColliders.delete(key);
@@ -4694,16 +4705,15 @@ function updateChunkPhysics(cx, cz, geometry = null) {
     const offX = cx * CHUNK_SIZE;
     const offZ = cz * CHUNK_SIZE;
 
-    geometry = geometry || state.chunks[key]?.children[0]?.geometry;
-    if(!geometry)return;
     // Exact mesh topology avoids heightfield scale, storage-order and diagonal mismatches.
     const colliderDesc = RAPIER.ColliderDesc.trimesh(new Float32Array(geometry.attributes.position.array),new Uint32Array(geometry.index.array))
         .setTranslation(offX, 0, offZ);
     const collider = state.physicsWorld.createCollider(colliderDesc);
     state.terrainColliders.set(key, collider);
+    terrainColliderSources.set(geometry,{world:state.physicsWorld,collider,position,positionVersion:position.version,index,indexVersion:index.version});
 }
 
-function updateChunkGeometry(mesh,cx,cz){TerrainKernel.updateChunkGeometry(mesh,cx,cz);}
+function updateChunkGeometry(mesh,cx,cz){return TerrainRefresh.update(mesh,cx,cz,TerrainKernel.updateChunkGeometry);}
 
 function updateChunkDecorations(chunk, cx, cz) {
     if (!chunk.userData) return;
@@ -5646,6 +5656,7 @@ function createChunk(cx, cz, prepared = null) {
         };
     }
 
+    StaticTransforms.add(grp);
     return grp;
 }
 
@@ -5931,7 +5942,9 @@ const PathWorker = {
 };
 
 const CharacterBatches=createCharacterBatches(THREE,state,getSurfaceHeight,()=>CritterManager);
-const SceneryBatches=createSceneryBatches(THREE,state);
+const SceneIndex=createSceneIndex();
+const StaticTransforms=createStaticTransforms(SceneIndex);
+const SceneryBatches=createSceneryBatches(THREE,state,SceneIndex);
 const ShadowCache=createShadowCache(THREE);
 const EffectWriter=createInstanceWriter(THREE);
 function terrainWorkerSnapshot(cx,cz){
@@ -9430,6 +9443,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
         };
 
         applyBuildingConstructionVisual(building);
+        StaticTransforms.add(building.mesh);
         state.buildings.push(building);
         if(!isLoading) spawnExplosion(x, baseH, z, 0xFFD700, 15);
         return building;
@@ -10141,10 +10155,13 @@ class EnemyAI {
 
 // --- UI FUNCTIONS ---
 
+const Hud=createHudCache(document);
+const visitDisplayKeys=['total','year','month','week'];
+const visitDisplayIds=['visit-count-display','visit-year-display','visit-month-display','visit-week-display'];
 function updateUI() {
     updatePeaceTimer();
-    const manaText = document.getElementById('mana-text');
-    const manaFill = document.getElementById('mana-fill');
+    const manaText = Hud.get('mana-text');
+    const manaFill = Hud.get('mana-fill');
     if(manaText) {
         const value=String(Math.floor(state.mana));
         if(manaText._shownValue!==value){manaText.innerText=value;manaText._shownValue=value;}
@@ -10153,29 +10170,23 @@ function updateUI() {
         const width=(Math.round(state.mana*10)/10)+'%';
         if(manaFill._shownWidth!==width){manaFill.style.width=width;manaFill._shownWidth=width;}
     }
-    const faithText=document.getElementById('faith-text');
-    const faithBonus=document.getElementById('faith-bonus');
-    if(faithText) faithText.textContent=String(Math.round(state.faith));
-    if(faithBonus) faithBonus.textContent=`${Math.round(faithManaMultiplier()*100)}%`;
-
-    const visitValues={total:state.visitCount,...state.visitStats};
-    for(const [key,id] of Object.entries({total:'visit-count-display',year:'visit-year-display',month:'visit-month-display',week:'visit-week-display'})){
-        const element=document.getElementById(id);
-        if(!element)continue;
-        const value=visitValues[key];
+    Hud.text('faith-text',String(Math.round(state.faith)));
+    Hud.text('faith-bonus',`${Math.round(faithManaMultiplier()*100)}%`);
+    for(let i=0;i<visitDisplayKeys.length;i++){
+        const key=visitDisplayKeys[i],id=visitDisplayIds[i];
+        const value=key==='total'?state.visitCount:state.visitStats[key];
         const text=value!==null&&value!==undefined?String(value):state.visitStatsErrors[key]?'Unavailable':'…';
-        if(element.textContent!==text)element.textContent=text;
+        Hud.text(id,text);
     }
-    const visitStatus=document.getElementById('visit-stats-status');
-    if(visitStatus&&visitStatus.textContent!==state.visitStatsStatus)visitStatus.textContent=state.visitStatsStatus;
+    Hud.text('visit-stats-status',state.visitStatsStatus);
 
 }
 
 function updatePeaceTimer() {
-    const label=document.getElementById('peace-timer');
+    const label=Hud.get('peace-timer');
     if(!label)return;
     const seconds=Math.ceil(peaceTimeRemaining());
-    label.hidden=seconds<=0;
+    if(label.hidden!==(seconds<=0))label.hidden=seconds<=0;
     if(seconds>0) {
         const value=`Peace time: ${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
         if(label.textContent!==value)label.textContent=value;
@@ -11060,7 +11071,8 @@ async function init() {
         state.rangeRing.visible = false;
 
         state.scene = new THREE.Scene();
-        state.scene.onBeforeRender=(renderer,scene,camera)=>{CharacterBatches.update();SceneryBatches.update();ShadowCache.update(scene,camera,renderer);};
+        StaticTransforms.bind(state.scene);
+        state.scene.onBeforeRender=(renderer,scene,camera)=>{CharacterBatches.update();SceneryBatches.update();ShadowCache.update(scene,camera,renderer,SceneIndex);};
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
         state.scene.fog = new THREE.Fog(CONFIG.BIOMES.normal.fog, CONFIG.BIOMES.normal.fogNear, CONFIG.BIOMES.normal.fogFar);
 
@@ -11215,7 +11227,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, ShadowCache, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, SceneIndex, StaticTransforms, TerrainRefresh, ShadowCache, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -13215,7 +13227,7 @@ function animate() {
         }
     });
 
-    const currentAlive = state.units.filter(u => u.state !== 'dead').length;
+    let currentAlive=0;for(const unit of state.units)if(unit.state!=='dead')currentAlive++;
     if(currentAlive !== lastAliveCount) {
         updateUnitList();
         lastAliveCount = currentAlive;
