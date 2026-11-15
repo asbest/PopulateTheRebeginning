@@ -1,7 +1,9 @@
+import {createBoxInstances} from './box-instances.js';
 // Original meshes, materials, shadows and raycast geometry remain authoritative.
 // Spatially bounded instances share vertex buffers; no mesh simplification/LOD.
 export function createSceneryBatches(T,state){
  const buckets=new Map(),roots=new WeakMap(),masked=new Map(),hiddenLayer=30;
+ const boxes=createBoxInstances(T);
  const matrix=new T.Matrix4(),sphere=new T.Sphere(),point=new T.Vector3();
  const projection=new T.Matrix4(),frustum=new T.Frustum();
  let scene,frame=0,cooldown=0,lastBuildings=-1,lastTerrainBuild;
@@ -42,16 +44,17 @@ export function createSceneryBatches(T,state){
    // Batch only parts the original camera pass would draw. Off-screen sources
    // remain untouched and continue casting their original visible shadows.
    if(!api.warming&&p.frustumCulled&&!frustum.intersectsObject(p))continue;
+   const box=boxes.get(p.geometry),geometry=box?.geometry||p.geometry;
    const e=p.matrixWorld.elements,cx=Math.floor(e[12]/40),cz=Math.floor(e[14]/40);
-   if(!r.key||r.cx!==cx||r.cz!==cz||r.geometry!==p.geometry||r.material!==p.material||r.cast!==p.castShadow||
+   if(!r.key||r.cx!==cx||r.cz!==cz||r.geometry!==geometry||r.material!==p.material||r.cast!==p.castShadow||
     r.receive!==p.receiveShadow||r.order!==p.renderOrder||r.layers!==p.layers.mask){
-    r.cx=cx;r.cz=cz;r.geometry=p.geometry;r.material=p.material;r.cast=p.castShadow;
+    r.cx=cx;r.cz=cz;r.geometry=geometry;r.box=box;r.material=p.material;r.cast=p.castShadow;
     r.receive=p.receiveShadow;r.order=p.renderOrder;r.layers=p.layers.mask;
-    r.key=[cx,cz,p.geometry.uuid,p.material.uuid,p.castShadow,p.receiveShadow,p.renderOrder,p.layers.mask].join('|');
+    r.key=[cx,cz,geometry.uuid,p.material.uuid,p.castShadow,p.receiveShadow,p.renderOrder,p.layers.mask].join('|');
    }
    const key=r.key;
    let b=buckets.get(key);
-   if(!b){b={source:p.geometry,material:p.material,cx,cz,cast:p.castShadow,receive:p.receiveShadow,
+   if(!b){b={source:geometry,material:p.material,cx,cz,cast:p.castShadow,receive:p.receiveShadow,
     order:p.renderOrder,layers:p.layers.mask,items:[],previous:[],capacity:0,mesh:null};buckets.set(key,b);}
    b.items.push(r);b.dirty ||= changed;b.used=frame;stats.parts++;
   }
@@ -100,12 +103,16 @@ export function createSceneryBatches(T,state){
     if(b.dirty||!same){
      b.bounds.makeEmpty();if(!b.source.boundingSphere)b.source.computeBoundingSphere();
      for(let i=0;i<b.items.length;i++){
-      const r=b.items[i];matrix.multiplyMatrices(b.inverse,r.node.matrixWorld);b.mesh.setMatrixAt(i,matrix);
+      const r=b.items[i];matrix.multiplyMatrices(b.inverse,r.node.matrixWorld);if(r.box)matrix.scale(r.box.scale);b.mesh.setMatrixAt(i,matrix);
       sphere.copy(b.source.boundingSphere).applyMatrix4(matrix);
       b.bounds.expandByPoint(point.copy(sphere.center).addScalar(sphere.radius));
       b.bounds.expandByPoint(point.copy(sphere.center).addScalar(-sphere.radius));
      }
-     b.geometry.boundingBox=b.bounds.clone();b.geometry.boundingSphere=b.bounds.getBoundingSphere(new T.Sphere());
+     if(!b.geometry.boundingBox)b.geometry.boundingBox=new T.Box3();
+     b.geometry.boundingBox.copy(b.bounds);
+     if(!b.geometry.boundingSphere)b.geometry.boundingSphere=new T.Sphere();
+     b.bounds.getBoundingSphere(b.geometry.boundingSphere);
+     b.mesh.instanceMatrix.updateRange.offset=0;b.mesh.instanceMatrix.updateRange.count=b.items.length*16;
      b.mesh.instanceMatrix.needsUpdate=true;b.previous.length=b.items.length;
      for(let i=0;i<b.items.length;i++)b.previous[i]=b.items[i];stats.uploads++;
     }
@@ -118,7 +125,7 @@ export function createSceneryBatches(T,state){
   stats.ms=performance.now()-start;
  }
  function matrixError(){let error=0;const expected=new T.Matrix4(),actual=new T.Matrix4();for(const b of buckets.values())if(b.mesh?.visible)for(let i=0;i<b.items.length;i++){
-  expected.multiplyMatrices(b.inverse,b.items[i].node.matrixWorld);b.mesh.getMatrixAt(i,actual);
+  expected.multiplyMatrices(b.inverse,b.items[i].node.matrixWorld);if(b.items[i].box)expected.scale(b.items[i].box.scale);b.mesh.getMatrixAt(i,actual);
   for(let k=0;k<16;k++)error=Math.max(error,Math.abs(expected.elements[k]-actual.elements[k]));}return error;}
  return api;
 }

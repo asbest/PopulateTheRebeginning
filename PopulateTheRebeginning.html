@@ -732,6 +732,8 @@ import { createTerrainKernel } from './art/terrain-kernel.js';
 import { LANDSCAPES, CAMPAIGN_LANDSCAPES, LAVA_LEVELS } from './art/landscape-profiles.js';
 import { createTerrainStream } from './art/terrain-stream.js';
 import { createSceneryBatches } from './art/scenery-batches.js';
+import { createShadowCache } from './art/shadow-cache.js';
+import { createInstanceWriter } from './art/instance-writer.js';
 import { createCharacterBatches } from './art/character-batches.js';
 import { createBattleWork, createBattleProfiler } from './art/battle-work.js';
 import { observeEnemy, counterWeights, chooseBattleSpell, formationPoint, isMagicThreat } from './art/enemy-tactics.js';
@@ -5930,6 +5932,8 @@ const PathWorker = {
 
 const CharacterBatches=createCharacterBatches(THREE,state,getSurfaceHeight,()=>CritterManager);
 const SceneryBatches=createSceneryBatches(THREE,state);
+const ShadowCache=createShadowCache(THREE);
+const EffectWriter=createInstanceWriter(THREE);
 function terrainWorkerSnapshot(cx,cz){
   const x=cx*CHUNK_SIZE,z=cz*CHUNK_SIZE,half=CHUNK_SIZE/2+2;
   const mods=[];
@@ -6060,7 +6064,12 @@ const FirewarriorFlames={
     axis:new THREE.Vector3(),right:new THREE.Vector3(),normal:new THREE.Vector3(),view:new THREE.Vector3(),basis:new THREE.Matrix4(),
     init(){
         if(this.mesh)return;
-        const geometry=new THREE.PlaneGeometry(1,1);geometry.translate(0,.5,0);
+        // Keep the original UVs. Only trim lower corners outside the maximum
+        // flame envelope (.44 + .155*y); no visible fragments are removed.
+        const geometry=new THREE.BufferGeometry();
+        geometry.setAttribute('position',new THREE.Float32BufferAttribute([-.445,0,0,.445,0,0,.5,.35,0,.5,1,0,-.5,1,0,-.5,.35,0],3));
+        geometry.setAttribute('uv',new THREE.Float32BufferAttribute([.055,0,.945,0,1,.35,1,1,0,1,0,.35],2));
+        geometry.setIndex([0,1,2,0,2,5,5,2,3,5,3,4]);
         const material=new THREE.ShaderMaterial({uniforms:{time:{value:0}},
             vertexShader:`varying vec2 vUv;varying vec3 vTint;
                 void main(){vUv=uv;vTint=instanceColor;
@@ -6073,6 +6082,7 @@ const FirewarriorFlames={
                     float width=mix(.44,.035,pow(flow,.72))*(.82+.18*sin(y*13.0-time*19.0));
                     float edge=abs(vUv.x-.5-bend);
                     float alpha=(1.0-smoothstep(width*.35,width,edge))*smoothstep(0.0,.1,y)*(1.0-smoothstep(.82,1.0,y));
+                    if(alpha<=0.0)discard;
                     vec3 color=mix(vTint,vec3(1.0,.82,.24),pow(1.0-flow,2.0));
                     gl_FragColor=vec4(color,alpha*.62);
                     #include <encodings_fragment>
@@ -6115,14 +6125,14 @@ const FirewarriorFlames={
                     this.dummy.quaternion.setFromRotationMatrix(this.basis);
                     this.dummy.scale.set(.10+flicker*.035,i<2?.30:.35,1);
                     this.dummy.updateMatrix();
-                    this.mesh.setMatrixAt(count,this.dummy.matrix);
-                    this.mesh.setColorAt(count++,this.tint.setHex(FIREWARRIOR_FLAME_COLORS[i]));
+                    EffectWriter.matrix(this.mesh,count,this.dummy.matrix);
+                    EffectWriter.color(this.mesh,count++,this.tint.setHex(FIREWARRIOR_FLAME_COLORS[i]));
                 }
             }
             if(count>=this.capacity)break;
         }
         this.mesh.count=count;this.mesh.visible=count>0;
-        if(count){this.mesh.instanceMatrix.needsUpdate=true;this.mesh.instanceColor.needsUpdate=true;}
+        if(count)EffectWriter.flush(this.mesh);
     },
     clear(){if(this.mesh){this.mesh.count=0;this.mesh.visible=false;}},
     prewarm(){
@@ -6133,18 +6143,21 @@ const FirewarriorFlames={
 };
 // One draw call per layer, regardless of how many fireballs share a battlefield.
 const FireballFxManager={
-    layers:null,lights:null,flashes:[],dummy:new THREE.Object3D(),tint:new THREE.Color(),
+    layers:null,lights:null,flashes:[],dummy:new THREE.Object3D(),tint:new THREE.Color(),boundPoint:new THREE.Vector3(),
     shots:new Set(),projectileMeshes:null,projectileMatrix:new THREE.Matrix4(),
     init(){
         if(this.layers)return;
         const layer=(capacity,geometry,material)=>{
-            const mesh=new THREE.InstancedMesh(geometry,material,capacity);
+            // Each effect batch owns its bounds, while its particles keep their
+            // original simulation even when the whole burst is off-screen.
+            const mesh=new THREE.InstancedMesh(geometry.clone(),material,capacity);
+            mesh.geometry.computeBoundingSphere();
             mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
             mesh.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(capacity*3),3);
             mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
-            mesh.frustumCulled=false;mesh.count=0;mesh.visible=false;
+            mesh.frustumCulled=true;mesh.count=0;mesh.visible=false;
             state.scene.add(mesh);
-            return {mesh,items:[],pool:Array.from({length:capacity},()=>({})),capacity};
+            return {mesh,items:[],pool:Array.from({length:capacity},()=>({})),capacity,bounds:new THREE.Box3()};
         };
         this.layers={
             glow:layer(384,FIREBALL_TRAIL_GEO,new THREE.MeshBasicMaterial({color:0xffffff,
@@ -6252,7 +6265,8 @@ const FireballFxManager={
     update(dt){
         if(!this.layers)return;
         this.updateProjectiles();
-        for(const [kind,layer] of Object.entries(this.layers)){
+        for(const kind in this.layers){
+            const layer=this.layers[kind];layer.bounds.makeEmpty();
             let count=0;
             for(const item of layer.items){
                 item.age+=dt;
@@ -6267,15 +6281,17 @@ const FireballFxManager={
                 this.dummy.rotation.set(0,0,kind==='smoke'?item.phase+progress*.5:0);
                 this.dummy.scale.setScalar(Math.max(.0001,scale));
                 this.dummy.updateMatrix();
-                layer.mesh.setMatrixAt(count,this.dummy.matrix);
-                layer.mesh.setColorAt(count,this.tint.setHex(item.color));
+                const radius=Math.max(.0001,scale)*(kind==='smoke'?.5:.3);
+                layer.bounds.expandByPoint(this.boundPoint.set(item.x-radius,item.y-radius,item.z-radius));
+                layer.bounds.expandByPoint(this.boundPoint.set(item.x+radius,item.y+radius,item.z+radius));
+                EffectWriter.matrix(layer.mesh,count,this.dummy.matrix);
+                EffectWriter.color(layer.mesh,count,this.tint.setHex(item.color));
                 layer.items[count++]=item;
             }
             layer.items.length=count;layer.mesh.count=count;layer.mesh.visible=count>0;
             if(count){
-                layer.mesh.instanceMatrix.updateRange.count=count*16;
-                layer.mesh.instanceColor.updateRange.count=count*3;
-                layer.mesh.instanceMatrix.needsUpdate=true;layer.mesh.instanceColor.needsUpdate=true;
+                layer.bounds.getBoundingSphere(layer.mesh.geometry.boundingSphere);
+                EffectWriter.flush(layer.mesh);
             }
         }
         for(let i=this.flashes.length-1;i>=0;i--){
@@ -11044,7 +11060,7 @@ async function init() {
         state.rangeRing.visible = false;
 
         state.scene = new THREE.Scene();
-        state.scene.onBeforeRender=()=>{CharacterBatches.update();SceneryBatches.update();};
+        state.scene.onBeforeRender=(renderer,scene,camera)=>{CharacterBatches.update();SceneryBatches.update();ShadowCache.update(scene,camera,renderer);};
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
         state.scene.fog = new THREE.Fog(CONFIG.BIOMES.normal.fog, CONFIG.BIOMES.normal.fogNear, CONFIG.BIOMES.normal.fogFar);
 
@@ -11199,7 +11215,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, ShadowCache, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);

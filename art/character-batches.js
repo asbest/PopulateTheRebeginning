@@ -1,15 +1,17 @@
+import {createInstanceWriter} from './instance-writer.js';
 // Draw the original, fully animated meshes as instances. The rig, collision
 // bodies, weapon pivots and raycast geometry remain authoritative and intact.
 export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     const hiddenLayer=31,buckets=new Map(),materials=new Map(),records=new WeakMap(),parts=new WeakMap(),masked=new Map();
+    const writer=createInstanceWriter(T);
     const inverse=new T.Matrix4(),matrix=new T.Matrix4(),color=new T.Color(),dummy=new T.Object3D();
     const frustum=new T.Frustum(),projection=new T.Matrix4(),sphere=new T.Sphere();
     const shadowProfiles={low:[20,24],medium:[32,32],high:[45,40],ultra:[60,56]};
-    const shadowDistances=[],simplifiedCasters=[],partialShadowBatches=[];
+    const shadowDistances=[],simplifiedCasters=[],partialShadowBatches=[],empty=[];
     const smallDetails=new Set(['Eye','Iris','UpperEyelid','Brow','Earring','NoseBridge','NoseTip','Mouth','BraidBead','Thumb','RitualBeads','MaskEyeSlit']);
     let scene,blob,shadowMap,frame=0;
     const stats={parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0,ms:0,fallback:false};
-    const api={enabled:true,crowdDetail:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError,reducePose};
+    const api={uploads:writer.stats,enabled:true,crowdDetail:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError,reducePose};
     const textureKeys=['map','normalMap','roughnessMap','metalnessMap','alphaMap','aoMap','bumpMap','emissiveMap'];
     function restore(){
         for(const [part,mask]of masked)part.layers.mask=mask;
@@ -136,13 +138,13 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         blob.setColorAt(0,color.setRGB(.2,.2,.2));scene.add(blob);
     }
     function update(){
-        const start=performance.now();restore();frame++;
+        const start=performance.now();restore();frame++;writer.reset();
         if(scene!==state.scene){dispose();scene=state.scene;}
         partialShadowBatches.length=0;
         for(const b of buckets.values()){b.items.length=0;b.shadowCount=0;if(b.mesh)b.mesh.visible=false;}
         if(blob){blob.count=0;blob.visible=false;}
         Object.assign(stats,{parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0});
-        const animals=wildlife(),bunnies=animals?.bunnies||[],birds=animals?.birds||[];
+        const animals=wildlife(),bunnies=animals?.bunnies||empty,birds=animals?.birds||empty;
         if(!api.enabled||!scene||!state.camera||state.units.length+bunnies.length+birds.length<12&&!api.warming){stats.ms=performance.now()-start;return;}
         if(state.renderer&&!state.renderer.capabilities.isWebGL2&&!state.renderer.extensions.get('ANGLE_instanced_arrays')){
             api.enabled=false;stats.fallback=true;stats.ms=performance.now()-start;return;
@@ -169,7 +171,8 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 }
             }
             let shadows=0;
-            for(const population of [state.units,bunnies,birds])for(const u of population){
+            for(let populationIndex=0;populationIndex<3;populationIndex++){const population=populationIndex===0?state.units:populationIndex===1?bunnies:birds;
+            for(const u of population){
                 const animal=population!==state.units;
                 if(!u.mesh?.parent||!u.mesh.visible||u.state==='transported')continue;
                 let visible=true;for(let p=u.mesh.parent;p;p=p.parent)if(!p.visible)visible=false;
@@ -200,10 +203,10 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                     if(!blob)initBlob();
                     const h=heightAt(p.x,p.z),altitude=Math.max(0,p.y-h),size=u.isVehicle?3.5:1.2;
                     dummy.position.set(p.x,h+.04,p.z);dummy.rotation.set(0,0,0);dummy.scale.set(size,1,size);
-                    dummy.updateMatrix();matrix.multiplyMatrices(inverse,dummy.matrix);blob.setMatrixAt(shadows,matrix);
-                    const fade=.19/(1+altitude*.12);blob.setColorAt(shadows++,color.setRGB(fade,fade,fade));
+                    dummy.updateMatrix();matrix.multiplyMatrices(inverse,dummy.matrix);writer.matrix(blob,shadows,matrix);
+                    const fade=.19/(1+altitude*.12);writer.color(blob,shadows++,color.setRGB(fade,fade,fade));
                 }
-            }
+            }}
             for(const [key,b]of buckets){
                 if(b.items.length<(api.warming||b.healthBar?1:2)){
                     if(b.items.length&&b.cast&&!b.shadowCount)suppressShadow(b.items[0]);
@@ -221,22 +224,18 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                     b.mesh.updateMatrixWorld(true);
                 }
                 for(let i=0;i<b.items.length;i++){
-                    const part=b.items[i];matrix.multiplyMatrices(inverse,part.matrixWorld);b.mesh.setMatrixAt(i,matrix);
-                    b.mesh.setColorAt(i,part.material.color);masked.set(part,part.layers.mask);part.layers.set(hiddenLayer);
+                    const part=b.items[i];matrix.multiplyMatrices(inverse,part.matrixWorld);writer.matrix(b.mesh,i,matrix);
+                    writer.color(b.mesh,i,part.material.color);masked.set(part,part.layers.mask);part.layers.set(hiddenLayer);
                 }
                 b.mesh.count=b.items.length;b.mesh.visible=true;b.mesh.castShadow=b.shadowCount>0;
                 if(b.mesh.castShadow&&b.shadowCount<b.mesh.count)partialShadowBatches.push(b);
-                b.mesh.instanceMatrix.updateRange.count=b.mesh.count*16;
-                b.mesh.instanceColor.updateRange.count=b.mesh.count*3;
-                b.mesh.instanceMatrix.needsUpdate=true;b.mesh.instanceColor.needsUpdate=true;
+                writer.flush(b.mesh);
                 stats.instances+=b.items.length;stats.batches++;
             }
             if(blob){
                 blob.count=shadows;blob.visible=shadows>0;
                 if(shadows){
-                    blob.instanceMatrix.updateRange.count=shadows*16;
-                    blob.instanceColor.updateRange.count=shadows*3;
-                    blob.instanceMatrix.needsUpdate=true;blob.instanceColor.needsUpdate=true;
+                    writer.flush(blob);
                 }
             }
             stats.farShadows=shadows;state.raycaster?.layers.enable(hiddenLayer);
