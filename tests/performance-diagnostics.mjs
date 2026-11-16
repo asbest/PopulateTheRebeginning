@@ -1,4 +1,5 @@
 import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
+import {clickVisibleControl} from './fixtures/click-control.mjs';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
@@ -9,22 +10,22 @@ try{
  await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:90000});
  await page.evaluate(()=>{closeHelp();closeStoryOverlay();state.isPaused=false;togglePause();});
  if(await page.locator('#btn-test-sound').count())throw Error('Retired sound test remains');
- await page.locator('#btn-performance-diagnostics').click();
- await page.locator('#btn-diagnostics-start').click();
+ await clickVisibleControl(page,'#btn-performance-diagnostics');
+ await clickVisibleControl(page,'#btn-diagnostics-start');
  await page.waitForFunction(()=>gameTestAPI.PerformanceDiagnostics.report?.reason==='Completed',null,{timeout:60000});
  const result=await page.evaluate(()=>{
   const report=gameTestAPI.PerformanceDiagnostics.report;
   if(!state.isPaused||gameTestAPI.GpuTimer.enabled||!report.frames||!report.fps||!report.cpu.physics||!report.cpu.ai||!report.cpu.units||report.durationSeconds<15)throw Error(JSON.stringify(report));
   return {frames:report.frames,fps:report.fps,gpu:report.gpu,cpu:report.cpu};
  });
- await page.locator('#btn-diagnostics-copy').click();
+ await clickVisibleControl(page,'#btn-diagnostics-copy');
  await page.waitForFunction(()=>document.querySelector('#performance-diagnostics [role=status]').textContent==='Report copied.');
  const copied=await page.evaluate(()=>navigator.clipboard.readText());
  if(copied.replaceAll('\r\n','\n')!==await page.locator('#diagnostics-report').inputValue())throw Error('Copied report differs');
  await page.evaluate(()=>{navigator.clipboard.writeText=()=>Promise.reject(Error('Blocked'));document.execCommand=()=>false;});
- await page.locator('#btn-diagnostics-copy').click();
+ await clickVisibleControl(page,'#btn-diagnostics-copy');
  await page.waitForFunction(()=>document.querySelector('#performance-diagnostics [role=status]').textContent.includes('report is selected'));
- await page.locator('#btn-diagnostics-start').click();
+ await clickVisibleControl(page,'#btn-diagnostics-start');
  await page.waitForFunction(()=>gameTestAPI.PerformanceDiagnostics.running&&!state.isPaused);
  await page.evaluate(()=>togglePause());
  await page.waitForFunction(()=>gameTestAPI.PerformanceDiagnostics.report?.reason==='Paused early');

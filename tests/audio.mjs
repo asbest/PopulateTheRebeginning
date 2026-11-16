@@ -1,4 +1,5 @@
 import {deepEqual} from 'node:assert/strict';
+import {clickVisibleControl} from './fixtures/click-control.mjs';
 import {readdir} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
@@ -216,9 +217,9 @@ try {
     });
     console.log(`PASS Nearby combat hits trigger restrained pain reactions: ${painSounds.map(call=>call.name).join(', ')}`);
     await page.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
-    await page.locator('#btn-performance-diagnostics').click();
+    await clickVisibleControl(page,'#btn-performance-diagnostics');
     if(!await page.locator('#performance-diagnostics').isVisible())throw Error('Diagnostics menu missing');
-    await page.locator('#btn-diagnostics-close').click();
+    await clickVisibleControl(page,'#btn-diagnostics-close');
     console.log('PASS Performance diagnostics replaces the retired sound test');
 
     checkpoint='desktop sustained firestorm';
@@ -263,6 +264,7 @@ try {
     // Release the desktop world and WebGL context before loading the mobile world.
     await page.close();
     checkpoint='Android startup';
+    if(!process.argv.includes('--desktop-only')){
     const mobile=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,
         userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'});
     try {
@@ -466,11 +468,12 @@ try {
         console.log(`PASS Blocked Android spell loop plays, pauses and stops (peak ${webLoop.peak.toFixed(3)})`);
         await phone.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
         checkpoint='diagnostics menu';
-        await phone.locator('#btn-performance-diagnostics').tap();
+        await clickVisibleControl(phone,'#btn-performance-diagnostics',{touch:true});
         if(!await phone.locator('#performance-diagnostics').isVisible())throw Error('Diagnostics menu missing');
-        await phone.locator('#btn-diagnostics-close').tap();
+        await clickVisibleControl(phone,'#btn-diagnostics-close',{touch:true});
     } finally {
         await mobile.close();
+    }
     }
     if(errors.length)throw new Error(errors.join('\n'));
 } catch(error) {
