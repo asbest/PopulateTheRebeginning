@@ -45,7 +45,7 @@ try{
  // Background streaming differs between native GPUs and software CI; require
  // actual eliminated calls rather than a percentage of unrelated scenery.
  if(errors.length||result.fallback||result.steady.original.calls-result.steady.optimized.calls<150||result.stats.instances<200||
-  [result.steady,...result.views,result.dynamic,result.destroyed].some(r=>r.pixelError>.005)||result.matrixError>.0001||result.unchangedUploads||result.recoveryError>.005)
+  [result.steady,...result.views,result.dynamic,result.destroyed].some(r=>r.pixelError>.005)||!result.stats.skippedRoots||result.matrixError>.0001||result.unchangedUploads||result.recoveryError>.005)
   throw new Error(JSON.stringify({errors,result}));
  console.log('PASS scenery preserves pixels, construction, destruction and fallback '+JSON.stringify(result));
 }finally{await browser.close();}

@@ -7,7 +7,7 @@ export function createSceneryBatches(T,state,index=null){
  const matrix=new T.Matrix4(),sphere=new T.Sphere(),point=new T.Vector3();
  const projection=new T.Matrix4(),frustum=new T.Frustum();
  let scene,frame=0,cooldown=0,lastBuildings=-1,lastTerrainBuild;
- const stats={parts:0,instances:0,batches:0,uploads:0,ms:0,fallback:false};
+ const stats={parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,ms:0,fallback:false};
  const api={enabled:true,warming:false,stats,update,restore,dispose,matrixError};
  function restore(){for(const [part,mask]of masked)part.layers.mask=mask;masked.clear();}
  function releaseGeometry(b){if(b.geometry){
@@ -30,12 +30,26 @@ export function createSceneryBatches(T,state,index=null){
   const revision=topology?topology.revision:root.userData.detailRevision||0;
   if(!list||list.revision!==revision){
    list=[];list.lods=topology?topology.lods:[];list.revision=revision;
+   list.bounds=new T.Sphere();list.box=new T.Box3();list.rootMatrix=new T.Matrix4();list.bounded=false;
    if(topology)for(const node of topology.meshes)list.push({node,matrix:new T.Matrix4(),seen:false});
    else root.traverse(node=>{
     if(node.isLOD)list.lods.push(node);
     if(node.isMesh)list.push({node,matrix:new T.Matrix4(),seen:false});
    });roots.set(root,list);
   }
+  // This only skips the batching optimization. Original off-screen sources
+  // remain available to rendering/shadows, even if a child later expands.
+  if(!list.bounded||!list.rootMatrix.equals(root.matrixWorld)){
+   list.box.makeEmpty();
+   for(const r of list){const p=r.node;if(!p.geometry)continue;
+    if(!p.geometry.boundingSphere)p.geometry.computeBoundingSphere();
+    sphere.copy(p.geometry.boundingSphere).applyMatrix4(p.matrixWorld);
+    list.box.expandByPoint(point.copy(sphere.center).addScalar(sphere.radius));
+    list.box.expandByPoint(point.copy(sphere.center).addScalar(-sphere.radius));
+   }
+   list.box.getBoundingSphere(list.bounds);list.rootMatrix.copy(root.matrixWorld);list.bounded=true;
+  }
+  if(!api.warming&&!frustum.intersectsSphere(list.bounds)){stats.skippedRoots++;return;}
   for(const lod of list.lods)lod.update(state.camera);
   for(const r of list){
    const p=r.node;let visible=true;
@@ -65,7 +79,7 @@ export function createSceneryBatches(T,state,index=null){
  function update(){
   const start=performance.now();restore();frame++;
   if(scene!==state.scene){dispose();scene=state.scene;}
-  Object.assign(stats,{parts:0,instances:0,batches:0,uploads:0});
+  Object.assign(stats,{parts:0,instances:0,batches:0,uploads:0,skippedRoots:0});
   for(const [key,b]of buckets){
    b.items.length=0;b.dirty=false;if(b.mesh)b.mesh.visible=false;
    if(frame-b.used>180){b.mesh?.parent?.remove(b.mesh);b.mesh?.dispose();releaseGeometry(b);buckets.delete(key);}
