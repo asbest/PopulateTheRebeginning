@@ -72,7 +72,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     function projectedHeight(unit){
         const camera=state.camera,p=unit.mesh.position;
         const height=(unit.height||1.5)*unit.mesh.scale.y;
-        const viewportHeight=state.renderer?.domElement.clientHeight;
+        const viewportHeight=state.renderer?.domElement.height;
         if(!viewportHeight)return Infinity;
         const pixels=height*viewportHeight*Math.abs(camera.projectionMatrix.elements[5])*.5;
         if(!camera.isPerspectiveCamera)return pixels;
@@ -183,7 +183,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 if(!animal&&inView&&u.state!=='dead')stats.visibleUnits++;
                 const useProjected=api.crowdDetail&&!api.warming&&!state.isFPV&&!animal;
                 const pixels=useProjected?projectedHeight(u):Infinity;
-                const simple=pixels<23&&!u.isVehicle;
+                const simple=pixels<23&&!u.isVehicle&&!state.selectedUnits.includes(u);
                 const detailed=animal||api.fullShadows||state.renderer.shadowMap.enabled&&dx*dx+dz*dz<=shadowRangeSq&&pixels>=29;
                 if(!detailed&&!inView){
                     // Outside both the view and detailed-shadow range: suppress only

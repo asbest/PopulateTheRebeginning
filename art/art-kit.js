@@ -5,13 +5,15 @@ import {createResourceBudget} from './resource-budget.js';
 import {createTexturePipeline} from './texture-pipeline.js';
 import {BARRACKS_ROOF} from './roof-profile.js';
 import {createRoofLandmarks} from './roof-landmarks.js';
+import {makeMeshLod} from './mesh-lod.js';
+import {configureLod} from './lod-policy.js';
 function buildingAssetKey(kind){
     return 'building/'+(kind==='temple'?'spy':kind)+'/root';
 }
 export function createArtKit(T) {
     const resources=createResourceBudget();
     const pipeline=createTexturePipeline(T,resources);
-    const blender=createBlenderPack(T,pipeline.load);
+    const blender=createBlenderPack(T,pipeline.load,resources);
     const mats = new Map(), geos = new Map();
     const palette = {wood:0x67503a, stone:0x99a69b, straw:0xc4a96b, gold:0xdcc27f, cloth:0xe1d8ba, dark:0x283b43};
     function texture(kind) {
@@ -215,6 +217,7 @@ export function createArtKit(T) {
             transformed.xz+=vec2(artGust,-artGust*.42)*vArtLeafHeight*.018;`);
     };
     crownMaterial.customProgramCacheKey=()=> 'island-tree-wind-v1';
+    const treeLods=new Map();
     function tree(style='broadleaf') {
         // First two children remain the trunk and a single crown mesh for burnTreesAt.
         const p=new T.Group();
@@ -253,6 +256,22 @@ export function createArtKit(T) {
             beam(p,[0,1.65,0],[Math.sin(a)*0.83,2.78,Math.cos(a)*0.83],0.065,0x5c4932);
         }
         blender.attach(p.children[0],'tree/trunk');
+        if(!treeLods.has(style)){
+            const full=[p.children[0].geometry,crownGeometry],levels=[{geometries:full,error:0}];
+            for(const fraction of [.04,.09]){
+                const results=full.map(g=>makeMeshLod(T,g,fraction));
+                levels.push({geometries:results.map(r=>r.geometry),error:Math.max(...results.map(r=>r.error))});
+            }
+            treeLods.set(style,levels);
+        }
+        const levels=treeLods.get(style),driver=new T.LOD();
+        for(let i=0;i<3;i++)driver.addLevel(new T.Group(),i*30);
+        configureLod(T,driver,4,levels.map(l=>l.error));
+        p.userData.updateLod=camera=>{
+            driver.matrixWorld.copy(p.matrixWorld);driver.update(camera);
+            const level=levels[driver.userData.activeLod||0];
+            p.children[0].geometry=level.geometries[0];crown.geometry=level.geometries[1];
+        };
         return p;
     }
     function dress(unit) {

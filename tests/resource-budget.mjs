@@ -21,3 +21,10 @@ const failure=budget.enqueue('failure',()=>{throw Error('GPU unavailable');}).ca
 budget.enqueue('after-failure',()=>executed.push('recovered'));step();assert.equal(executed.at(-1),'recovered');assert.equal(budget.stats.errors,1);
 assert.equal(budget.stats.maxStepMs,8);assert.equal(budget.stats.queued,0);
 console.log('PASS resource preparation deduplicates, prioritizes uploads, yields busy/combat frames, backs off and cancels unloaded geometry');
+budget.frame(45,false,false,true);
+budget.enqueue('deferred-model',()=>executed.push('deferred-model'),1);
+budget.enqueue('lod-recovery',()=>executed.push('lod-recovery'),0,true);
+step();assert.equal(executed.at(-1),'lod-recovery');
+step();assert.equal(executed.at(-1),'lod-recovery');
+budget.frame(5,true);step();assert.equal(executed.at(-1),'deferred-model');
+console.log('PASS bounded LOD recovery runs on slow/combat frames while optional model work remains deferred');

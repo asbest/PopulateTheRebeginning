@@ -7,9 +7,13 @@ export function createResourceBudget({now=()=>performance.now(),schedule=cb=>req
  function pump(){
   scheduled=false;
   if(!jobs.size)return;
-  if(!loading&&!paused&&(cost>22||backoff>0)){if(backoff)backoff--;stats.deferred++;arm();return;}
+  if(!loading&&!paused&&backoff>0){backoff--;stats.deferred++;arm();return;}
   let first,priority=Infinity;
-  for(const job of jobs.values()){const value=typeof job.priority==='function'?job.priority():job.priority;if(value<priority){first=job;priority=value;}}
+  for(const job of jobs.values()){
+   if(!loading&&!paused&&cost>22&&!job.allowBusy)continue;
+   const value=typeof job.priority==='function'?job.priority():job.priority;if(value<priority){first=job;priority=value;}
+  }
+  if(!first){stats.deferred++;arm();return;}
   if(combat&&!loading&&!paused&&priority>0){stats.deferred++;arm();return;}
   jobs.delete(first.key);stats.queued=jobs.size;const start=now();
   try{first.resolve(first.run());stats.completed++;}catch(error){stats.errors++;first.reject(error);}
@@ -17,10 +21,10 @@ export function createResourceBudget({now=()=>performance.now(),schedule=cb=>req
   backoff=Math.min(60,Math.max(0,Math.ceil(elapsed/2)-1));arm();
  }
  return {stats,
-  enqueue(key,run,priority=1){
+  enqueue(key,run,priority=1,allowBusy=false){
    if(jobs.has(key))return jobs.get(key).promise;
    let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});
-   jobs.set(key,{key,run,priority,promise,resolve,reject});stats.queued=jobs.size;arm();return promise;
+   jobs.set(key,{key,run,priority,promise,resolve,reject,allowBusy});stats.queued=jobs.size;arm();return promise;
   },
   cancel(key){const job=jobs.get(key);if(!job)return; jobs.delete(key);stats.queued=jobs.size;job.resolve(false);},
   frame(cpuMs,isPaused,isLoading=false,inCombat=false){cost=cpuMs;paused=isPaused;loading=isLoading;combat=inCombat;arm();},

@@ -38,7 +38,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
             fps:intervals.length?+(intervals.length*1000/intervals.reduce((sum,n)=>sum+n,0)).toFixed(1):null,
             frameIntervals:summary(intervals),cpu,gpu:gpuResult.supported&&gpuResult.samples?gpuResult:{available:false,reason:'GPU timing unavailable or no completed samples'},
             graphics:{...state.graphicsQuality,width:renderer.domElement.width,height:renderer.domElement.height,pixelRatio:renderer.getPixelRatio(),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles},
-            scene:{units:state.units.length,buildings:state.buildings.length,chunks:Object.keys(state.chunks).length,tutorialActive:!!state.controlTutorial?.active},
+            scene:{units:state.units.length,buildings:state.buildings.length,chunks:Object.keys(state.chunks).length,tutorialActive:!!state.controlTutorial?.active,terrainLod:state.terrainLodStats?{...state.terrainLodStats}:null},
             environment:{userAgent:navigator.userAgent,cores:navigator.hardwareConcurrency||null,memoryGB:navigator.deviceMemory||null,webgl2:!!renderer.capabilities.isWebGL2,adapter},
             notes:['CPU render includes driver waits and batching; it is not GPU execution time.','AI, units and buildings are parts of simulation; batching is part of rendering. Do not add overlapping timings.','Normal gameplay only; paused/hidden frames end the recording. No automatic bottleneck diagnosis is inferred from FPS alone.']};
         pause();open();if(missingCpuFrames)status.textContent=report.measurementWarnings[0];output.value=JSON.stringify(report,null,2);copyButton.disabled=false;

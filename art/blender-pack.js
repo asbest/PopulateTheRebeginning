@@ -5,11 +5,13 @@ import {MODEL_GROUPS,MODEL_FILES} from './startup-manifest.js';
 import {assetURL} from './asset-urls.js';
 import {fitBarracksTiles} from './roof-profile.js';
 import {optimizeVertexFetch} from './vertex-fetch.js';
+import {makeMeshLod} from './mesh-lod.js';
+import {configureLod,invalidateLod} from './lod-policy.js';
 let sharedPack;
 
-export function createBlenderPack(T,loadTexture) {
+export function createBlenderPack(T,loadTexture,resources=null) {
     if (sharedPack) return sharedPack;
-    const geometries=new Map(), materials=new Map();
+    const geometries=new Map(), materials=new Map(),lodGeometries=new Map();
     const models=Object.create(null),loads=new Map(),pendingParents=new WeakMap(),attached=new WeakMap();
     const surfaces=new Map();
     const definitions={
@@ -97,7 +99,7 @@ export function createBlenderPack(T,loadTexture) {
         if(attached.get(parent)?.has(key))return true;
         if(!attached.has(parent))attached.set(parent,new Set());
         attached.get(parent).add(key);
-        const near=new T.Group();
+        const near=new T.Group(),middle=new T.Group(),errors=[0,0,0];let radius=1;
         for(const [kind,data] of Object.entries(model)) {
             const part=new T.Mesh(geometry(key,kind,data),material(kind,factionColor));
             part.name='Blender '+key+' '+kind;
@@ -106,20 +108,30 @@ export function createBlenderPack(T,loadTexture) {
             part.userData.blenderAsset=true;
             if(kind==='faction')part.userData.characterFaction=true;
             near.add(part);
+            const keyForLod=key+'/'+kind+'/lod';
+            let reduced=lodGeometries.get(keyForLod);
+            if(!reduced){
+                reduced={geometry:part.geometry,error:0,done:false};lodGeometries.set(keyForLod,reduced);
+                const build=()=>{Object.assign(reduced,makeMeshLod(T,part.geometry));reduced.done=true;};
+                reduced.ready=resources?resources.enqueue('mesh-lod/'+keyForLod,build,1):Promise.resolve(build());
+            }
+            const proxy=new T.Mesh(reduced.geometry,part.material);proxy.castShadow=part.castShadow;proxy.receiveShadow=part.receiveShadow;
+            proxy.userData.blenderAsset=true;proxy.userData.characterFaction=kind==='faction';middle.add(proxy);
+            const apply=()=>{proxy.geometry=reduced.geometry;errors[1]=Math.max(errors[1],reduced.error);invalidateLod();};
+            if(reduced.done)apply();else reduced.ready.then(apply).catch(()=>{});
+            radius=Math.max(radius,part.geometry.boundingSphere.radius+part.geometry.boundingSphere.center.length());
         }
         // At normal strategy zoom the silhouette remains, while tiny surface parts
         // stop issuing draw calls. The authored geometry stays available close up.
         const lod=new T.LOD();
         lod.name='Blender detail LOD '+key;
         lod.addLevel(near,0);
+        lod.addLevel(middle,30);
         const distance=key.startsWith('critter/bird/')||key.startsWith('critter/bunny/')
             ? 100000 : key.startsWith('building/')?85:55;
         lod.addLevel(new T.Group(),distance);
-        const update=lod.update;
-        lod.update=function(camera){
-            this.levels[1].distance=distance*graphicsSettings.profile.detail*graphicsSettings.detailScale;
-            update.call(this,camera);
-        };
+        configureLod(T,lod,radius,errors);
+        if(key.startsWith('critter/')){lod.update=function(){near.visible=true;middle.visible=false;this.levels[2].object.visible=false;};}
         parent.add(lod);
         parent.userData.detailRevision=(parent.userData.detailRevision||0)+1;
         return true;

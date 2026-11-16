@@ -50,13 +50,13 @@ try{
    snapshots.push({tier,p95:times[Math.ceil(times.length*.95)-1],calls:renderer.info.render.calls,
     triangles:renderer.info.render.triangles,pixels:renderer.domElement.width*renderer.domElement.height,
     shadows:renderer.shadowMap.enabled,shadowSize:state.sunLight.shadow.mapSize.width,maxPixelRatio:state.graphicsQuality.maxPixelRatio,
-    normal:!!material.normalMap,lodDistance:lod.levels[1].distance});
+    normal:!!material.normalMap,lodThreshold:lod.userData.lodPixelThreshold});
   }
   const [high,medium,low,ultra,restored]=snapshots;
   if(low.shadows||!medium.shadows||medium.normal||low.normal||!high.normal||
      low.pixels>=medium.pixels||medium.maxPixelRatio>=high.maxPixelRatio||high.maxPixelRatio>=ultra.maxPixelRatio||
-     low.triangles>=high.triangles||medium.lodDistance>=high.lodDistance||
-     restored.lodDistance!==high.lodDistance||!restored.normal)
+     low.triangles>=high.triangles||medium.lodThreshold<=high.lodThreshold||
+     restored.lodThreshold!==high.lodThreshold||!restored.normal)
    throw Error('Quality budgets or restoration failed '+JSON.stringify(snapshots));
   if(units.some((u,i)=>JSON.stringify(u.rigidBody.translation())!==originalBodies[i]))
    throw Error('Rendering changed physics');

@@ -40,6 +40,21 @@ are independent of these changes.
 
 ## Validation
 
+Screen-space LOD supplies full, intermediate and distant packed-model/tree
+detail, with hysteresis and a projected geometry-error limit. Selected actors
+keep full packed details. Shared scene lists update LOD once per camera, object
+or quality change rather than repeatedly through renderer/batch passes.
+
+Terrain and water use separate render meshes sharing authoritative vertex data.
+Adaptive indices keep full chunk borders and matching fine/coarse tile edges.
+Equal coarse neighbours share edges. Shore terrain/water stays fine. Original
+80x80 collision/raycast topology and full FPV terrain remain unchanged. Coarse
+indices prepare through the frame budget and GPU warmup; full geometry remains
+the fallback. Deformation invalidates prepared levels. `tests/lod.mjs` checks
+closed mixed topology and borders; `tests/lod-browser.mjs` checks rendered savings,
+selection, FPV and physics. Diagnostic terrainLod counters include loaded
+off-screen chunks; graphics.triangles describes the actually rendered frame.
+
 The pause menu's **Performance diagnostics** replaces the sound-test button.
 Choose **Record 15 seconds**, play the slow situation, then **Copy report**.
 The game pauses automatically at completion; pausing or hiding the page ends
