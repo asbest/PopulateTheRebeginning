@@ -1,8 +1,10 @@
 import {graphicsSettings} from './graphics-settings.js';
 const context={height:600,selected:[],fpv:false};let generation=0;
+const stats={checked:0,updated:0,reused:0};
 export function invalidateLod(){generation++;}
 let previousCamera,world,projection,previousDetail,previousHeight;const previousSelected=[];
 export function beginLod(camera,renderer,state,index){
+    stats.checked=stats.updated=stats.reused=0;state.modelLodStats=stats;
     context.height=renderer.domElement.height;context.selected=state.selectedUnits||[];context.fpv=state.isFPV;
     const detail=graphicsSettings.profile.detail*graphicsSettings.detailScale;
     let changed=previousCamera!==camera||previousHeight!==context.height||previousDetail!==detail||!world?.equals(camera.matrixWorld)||!projection?.equals(camera.projectionMatrix)||previousSelected.length!==context.selected.length;
@@ -12,7 +14,9 @@ export function beginLod(camera,renderer,state,index){
         if(!world){world=camera.matrixWorld.clone();projection=camera.projectionMatrix.clone();}else{world.copy(camera.matrixWorld);projection.copy(camera.projectionMatrix);}
         previousSelected.length=context.selected.length;for(let i=0;i<previousSelected.length;i++)previousSelected[i]=context.selected[i];
     }
-    if(index){const list=index.list(state.scene);for(const lod of list.lods)if(!lod.autoUpdate)lod.update(camera);for(const root of list.visualLods)root.userData.updateLod(camera);}
+    if(index){const list=index.list(state.scene);for(const lod of list.lods)if(!lod.autoUpdate){
+        stats.checked++;if(lod.update(camera)===false)stats.reused++;else stats.updated++;
+    }for(const root of list.visualLods){stats.checked++;if(root.userData.updateLod(camera)===false)stats.reused++;else stats.updated++;}}
 }
 export function projectedPixels(camera,height,position,margin=0){
     const e=camera.matrixWorldInverse.elements;
@@ -33,7 +37,7 @@ export function configureLod(T,lod,radius,error=0){
     lod.autoUpdate=false;
     lod.update=function(camera){
         // Explicit standalone calls (asset tools/tests) remain supported.
-        if(frame===generation&&lastCamera===camera&&matrix.equals(this.matrixWorld)&&cameraMatrix.equals(camera.matrixWorld))return;
+        if(frame===generation&&lastCamera===camera&&matrix.equals(this.matrixWorld)&&cameraMatrix.equals(camera.matrixWorld))return false;
         frame=generation;lastCamera=camera;matrix.copy(this.matrixWorld);cameraMatrix.copy(camera.matrixWorld);
         point.setFromMatrixPosition(this.matrixWorld);
         const scale=this.matrixWorld.getMaxScaleOnAxis(),perUnit=projectedPixels(camera,context.height,point);
@@ -45,7 +49,8 @@ export function configureLod(T,lod,radius,error=0){
         if(next>0&&deviation*scale*perUnit>.8)next=0;
         level=next;
         this._currentLevel=next;
-        for(let i=0;i<this.levels.length;i++)this.levels[i].object.visible=i===next;
+        if(this.userData.activeLod!==next)for(let i=0;i<this.levels.length;i++)this.levels[i].object.visible=i===next;
         this.userData.activeLod=next;
+        return true;
     };
 }

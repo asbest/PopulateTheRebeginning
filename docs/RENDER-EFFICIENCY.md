@@ -46,14 +46,28 @@ keep full packed details. Shared scene lists update LOD once per camera, object
 or quality change rather than repeatedly through renderer/batch passes.
 
 Terrain and water use separate render meshes sharing authoritative vertex data.
-Adaptive indices keep full chunk borders and matching fine/coarse tile edges.
-Equal coarse neighbours share edges. Shore terrain/water stays fine. Original
-80x80 collision/raycast topology and full FPV terrain remain unchanged. Coarse
-indices prepare through the frame budget and GPU warmup; full geometry remains
-the fallback. Deformation invalidates prepared levels. `tests/lod.mjs` checks
-closed mixed topology and borders; `tests/lod-browser.mjs` checks rendered savings,
-selection, FPV and physics. Diagnostic terrainLod counters include loaded
-off-screen chunks; graphics.triangles describes the actually rendered frame.
+Adaptive indices combine 2/4/8-cell patches in one mesh, retaining full chunk
+borders and matching mixed-size edges without additional draw calls. A local
+projected error budget keeps difficult patches fine without rejecting their
+entire chunk. Shore terrain/water stays fine; wave bounds cover storm strength.
+Original 80x80 collision/raycast topology and the area near the strategy focus
+or FPV camera remain full detail. Distant FPV patches use the same pixel limit.
+Indices prepare through the frame budget and GPU warmup; full geometry remains
+the fallback. Off-screen patches do not start new preparation. Each mesh retains
+at most three prepared error-budget variants; deformation invalidates them.
+Unchanged cameras/terrain reuse their selection and attribute bindings.
+`tests/lod.mjs` checks closed mixed topology, borders and local error budgets;
+`tests/lod-browser.mjs` compares images, rendering counts, selection, real FPV
+near/far behavior, cache reuse and authoritative collision/physics data.
+
+Scenery batch reuse validates original topology, visibility, transforms,
+geometry, material eligibility, layers and draw settings. Stable views keep
+their masks, membership, bounds and GPU instance buffers. Camera/source changes
+rebuild immediately; continuously changing sources back off cache creation.
+Animation and simulation cadence remain unchanged. The scenery benchmark checks
+pixel parity and invalidation after individual part/material/visibility/layer
+edits, construction, destruction and fallback. Model/tree LOD avoids repeated
+visibility or geometry assignments when its result is unchanged.
 
 The pause menu's **Performance diagnostics** replaces the sound-test button.
 Choose **Record 15 seconds**, play the slow situation, then **Copy report**.
@@ -65,6 +79,17 @@ driver waits and batching; simulation includes AI/unit/building timings. These
 overlapping timings must not be added together. Unsupported GPU timing is
 reported as unavailable. If clipboard access is blocked, select/copy the report
 manually using the provided text field.
+
+`scene.terrainLod` is an immutable final-frame snapshot. Its totals include
+loaded off-screen meshes, while `visible` counts the main camera frustum.
+`reasons` distinguishes off-screen meshes, protected near terrain, disabled LOD,
+pending preparation, local pixel-error limits and shoreline/detail protection.
+Camera mode, zoom, strategy view scale and drawing-buffer height are included.
+`terrainLodRecording` counts active/full-detail frames over the whole recording,
+camera modes and frames containing each loaded protection reason. `activeFrames`
+requires savings in the camera frustum; `loadedActiveFrames` includes off-screen
+meshes. Scenery/model counters expose reuse. These counters do not measure GPU
+time or guarantee 30 FPS. `graphics.triangles` remains the renderer's frame count.
 
 Height-cache capacity evicts 2,000 old entries instead of clearing all 20,000.
 Local edits invalidate affected chunk samples including interpolation support.

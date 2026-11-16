@@ -26,6 +26,29 @@ try{
   }
   const steady=compare(),stats={...batch.stats},matrixError=batch.matrixError();
   render();const unchangedUploads=batch.stats.uploads;
+  for(let i=0;i<12;i++)render();
+  const reused={...batch.stats},cachedPixels=pixels();
+  if(!reused.reused||!reused.cacheHits||reused.uploads)throw Error('Unchanged scenery did not reuse batches '+JSON.stringify(reused));
+  batch.cacheEnabled=false;render();const uncached=pixels();batch.cacheEnabled=true;
+  let cacheDifferences=0;for(let i=0;i<cachedPixels.length;i++)if(Math.abs(cachedPixels[i]-uncached[i])>8)cacheDifferences++;
+  if(cacheDifferences)throw Error('Batch reuse changed pixels');
+  const cacheChanges=[];let part;
+  houses[4].visualMesh.traverse(n=>{if(!part&&n.isMesh&&n.layers.mask===(1<<30))part=n;});
+  if(!part)throw Error('No batched source available for cache invalidation');
+  for(const kind of ['transform','material','visibility','layers']){
+   for(let i=0;i<12;i++)render();
+   if(!batch.stats.reused)throw Error('Cache did not settle before '+kind);
+   const position=part.position.x,material=part.material,visible=part.visible;
+   if(kind==='transform')part.position.x+=.125;
+   if(kind==='material'){part.material=material.clone();part.material.transparent=true;part.material.opacity=.6;}
+   if(kind==='visibility')part.visible=false;
+   if(kind==='layers')part.layers.set(2);
+   render();if(batch.stats.reused)throw Error('Cache ignored source '+kind);
+   const edited=compare();cacheChanges.push({kind,pixelError:edited.pixelError});
+   if(edited.pixelError>.005)throw Error('Cached '+kind+' differs from originals');
+   if(kind==='material')part.material.dispose();
+   part.position.x=position;part.material=material;part.visible=visible;part.layers.set(0);
+  }
   const cameraPosition=state.camera.position.clone(),cameraRotation=state.camera.quaternion.clone(),views=[];
   for(const offset of [[4,3,5],[-12,18,-9]]){
    state.camera.position.copy(houses[5].mesh.position).add(new THREE.Vector3(...offset));
@@ -40,7 +63,7 @@ try{
   const dynamic=compare();houses[0].destroy(false);const destroyed=compare();
   batch.dispose();batch.enabled=false;render();const fallbackPixels=pixels();batch.enabled=true;render();const recovered=pixels();
   let recoveryError=0;for(let i=0;i<recovered.length;i++)if(Math.abs(fallbackPixels[i]-recovered[i])>8)recoveryError++;
-  return {steady,views,stats,matrixError,unchangedUploads,dynamic,destroyed,recoveryError:recoveryError/(w*h*4),fallback:batch.stats.fallback};
+  return {steady,views,stats,reused,cacheChanges,matrixError,unchangedUploads,dynamic,destroyed,recoveryError:recoveryError/(w*h*4),fallback:batch.stats.fallback};
  });
  // Background streaming differs between native GPUs and software CI; require
  // actual eliminated calls rather than a percentage of unrelated scenery.

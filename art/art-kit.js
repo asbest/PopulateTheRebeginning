@@ -268,9 +268,10 @@ export function createArtKit(T) {
         for(let i=0;i<3;i++)driver.addLevel(new T.Group(),i*30);
         configureLod(T,driver,4,levels.map(l=>l.error));
         p.userData.updateLod=camera=>{
-            driver.matrixWorld.copy(p.matrixWorld);driver.update(camera);
+            driver.matrixWorld.copy(p.matrixWorld);if(driver.update(camera)===false)return false;
             const level=levels[driver.userData.activeLod||0];
-            p.children[0].geometry=level.geometries[0];crown.geometry=level.geometries[1];
+            if(crown.geometry!==level.geometries[1]){p.children[0].geometry=level.geometries[0];crown.geometry=level.geometries[1];}
+            return true;
         };
         return p;
     }

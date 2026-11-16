@@ -3,6 +3,7 @@ import {ASSET_REVISION} from './asset-revisions.js';
 export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
     let panel,output,status,startButton,copyButton,banner,running=false,started=0,last=0,previousGpu=false,report=null,missingCpuFrames=0;
     const samples={},intervals=[];
+    let terrainRecording;
     const names=['frame','physics','simulation','ai','units','buildings','batching','render','other'];
     function controls(){
         if(panel)return;
@@ -25,6 +26,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
         if(running)return;controls();report=null;output.value='';copyButton.disabled=true;
         for(const name of names)samples[name]=[];intervals.length=0;started=last=performance.now();
         missingCpuFrames=0;
+        terrainRecording={samples:0,activeFrames:0,fullDetailFrames:0,loadedActiveFrames:0,reasons:{},cameraModes:{}};
         previousGpu=gpu.enabled;gpu.reset();gpu.enabled=true;running=true;panel.style.display='none';banner.textContent='Recording diagnostics… 15s';banner.style.display='block';resume();
     }
     function summary(values){if(!values.length)return null;const sorted=values.slice().sort((a,b)=>a-b);return {medianMs:+sorted[Math.floor(sorted.length*.5)].toFixed(2),p95Ms:+sorted[Math.min(sorted.length-1,Math.floor(sorted.length*.95))].toFixed(2)};}
@@ -38,9 +40,15 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
             fps:intervals.length?+(intervals.length*1000/intervals.reduce((sum,n)=>sum+n,0)).toFixed(1):null,
             frameIntervals:summary(intervals),cpu,gpu:gpuResult.supported&&gpuResult.samples?gpuResult:{available:false,reason:'GPU timing unavailable or no completed samples'},
             graphics:{...state.graphicsQuality,width:renderer.domElement.width,height:renderer.domElement.height,pixelRatio:renderer.getPixelRatio(),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles},
-            scene:{units:state.units.length,buildings:state.buildings.length,chunks:Object.keys(state.chunks).length,tutorialActive:!!state.controlTutorial?.active,terrainLod:state.terrainLodStats?{...state.terrainLodStats}:null},
+            scene:{units:state.units.length,buildings:state.buildings.length,chunks:Object.keys(state.chunks).length,tutorialActive:!!state.controlTutorial?.active,
+                terrainLod:state.terrainLodStats?JSON.parse(JSON.stringify(state.terrainLodStats)):null,
+                terrainLodRecording:terrainRecording,
+                sceneryBatching:state.sceneryBatchStats?{...state.sceneryBatchStats}:null,
+                modelLod:state.modelLodStats?{...state.modelLodStats}:null},
             environment:{userAgent:navigator.userAgent,cores:navigator.hardwareConcurrency||null,memoryGB:navigator.deviceMemory||null,webgl2:!!renderer.capabilities.isWebGL2,adapter},
-            notes:['CPU render includes driver waits and batching; it is not GPU execution time.','AI, units and buildings are parts of simulation; batching is part of rendering. Do not add overlapping timings.','Normal gameplay only; paused/hidden frames end the recording. No automatic bottleneck diagnosis is inferred from FPS alone.']};
+            notes:['CPU render includes driver waits and batching; it is not GPU execution time.','AI, units and buildings are parts of simulation; batching is part of rendering. Do not add overlapping timings.','Normal gameplay only; paused/hidden frames end the recording. No automatic bottleneck diagnosis is inferred from FPS alone.',
+                'Terrain LOD and scenery counters describe the final frame. Terrain totals include loaded off-screen chunks; terrainLod.visible counts the camera frustum.',
+                'terrainLodRecording.activeFrames counts frames with simplification in the camera frustum; loadedActiveFrames also includes off-screen chunks. Reasons count frames with each loaded full-detail cause.']};
         pause();open();if(missingCpuFrames)status.textContent=report.measurementWarnings[0];output.value=JSON.stringify(report,null,2);copyButton.disabled=false;
     }
     async function copy(){
@@ -58,6 +66,14 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
         // Older cached profilers have no .last getter. Never throw between
         // counting a frame and checking the deadline; report the mismatch.
         const frame=profiler.last;
+        const lod=state.terrainLodStats;
+        if(lod&&terrainRecording){
+            terrainRecording.samples++;
+            if((lod.visible?.savedTriangles??lod.savedTriangles)>0)terrainRecording.activeFrames++;else terrainRecording.fullDetailFrames++;
+            if(lod.savedTriangles>0)terrainRecording.loadedActiveFrames++;
+            for(const key in lod.reasons)if(lod.reasons[key]>0)terrainRecording.reasons[key]=(terrainRecording.reasons[key]||0)+1;
+            if(lod.cameraMode)terrainRecording.cameraModes[lod.cameraMode]=(terrainRecording.cameraModes[lod.cameraMode]||0)+1;
+        }
         if(!frame||!Number.isFinite(frame.frame))missingCpuFrames++;
         else for(const name of names)if(Number.isFinite(frame[name]))samples[name].push(frame[name]);
         if(now-started>=15000||intervals.length>=3600)finish('Completed');
