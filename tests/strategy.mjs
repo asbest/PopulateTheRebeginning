@@ -382,7 +382,7 @@ await check('Natural starting landscape supports mixed troops and an offensive w
  await seedWorld(natural,seed);
  try{
   await natural.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:60000});
-  await natural.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
+  await natural.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.assetsReady,null,{timeout:90000});
   // The fixed-step run below never yields to browser tasks. Finish terrain
   // streaming first and use the supported synchronous path for new orders.
   await natural.evaluate(()=>{
@@ -395,6 +395,9 @@ await check('Natural starting landscape supports mixed troops and an offensive w
    const chunks=Object.keys(state.chunks).length;
    if(chunks!==(2*CONFIG.TERRAIN.RENDER_DISTANCE+1)**2)throw new Error('Incomplete terrain fixture: '+chunks);
    let time=0,firstAttackAt=null,firstContactAt=null,sawPriest=false;
+   const shaman=state.units.find(u=>u.faction===1&&u.isShaman),damage=[];
+   if(!shaman)throw new Error('Missing initial enemy shaman');
+   let previousHp=shaman.hp;
    state.clock.getElapsedTime=()=>time;
    for(let k=0;k<4800;k++){
     time+=.1;state.clock.elapsedTime=time;
@@ -406,6 +409,13 @@ await check('Natural starting landscape supports mixed troops and an offensive w
     state.physicsWorld.timestep=1/60;
     for(let i=0;i<6;i++)state.physicsWorld.step();
     for(const u of [...state.units])u.update(.1);
+    if(shaman.hp<previousHp){
+     damage.push({time,hp:shaman.hp,state:shaman.state,role:shaman.aiRole,
+      position:shaman.mesh.position.toArray(),target:shaman.target?.toArray(),
+      waterExposure:shaman.waterExposure||0});
+     if(damage.length>4)damage.shift();
+    }
+    previousHp=shaman.hp;
     for(const b of [...state.buildings])if(!b.dead)b.update(.1);
     for(let i=state.projectiles.length-1;i>=0;i--)if(!state.projectiles[i].update(.1))state.projectiles.splice(i,1);
     for(let i=state.activeEffects.length-1;i>=0;i--)if(!state.activeEffects[i].update(.1))state.activeEffects.splice(i,1);
@@ -417,7 +427,7 @@ await check('Natural starting landscape supports mixed troops and an offensive w
    const detail={units:own.map(u=>u.type),buildings:buildings.map(b=>b.type),
     plan:enemyAIs[0].lastPlan,pending:enemyAIs[0].pendingBuild,
     workers:own.filter(u=>u.type==='wild').map(u=>({p:u.mesh.position,role:u.aiRole,state:u.state,dest:u.finalDest})),
-    firstAttackAt,firstContactAt,sawPriest,chunks};
+    firstAttackAt,firstContactAt,sawPriest,chunks,shaman:{state:shaman.state,hp:shaman.hp,damage}};
    if(firstAttackAt===null||firstContactAt===null||!sawPriest||!own.some(u=>u.isShaman)||buildings.length<4||
       !own.some(u=>u.type==='warrior')||!own.some(u=>u.type==='firewarrior'))throw new Error(JSON.stringify(detail));
    return detail;

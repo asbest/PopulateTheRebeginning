@@ -359,13 +359,25 @@ export function createLocomotion(T) {
                 const next=heightAt(p.x+v.x*lead,p.z+v.z*lead);
                 // Follow the surface tangent, including downhill travel; gravity still handles genuine falls.
                 const vy=Math.max(-u.moveSpeed,Math.min(u.moveSpeed,(next-h)/Math.max(dt,.001)));
+                let sweepX=v.x*lead,sweepZ=v.z*lead;
+                if(u.state==='move'&&u.target){
+                    const dx=u.target.x-p.x,dz=u.target.z-p.z;
+                    if(v.x*dx+v.z*dz<0){
+                        // A steep bank can reflect the capsule backwards. The
+                        // next walking command still points uphill; clear that
+                        // intended sweep instead of repeatedly sampling downhill.
+                        const distance=Math.hypot(dx,dz),reach=Math.min(distance,u.moveSpeed*lead);
+                        const x=dx/distance*reach,z=dz/distance*reach;
+                        if(heightAt(p.x+x,p.z+z)>h){sweepX=x;sweepZ=z;}
+                    }
+                }
                 // Lift the collision capsule over the terrain swept during the next
                 // physics frame. The visible feet stay on the actual surface.
                 let clearance=.02;
                 for(let t=0;t<=1;t++)for(let i=0;i<8;i++){
                     if(t&&Math.abs(v.x)+Math.abs(v.z)<.01)break;
                     const a=i*Math.PI/4,r=.35;
-                    clearance=Math.max(clearance,heightAt(p.x+v.x*lead*t+Math.cos(a)*r,p.z+v.z*lead*t+Math.sin(a)*r)-h+.04);
+                    clearance=Math.max(clearance,heightAt(p.x+sweepX*t+Math.cos(a)*r,p.z+sweepZ*t+Math.sin(a)*r)-h+.04);
                 }
                 u.groundBodyOffset=clearance;
                 u.rigidBody.setTranslation({x:p.x,y:h+u.height/2+clearance,z:p.z},true);

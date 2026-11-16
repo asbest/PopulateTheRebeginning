@@ -17,7 +17,7 @@ try{
   for(const b of state.buildings)state.scene.remove(b.mesh);state.buildings=[];
   gameTestAPI.BuildingSpatialHash.markDirty();state.simplex={noise2D:()=>0};
   const results=[];
-  for(const basin of [true,false]){
+  for(const dt of [1/60,.1])for(const basin of [true,false]){
    state.terrainMods.clear();state.heightCache.clear();
    for(let x=-15;x<=15;x++)for(let z=-15;z<=15;z++){
     const height=x>=3?3:basin&&x>=0?-1.5:-.2;
@@ -33,12 +33,12 @@ try{
    unit.aiWaterEscape=true;unit.seekShore=()=>{unit.goto(destination,0);return unit.state==='move';};
    unit.seekShore();let frames=0;const samples=[];
    const finalWaypoint=unit.path.at(-1)?.x;
-   for(;frames<1440&&getHeight(unit.mesh.position.x,unit.mesh.position.z)<gameTestAPI.aiDryHeight();frames++){
+   for(;frames<24/dt&&getHeight(unit.mesh.position.x,unit.mesh.position.z)<gameTestAPI.aiDryHeight();frames++){
     gameTestAPI.SpatialHash.update();state.physicsWorld.timestep=1/60;
-    state.physicsWorld.step();unit.nextTargetCheck=Infinity;unit.update(1/60);
+    for(let i=0;i<Math.round(dt*60);i++)state.physicsWorld.step();unit.nextTargetCheck=Infinity;unit.update(dt);
     if(frames%180===0)samples.push({frames,state:unit.state,p:unit.mesh.position.toArray(),v:unit.velocity.toArray(),grounded:unit.isGrounded,sinking:unit.isSinking,escape:unit.aiWaterEscape});
    }
-   const detail={basin,frames,hp:unit.hp,position:unit.mesh.position.toArray(),destination,finalWaypoint,target:unit.target?.toArray(),ground:gameTestAPI.getSurfaceHeight(unit.mesh.position.x,unit.mesh.position.z),grounded:unit.isGrounded,sinking:unit.isSinking,velocity:unit.velocity.toArray(),offset:unit.groundBodyOffset};
+   const detail={dt,basin,frames,hp:unit.hp,position:unit.mesh.position.toArray(),destination,finalWaypoint,target:unit.target?.toArray(),ground:gameTestAPI.getSurfaceHeight(unit.mesh.position.x,unit.mesh.position.z),grounded:unit.isGrounded,sinking:unit.isSinking,velocity:unit.velocity.toArray(),offset:unit.groundBodyOffset};
    if(unit.state==='dead'||getHeight(unit.mesh.position.x,unit.mesh.position.z)<gameTestAPI.aiDryHeight())
     throw Error('Water rescue stalled '+JSON.stringify({...detail,samples}));
    results.push(detail);unit.die();state.scene.remove(unit.mesh);
