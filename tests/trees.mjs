@@ -76,6 +76,10 @@ try{
         }
         const remaining=state.treeBurns.get(tree.id)-state.treeTime;
         if(Math.abs(remaining-300)>.01)throw new Error(`Wrong regrowth time: ${remaining}`);
+        const deadline=state.treeBurns.get(tree.id);
+        gameTestAPI.updateTreeRegrowth(.5);
+        gameTestAPI.burnTreesAt(x,z,.2);
+        if(state.treeBurns.get(tree.id)!==deadline)throw new Error('Hit on burning tree extended its timer');
         return {id:tree.id,parts:tree.originalParts.length,remaining};
     });
     console.log(`PASS Lightning chars a complete tree for ${first.remaining} game seconds (${first.parts} mesh parts)`);
@@ -117,16 +121,16 @@ try{
         gameTestAPI.updateTreeRegrowth(until-.05);
         if(!find()?.burned)throw new Error('Tree regrew before five minutes');
         gameTestAPI.burnTreesAt(x,z,.2);
-        const renewed=state.treeBurns.get(id)-state.treeTime;
-        if(Math.abs(renewed-300)>.01)throw new Error('A second hit did not renew regrowth');
-        gameTestAPI.updateTreeRegrowth(299.95);
-        if(!find()?.burned)throw new Error('Renewed tree regrew too early');
+        const remaining=state.treeBurns.get(id)-state.treeTime;
+        if(Math.abs(remaining-.05)>.01)throw new Error('A burned stump restarted its regrowth timer');
+        gameTestAPI.updateTreeRegrowth(.02);
+        if(!find()?.burned)throw new Error('Tree regrew too early');
         gameTestAPI.updateTreeRegrowth(.06);
         if(find()?.burned||state.treeBurns.has(id)||find()?.originalParts)
             throw new Error('Tree did not restore its original model and materials');
-        return {renewed};
+        return {remaining};
     });
-    console.log(`PASS Tree regrows after five minutes of game time; a new hit resets the timer (${regrowth.renewed}s)`);
+    console.log(`PASS Burned stump ignores hits and regrows on its original deadline (${regrowth.remaining}s left)`);
 
     await page.evaluate(()=>{
         const id=testTreeId;
@@ -140,6 +144,10 @@ try{
         gameTestAPI.performAction(x,z,'lightning');
         gameTestAPI.SpellWindup.update(1);
         if(!state.treeBurns.has(id))throw new Error('Off-screen lightning did not mark its tree');
+        const deadline=state.treeBurns.get(id);
+        gameTestAPI.updateTreeRegrowth(8.1);
+        gameTestAPI.burnTreesAt(x,z,.2);
+        if(state.treeBurns.get(id)!==deadline)throw new Error('Unloaded burned tree restarted its timer');
         state.cameraLookAt.copy(look);
         for(let i=0;i<80&&!state.chunks[chunkKey];i++)gameTestAPI.updateChunks();
         const restored=state.chunks[chunkKey]?.userData.trees.find(item=>item.id===id);
@@ -178,6 +186,10 @@ try{
         gameTestAPI.updateTreeRegrowth(7.6);
         if(effects.visible)throw new Error('Fire animation did not end');
         if(palms.mesh.geometry.attributes.aChar.getX(0)<.99)throw new Error('Palm crown did not burn away');
+        const palmDeadline=state.treeBurns.get(palm.id);
+        gameTestAPI.burnTreesAt(palm.x,palm.z,.2);
+        gameTestAPI.updateTreeRegrowth(0);
+        if(state.treeBurns.get(palm.id)!==palmDeadline||effects.visible)throw new Error('Burned palm restarted its timer or flames');
         const palmShader={vertexShader:THREE.ShaderLib.standard.vertexShader,fragmentShader:THREE.ShaderLib.standard.fragmentShader,uniforms:{}};
         palms.mesh.material.onBeforeCompile(palmShader);
         if(!palmShader.vertexShader.includes('aChar*.91')||!palmShader.fragmentShader.includes('vPalmLeaf>.5)discard'))
@@ -203,6 +215,8 @@ try{
         const tint=new THREE.Color();palms.mesh.getColorAt(0,tint);
         if(Math.max(Math.abs(tint.r-palm.tint.r),Math.abs(tint.g-palm.tint.g),Math.abs(tint.b-palm.tint.b))>.0001)
             throw new Error('Palm tint did not restore');
+        gameTestAPI.burnTreesAt(palm.x,palm.z,.2);
+        if(!state.treeBurns.has(palm.id))throw new Error('Regrown palm could not burn again');
     });
     console.log('PASS Firewarrior burns palms with bounded animated fire; palms regrow after exactly five minutes');
 

@@ -4458,7 +4458,10 @@ function burnTreesAt(x, z, radius, covers = null) {
         const hit=(id,treeX,treeZ,tree)=>{
             const dx=treeX-x,dz=treeZ-z;
             if(dx*dx+dz*dz>=radiusSquared||(covers&&!covers(treeX,treeZ)))return;
-            // A fresh hit renews the timer, even if the tree is already charred.
+            // Burning/charred vegetation is immune until its regrowth deadline.
+            // This also covers palms and sites in unloaded terrain chunks.
+            if((state.treeBurns.get(id)||0)>state.treeTime)return;
+            if(tree?.burned)restoreTree(tree);
             state.treeBurns.set(id,state.treeTime+CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
             if(tree)charTree(tree);
         };
