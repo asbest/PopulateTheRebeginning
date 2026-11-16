@@ -55,13 +55,21 @@ self.addEventListener('fetch',event=>{
     const request=new Request(url.href);
     event.respondWith((async()=>{
         const hit=await stored(request);
-        if(hit&&original.mode!=='navigate')return hit;
+        // Bare module URLs belong to the current online HTML. An older active
+        // worker must not serve old cached JS into a newly deployed page.
+        // Explicitly versioned assets remain cache-first; offline JS still uses
+        // the stored release when the network is unavailable.
+        const freshScript=path.endsWith('.js')&&!new URL(original.url).searchParams.has('v');
+        if(hit&&original.mode!=='navigate'&&!freshScript)return hit;
         let response;
-        try{response=await fetch(request);}
+        try{response=await fetch(freshScript?new Request(request,{cache:'no-cache'}):request);}
         catch(error){if(hit)return offlineResponse(hit,original.mode==='navigate');throw error;}
         if(!response.ok&&hit)return offlineResponse(hit,original.mode==='navigate');
         // Cache writes do not delay delivery to the renderer or audio decoder.
-        event.waitUntil(remember(request,response));
+        // The explicit content-version requests from CACHE_USED_ASSETS fill
+        // the JS cache. Do not label fresh server code with an older worker's
+        // hash when that worker is still controlling an updated online page.
+        if(!freshScript)event.waitUntil(remember(request,response));
         return response;
     })());
 });

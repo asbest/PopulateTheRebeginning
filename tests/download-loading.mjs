@@ -221,6 +221,11 @@ try{
                 const url=assetURL('art/materials/grass.ktx2');
                 const names=await caches.keys(),name=names.find(name=>name.startsWith('populate-assets-'));
                 const cache=await caches.open(name),old=new URL(url);old.searchParams.set('v','old-version');
+                const scriptURL=assetURL('art/gpu-timer.js');
+                await cache.put(scriptURL,new Response('cached prior script',{headers:{'Content-Type':'text/javascript'}}));
+                const bareScript=new URL('art/gpu-timer.js',document.baseURI).href;
+                if(!(await (await fetch(bareScript)).text()).includes('createGpuTimer'))throw Error('Online bare module used stale cached script');
+                window.cachedBareScript=bareScript;
                 await cache.put(old.href,new Response('old-content'));
                 const bytes=await (await fetch(url)).arrayBuffer();
                 if(bytes.byteLength<1000)throw new Error('Old content returned for new hash');
@@ -231,6 +236,8 @@ try{
             await context.setOffline(true);
             const bytes=await page.evaluate(async()=>(await (await fetch(cachedAssetURL)).arrayBuffer()).byteLength);
             assert(bytes===result.bytes,'Cached download was not reusable offline');
+            assert(await page.evaluate(async()=>(await (await fetch(cachedBareScript)).text())==='cached prior script'),
+                'Offline JS fallback was lost or fresh code was mislabeled with the old hash');
             assert(errors.length===0,errors.join('; '));return {bytes,offlineHit:true};
         }finally{await context.setOffline(false);await context.close();}
     });

@@ -29,6 +29,17 @@ try{
  await page.waitForFunction(()=>gameTestAPI.PerformanceDiagnostics.running&&!state.isPaused);
  await page.evaluate(()=>togglePause());
  await page.waitForFunction(()=>gameTestAPI.PerformanceDiagnostics.report?.reason==='Paused early');
+ await page.evaluate(()=>{
+  const profiler=gameTestAPI.BattleProfiler,descriptor=Object.getOwnPropertyDescriptor(profiler,'last');
+  Object.defineProperty(profiler,'last',{get:()=>undefined,configurable:true});
+  try{
+   const diagnostics=gameTestAPI.PerformanceDiagnostics,clock=performance.now.bind(performance),now=clock();
+   diagnostics.start();
+   try{performance.now=()=>now+16000;diagnostics.sample();}finally{performance.now=clock;}
+   if(diagnostics.report?.reason!=='Completed'||!diagnostics.report.missingCpuFrames||!diagnostics.report.measurementWarnings.length||diagnostics.running)
+    throw Error('Missing profiler left the recording broken or unreported');
+  }finally{Object.defineProperty(profiler,'last',descriptor);}
+ });
  if(errors.length)throw Error(errors.join('\n'));
  console.log('PASS diagnostics measurement, CPU/GPU reporting, clipboard, rejected-clipboard fallback and paused cancellation '+JSON.stringify(result));
 }finally{await browser.close();}
