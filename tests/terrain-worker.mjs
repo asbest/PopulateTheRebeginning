@@ -63,7 +63,8 @@ try{
    cases.push({biome,winter,equal:true});geo.dispose();water.dispose();
   }
   const {CAMPAIGN_LANDSCAPES}=await import('./art/landscape-profiles.js');
-  for(const profile of CAMPAIGN_LANDSCAPES){
+  for(const profile of [...CAMPAIGN_LANDSCAPES,'caldera','caldera']){
+   state.terrainMods.set(`${cx*40},${cz*40}`,(state.terrainMods.get(`${cx*40},${cz*40}`)||0)+.125);
    state.matchSettings.terrainProfile=profile;state.matchSettings.terrainSeed=137914;state.matchSettings.liquid='lava';gameTestAPI.restoreTerrainNoise();state.navigationVersion++;
    stream.clear();stream.prepare(cx,cz);
    const geo=chunk.children[0].geometry.clone(),water=chunk.children[1].geometry.clone();

@@ -119,7 +119,7 @@ function getHeight(x, z) {
     let h = getBaseHeight(sampleX, sampleZ);
     h += getTerrainMod(sampleX, sampleZ);
     state.heightCache.set(cacheKey, h);
-    if (state.heightCache.size > 20000) state.heightCache.clear();
+    if(state.heightCache.size>20000){const oldest=state.heightCache.keys();for(let i=0;i<2000;i++)state.heightCache.delete(oldest.next().value);}
     return h;
 }
 return {getBaseHeight,getTerrainMod,getHeight};

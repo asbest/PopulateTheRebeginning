@@ -737,6 +737,7 @@ import { createSceneIndex } from './art/scene-index.js';
 import { createStaticTransforms } from './art/static-transforms.js';
 import { createTerrainRefresh } from './art/terrain-refresh.js';
 import { createHudCache } from './art/hud-cache.js';
+import { invalidateHeightChunks } from './art/height-cache.js';
 import { createInstanceWriter } from './art/instance-writer.js';
 import { createCharacterBatches } from './art/character-batches.js';
 import { createBattleWork, createBattleProfiler } from './art/battle-work.js';
@@ -4560,7 +4561,7 @@ function modifyTerrain(centerX, centerZ, radius, amount) {
         }
     }
 
-    state.heightCache.clear();
+    invalidateHeightChunks(state.heightCache,modifiedChunks,CHUNK_SIZE);
     modifiedChunks.forEach(key => {
         const [cx, cz] = key.split(',').map(Number);
         updateChunkPhysics(cx, cz);
@@ -4620,7 +4621,7 @@ function disposeChunkGeometry(chunk) {
 }
 
 function updateChunks(force = false, specificChunks = null) {
-    if(force){state.heightCache.clear();state.navigationVersion++;}
+    if(force){invalidateHeightChunks(state.heightCache,specificChunks,CHUNK_SIZE);state.navigationVersion++;}
     if (!chunkTerrainMat) initTerrainResources();
 
     const focus=state.isFPV&&state.selectedUnits[0]?.state!=='dead'&&state.selectedUnits[0]?.mesh
@@ -5953,10 +5954,9 @@ function terrainWorkerSnapshot(cx,cz){
   if(state.terrainMods.size)for(let mx=Math.floor(x-half);mx<=Math.ceil(x+half);mx++)for(let mz=Math.floor(z-half);mz<=Math.ceil(z+half);mz++){
    const key=`${mx},${mz}`;if(state.terrainMods.has(key))mods.push([key,state.terrainMods.get(key)]);
   }
-  // Preserve cache insertion order and eviction exactly, without structured-
-  // cloning thousands of small entry arrays on the main thread.
-  const heightKeys=new Int32Array(state.heightCache.size),heightValues=new Float64Array(state.heightCache.size);let i=0;
-  state.heightCache.forEach((h,key)=>{heightKeys[i]=key;heightValues[i++]=h;});
+  // Canonical samples let the persistent Worker keep its own height cache.
+  // Only local edit inputs need to be sent to it.
+  const heightKeys=new Int32Array(0),heightValues=new Float64Array(0);
   return {CONFIG:{TERRAIN:CONFIG.TERRAIN},COLORS,CHUNK_SIZE,CHUNK_RES,WATER_LEVEL,VISUAL_WATER_LEVEL,
    NOISE_SCALE,HEIGHT_MULTIPLIER,BRIDGE_WIDTH,BRIDGE_HEIGHT,mods,heightKeys,heightValues,
    settings:{biome:state.matchSettings.biome,winter:state.matchSettings.winter,terrainProfile:state.matchSettings.terrainProfile,terrainSeed:state.matchSettings.terrainSeed,liquid:state.matchSettings.liquid},
@@ -9255,7 +9255,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
                 }
             }
         }
-        state.heightCache.clear();
+        invalidateHeightChunks(state.heightCache,modifiedChunks,CHUNK_SIZE);
         if(autoUpdate) updateChunks(true, modifiedChunks);
     }
 

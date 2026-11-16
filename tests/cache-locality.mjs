@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import * as T from '../vendor/three.module.js';
+import {invalidateHeightChunks} from '../art/height-cache.js';
+import {optimizeVertexFetch} from '../art/vertex-fetch.js';
+import {createTerrainHeight} from '../art/terrain-height.js';
+const key=(x,z)=>((Math.round(x*10)<<16)|(Math.round(z*10)&65535));
+const cache=new Map([[key(0,0),1],[key(-20,-20),2],[key(100,100),3]]);
+invalidateHeightChunks(cache,new Set(['0,0']),40);assert.equal(cache.size,1);assert.equal(cache.get(key(100,100)),3);
+const state={heightCache:new Map(),simplex:null,terrainMods:new Map(),matchSettings:{}};
+for(let i=0;i<20000;i++)state.heightCache.set(i,0);
+const field=createTerrainHeight({state,CONFIG:{TERRAIN:{}},WATER_LEVEL:1});field.getHeight(-1,-1);
+assert.equal(state.heightCache.size,18001);assert(state.heightCache.has(19000));
+const geometry=new T.BoxGeometry(),before={};
+for(const [name,a]of Object.entries(geometry.attributes))before[name]=Array.from(geometry.index.array,i=>Array.from(a.array.slice(i*a.itemSize,(i+1)*a.itemSize)));
+optimizeVertexFetch(geometry);
+for(const [name,a]of Object.entries(geometry.attributes))assert.deepEqual(Array.from(geometry.index.array,i=>Array.from(a.array.slice(i*a.itemSize,(i+1)*a.itemSize))),before[name]);
+console.log('PASS bounded height eviction, signed spatial invalidation and bit-exact indexed attributes with unchanged triangle order');

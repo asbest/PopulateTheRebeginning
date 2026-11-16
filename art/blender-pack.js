@@ -4,6 +4,7 @@ import {qualityMaterial,graphicsSettings,useProceduralSurfaces} from './graphics
 import {MODEL_GROUPS,MODEL_FILES} from './startup-manifest.js';
 import {assetURL} from './asset-urls.js';
 import {fitBarracksTiles} from './roof-profile.js';
+import {optimizeVertexFetch} from './vertex-fetch.js';
 let sharedPack;
 
 export function createBlenderPack(T,loadTexture) {
@@ -75,6 +76,7 @@ export function createBlenderPack(T,loadTexture) {
             g.setAttribute('normal',new T.Float32BufferAttribute(data.normal,3));
             g.setAttribute('uv',new T.Float32BufferAttribute(data.uv,2));
             if(data.index)g.setIndex(data.index);
+            optimizeVertexFetch(g);
             g.computeBoundingSphere();
             geometries.set(cacheKey,g);
         }

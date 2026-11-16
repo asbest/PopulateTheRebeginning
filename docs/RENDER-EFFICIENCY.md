@@ -40,6 +40,17 @@ are independent of these changes.
 
 ## Validation
 
+Height-cache capacity evicts 2,000 old entries instead of clearing all 20,000.
+Local edits invalidate affected chunk samples including interpolation support.
+World changes retain full invalidation. The persistent terrain Worker reuses
+noise, kernel and geometry for identical configurations, and invalidates its
+own height cache on edit changes. Jobs no longer serialize the main height cache.
+Transferred output copies preserve ownership of the reusable workspace buffers.
+
+Blender buffers use first-use vertex ordering (`art/vertex-fetch.js`), preserving
+every attribute value and triangle order, including transparent faces. There is
+no quantization, simplification or additional dependency.
+
 Desktop Chromium checks include `tests/render-efficiency.mjs`,
 `tests/cpu-efficiency.mjs`, `tests/terrain-refresh.mjs`,
 `tests/shadow-cache.mjs`, `tests/effect-efficiency.mjs`,
