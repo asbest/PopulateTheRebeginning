@@ -73,6 +73,8 @@ function findPath(start,end,isFlying,avoidWater,waterExit){
             route.reverse();
             if(dryRoute&&Math.hypot(start.x-startNode.x*grid,start.z-startNode.y*grid)>.5)
                 route.unshift([startNode.x*grid,startNode.y*grid]);
+            if(waterExit&&Math.hypot(current.x*grid-end.x,current.y*grid-end.z)>.001)
+                route.push([end.x,end.z]);
             return route;
         }
         for(const offset of neighbors){

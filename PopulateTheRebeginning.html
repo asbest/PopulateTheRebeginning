@@ -5811,6 +5811,10 @@ const Pathfinder = {
                 const first=path[0];
                 if(dryRoute&&Math.hypot(startPos.x-startGrid.x,startPos.z-startGrid.z)>.5||
                     !isFlying&&treeBlocksSegment(startPos.x,startPos.z,first.x,first.z,true))path.unshift(startGrid);
+                // A rounded grid endpoint can still lie underwater. Rescue must
+                // reach the actual shore, including after a stuck-route replan.
+                if(waterExit&&Math.hypot(currentNode.x*this.GRID_SIZE-endPos.x,currentNode.y*this.GRID_SIZE-endPos.z)>.001)
+                    path.push(new THREE.Vector3(endPos.x,0,endPos.z));
                 return path;
             }
 
@@ -8759,7 +8763,7 @@ window.Humanoid = class Humanoid {
                 let canMove = true;
                 const safeH = (this.faction !== 0 || state.matchSettings.liquid==='lava') && !this.aiWaterEscape && state.waterState !== 'frozen'
                     ? aiDryHeight() : WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
-                if (this.type !== 'airship' && nextH < safeH && currentH >= safeH) canMove = false;
+                if (this.type !== 'airship' && !this.aiWaterEscape && nextH < safeH && currentH >= safeH) canMove = false;
 
                 if(canMove) {
                     let speed = this.moveSpeed * (this.type === 'airship' ? 1.0 :
@@ -8886,7 +8890,9 @@ window.Humanoid = class Humanoid {
                     ? aiDryHeight() : WATER_LEVEL - CONFIG.TERRAIN.WATER_SAFE_DEPTH;
                 if(this.type !== 'airship') {
                     const currentH = groundH;
-                    if (nextH < safeH && currentH >= safeH) {
+                    // Rescue paths may cross a deeper patch on their way to shore.
+                    // The planner permits it; the shallow-water walking guard must too.
+                    if (!this.aiWaterEscape && nextH < safeH && currentH >= safeH) {
                          if(!this.targetBoat) canMove = false;
                     }
                 }

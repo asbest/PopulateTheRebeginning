@@ -20,17 +20,19 @@ try {
         const trees=Object.values(state.chunks).flatMap(c=>c.userData.trees||[]).map(t=>[t.mesh,t.mesh.visible]);
         for(const [mesh] of trees)mesh.visible=false;
         const routes=[];
-        const check=async(start,end,avoidWater=false)=>{
-            const expected=Pathfinder.findPath(start,end,false,1.5,avoidWater,false);
+        const check=async(start,end,avoidWater=false,waterExit=false)=>{
+            const expected=Pathfinder.findPath(start,end,false,1.5,avoidWater,waterExit);
             const actual=await new Promise((resolve,reject)=>{
                 const timeout=setTimeout(()=>reject(new Error('Worker path timed out')),12000);
                 const tick=setInterval(()=>worker.update(),20);
-                const accepted=worker.request(start,end,false,avoidWater,false,(path,fallback)=>{
+                const accepted=worker.request(start,end,false,avoidWater,waterExit,(path,fallback)=>{
                     clearTimeout(timeout);clearInterval(tick);resolve({path,fallback});
                 });
                 if(!accepted){clearTimeout(timeout);clearInterval(tick);reject(new Error('Worker unavailable'));}
             });
             const reference=expected?.map(p=>[p.x,p.z])??null;
+            if(waterExit&&(!reference?.length||Math.hypot(reference.at(-1)[0]-end.x,reference.at(-1)[1]-end.z)>.001))
+                throw Error('Rescue route stopped at a rounded grid cell');
             const equal=JSON.stringify(reference)===JSON.stringify(actual.path);
             routes.push({equal,fallback:actual.fallback,length:actual.path?.length??null,
                 ...(equal?{}:{reference,actual:actual.path,profile:state.matchSettings.terrainProfile})});
@@ -41,6 +43,7 @@ try {
         const enemy=window.enemyAIs[0].myShaman.mesh.position;
         await check(enemy,gameTestAPI.findNearestLand(enemy.x+10,enemy.z+4),true);
         await check(enemy,gameTestAPI.findNearestLand(enemy.x-18,enemy.z-12),true);
+        await check(enemy,gameTestAPI.findNearestLand(enemy.x+10.37,enemy.z+4.19),false,true);
         state.waterState='frozen';
         await check(enemy,gameTestAPI.findNearestLand(enemy.x+15,enemy.z+9),true);
         state.waterState='liquid';
