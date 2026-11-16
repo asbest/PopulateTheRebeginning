@@ -18,7 +18,7 @@ export function createGpuTimer(){
    current=gl.createQuery();gl.beginQuery(ext.TIME_ELAPSED_EXT,current);
   },
   end(){if(current){gl.endQuery(ext.TIME_ELAPSED_EXT);pending.push(current);current=null;}},
-  reset(){count=index=0;},
+  reset(){count=index=0;if(gl){for(const q of pending)gl.deleteQuery(q);}pending=[];},
   report(){const a=Array.from(samples.slice(0,count)).sort((a,b)=>a-b);return {supported:!!ext,samples:count,medianMs:a[Math.floor(count*.5)]||0,p95Ms:a[Math.min(count-1,Math.floor(count*.95))]||0};}
  };
  return api;

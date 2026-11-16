@@ -40,6 +40,17 @@ are independent of these changes.
 
 ## Validation
 
+The pause menu's **Performance diagnostics** replaces the sound-test button.
+Choose **Record 15 seconds**, play the slow situation, then **Copy report**.
+The game pauses automatically at completion; pausing or hiding the page ends
+the recording early. Reports include CPU phases, optional GPU timings,
+browser/adapter information and render counts. GPU timing is only enabled for
+the recording and its previous state is restored. Rendering CPU time includes
+driver waits and batching; simulation includes AI/unit/building timings. These
+overlapping timings must not be added together. Unsupported GPU timing is
+reported as unavailable. If clipboard access is blocked, select/copy the report
+manually using the provided text field.
+
 Height-cache capacity evicts 2,000 old entries instead of clearing all 20,000.
 Local edits invalidate affected chunk samples including interpolation support.
 World changes retain full invalidation. The persistent terrain Worker reuses

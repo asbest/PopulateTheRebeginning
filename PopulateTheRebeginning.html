@@ -524,7 +524,7 @@
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-campaign-journal" onclick="showCampaignJournal()">Campaign journal</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFps()">Toggle FPS</button>
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-toggle-music" onclick="toggleMusic()">Music: On</button>
-            <button class="menu-btn" style="margin:0; width:100%;" id="btn-test-sound" onclick="testSpellSound()">Test spell sound</button>
+            <button class="menu-btn" style="margin:0; width:100%;" id="btn-performance-diagnostics" onclick="openPerformanceDiagnostics()">Performance diagnostics</button>
             <button class="menu-btn" style="margin:0; width:100%;" onclick="toggleFullscreen()">Toggle Fullscreen</button>
             <button class="menu-btn" style="margin:0; width:100%;" id="btn-graphics-quality" onclick="cycleGraphicsQuality()">Graphics: High</button>
 
@@ -737,6 +737,7 @@ import { createSceneIndex } from './art/scene-index.js';
 import { createStaticTransforms } from './art/static-transforms.js';
 import { createTerrainRefresh } from './art/terrain-refresh.js';
 import { createHudCache } from './art/hud-cache.js';
+import { createPerformanceDiagnostics } from './art/performance-diagnostics.js';
 import { invalidateHeightChunks } from './art/height-cache.js';
 import { createInstanceWriter } from './art/instance-writer.js';
 import { createCharacterBatches } from './art/character-batches.js';
@@ -5973,6 +5974,9 @@ const TerrainStream=createTerrainStream({
 
 const BattleProfiler=createBattleProfiler();
 const GpuTimer=createGpuTimer();
+const PerformanceDiagnostics=createPerformanceDiagnostics({state,profiler:BattleProfiler,gpu:GpuTimer,
+ pause:()=>{if(!state.isPaused)window.togglePause();},resume:()=>{if(state.isPaused)window.togglePause();}});
+window.openPerformanceDiagnostics=()=>PerformanceDiagnostics.open();
 const SettlementPreparation=createSettlementPreparation(THREE,state,Art,
  ()=>{
     // Lights live at scene level or directly inside short-lived effect meshes.
@@ -11075,7 +11079,7 @@ async function init() {
 
         state.scene = new THREE.Scene();
         StaticTransforms.bind(state.scene);
-        state.scene.onBeforeRender=(renderer,scene,camera)=>{CharacterBatches.update();SceneryBatches.update();ShadowCache.update(scene,camera,renderer,SceneIndex);};
+        state.scene.onBeforeRender=(renderer,scene,camera)=>{const start=performance.now();CharacterBatches.update();SceneryBatches.update();ShadowCache.update(scene,camera,renderer,SceneIndex);BattleProfiler.add('batching',performance.now()-start);};
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
         state.scene.fog = new THREE.Fog(CONFIG.BIOMES.normal.fog, CONFIG.BIOMES.normal.fogNear, CONFIG.BIOMES.normal.fogFar);
 
@@ -11230,7 +11234,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, SceneIndex, StaticTransforms, TerrainRefresh, ShadowCache, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, TerrainRefresh, ShadowCache, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -11435,22 +11439,6 @@ window.toggleMusic = function() {
     const musicBtn = document.getElementById('btn-toggle-music');
     if (musicBtn) musicBtn.innerText = enabled ? "Music: On" : "Music: Off";
 }
-
-window.testSpellSound = async function() {
-    const button = document.getElementById('btn-test-sound');
-    if (button) button.innerText = 'Checking sound…';
-    // Both the playback context and the media element must start in this tap.
-    SoundManager.unlockFromGesture();
-    const playback = SoundManager.playSound('fireball');
-    const ready = await Promise.race([
-        playback,
-        new Promise(resolve => setTimeout(() => resolve(false), 1500))
-    ]);
-    if (button) {
-        button.innerText = ready ? 'Sound playing — check volume' : 'Audio blocked — retry';
-        setTimeout(() => { button.innerText = 'Test spell sound'; }, 2500);
-    }
-};
 
 window.toggleFullscreen = function() {
     if (!document.fullscreenElement) {
@@ -13086,7 +13074,9 @@ function animate() {
     updatePeaceTimer();
     if(isPeaceTime()&&(state.projectiles.length||state.activeEffects.length))cancelOffensiveEffectsDuringPeace();
     const simulationStart=performance.now();BattleWork.begin();
+    const aiStart=performance.now();
     if (state.network.role !== 'client'&&!state.controlTutorial?.active) window.enemyAIs.forEach(ai => ai.update(dt));
+    BattleProfiler.add('ai',performance.now()-aiStart);
     PathWorker.update();
 
     // Music Logic
@@ -13104,10 +13094,10 @@ function animate() {
     }
 
     if(state.matchSettings && state.matchSettings.infiniteMana) state.mana = CONFIG.CAMPAGIN.INFINITE_MANA_VALUE;
-    state.units.forEach(u => u.update(dt));
+    const unitsStart=performance.now();state.units.forEach(u => u.update(dt));BattleProfiler.add('units',performance.now()-unitsStart);
     PreacherConversion.update(dt);
     SpellWindup.update(dt);
-    state.buildings.forEach(b => b.update(dt));
+    const buildingsStart=performance.now();state.buildings.forEach(b => b.update(dt));BattleProfiler.add('buildings',performance.now()-buildingsStart);
     if(state.graphicsQuality?.tier==='high'){
         for(const u of state.units){
             if(u.isVehicle||u.state==='dead'||u.state==='transported'||!u.isGrounded||u.mesh.position.distanceToSquared(state.camera.position)>6400)continue;
@@ -13288,7 +13278,7 @@ function animate() {
     updateUnitListSelection();
     const renderStart=performance.now();GpuTimer.begin(state.renderer);
     state.renderer.render(state.scene, state.camera);GpuTimer.end();
-    BattleProfiler.add('render',performance.now()-renderStart);BattleProfiler.end();
+    BattleProfiler.add('render',performance.now()-renderStart);BattleProfiler.end();PerformanceDiagnostics.sample();
     Art.resources.frame(performance.now()-frameTime,!!state.isPaused,!state.assetsReady,
         !!(Art.resources.stats.queued&&(state.projectiles.length||state.units.some(u=>u.state==='combat'))));
     SettlementPreparation.tick(performance.now());

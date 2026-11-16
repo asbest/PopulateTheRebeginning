@@ -71,11 +71,12 @@ export function createBattleWork({state,worker,findPath,walkable,treeConflict,ma
 }
 
 export function createBattleProfiler(){
-    const names=['frame','physics','simulation','render','other'],size=240;
+    const names=['frame','physics','simulation','ai','units','buildings','batching','render','other'],size=240;
     const samples=Object.fromEntries(names.map(n=>[n,new Float32Array(size)]));
     let count=0,index=0,started=0,current={};
     return {
-        begin(){started=performance.now();current.physics=current.simulation=current.render=0;},
+        get last(){return current;},
+        begin(){started=performance.now();for(const name of names)current[name]=0;},
         add(name,time){current[name]=(current[name]||0)+time;},
         end(){current.frame=performance.now()-started;current.other=Math.max(0,current.frame-current.physics-current.simulation-current.render);for(const n of names)samples[n][index]=current[n]||0;index=(index+1)%size;count=Math.min(size,count+1);},
         reset(){count=index=0;},

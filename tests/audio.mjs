@@ -216,12 +216,10 @@ try {
     });
     console.log(`PASS Nearby combat hits trigger restrained pain reactions: ${painSounds.map(call=>call.name).join(', ')}`);
     await page.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
-    await startRecording(page);
-    const soundPoint=await clickControl(page,'#btn-test-sound');
-    await page.mouse.click(soundPoint.x,soundPoint.y);
-    const testPeak=await stopRecording(page);
-    if(testPeak<0.03)throw new Error(`Pause-menu sound test was silent (peak ${testPeak})`);
-    console.log(`PASS Pause-menu sound test (peak ${testPeak.toFixed(3)})`);
+    await page.locator('#btn-performance-diagnostics').click();
+    if(!await page.locator('#performance-diagnostics').isVisible())throw Error('Diagnostics menu missing');
+    await page.locator('#btn-diagnostics-close').click();
+    console.log('PASS Performance diagnostics replaces the retired sound test');
 
     checkpoint='desktop sustained firestorm';
     const sustain=await page.evaluate(()=>{
@@ -467,13 +465,10 @@ try {
         });
         console.log(`PASS Blocked Android spell loop plays, pauses and stops (peak ${webLoop.peak.toFixed(3)})`);
         await phone.evaluate(()=>{state.isPaused=true;document.getElementById('pause-menu').style.display='flex';});
-        checkpoint='Android pause-menu sound test';
-        await startRecording(phone);
-        const phoneSoundPoint=await clickControl(phone,'#btn-test-sound');
-        await phone.touchscreen.tap(phoneSoundPoint.x,phoneSoundPoint.y);
-        const phoneTestPeak=await stopRecording(phone);
-        if(phoneTestPeak<.03)throw new Error(`Android pause-menu sound test was silent after media rejection (peak ${phoneTestPeak})`);
-        console.log(`PASS Android pause-menu sound test remains audible after media rejection (peak ${phoneTestPeak.toFixed(3)})`);
+        checkpoint='diagnostics menu';
+        await phone.locator('#btn-performance-diagnostics').tap();
+        if(!await phone.locator('#performance-diagnostics').isVisible())throw Error('Diagnostics menu missing');
+        await phone.locator('#btn-diagnostics-close').tap();
     } finally {
         await mobile.close();
     }
