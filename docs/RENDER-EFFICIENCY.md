@@ -98,6 +98,19 @@ sharing an exact material are combined within 40-unit spatial cells. Each batch
 retains every source triangle, normal and UV, original textures, shadow flags,
 render order and layers. Batches cap at 32,768 vertices to retain 16-bit indices.
 Animated flames, construction and damage rigs keep their existing live paths.
+An optional path for groups sharing the same small geometry (at most 64 vertices)
+and orthogonal positive transforms uses a static `InstancedMesh` to reuse vertex/index buffers
+instead of copying them into a merged buffer. Heterogeneous or sheared sources
+retain the material-merge path; missing instancing support also retains merging.
+Instance bounds include every source and shadow caster, including off-screen
+sources. Disposing wrappers detaches shared attributes before disposal so source
+GPU buffers remain owned by the originals. `instancedBatches` and
+`savedVertexBytes` expose the active groups and avoided additional buffer bytes.
+This additional path defaults off: both broad and small-part instancing reduced
+memory but increased render time in the desktop settlement comparison. Existing
+scenery/construction instancing remains active. The static material batches keep
+their baked transforms; the optional path is covered by rendering/fallback tests.
+
 Original objects and buffers remain authoritative for collision and selection;
 layer 29 masks only their rendering after preparation succeeds. Singletons stay
 on their original path. Legacy instancing explicitly relinquishes ownership
@@ -111,6 +124,20 @@ destruction invalidate affected groups immediately and restore original meshes
 while replacements prepare. Continuously changing roots use a short cooldown;
 unsupported meshes and errors retain the original rendering. Unchanged groups
 reuse buffers. Diagnostics expose an immutable `scene.buildingBatching` snapshot.
+
+`art/building-observer.js` uses read-only, reusable snapshots for visibility,
+materials, layers and render flags. Shared geometry/material signatures are
+checked once per frame across all buildings; no Three.js properties are wrapped
+or replaced. Static-transform synchronization publishes subtree versions when
+transforms actually change. Managed roots with unchanged signatures, topology,
+ancestors and root matrices skip expensive eligibility and per-part matrix
+validation. Unmanaged roots retain the original polling path. Snapshots are
+released when roots disappear, enter construction, or optimization stops.
+Buffer edits use Three.js's normal `needsUpdate` contract. `observationChecks`
+counts lightweight checks; `sourceChecks` counts full validation, and
+`observationHits` counts successful reuse. Existing shared material caches,
+screen-space LOD and full-rate shadow invalidation remain in use; no texture
+atlas, reduced texture resolution or additional LOD simplification is required.
 
 `tests/building-batches.mjs` checks these transitions against the original
 rendering, including immediate fallback and unchanged source buffers. The

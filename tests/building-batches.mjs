@@ -32,8 +32,11 @@ try{
    b.underConstruction=false;b.visualMesh.scale.y=1;b.constructionRig.visible=false;if(b.pathVisual)b.pathVisual.visible=true;houses.push(b);
   }
   state.viewScale=26;state.cameraLookAt.copy(p);gameTestAPI.updateCameraZoom();updateCameraPosition();
-  api.enabled=true;await settle();
+  api.enabled=true;api.instancingEnabled=true;await settle();
   if(!api.stats.batches||!api.stats.sourceParts||api.stats.pending)throw Error('No ready material batches');
+  for(let i=0;i<4;i++)render();
+  if(!api.stats.instancedBatches||!api.stats.savedVertexBytes||api.stats.sourceChecks||!api.stats.observationHits)
+   throw Error('Stable buildings did not reuse observed instances '+JSON.stringify(api.stats));
   let part;houses[0].visualMesh.traverseVisible(n=>{if(!part&&n.isMesh&&n.layers.mask===(1<<29))part=n;});
   if(!part)throw Error('No owned source part');
   const source=part.geometry,position=source.attributes.position.array.slice(),index=source.index?.array.slice();
@@ -45,8 +48,15 @@ try{
    if(firstError>.005||pixelError>.005)throw Error('Batch invalidation differs '+JSON.stringify({name,firstError,pixelError,stats:api.stats}));
    api.enabled=true;await settle();checks.push({name,firstError,pixelError});
   }
+  api.observationEnabled=false;render();if(!api.stats.sourceChecks)throw Error('Polling fallback did not inspect sources');
+  api.observationEnabled=true;render();render();if(api.stats.sourceChecks)throw Error('Observed sources still polled');
+  await compare('material-only fallback',()=>{api.instancingEnabled=false;});
+  await compare('restored instancing',()=>{api.instancingEnabled=true;});
   await compare('leaf transform',()=>{part.position.x+=.15;});
   await compare('material',()=>{part.material=part.material.clone();part.material.color.multiplyScalar(.7);part.material.roughness=.6;});
+  await compare('buffer update',()=>{part.geometry.attributes.position.needsUpdate=true;});
+  await compare('material eligibility',()=>{part.material.vertexColors=true;});
+  await compare('restored material',()=>{part.material.vertexColors=false;});
   await compare('visibility',()=>{part.visible=false;});
   await compare('restored visibility',()=>{part.visible=true;});
   await compare('external layers',()=>{part.layers.set(2);});

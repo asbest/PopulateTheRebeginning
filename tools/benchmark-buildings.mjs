@@ -84,8 +84,9 @@ try{
   const results=[];
   for(const phase of ['finished','construction','damaged']){
    const measurements=[];let a;
-   for(let index=0;index<3;index++){
-    const buildings=sets[index===0?0:1];buildingBatches.enabled=index===2;
+   for(let index=0;index<4;index++){
+    const buildings=sets[index===0?0:1];buildingBatches.enabled=index>=2;
+    buildingBatches.instancingEnabled=false;buildingBatches.observationEnabled=index===3;
     for(const set of sets)for(const b of set)b.mesh.visible=false;
     state.buildings=buildings;
     for(const b of buildings){
@@ -94,7 +95,7 @@ try{
      b.damageVisual.visible=phase==='damaged';if(b.roofFlame)b.roofFlame.visible=!b.underConstruction;
      if(b.pathVisual)b.pathVisual.visible=!b.underConstruction;
     }
-    if(index===2)await settle();
+    if(index>=2)await settle();
     for(let i=0;i<14;i++)render();
     const samples=[];for(let i=0;i<12;i++){const start=performance.now();render();gl.finish();samples.push(performance.now()-start);}
     samples.sort((a,b)=>a-b);
@@ -108,7 +109,10 @@ try{
    if(measurements[2].calls>measurements[1].calls)throw Error('Material batching increased draw calls '+JSON.stringify({phase,measurements}));
    if(!measurements[1].batch.buildingBatches)throw Error('Merged buildings were not instanced');
    if(phase!=='construction'&&!measurements[2].staticBatch.batches)throw Error('Static material batches never became active');
-   results.push({phase,original:measurements[0],merged:measurements[1],optimized:measurements[2]});
+   if(measurements[3].calls>measurements[2].calls)throw Error('Hybrid batching increased draw calls '+JSON.stringify({phase,measurements}));
+   if(phase!=='construction'&&(!measurements[3].staticBatch.observationChecks||measurements[3].staticBatch.sourceChecks))
+    throw Error('Hybrid buffers/observers not reused '+JSON.stringify(measurements[3]));
+   results.push({phase,original:measurements[0],merged:measurements[1],materialBatches:measurements[2],optimized:measurements[3]});
   }
   if(!results.some(r=>r.original.calls-r.optimized.calls>=100))throw Error('No substantial building draw-call reduction');
   return {models,results,mergeStats:{...optimizer.stats}};

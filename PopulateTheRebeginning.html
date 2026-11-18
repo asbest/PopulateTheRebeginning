@@ -5959,7 +5959,7 @@ const SceneIndex=createSceneIndex();
 const StaticTransforms=createStaticTransforms(SceneIndex);
 const SceneryBatches=createSceneryBatches(THREE,state,SceneIndex);
 const BuildingBatches=createBuildingBatches(THREE,state,Art.resources,SceneIndex,SceneryBatches,
-    mesh=>SettlementPreparation.prepareRoot(mesh,false,false,false,true,-.5));
+    mesh=>SettlementPreparation.prepareRoot(mesh,false,false,false,true,-.5),StaticTransforms);
 const ShadowCache=createShadowCache(THREE);
 const TerrainLod=createTerrainLod(THREE,state,Art.resources,VISUAL_WATER_LEVEL,mesh=>SettlementPreparation.prepareRoot(mesh,false,false,false,true));
 window.TerrainLod=TerrainLod;

@@ -1,7 +1,7 @@
 // Freeze local matrices, but retain support for ordinary position/rotation/scale
 // edits. Synchronize before scene.updateMatrixWorld, not after the render starts.
 export function createStaticTransforms(index){
-    const saved=new WeakMap(),rootVersions=new WeakMap(),roots=new Set();let records=[],spare=[],epoch=0;
+    const saved=new WeakMap(),rootVersions=new WeakMap(),visualVersions=new WeakMap(),roots=new Set();let records=[],spare=[],epoch=0;
     let rootRevision=-1,topology=-1,revision=0,scene;
     const stats={checked:0,composed:0};
     function compose(r){
@@ -9,6 +9,7 @@ export function createStaticTransforms(index){
         if(v[0]===p.x&&v[1]===p.y&&v[2]===p.z&&v[3]===q.x&&v[4]===q.y&&v[5]===q.z&&v[6]===q.w&&v[7]===s.x&&v[8]===s.y&&v[9]===s.z)return;
         v[0]=p.x;v[1]=p.y;v[2]=p.z;v[3]=q.x;v[4]=q.y;v[5]=q.z;v[6]=q.w;v[7]=s.x;v[8]=s.y;v[9]=s.z;
         n.updateMatrix();stats.composed++;
+        for(let p=n;p;p=p.parent)visualVersions.set(p,(visualVersions.get(p)||0)+1);
     }
     function world(parents,children){const r=saved.get(this);compose(r);return r.world.call(this,parents,children);}
     function restore(r){
@@ -55,5 +56,5 @@ export function createStaticTransforms(index){
         add(root);
     }
     // Scene is a special root: its dynamic children must not be frozen.
-    return {add,remove,stats,bind,sync,get scene(){return scene;}};
+    return {add,remove,stats,bind,sync,has:node=>saved.has(node),version:root=>visualVersions.get(root)||0,get scene(){return scene;}};
 }
