@@ -732,6 +732,7 @@ import { createTerrainKernel } from './art/terrain-kernel.js';
 import { LANDSCAPES, CAMPAIGN_LANDSCAPES, LAVA_LEVELS } from './art/landscape-profiles.js';
 import { createTerrainStream } from './art/terrain-stream.js';
 import { createSceneryBatches } from './art/scenery-batches.js';
+import {createBuildingBatches} from './art/building-batches.js';
 import { createShadowCache } from './art/shadow-cache.js';
 import {createTerrainLod} from './art/terrain-lod.js';
 import {beginLod} from './art/lod-policy.js';
@@ -5957,6 +5958,8 @@ const CharacterBatches=createCharacterBatches(THREE,state,getSurfaceHeight,()=>C
 const SceneIndex=createSceneIndex();
 const StaticTransforms=createStaticTransforms(SceneIndex);
 const SceneryBatches=createSceneryBatches(THREE,state,SceneIndex);
+const BuildingBatches=createBuildingBatches(THREE,state,Art.resources,SceneIndex,SceneryBatches,
+    mesh=>SettlementPreparation.prepareRoot(mesh,false,false,false,true,-.5));
 const ShadowCache=createShadowCache(THREE);
 const TerrainLod=createTerrainLod(THREE,state,Art.resources,VISUAL_WATER_LEVEL,mesh=>SettlementPreparation.prepareRoot(mesh,false,false,false,true));
 window.TerrainLod=TerrainLod;
@@ -11092,7 +11095,7 @@ async function init() {
 
         state.scene = new THREE.Scene();
         StaticTransforms.bind(state.scene);
-        state.scene.onBeforeRender=(renderer,scene,camera)=>{const start=performance.now();beginLod(camera,renderer,state,SceneIndex);TerrainLod.update(camera,renderer);CharacterBatches.update();SceneryBatches.update();ShadowCache.update(scene,camera,renderer,SceneIndex);BattleProfiler.add('batching',performance.now()-start);};
+        state.scene.onBeforeRender=(renderer,scene,camera)=>{const start=performance.now();beginLod(camera,renderer,state,SceneIndex);BuildingBatches.update();TerrainLod.update(camera,renderer);CharacterBatches.update();SceneryBatches.update();ShadowCache.update(scene,camera,renderer,SceneIndex);BattleProfiler.add('batching',performance.now()-start);};
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
         state.scene.fog = new THREE.Fog(CONFIG.BIOMES.normal.fog, CONFIG.BIOMES.normal.fogNear, CONFIG.BIOMES.normal.fogFar);
 
@@ -11247,7 +11250,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, TerrainRefresh, ShadowCache, SceneryBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, TerrainRefresh, ShadowCache, SceneryBatches, BuildingBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);

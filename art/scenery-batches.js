@@ -8,12 +8,16 @@ export function createSceneryBatches(T,state,index=null){
  const projection=new T.Matrix4(),frustum=new T.Frustum();
  let scene,frame=0,cooldown=0,lastBuildings=-1,lastTerrainBuild;
  const stats={parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,ms:0,fallback:false,cacheHits:0,sourceChecks:0,reused:false,buildingInstances:0,buildingBatches:0};
- const api={enabled:true,warming:false,cacheEnabled:true,stats,update,restore,dispose,matrixError};
+ const api={enabled:true,warming:false,cacheEnabled:true,stats,update,restore,dispose,matrixError,eligible,
+  sourceLayers:part=>masked.get(part)??part.layers.mask,releaseParts};
  state.sceneryBatchStats=stats;
  const cachedCamera=new T.Matrix4(),cachedProjection=new T.Matrix4(),cachedScene=new T.Matrix4();
  const lastView=new T.Matrix4(),lastProjection=new T.Matrix4();
  let cached=false,cachedWarming=false,cacheCooldown=0;const observedRoots=[],visitedRoots=[];
  function restore(){cached=false;for(const [part,mask]of masked)if(part.layers.mask===(1<<hiddenLayer))part.layers.mask=mask;masked.clear();}
+ function releaseParts(parts){for(const part of parts)if(masked.has(part)){
+  if(part.layers.mask===(1<<hiddenLayer))part.layers.mask=masked.get(part);masked.delete(part);cached=false;
+ }}
  function releaseGeometry(b){if(b.geometry){
   // The wrapper owns its bounds/VAOs, not the source vertex/index buffers.
   b.geometry.attributes={};b.geometry.index=null;b.geometry.dispose();
@@ -26,7 +30,7 @@ export function createSceneryBatches(T,state,index=null){
   p.onBeforeRender===T.Object3D.prototype.onBeforeRender;}
  function visitRoots(visit){
   for(const b of state.buildings)if(!b.dead){
-   if(b.visualMesh?.parent)visit(b.visualMesh);
+   if(b.visualMesh?.parent&&!b.visualMesh.userData.buildingBatchOwned)visit(b.visualMesh);
    if(b.constructionRig?.visible&&b.constructionRig.parent)visit(b.constructionRig);
    if(b.damageVisual?.visible&&b.damageVisual.parent)visit(b.damageVisual);
   }

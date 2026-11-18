@@ -1,7 +1,7 @@
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import fs from 'node:fs/promises';
-import {seedWorld,startManualSimulation} from '../tests/fixtures/seed-world.mjs';
+import {seedWorld} from '../tests/fixtures/seed-world.mjs';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
@@ -11,10 +11,24 @@ try{
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:90000});
  await Promise.all(['hut','temple','warrior','fire','tower','shipyard'].map(kind=>page.evaluate(kind=>Art.blender.ensure(Art.buildingAssetKey(kind)),kind)));
- await startManualSimulation(page,98217);
- const result=await page.evaluate(()=>{
+ const result=await page.evaluate(async()=>{
   closeHelp();closeStoryOverlay();state.isPaused=true;
-  const renderer=state.renderer,gl=renderer.getContext(),optimizer=Art.buildingGeometry;
+  state.clock.autoStart=false;state.clock.stop();
+  const renderer=state.renderer,gl=renderer.getContext(),optimizer=Art.buildingGeometry,buildingBatches=gameTestAPI.BuildingBatches,draw=renderer.render;
+  buildingBatches.enabled=false;
+  renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
+  const render=()=>draw.call(renderer,state.scene,state.camera);
+  async function drain(){const start=performance.now();
+   while(Art.resources.stats.queued||Art.textureStatus.previewPending||Art.textureStatus.pending||Art.textureStatus.upgrading){
+    if(performance.now()-start>120000)throw Error('Asset preparation stalled');await new Promise(r=>setTimeout(r,20));
+   }
+  }
+  // Freeze presentation as well as simulation, but keep the original RAF
+  // scheduler for cooperative buffer/GPU work. Weather/exposure must not drift
+  // while comparing a synchronous baseline with asynchronously prepared batches.
+  const prepareFrame=requestAnimationFrame;
+  window.requestAnimationFrame=callback=>callback.name==='animate'?0:prepareFrame(callback);
+  await new Promise(r=>prepareFrame(()=>prepareFrame(r)));await drain();
   renderer.setPixelRatio(.75);const w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;
   const pixels=()=>{const data=new Uint8Array(w*h*4);gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,data);return data;};
   const difference=(a,b)=>{let n=0;for(let i=0;i<a.length;i+=4)if(Math.max(Math.abs(a[i]-b[i]),Math.abs(a[i+1]-b[i+1]),Math.abs(a[i+2]-b[i+2]))>8)n++;return n/(a.length/4);};
@@ -54,10 +68,24 @@ try{
    }sets.push(buildings);
   }
   optimizer.enabled=true;state.cameraLookAt.copy(p);state.viewScale=42;gameTestAPI.updateCameraZoom();updateCameraPosition();
+  Art.uniforms.windTime.value=state.clock.elapsedTime;
+  await drain();
+  async function settle(){
+   const start=performance.now();
+   for(let pass=0;pass<4;pass++){
+    render();
+    while(Art.resources.stats.queued||buildingBatches.stats.pending){
+     if(performance.now()-start>180000)throw Error('Building preparation stalled '+JSON.stringify({budget:Art.resources.stats,batches:buildingBatches.stats}));
+     await new Promise(r=>setTimeout(r,20));
+    }
+   }
+   render();
+  }
   const results=[];
   for(const phase of ['finished','construction','damaged']){
    const measurements=[];let a;
-   for(const [index,buildings]of sets.entries()){
+   for(let index=0;index<3;index++){
+    const buildings=sets[index===0?0:1];buildingBatches.enabled=index===2;
     for(const set of sets)for(const b of set)b.mesh.visible=false;
     state.buildings=buildings;
     for(const b of buildings){
@@ -66,19 +94,21 @@ try{
      b.damageVisual.visible=phase==='damaged';if(b.roofFlame)b.roofFlame.visible=!b.underConstruction;
      if(b.pathVisual)b.pathVisual.visible=!b.underConstruction;
     }
-    for(let i=0;i<14;i++)renderer.render(state.scene,state.camera);
-    const samples=[];for(let i=0;i<12;i++){const start=performance.now();renderer.render(state.scene,state.camera);gl.finish();samples.push(performance.now()-start);}
+    if(index===2)await settle();
+    for(let i=0;i<14;i++)render();
+    const samples=[];for(let i=0;i<12;i++){const start=performance.now();render();gl.finish();samples.push(performance.now()-start);}
     samples.sort((a,b)=>a-b);
-    const measurement={calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,medianMs:samples[6],batch:{...gameTestAPI.SceneryBatches.stats}};
+    const measurement={calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,medianMs:samples[6],batch:{...gameTestAPI.SceneryBatches.stats},staticBatch:{...buildingBatches.stats}};
     measurements.push(measurement);
     if(index===0)a=pixels();else{
      measurement.pixelError=difference(a,pixels());
      if(measurement.pixelError>.005)throw Error('Settlement differs '+JSON.stringify({phase,measurement}));
     }
    }
-   if(measurements[1].calls>measurements[0].calls)throw Error('Merged settlement increased draw calls '+JSON.stringify({phase,measurements}));
+   if(measurements[2].calls>measurements[1].calls)throw Error('Material batching increased draw calls '+JSON.stringify({phase,measurements}));
    if(!measurements[1].batch.buildingBatches)throw Error('Merged buildings were not instanced');
-   results.push({phase,original:measurements[0],optimized:measurements[1]});
+   if(phase!=='construction'&&!measurements[2].staticBatch.batches)throw Error('Static material batches never became active');
+   results.push({phase,original:measurements[0],merged:measurements[1],optimized:measurements[2]});
   }
   if(!results.some(r=>r.original.calls-r.optimized.calls>=100))throw Error('No substantial building draw-call reduction');
   return {models,results,mergeStats:{...optimizer.stats}};

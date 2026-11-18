@@ -18,10 +18,12 @@ try{
   if(!state.isPaused||gameTestAPI.GpuTimer.enabled||!report.frames||!report.fps||!report.cpu.physics||!report.cpu.ai||!report.cpu.units||report.durationSeconds<15)throw Error(JSON.stringify(report));
   const recording=report.scene.terrainLodRecording;
   if(recording.samples!==report.frames||recording.activeFrames+recording.fullDetailFrames!==report.frames||
-   !report.scene.terrainLod.reasons||!report.scene.terrainLod.cameraMode||!report.scene.sceneryBatching||!report.scene.modelLod)
+   !report.scene.terrainLod.reasons||!report.scene.terrainLod.cameraMode||!report.scene.sceneryBatching||!report.scene.buildingBatching||!report.scene.modelLod)
    throw Error('Missing LOD recording/camera/cache diagnostics '+JSON.stringify(report.scene));
   const before=JSON.stringify(report.scene.terrainLod),reasons=state.terrainLodStats.reasons;
   reasons.active++;try{if(JSON.stringify(report.scene.terrainLod)!==before)throw Error('Report shares live LOD counters');}finally{reasons.active--;}
+  const buildingBefore=JSON.stringify(report.scene.buildingBatching),buildingStats=state.buildingBatchStats;
+  buildingStats.rebuilt++;try{if(JSON.stringify(report.scene.buildingBatching)!==buildingBefore)throw Error('Report shares live building counters');}finally{buildingStats.rebuilt--;}
   return {frames:report.frames,fps:report.fps,gpu:report.gpu,cpu:report.cpu};
  });
  await clickVisibleControl(page,'#btn-diagnostics-copy');

@@ -44,6 +44,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
                 terrainLod:state.terrainLodStats?JSON.parse(JSON.stringify(state.terrainLodStats)):null,
                 terrainLodRecording:terrainRecording,
                 sceneryBatching:state.sceneryBatchStats?{...state.sceneryBatchStats}:null,
+                buildingBatching:state.buildingBatchStats?{...state.buildingBatchStats}:null,
                 modelLod:state.modelLodStats?{...state.modelLodStats}:null},
             environment:{userAgent:navigator.userAgent,cores:navigator.hardwareConcurrency||null,memoryGB:navigator.deviceMemory||null,webgl2:!!renderer.capabilities.isWebGL2,adapter},
             notes:['CPU render includes driver waits and batching; it is not GPU execution time.','AI, units and buildings are parts of simulation; batching is part of rendering. Do not add overlapping timings.','Normal gameplay only; paused/hidden frames end the recording. No automatic bottleneck diagnosis is inferred from FPS alone.',

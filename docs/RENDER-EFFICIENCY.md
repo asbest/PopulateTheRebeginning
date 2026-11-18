@@ -93,6 +93,31 @@ scaffolding hidden. The performance CI group runs this benchmark. Saved draw
 calls depend on the mix: already-instanced finished houses benefit less than
 construction sites; desktop timings do not predict mobile FPS.
 
+Finished buildings also use `art/building-batches.js`: different opaque meshes
+sharing an exact material are combined within 40-unit spatial cells. Each batch
+retains every source triangle, normal and UV, original textures, shadow flags,
+render order and layers. Batches cap at 32,768 vertices to retain 16-bit indices.
+Animated flames, construction and damage rigs keep their existing live paths.
+Original objects and buffers remain authoritative for collision and selection;
+layer 29 masks only their rendering after preparation succeeds. Singletons stay
+on their original path. Legacy instancing explicitly relinquishes ownership
+before the static batches take over.
+
+Preparation copies at most 4,096 vertices or 8,192 indices per scheduled step,
+using the existing one-step-per-frame resource budget. GPU buffers are warmed
+before publication; unknown shader variants wait out combat. Changes to source
+transforms, visibility, materials, geometry versions, LOD, construction or
+destruction invalidate affected groups immediately and restore original meshes
+while replacements prepare. Continuously changing roots use a short cooldown;
+unsupported meshes and errors retain the original rendering. Unchanged groups
+reuse buffers. Diagnostics expose an immutable `scene.buildingBatching` snapshot.
+
+`tests/building-batches.mjs` checks these transitions against the original
+rendering, including immediate fallback and unchanged source buffers. The
+32-building desktop fixture reduced finished-settlement calls from 883 with
+the existing model merge/instancing to 807 with material batches (about 9%).
+This fixture is comparative evidence, not a mobile FPS guarantee.
+
 The pause menu's **Performance diagnostics** replaces the sound-test button.
 Choose **Record 15 seconds**, play the slow situation, then **Copy report**.
 The game pauses automatically at completion; pausing or hiding the page ends

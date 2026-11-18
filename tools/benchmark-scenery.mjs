@@ -13,6 +13,9 @@ try{
  const result=await page.evaluate(async()=>{
   await Promise.all(['hut','warrior','fire'].map(kind=>Art.blender.ensure(Art.buildingAssetKey(kind))));
   closeHelp();closeStoryOverlay();state.isPaused=true;window.enemyAIs=[];
+  // This benchmark isolates the legacy instance cache; heterogeneous static
+  // building batches have their own rendering/invalidation benchmark.
+  gameTestAPI.BuildingBatches.enabled=false;gameTestAPI.BuildingBatches.update();
   const {SceneryBatches:batch,createBuilding}=gameTestAPI,p=state.shaman.mesh.position.clone();
   const houses=[];for(let i=0;i<12;i++){
    const b=createBuilding(['hut','warrior','fire'][i%3],p.x+(i%4-1.5)*8,p.z+(Math.floor(i/4)-1)*8,i%4,false,true);
