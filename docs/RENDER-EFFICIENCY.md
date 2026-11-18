@@ -146,6 +146,36 @@ the existing model merge/instancing to 807 with material batches (about 9%).
 This fixture is comparative evidence, not a mobile FPS guarantee.
 
 The pause menu's **Performance diagnostics** replaces the sound-test button.
+Overview rendering keeps the same 0.8-pixel terrain error limit but releases the
+fixed 45-unit focus exclusion when a chunk covers fewer than 600 buffer pixels.
+The near and first-person terrain paths retain that exclusion. In overview mode,
+the actual projected error budget replaces the extra fixed world-space caps;
+coastline samples and mixed-resolution chunk boundaries remain protected.
+
+Water over a wholly dry chunk (every land sample above water level + 2) retains
+its full-resolution perimeter but omits the invisible interior. A minimum
+0.25-unit grid cell covers the supported wave's lateral displacement, and wave
+strengths above 2 fall back to original water geometry. Terrain edits invalidate
+the decision immediately. Source indices, water physics and raycast geometry
+are unchanged. Diagnostics report `terrainLod.occludedWaterTriangles` separately.
+
+`art/overview-details.js` retains every volumetric grass blade, instance, colour,
+normal and UV. At small projected sizes it skips intermediate blade rings with
+a conservative displacement bound, including instance scale and wind shear.
+Hysteresis keeps this below half a drawing-buffer pixel. Plants over eight
+pixels high and all first-person grass retain their original indices. Shared
+index variants are generated once from the authored grass template; no shader,
+texture, plant-density or simulation changes are involved. `scene.overviewDetails`
+reports loaded and frustum-visible triangle savings.
+
+`tests/lod.mjs` covers topology, interpolation error, dry-water borders and flood/
+wave fallback. `tests/overview-browser.mjs` compares three zoom levels against
+the previous policy and stores paired images and counts. In the seeded 640×480
+desktop fixture, zoom 65 reduced 3,977,999 triangles to 2,892,901 (27%); zoom 110
+reduced 6,905,456 to 3,870,042 (44%). Mean absolute colour differences were below
+0.2% of the RGB range. These are geometry and image comparisons, not mobile FPS
+measurements. Near-view and first-person checks retain their existing budgets.
+
 Choose **Record 15 seconds**, play the slow situation, then **Copy report**.
 The game pauses automatically at completion; pausing or hiding the page ends
 the recording early. Reports include CPU phases, optional GPU timings,

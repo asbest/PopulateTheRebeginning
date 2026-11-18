@@ -43,6 +43,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
             scene:{units:state.units.length,buildings:state.buildings.length,chunks:Object.keys(state.chunks).length,tutorialActive:!!state.controlTutorial?.active,
                 terrainLod:state.terrainLodStats?JSON.parse(JSON.stringify(state.terrainLodStats)):null,
                 terrainLodRecording:terrainRecording,
+                overviewDetails:state.overviewDetailStats?{...state.overviewDetailStats}:null,
                 sceneryBatching:state.sceneryBatchStats?{...state.sceneryBatchStats}:null,
                 buildingBatching:state.buildingBatchStats?{...state.buildingBatchStats}:null,
                 modelLod:state.modelLodStats?{...state.modelLodStats}:null},
