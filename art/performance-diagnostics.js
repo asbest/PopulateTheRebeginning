@@ -4,7 +4,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
     let panel,output,status,startButton,copyButton,banner,running=false,started=0,last=0,previousGpu=false,report=null,missingCpuFrames=0;
     const samples={},intervals=[];
     let terrainRecording;
-    const names=['frame','physics','simulation','ai','units','buildings','batching','render','other'];
+    const names=['frame','physics','simulation','ai','units','buildings','batching','render','other','modelLod','buildingBatches','terrainLod','overviewDetails','characterBatches','sceneryBatches','shadowCache'];
     function controls(){
         if(panel)return;
         panel=document.createElement('div');panel.id='performance-diagnostics';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','Performance diagnostics');
@@ -46,9 +46,11 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
                 overviewDetails:state.overviewDetailStats?{...state.overviewDetailStats}:null,
                 sceneryBatching:state.sceneryBatchStats?{...state.sceneryBatchStats}:null,
                 buildingBatching:state.buildingBatchStats?{...state.buildingBatchStats}:null,
-                modelLod:state.modelLodStats?{...state.modelLodStats}:null},
+                characterBatching:state.characterBatchStats?{...state.characterBatchStats}:null,
+                modelLod:state.modelLodStats?{...state.modelLodStats}:null,
+                lodVisibility:state.lodVisibilityStats?{...state.lodVisibilityStats}:null},
             environment:{userAgent:navigator.userAgent,cores:navigator.hardwareConcurrency||null,memoryGB:navigator.deviceMemory||null,webgl2:!!renderer.capabilities.isWebGL2,adapter},
-            notes:['CPU render includes driver waits and batching; it is not GPU execution time.','AI, units and buildings are parts of simulation; batching is part of rendering. Do not add overlapping timings.','Normal gameplay only; paused/hidden frames end the recording. No automatic bottleneck diagnosis is inferred from FPS alone.',
+            notes:['CPU render includes driver waits and batching; it is not GPU execution time.','AI, units and buildings are parts of simulation; batching is part of rendering. Do not add overlapping timings.','modelLod, buildingBatches, terrainLod, overviewDetails, characterBatches, sceneryBatches and shadowCache subdivide batching; do not add them to batching or render.','Normal gameplay only; paused/hidden frames end the recording. No automatic bottleneck diagnosis is inferred from FPS alone.',
                 'Terrain LOD and scenery counters describe the final frame. Terrain totals include loaded off-screen chunks; terrainLod.visible counts the camera frustum.',
                 'terrainLodRecording.activeFrames counts frames with simplification in the camera frustum; loadedActiveFrames also includes off-screen chunks. Reasons count frames with each loaded full-detail cause.']};
         pause();open();if(missingCpuFrames)status.textContent=report.measurementWarnings[0];output.value=JSON.stringify(report,null,2);copyButton.disabled=false;

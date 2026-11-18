@@ -146,6 +146,42 @@ the existing model merge/instancing to 807 with material batches (about 9%).
 This fixture is comparative evidence, not a mobile FPS guarantee.
 
 The pause menu's **Performance diagnostics** replaces the sound-test button.
+The CPU report subdivides `batching` into `modelLod`, `buildingBatches`,
+`terrainLod`, `overviewDetails`, `characterBatches`, `sceneryBatches` and
+`shadowCache`. These are nested timings, not additional frame costs. Original
+renderer/driver timing and optional GPU timing retain their previous meaning.
+
+Model LOD caches projected scale at float32 precision instead of pose matrices.
+Orthographic translation, rotation and camera panning therefore reuse the same
+decision; zoom, scale, selection, graphics policy and perspective depth still
+invalidate it. Selected roots use a set lookup along the ancestor chain.
+Character/scenery batching avoids repeating LOD updates already performed in the
+same main-camera pass. Standalone and warm-up calls retain their own updates.
+Wildlife keeps full authored geometry and live rig animation but no longer
+allocates unused middle-detail meshes or rewrites unchanged visibility flags.
+
+`art/lod-visibility.js` conservatively bounds static chunk LOD subtrees, including
+hidden detail levels. It skips LOD work only outside both the main camera and
+all supported directional-shadow frustums. Moving/unsafe subtrees and unknown
+shadow-light types retain the original path. Sources remain in the scene and
+rendering/physics/animation rates do not change. The paired desktop test skipped
+520 of 1,175 LOD checks with zero differing image pixels, including full-rate
+shadow rendering. `scene.lodVisibility` exposes decisions and bound reuse.
+
+Scenery caching inspects only roots that actually contribute masked instances.
+Unbatched originals remain live, so their changes cannot invalidate unrelated
+instance buffers; camera/membership changes still trigger collection. In the
+scenery fixture this reduced cache source checks from 2,159 to 618 while
+preserving pixels. A sparse-view cooldown is cancelled on camera movement.
+`reason`, `potentialSavings`, `minSavings`, `cooldownFrames`, `unsupportedParts`
+and `cacheSkippedRoots` distinguish active/cached batches, sparse decisions,
+disabled optimization and unsupported/error fallback. The conservative savings
+threshold remains unchanged. These counters do not imply a mobile FPS gain.
+
+`tests/lod-work.mjs`, `tests/scenery-decisions.mjs` and
+`tests/render-management.mjs` cover these paths, including off-screen shadow
+casters, reparenting, camera entry, zoom/selection and unchanged rendered images.
+
 Overview rendering keeps the same 0.8-pixel terrain error limit but releases the
 fixed 45-unit focus exclusion when a chunk covers fewer than 600 buffer pixels.
 The near and first-person terrain paths retain that exclusion. In overview mode,

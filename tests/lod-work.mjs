@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';import * as T from '../vendor/three.module.js';
+import {createSceneIndex} from '../art/scene-index.js';import {createStaticTransforms} from '../art/static-transforms.js';
+import {createLodVisibility} from '../art/lod-visibility.js';
+globalThis.window={addEventListener(){}};globalThis.location={protocol:'http:'};globalThis.localStorage={getItem:()=>null};
+const {configureLod,beginLod}=await import('../art/lod-policy.js');
+const scene=new T.Scene(),index=createSceneIndex(),transforms=createStaticTransforms(index);transforms.bind(scene);
+const state={scene,chunks:{},selectedUnits:[],isFPV:false},renderer={domElement:{height:600},shadowMap:{enabled:true}};
+function chunkAt(x){const chunk=new T.Group();chunk.position.x=x;
+ chunk.add(new T.Mesh(new T.PlaneGeometry(40,40),new T.MeshBasicMaterial()));
+ const lod=new T.LOD();for(let i=0;i<3;i++){const mesh=new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial());mesh.castShadow=true;lod.addLevel(mesh,i*30);}
+ configureLod(T,lod,1);chunk.add(lod);state.chunks[x]=chunk;scene.add(chunk);transforms.add(chunk);return {chunk,lod};
+}
+const near=chunkAt(0),shadowOnly=chunkAt(80),far=chunkAt(2000);
+const camera=new T.OrthographicCamera(-10,10,10,-10,.1,100);camera.position.set(0,20,0);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
+const sun=new T.DirectionalLight();sun.castShadow=true;sun.position.set(80,30,0);sun.target.position.set(80,0,0);
+Object.assign(sun.shadow.camera,{left:-15,right:15,top:15,bottom:-15,near:.1,far:100});sun.shadow.camera.updateProjectionMatrix();scene.add(sun,sun.target);
+scene.updateMatrixWorld(true);const visibility=createLodVisibility(T,state,index,transforms);visibility.begin(camera,renderer);
+assert(visibility.allow(near.lod));assert(visibility.allow(shadowOnly.lod));assert(!visibility.allow(far.lod));
+visibility.begin(camera,renderer);assert.equal(visibility.stats.rebuiltBounds,0);
+renderer.shadowMap.enabled=false;visibility.begin(camera,renderer);assert(!visibility.allow(shadowOnly.lod));renderer.shadowMap.enabled=true;
+const point=new T.PointLight();point.castShadow=true;scene.add(point);scene.updateMatrixWorld(true);visibility.begin(camera,renderer);assert(visibility.stats.shadowFallback&&visibility.allow(far.lod));scene.remove(point);
+camera.position.x=2000;camera.lookAt(2000,0,0);camera.updateMatrixWorld(true);visibility.begin(camera,renderer);assert(visibility.allow(far.lod));assert(!visibility.allow(near.lod));assert(visibility.allow(shadowOnly.lod));
+scene.add(far.lod);visibility.begin(camera,renderer);assert(visibility.allow(far.lod));
+console.log('PASS static LOD culling preserves off-screen shadow casters, camera entry, unsupported shadows and reparented objects');
+camera.position.set(0,20,0);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
+beginLod(camera,renderer,state,index);const level=near.lod.userData.activeLod;
+near.lod.position.x+=2;near.lod.rotation.y=.73;scene.updateMatrixWorld(true);beginLod(camera,renderer,state,index);
+assert.equal(near.lod.userData.activeLod,level);assert.equal(state.modelLodStats.updated,0);
+camera.position.x=1;camera.lookAt(1,0,0);camera.updateMatrixWorld(true);beginLod(camera,renderer,state,index);assert.equal(state.modelLodStats.updated,0);
+near.lod.scale.setScalar(2);scene.updateMatrixWorld(true);beginLod(camera,renderer,state,index);assert(state.modelLodStats.updated>0);
+state.selectedUnits=[{mesh:near.lod}];beginLod(camera,renderer,state,index);assert.equal(near.lod.userData.activeLod,0);
+state.selectedUnits=[];camera.zoom=2;camera.updateProjectionMatrix();beginLod(camera,renderer,state,index);assert(state.modelLodStats.updated>0);
+console.log('PASS orthographic translation/rotation and camera pan reuse LOD; scale, zoom and selection still update it');

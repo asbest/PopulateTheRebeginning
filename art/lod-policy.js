@@ -1,24 +1,27 @@
 import {graphicsSettings} from './graphics-settings.js';
-const context={height:600,selected:[],fpv:false};let generation=0;
-const stats={checked:0,updated:0,reused:0};
+const context={height:600,selected:[],selectedRoots:new Set(),fpv:false};let generation=0;
+const stats={checked:0,updated:0,reused:0,culled:0};
 export function invalidateLod(){generation++;}
-let previousCamera,world,projection,previousDetail,previousHeight;const previousSelected=[];
-export function beginLod(camera,renderer,state,index){
-    stats.checked=stats.updated=stats.reused=0;state.modelLodStats=stats;
+let previousDetail,previousHeight;const previousSelected=[],previousSelectedRoots=[];
+export function beginLod(camera,renderer,state,index,visibility=null){
+    stats.checked=stats.updated=stats.reused=stats.culled=0;state.modelLodStats=stats;
     context.height=renderer.domElement.height;context.selected=state.selectedUnits||[];context.fpv=state.isFPV;
     const detail=graphicsSettings.profile.detail*graphicsSettings.detailScale;
-    let changed=previousCamera!==camera||previousHeight!==context.height||previousDetail!==detail||!world?.equals(camera.matrixWorld)||!projection?.equals(camera.projectionMatrix)||previousSelected.length!==context.selected.length;
-    if(!changed)for(let i=0;i<previousSelected.length;i++)if(previousSelected[i]!==context.selected[i]){changed=true;break;}
+    let changed=previousHeight!==context.height||previousDetail!==detail||previousSelected.length!==context.selected.length;
+    if(!changed)for(let i=0;i<previousSelected.length;i++)if(previousSelected[i]!==context.selected[i]||previousSelectedRoots[i]!==context.selected[i].mesh){changed=true;break;}
     if(changed){
-        generation++;previousCamera=camera;previousHeight=context.height;previousDetail=detail;
-        if(!world){world=camera.matrixWorld.clone();projection=camera.projectionMatrix.clone();}else{world.copy(camera.matrixWorld);projection.copy(camera.projectionMatrix);}
-        previousSelected.length=context.selected.length;for(let i=0;i<previousSelected.length;i++)previousSelected[i]=context.selected[i];
+        generation++;previousHeight=context.height;previousDetail=detail;
+        previousSelected.length=previousSelectedRoots.length=context.selected.length;for(let i=0;i<previousSelected.length;i++){previousSelected[i]=context.selected[i];previousSelectedRoots[i]=context.selected[i].mesh;}
+        context.selectedRoots.clear();for(const unit of context.selected)context.selectedRoots.add(unit.mesh);
     }
+    visibility?.begin(camera,renderer);
     if(index){const list=index.list(state.scene);for(const lod of list.lods)if(!lod.autoUpdate){
+        if(visibility&&!visibility.allow(lod)){stats.culled++;continue;}
         stats.checked++;if(lod.update(camera)===false)stats.reused++;else stats.updated++;
-    }for(const root of list.visualLods){stats.checked++;if(root.userData.updateLod(camera)===false)stats.reused++;else stats.updated++;}}
+    }for(const root of list.visualLods){if(visibility&&!visibility.allow(root)){stats.culled++;continue;}stats.checked++;if(root.userData.updateLod(camera)===false)stats.reused++;else stats.updated++;}}
 }
 export function projectedPixels(camera,height,position,margin=0){
+    if(!camera.isPerspectiveCamera)return height*Math.abs(camera.projectionMatrix.elements[5])*.5;
     const e=camera.matrixWorldInverse.elements;
     const depth=Math.max(camera.near,-(e[2]*position.x+e[6]*position.y+e[10]*position.z+e[14])-margin);
     return height*Math.abs(camera.projectionMatrix.elements[5])*.5/(camera.isPerspectiveCamera?depth:1);
@@ -29,18 +32,21 @@ export function chooseLod(previous,pixels,near,far){
     return pixels>near*1.15?0:pixels>far*1.15?1:2;
 }
 export function protectedLod(node){
-    for(let p=node;p;p=p.parent)for(const unit of context.selected)if(unit.mesh===p)return true;
+    for(let p=node;p;p=p.parent)if(context.selectedRoots.has(p))return true;
     return false;
 }
 export function configureLod(T,lod,radius,error=0){
-    let frame=-1,level=0,lastCamera;const point=new T.Vector3(),matrix=new T.Matrix4(),cameraMatrix=new T.Matrix4();
+    let frame=-1,level=0,lastCamera,lastDemand;const point=new T.Vector3();
     lod.autoUpdate=false;
     lod.update=function(camera){
         // Explicit standalone calls (asset tools/tests) remain supported.
-        if(frame===generation&&lastCamera===camera&&matrix.equals(this.matrixWorld)&&cameraMatrix.equals(camera.matrixWorld))return false;
-        frame=generation;lastCamera=camera;matrix.copy(this.matrixWorld);cameraMatrix.copy(camera.matrixWorld);
         point.setFromMatrixPosition(this.matrixWorld);
         const scale=this.matrixWorld.getMaxScaleOnAxis(),perUnit=projectedPixels(camera,context.height,point);
+        const demand=Math.fround(scale*perUnit);
+        // A translated/rotated sphere has the same projected size in an
+        // orthographic view. Cache the actual LOD input, not every pose matrix.
+        if(frame===generation&&lastCamera===camera&&lastDemand===demand)return false;
+        frame=generation;lastCamera=camera;lastDemand=demand;
         const detail=Math.max(.1,graphicsSettings.profile.detail*graphicsSettings.detailScale);
         this.userData.lodPixelThreshold=75/detail;
         let next=chooseLod(level,perUnit*radius*scale*2,75/detail,16/detail);

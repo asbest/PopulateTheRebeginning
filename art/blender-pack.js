@@ -99,7 +99,7 @@ export function createBlenderPack(T,loadTexture,resources=null) {
         if(attached.get(parent)?.has(key))return true;
         if(!attached.has(parent))attached.set(parent,new Set());
         attached.get(parent).add(key);
-        const near=new T.Group(),middle=new T.Group(),errors=[0,0,0];let radius=1;
+        const near=new T.Group(),middle=new T.Group(),errors=[0,0,0],fullWildlife=key.startsWith('critter/');let radius=1;
         for(const [kind,data] of Object.entries(model)) {
             const part=new T.Mesh(geometry(key,kind,data),material(kind,factionColor));
             part.name='Blender '+key+' '+kind;
@@ -108,6 +108,10 @@ export function createBlenderPack(T,loadTexture,resources=null) {
             part.userData.blenderAsset=true;
             if(kind==='faction')part.userData.characterFaction=true;
             near.add(part);
+            radius=Math.max(radius,part.geometry.boundingSphere.radius+part.geometry.boundingSphere.center.length());
+            // Wildlife always renders the authored model. Do not allocate or
+            // animate hidden proxy meshes / build reductions that it never uses.
+            if(fullWildlife)continue;
             const keyForLod=key+'/'+kind+'/lod';
             let reduced=lodGeometries.get(keyForLod);
             if(!reduced){
@@ -119,7 +123,6 @@ export function createBlenderPack(T,loadTexture,resources=null) {
             proxy.userData.blenderAsset=true;proxy.userData.characterFaction=kind==='faction';middle.add(proxy);
             const apply=()=>{proxy.geometry=reduced.geometry;errors[1]=Math.max(errors[1],reduced.error);invalidateLod();};
             if(reduced.done)apply();else reduced.ready.then(apply).catch(()=>{});
-            radius=Math.max(radius,part.geometry.boundingSphere.radius+part.geometry.boundingSphere.center.length());
         }
         // At normal strategy zoom the silhouette remains, while tiny surface parts
         // stop issuing draw calls. The authored geometry stays available close up.
@@ -131,7 +134,11 @@ export function createBlenderPack(T,loadTexture,resources=null) {
             ? 100000 : key.startsWith('building/')?85:55;
         lod.addLevel(new T.Group(),distance);
         configureLod(T,lod,radius,errors);
-        if(key.startsWith('critter/')){lod.update=function(){near.visible=true;middle.visible=false;this.levels[2].object.visible=false;};}
+        if(fullWildlife){lod.update=function(){
+            const far=this.levels[2].object,changed=!near.visible||middle.visible||far.visible||this.userData.activeLod!==0;
+            if(changed){near.visible=true;middle.visible=false;far.visible=false;this.userData.activeLod=0;this._currentLevel=0;}
+            return changed;
+        };}
         parent.add(lod);
         parent.userData.detailRevision=(parent.userData.detailRevision||0)+1;
         return true;

@@ -16,6 +16,9 @@ try{
  const result=await page.evaluate(()=>{
   const report=gameTestAPI.PerformanceDiagnostics.report;
   if(!state.isPaused||gameTestAPI.GpuTimer.enabled||!report.frames||!report.fps||!report.cpu.physics||!report.cpu.ai||!report.cpu.units||report.durationSeconds<15)throw Error(JSON.stringify(report));
+  for(const name of ['modelLod','buildingBatches','terrainLod','overviewDetails','characterBatches','sceneryBatches','shadowCache'])
+   if(!report.cpu[name]||!Number.isFinite(report.cpu[name].medianMs))throw Error('Missing batching phase '+name);
+  if(!report.scene.lodVisibility||!report.scene.characterBatching||!report.scene.sceneryBatching.reason||!Number.isFinite(report.scene.sceneryBatching.potentialSavings))throw Error('Missing visibility/batching decision');
   const recording=report.scene.terrainLodRecording;
   if(recording.samples!==report.frames||recording.activeFrames+recording.fullDetailFrames!==report.frames||
    !report.scene.terrainLod.reasons||!report.scene.terrainLod.cameraMode||!report.scene.sceneryBatching||!report.scene.buildingBatching||!report.scene.overviewDetails||!report.scene.modelLod)

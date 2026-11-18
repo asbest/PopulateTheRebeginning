@@ -19,9 +19,10 @@ export function createSceneIndex(){
     function list(root){
         track(root);let entry=lists.get(root);
         if(entry?.localVersion===(versions.get(root)||0)&&entry.generation===generation){stats.hits++;return entry;}
-        if(!entry)entry={nodes:[],meshes:[],lods:[],visualLods:[],visibleNodes:[]};
+        if(!entry)entry={nodes:[],meshes:[],lods:[],visualLods:[],lights:[],visibleNodes:[]};
         entry.nodes.length=entry.meshes.length=entry.lods.length=entry.visualLods.length=0;
-        root.traverse(node=>{track(node);entry.nodes.push(node);if(node.isMesh)entry.meshes.push(node);if(node.isLOD)entry.lods.push(node);if(node.userData.updateLod)entry.visualLods.push(node);});
+        entry.lights.length=0;
+        root.traverse(node=>{track(node);entry.nodes.push(node);if(node.isLight)entry.lights.push(node);if(node.isMesh)entry.meshes.push(node);if(node.isLOD)entry.lods.push(node);if(node.userData.updateLod)entry.visualLods.push(node);});
         entry.localVersion=versions.get(root)||0;entry.revision=revision;entry.generation=generation;lists.set(root,entry);stats.rebuilds++;return entry;
     }
     function visibleNodes(root){

@@ -6,14 +6,14 @@ export function createSceneryBatches(T,state,index=null){
  const boxes=createBoxInstances(T);
  const matrix=new T.Matrix4(),sphere=new T.Sphere(),point=new T.Vector3();
  const projection=new T.Matrix4(),frustum=new T.Frustum();
- let scene,frame=0,cooldown=0,lastBuildings=-1,lastTerrainBuild;
- const stats={parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,ms:0,fallback:false,cacheHits:0,sourceChecks:0,reused:false,buildingInstances:0,buildingBatches:0};
- const api={enabled:true,warming:false,cacheEnabled:true,stats,update,restore,dispose,matrixError,eligible,
+ let scene,frame=0,cooldown=0,lastBuildings=-1,lastTerrainBuild,lastMinSavings=-1,lodPrepared=false;
+ const stats={parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,ms:0,fallback:false,cacheHits:0,sourceChecks:0,cacheSkippedRoots:0,reused:false,buildingInstances:0,buildingBatches:0,reason:'startup',cooldownFrames:0,potentialSavings:0,visitedRoots:0,unsupportedParts:0};
+ const api={enabled:true,warming:false,cacheEnabled:true,minSavings:64,stats,update,restore,dispose,matrixError,eligible,
   sourceLayers:part=>masked.get(part)??part.layers.mask,releaseParts};
  state.sceneryBatchStats=stats;
  const cachedCamera=new T.Matrix4(),cachedProjection=new T.Matrix4(),cachedScene=new T.Matrix4();
  const lastView=new T.Matrix4(),lastProjection=new T.Matrix4();
- let cached=false,cachedWarming=false,cacheCooldown=0;const observedRoots=[],visitedRoots=[];
+ let cached=false,cachedWarming=false,cachedMinSavings,cacheCooldown=0;const observedRoots=[],visitedRoots=[];
  function restore(){cached=false;for(const [part,mask]of masked)if(part.layers.mask===(1<<hiddenLayer))part.layers.mask=mask;masked.clear();}
  function releaseParts(parts){for(const part of parts)if(masked.has(part)){
   if(part.layers.mask===(1<<hiddenLayer))part.layers.mask=masked.get(part);masked.delete(part);cached=false;
@@ -41,12 +41,16 @@ export function createSceneryBatches(T,state,index=null){
  }
  function ancestorsVisible(root){for(let p=root.parent;p;p=p.parent)if(!p.visible)return false;return true;}
  function unchanged(){
-  if(!cached||!api.cacheEnabled||!api.enabled||scene!==state.scene||cachedWarming!==api.warming||
+  if(!cached||!api.cacheEnabled||!api.enabled||scene!==state.scene||cachedWarming!==api.warming||cachedMinSavings!==api.minSavings||
    !cachedCamera.equals(state.camera.matrixWorld)||!cachedProjection.equals(state.camera.projectionMatrix)||!cachedScene.equals(scene.matrixWorld))return false;
   let i=0,same=true;
   visitRoots(root=>{if(observedRoots[i++]?.root!==root)same=false;});
   if(!same||i!==observedRoots.length)return false;
   for(const entry of observedRoots){
+   // Unbatched originals remain fully live in the scene. Their edits cannot
+   // invalidate an instance buffer they never contributed to; if they enter
+   // view they simply render on their original path until the next rebuild.
+   if(!entry.batched){stats.cacheSkippedRoots++;continue;}
    if(entry.revision!==(index?index.list(entry.root).revision:entry.root.userData.detailRevision||0)||entry.ancestors!==ancestorsVisible(entry.root))return false;
    for(const r of entry.nodes){
     const n=r.node;stats.sourceChecks++;
@@ -66,9 +70,10 @@ export function createSceneryBatches(T,state,index=null){
   observedRoots.length=0;
   for(const root of visitedRoots){
    const list=roots.get(root),entry=list.observation||(list.observation={root,nodes:list.nodes.map(node=>({node}))});
-   entry.revision=list.revision;entry.ancestors=ancestorsVisible(root);
+   entry.revision=list.revision;entry.ancestors=ancestorsVisible(root);entry.batched=false;
    for(const r of entry.nodes){
     const node=r.node;r.visible=node.visible;
+    if(masked.has(node))entry.batched=true;
     if(node.isMesh){
      r.geometry=node.geometry;r.material=node.material;r.eligible=eligible(node);
      if(r.eligible){const g=node.geometry;if(!r.matrix)r.matrix=new T.Matrix4();r.matrix.copy(node.matrixWorld);r.layers=node.layers.mask;
@@ -79,7 +84,7 @@ export function createSceneryBatches(T,state,index=null){
    observedRoots.push(entry);
   }
   cachedCamera.copy(state.camera.matrixWorld);cachedProjection.copy(state.camera.projectionMatrix);cachedScene.copy(scene.matrixWorld);
-  cachedWarming=api.warming;cached=true;
+  cachedWarming=api.warming;cachedMinSavings=api.minSavings;cached=true;
  }
  function orthogonal(m){const a=m.elements,x=a[0]*a[0]+a[1]*a[1]+a[2]*a[2],y=a[4]*a[4]+a[5]*a[5]+a[6]*a[6],z=a[8]*a[8]+a[9]*a[9]+a[10]*a[10];
   return m.determinant()>0&&Math.abs(a[0]*a[4]+a[1]*a[5]+a[2]*a[6])<1e-6*Math.sqrt(x*y)&&
@@ -113,11 +118,12 @@ export function createSceneryBatches(T,state,index=null){
    list.box.getBoundingSphere(list.bounds);list.rootMatrix.copy(root.matrixWorld);list.bounded=true;
   }
   if(!api.warming&&!frustum.intersectsSphere(list.bounds)){stats.skippedRoots++;return;}
-  for(const lod of list.lods)lod.update(state.camera);
+  for(const lod of list.lods)if(!lodPrepared||lod.autoUpdate)lod.update(state.camera);
   for(const r of list){
    const p=r.node;let visible=true;
    for(let n=p;n;n=n.parent){if(!n.visible){visible=false;break;}if(n===scene)break;}
-   if(!visible||(p.layers.mask&1)===0||!eligible(p))continue;
+   if(!visible||(p.layers.mask&1)===0)continue;
+   if(!eligible(p)){stats.unsupportedParts++;continue;}
    const changed=!r.seen||!r.matrix.equals(p.matrixWorld);
    if(changed){r.matrix.copy(p.matrixWorld);r.valid=orthogonal(r.matrix);r.seen=true;}
    if(!r.valid)continue;
@@ -139,11 +145,12 @@ export function createSceneryBatches(T,state,index=null){
    b.items.push(r);b.dirty ||= changed;b.used=frame;stats.parts++;
   }
  }
- function update(){
-  const start=performance.now();stats.sourceChecks=0;stats.reused=false;
+ function update(prepared=false){
+  lodPrepared=prepared;stats.enabled=api.enabled;stats.minSavings=api.minSavings;
+  const start=performance.now();stats.sourceChecks=stats.cacheSkippedRoots=0;stats.reused=false;
   const viewSteady=state.camera&&lastView.equals(state.camera.matrixWorld)&&lastProjection.equals(state.camera.projectionMatrix),wasCached=cached;
   if(state.camera){lastView.copy(state.camera.matrixWorld);lastProjection.copy(state.camera.projectionMatrix);}
-  if(unchanged()){stats.cacheHits++;stats.reused=true;stats.uploads=0;stats.ms=performance.now()-start;return;}
+  if(unchanged()){stats.reason='cached';stats.cacheHits++;stats.reused=true;stats.uploads=0;stats.ms=performance.now()-start;return;}
   if(wasCached&&viewSteady)cacheCooldown=8;
   restore();frame++;
   if(scene!==state.scene){dispose();scene=state.scene;}
@@ -152,19 +159,21 @@ export function createSceneryBatches(T,state,index=null){
    b.items.length=0;b.dirty=false;if(b.mesh)b.mesh.visible=false;
    if(frame-b.used>180){b.mesh?.parent?.remove(b.mesh);b.mesh?.dispose();releaseGeometry(b);buckets.delete(key);}
   }
-  if(!api.enabled||!scene){stats.ms=performance.now()-start;return;}
+  if(!api.enabled||!scene){stats.reason='disabled';stats.ms=performance.now()-start;return;}
   // Sparse views use originals. Reconsider periodically or as buildings/chunks
   // arrive; skipping this optimization never suppresses a mesh or animation.
-  if(!api.warming&&cooldown>0&&lastBuildings===state.buildings.length&&lastTerrainBuild===state.lastTerrainBuildAt){cooldown--;stats.ms=performance.now()-start;return;}
-  cooldown=0;lastBuildings=state.buildings.length;lastTerrainBuild=state.lastTerrainBuildAt;
-  if(!state.renderer?.capabilities.isWebGL2&&!state.renderer?.extensions.get('ANGLE_instanced_arrays')){api.enabled=false;stats.fallback=true;return;}
+  if(!api.warming&&viewSteady&&cooldown>0&&lastMinSavings===api.minSavings&&lastBuildings===state.buildings.length&&lastTerrainBuild===state.lastTerrainBuildAt){cooldown--;stats.reason='sparse-cooldown';stats.cooldownFrames=cooldown;stats.ms=performance.now()-start;return;}
+  cooldown=0;stats.cooldownFrames=0;lastBuildings=state.buildings.length;lastTerrainBuild=state.lastTerrainBuildAt;lastMinSavings=api.minSavings;
+  if(!state.renderer?.capabilities.isWebGL2&&!state.renderer?.extensions.get('ANGLE_instanced_arrays')){api.enabled=false;stats.fallback=true;stats.reason='unsupported';stats.ms=performance.now()-start;return;}
   try{
    projection.multiplyMatrices(state.camera.projectionMatrix,state.camera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);
-   visitedRoots.length=0;visitRoots(root=>{visitedRoots.push(root);collect(root);});
+   stats.unsupportedParts=0;visitedRoots.length=0;visitRoots(root=>{visitedRoots.push(root);collect(root);});stats.visitedRoots=visitedRoots.length;
    let savings=0,buildingSavings=0;for(const b of buckets.values())if(b.items.length>=2){
     savings+=b.items.length-1;if(b.items[0].node.userData.mergedBuildingStatic)buildingSavings+=b.items.length-1;
    }
-   if(!api.warming&&savings<64&&buildingSavings<8){cooldown=15;stats.ms=performance.now()-start;return;}
+   stats.potentialSavings=savings;
+   if(!api.warming&&savings<api.minSavings&&buildingSavings<8){cooldown=15;stats.reason='sparse';stats.cooldownFrames=cooldown;stats.ms=performance.now()-start;return;}
+   stats.reason='active';
    for(const [key,b]of buckets){
     if(b.items.length<2){if(b.mesh)b.previous.length=0;if(frame-b.used>180){b.mesh?.parent?.remove(b.mesh);b.mesh?.dispose();releaseGeometry(b);buckets.delete(key);}continue;}
     if(b.items.length>b.capacity){
@@ -206,7 +215,7 @@ export function createSceneryBatches(T,state,index=null){
    }
    state.raycaster?.layers.enable(hiddenLayer);
    if(api.cacheEnabled&&viewSteady&&cacheCooldown--<=0)remember();
-  }catch(error){api.enabled=false;stats.fallback=true;restore();for(const b of buckets.values())if(b.mesh)b.mesh.visible=false;console.warn('Scenery batching unavailable; using originals',error);}
+  }catch(error){api.enabled=false;stats.fallback=true;stats.reason='error';restore();for(const b of buckets.values())if(b.mesh)b.mesh.visible=false;console.warn('Scenery batching unavailable; using originals',error);}
   stats.ms=performance.now()-start;
  }
  function matrixError(){let error=0;const expected=new T.Matrix4(),actual=new T.Matrix4();for(const b of buckets.values())if(b.mesh?.visible)for(let i=0;i<b.items.length;i++){

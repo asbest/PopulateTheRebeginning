@@ -9,8 +9,9 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     const shadowProfiles={low:[20,24],medium:[32,32],high:[45,40],ultra:[60,56]};
     const shadowDistances=[],simplifiedCasters=[],partialShadowBatches=[],empty=[];
     const smallDetails=new Set(['Eye','Iris','UpperEyelid','Brow','Earring','NoseBridge','NoseTip','Mouth','BraidBead','Thumb','RitualBeads','MaskEyeSlit']);
-    let scene,blob,shadowMap,frame=0;
-    const stats={parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0,ms:0,fallback:false};
+    let scene,blob,shadowMap,frame=0,lodPrepared=false;
+    const stats={parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0,lodChecksAvoided:0,ms:0,fallback:false};
+    state.characterBatchStats=stats;
     const api={uploads:writer.stats,enabled:true,crowdDetail:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError,reducePose};
     const textureKeys=['map','normalMap','roughnessMap','metalnessMap','alphaMap','aoMap','bumpMap','emissiveMap'];
     function restore(){
@@ -90,7 +91,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             node.traverse(maskPart);
             return;
         }
-        if(node.isLOD)node.update(state.camera);
+        if(node.isLOD){if(!lodPrepared||node.autoUpdate)node.update(state.camera);else stats.lodChecksAvoided++;}
         if(eligible(node,healthBar)){
             const mk=materialKey(node.material),cast=node.castShadow;
             let part=parts.get(node);
@@ -137,13 +138,14 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         blob.name='Distant unit contact shadows';blob.instanceMatrix.setUsage(T.DynamicDrawUsage);
         blob.setColorAt(0,color.setRGB(.2,.2,.2));scene.add(blob);
     }
-    function update(){
+    function update(prepared=false){
+        lodPrepared=prepared;
         const start=performance.now();restore();frame++;writer.reset();
         if(scene!==state.scene){dispose();scene=state.scene;}
         partialShadowBatches.length=0;
         for(const b of buckets.values()){b.items.length=0;b.shadowCount=0;if(b.mesh)b.mesh.visible=false;}
         if(blob){blob.count=0;blob.visible=false;}
-        Object.assign(stats,{parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0});
+        Object.assign(stats,{parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0,lodChecksAvoided:0});
         const animals=wildlife(),bunnies=animals?.bunnies||empty,birds=animals?.birds||empty;
         if(!api.enabled||!scene||!state.camera||state.units.length+bunnies.length+birds.length<12&&!api.warming){stats.ms=performance.now()-start;return;}
         if(state.renderer&&!state.renderer.capabilities.isWebGL2&&!state.renderer.extensions.get('ANGLE_instanced_arrays')){
