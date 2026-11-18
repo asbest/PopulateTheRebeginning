@@ -95,9 +95,28 @@ try {
   if(after.length-before.length>2)throw new Error(`First fireball compiled ${after.length-before.length} shader programs: ${JSON.stringify({tier:state.graphicsQuality.tier,added:after.filter(key=>!before.includes(key))})}`);
   return {tier:state.graphicsQuality.tier,programsBefore:before.length,programsAfter:after.length};
  }));
- await check('Six detailed faction-colored building meshes',async()=>page.evaluate(()=>{
+ await check('Six detailed faction-colored building meshes',async()=>page.evaluate(async()=>{
+  const kinds=['hut','tower','warrior','fire','temple','shipyard'];
+  await Promise.all(kinds.map(kind=>Art.blender.ensure(Art.buildingAssetKey(kind))));
+  const summarize=model=>{
+   const data={meshes:0,triangles:0,banners:0,details:0,valid:true};
+   model.traverse(n=>{if(n.userData.blenderAsset)data.details++;if(n.userData.isFactionBanner)data.banners++;
+    if(!n.isMesh)return;data.meshes++;const g=n.geometry;
+    data.triangles+=(g.index?.count||g.attributes.position.count)/3;
+    data.valid &&= !!g.attributes.normal&&!!g.attributes.uv&&g.attributes.position.count>0;
+   });return data;
+  };
   const report=[];
-  for(const kind of ['hut','tower','warrior','fire','temple','shipyard']){const model=Art.building(kind,0xff4500);let meshes=0,banner=false;model.traverse(n=>{if(n.isMesh)meshes++;if(n.userData.isFactionBanner)banner=true;});if(meshes<10||!banner)throw new Error(kind+' incomplete');report.push({kind,meshes});}
+  const optimizer=Art.buildingGeometry,enabled=optimizer.enabled;
+  // Fewer draw meshes are expected after merging; authored geometry and
+  // separately attached details/banners must still be present in full.
+  try{for(const kind of kinds){
+   optimizer.enabled=false;const original=summarize(Art.building(kind,0xff4500));
+   optimizer.enabled=true;const optimized=summarize(Art.building(kind,0xff4500));
+   if(!optimized.valid||!optimized.details||optimized.banners!==2||optimized.triangles!==original.triangles||optimized.meshes>original.meshes)
+    throw new Error(kind+' incomplete: '+JSON.stringify({original,optimized}));
+   report.push({kind,original,optimized});
+  }}finally{optimizer.enabled=enabled;}
   return report;
  }));
  await check('Cinematic camera and instanced coastal scenery remain interactive',async()=>{

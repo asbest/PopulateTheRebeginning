@@ -59,7 +59,13 @@ try{
   }
   if(!hut)throw Error('No legal environment-test building site near the dry spawn');
   hut.mesh.traverse(n=>{if(n.userData?.contactShadow)contacts.push(n);});
-  const construction={name:hut.constructionRig?.name,parts:hut.constructionRig?.children.length};
+  const construction={name:hut.constructionRig?.name,parts:0,triangles:0,valid:true};
+  // Count represented posts/rails/rings, including parts in merged buffers.
+  hut.constructionRig.traverse(n=>{if(!n.isMesh)return;
+   const g=n.geometry;construction.parts+=n.userData.sourcePartCount||1;
+   construction.triangles+=(g.index?.count||g.attributes.position.count)/3;
+   construction.valid &&= !!g.attributes.normal&&!!g.attributes.uv&&g.attributes.position.count>0;
+  });
   hut.takeDamage(hut.maxHp*.45,true);const damaged=hut.damageVisual?.visible;
   const marksBefore=gameTestAPI.SurfaceMarks.marks.length;
   gameTestAPI.SurfaceMarks.add(hut.mesh.position.x,hut.mesh.position.z,{radius:1,life:2});
@@ -108,7 +114,7 @@ try{
     result.stoneStyle.normalMap||result.stoneStyle.receiveShadow||result.stoneStyle.emissive<.14||result.stoneStyle.instanceColors<1||
     result.stoneStyle.vertexColors<1||result.stoneStyle.bushVertexColors<1||result.stoneStyle.ratio>.08||
     result.treeShadows.count<1||result.treeShadows.unsafeCrowns||result.treeShadows.softContacts!==result.treeShadows.count||
-    result.construction.name!=='Construction scaffolding'||result.construction.parts<10||!result.damaged||result.marksAdded!==1||
+    result.construction.name!=='Construction scaffolding'||result.construction.parts<10||!result.construction.valid||result.construction.triangles<1||!result.damaged||result.marksAdded!==1||
     result.profiles.low.tier!=='low'||result.profiles.low.grass>=result.grass||result.profiles.ultra.tier!=='ultra'||result.profiles.ultra.pixel<1.8||
     result.graphicsUi.menu!=='flex'||result.graphicsUi.tier!=='ultra'||result.graphicsUi.saved!=='ultra'||!result.graphicsUi.label?.includes('Ultra')||
     result.sky!=='Procedural atmosphere'||!result.rim||result.water.depthWrite||!result.water.hasFresnel||!result.water.hasWaveNormal||!result.water.coastalDepth||
