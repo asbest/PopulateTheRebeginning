@@ -1,18 +1,23 @@
 import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
+import {seedWorld,startManualSimulation} from '../tests/fixtures/seed-world.mjs';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:960,height:600}}),errors=[];
+ await seedWorld(page,98217);
  page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(/Scenery batching unavailable|Error compiling|VALIDATE_STATUS/.test(m.text()))errors.push(m.text());});
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
- await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
- const result=await page.evaluate(()=>{
+ await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:90000});
+ await startManualSimulation(page,98217);
+ const result=await page.evaluate(async()=>{
+  await Promise.all(['hut','warrior','fire'].map(kind=>Art.blender.ensure(Art.buildingAssetKey(kind))));
   closeHelp();closeStoryOverlay();state.isPaused=true;window.enemyAIs=[];
   const {SceneryBatches:batch,createBuilding}=gameTestAPI,p=state.shaman.mesh.position.clone();
   const houses=[];for(let i=0;i<12;i++){
    const b=createBuilding(['hut','warrior','fire'][i%3],p.x+(i%4-1.5)*8,p.z+(Math.floor(i/4)-1)*8,i%4,false,true);
-   b.underConstruction=false;b.visualMesh.scale.y=1;houses.push(b);
+   b.underConstruction=false;b.visualMesh.scale.y=1;b.constructionRig.visible=false;
+   if(b.pathVisual)b.pathVisual.visible=true;if(b.roofFlame)b.roofFlame.visible=true;houses.push(b);
   }
   state.cameraLookAt.copy(p);updateCameraPosition();state.renderer.setPixelRatio(1);
   const renderer=state.renderer,gl=renderer.getContext(),w=gl.drawingBufferWidth,h=gl.drawingBufferHeight;
@@ -58,16 +63,17 @@ try{
   state.camera.position.copy(cameraPosition);state.camera.quaternion.copy(cameraRotation);
   // Construction, visible flags/fire, changing materials and destruction keep
   // using the original live sources, with no frame-rate reduction.
-  houses[0].visualMesh.scale.y=.4;houses[1].visualMesh.visible=false;
+  houses[0].visualMesh.scale.y=.4;houses[0].constructionRig.visible=true;houses[0].constructionRig.scale.y=.5;houses[0].constructionRig.rotation.y=.2;
+  houses[1].visualMesh.visible=false;
   houses[2].visualMesh.position.y+=.15;houses[3].hp=houses[3].maxHp*.4;houses[3].damageVisual.visible=true;
   const dynamic=compare();houses[0].destroy(false);const destroyed=compare();
   batch.dispose();batch.enabled=false;render();const fallbackPixels=pixels();batch.enabled=true;render();const recovered=pixels();
   let recoveryError=0;for(let i=0;i<recovered.length;i++)if(Math.abs(fallbackPixels[i]-recovered[i])>8)recoveryError++;
   return {steady,views,stats,reused,cacheChanges,matrixError,unchangedUploads,dynamic,destroyed,recoveryError:recoveryError/(w*h*4),fallback:batch.stats.fallback};
  });
- // Background streaming differs between native GPUs and software CI; require
- // actual eliminated calls rather than a percentage of unrelated scenery.
- if(errors.length||result.fallback||result.steady.original.calls-result.steady.optimized.calls<150||result.stats.instances<200||
+ // Finished, premerged buildings contain fewer source parts. Verify actual
+ // renderer savings and building instancing rather than the old raw-part count.
+ if(errors.length||result.fallback||result.steady.original.calls-result.steady.optimized.calls<64||!result.stats.buildingInstances||
   [result.steady,...result.views,result.dynamic,result.destroyed].some(r=>r.pixelError>.005)||!result.stats.skippedRoots||result.matrixError>.0001||result.unchangedUploads||result.recoveryError>.005)
   throw new Error(JSON.stringify({errors,result}));
  console.log('PASS scenery preserves pixels, construction, destruction and fallback '+JSON.stringify(result));

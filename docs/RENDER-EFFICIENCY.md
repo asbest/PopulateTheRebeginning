@@ -69,6 +69,30 @@ pixel parity and invalidation after individual part/material/visibility/layer
 edits, construction, destruction and fallback. Model/tree LOD avoids repeated
 visibility or geometry assignments when its result is unchanged.
 
+`art/building-geometry.js` combines anonymous opaque static building parts by
+material and draw settings. Positions/normals are baked into shared local-space
+buffers; triangle order within each group and UVs remain intact. Identical
+shapes share geometry across buildings, types and tribe colours. Named roof
+landmarks, banners, emissive effects, custom shaders and packed LOD branches
+retain their original objects. Mirrored/unsupported sources and disabled merging
+use the original path. Originals are never disposed by the merger.
+
+Scaffolding and damage rigs also merge their static members, while their parent
+growth/rotation/visibility remains live. Visible rigs participate in spatial
+instancing. Whole-building preparation includes paths and hidden rig shaders,
+avoiding first-entry compilation. The fire-house glow shares its unchanged
+material. Collision, navigation, selection, training and save formats are
+unchanged; no animation/simulation steps are skipped.
+
+`tests/building-geometry.mjs` verifies triangle/normal/UV equivalence, ownership,
+sharing and fallback. `tools/benchmark-buildings.mjs` compares six building types
+from opposite views and at construction scales, then compares the same 32-house
+settlement in finished, construction and damaged states with original/merged
+geometry and active instancing. The rendering comparison keeps actual finished
+scaffolding hidden. The performance CI group runs this benchmark. Saved draw
+calls depend on the mix: already-instanced finished houses benefit less than
+construction sites; desktop timings do not predict mobile FPS.
+
 The pause menu's **Performance diagnostics** replaces the sound-test button.
 Choose **Record 15 seconds**, play the slow situation, then **Copy report**.
 The game pauses automatically at completion; pausing or hiding the page ends

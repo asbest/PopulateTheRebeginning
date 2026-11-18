@@ -98,7 +98,10 @@ export function createSettlementPreparation(T,state,art,getLights){
  async function initial(){
   const start=performance.now(),kinds=new Set(state.buildings.filter(b=>!b.dead).map(b=>b.type));
   let timer;
-  await Promise.race([Promise.all([...kinds].map(prepareType)),new Promise(resolve=>{timer=setTimeout(resolve,1200);})]);
+  await Promise.race([Promise.all([
+   ...[...kinds].map(prepareType),
+   ...state.buildings.filter(b=>!b.dead).map(b=>collect(b.mesh,false,false,true))
+  ]),new Promise(resolve=>{timer=setTimeout(resolve,1200);})]);
   clearTimeout(timer);stats.initialMs=performance.now()-start;
  }
  function tick(time){
@@ -120,8 +123,10 @@ export function createSettlementPreparation(T,state,art,getLights){
    if(distance>130*130)continue;
    const promote=state.isFPV||state.viewScale<=28;
    const stamp=env+'/'+b.visualMesh.children.length+'/'+promote;
-   if(roots.get(b.visualMesh)===stamp)continue;
-   candidates.push({root:b.visualMesh,stamp,distance,promote});
+   if(roots.get(b.mesh)===stamp)continue;
+   // Paths, scaffolds and damage meshes can introduce shader/buffer variants
+   // too, even when the authored body was already prepared for this type.
+   candidates.push({root:b.mesh,stamp,distance,promote});
   }
   candidates.sort((a,b)=>a.distance-b.distance);
   for(const {root,stamp,promote}of candidates.slice(0,4)){

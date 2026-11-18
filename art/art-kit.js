@@ -7,6 +7,7 @@ import {BARRACKS_ROOF} from './roof-profile.js';
 import {createRoofLandmarks} from './roof-landmarks.js';
 import {makeMeshLod} from './mesh-lod.js';
 import {configureLod} from './lod-policy.js';
+import {createBuildingGeometry} from './building-geometry.js';
 function buildingAssetKey(kind){
     return 'building/'+(kind==='temple'?'spy':kind)+'/root';
 }
@@ -14,6 +15,7 @@ export function createArtKit(T) {
     const resources=createResourceBudget();
     const pipeline=createTexturePipeline(T,resources);
     const blender=createBlenderPack(T,pipeline.load,resources);
+    const buildingGeometry=createBuildingGeometry(T);
     const mats = new Map(), geos = new Map();
     const palette = {wood:0x67503a, stone:0x99a69b, straw:0xc4a96b, gold:0xdcc27f, cloth:0xe1d8ba, dark:0x283b43};
     function texture(kind) {
@@ -190,7 +192,9 @@ export function createArtKit(T) {
             for(let i=0;i<6;i++){let a=i*Math.PI/3;cyl(p,[Math.sin(a)*1.3,2,Math.cos(a)*1.3],0.13,0.18,2,palette.wood);}
             cyl(p,[0,3.25,0],0.05,1.85,1.3,palette.gold,'thatch');
             cyl(p,[0,1.55,0],0.5,0.3,0.35,palette.gold);
-            const fire=orb(p,[0,2.1,0],[0.5,1,0.5],0xffa357);fire.material=new T.MeshStandardMaterial({color:0xffc17d,emissive:0xff611b,emissiveIntensity:0.65});
+            const fire=orb(p,[0,2.1,0],[0.5,1,0.5],0xffa357);
+            if(!mats.has('fire-house-glow'))mats.set('fire-house-glow',new T.MeshStandardMaterial({color:0xffc17d,emissive:0xff611b,emissiveIntensity:0.65}));
+            fire.material=mats.get('fire-house-glow');
         } else if(kind==='shipyard') {
             for(let i=0;i<12;i++)box(p,[0,0.22,-2.15+i*0.4],[3,0.2,0.35],palette.wood);
             for(let x of [-1.3,1.3])for(let z of [-2,2])cyl(p,[x,0.35,z],0.18,0.21,1.0,palette.wood);
@@ -202,6 +206,7 @@ export function createArtKit(T) {
         if(kind==='fire')roofLandmarks.fire(p,material(palette.gold,'wood',.65));
         if(kind==='warrior')roofLandmarks.warrior(p,material(palette.wood,'wood'),material(palette.gold,'wood',.65),factionColor);
         blender.attach(p,buildingAssetKey(kind),factionColor);
+        buildingGeometry.merge(p,kind);
         return p;
     }
     const uniforms={windTime:{value:0}};
@@ -360,7 +365,7 @@ export function createArtKit(T) {
         };
         material.customProgramCacheKey=()=> 'island-terrain-detail-v8';
     }
-    return {building,buildingAssetKey,tree,dress,terrainDetail,textures,palette,uniforms,resources,ready:blender.ready,blender,
+    return {building,buildingAssetKey,buildingGeometry,tree,dress,terrainDetail,textures,palette,uniforms,resources,ready:blender.ready,blender,
         configureTextures,textureStatus:pipeline.status,loadTexture:pipeline.load,
         requestTexture:pipeline.request,promoteTexture:pipeline.promote,warmTexture:pipeline.warmTexture,
         textureReady:pipeline.whenReady,texturesReady:pipeline.waitForPending,promoteTextures:pipeline.promoteAll,

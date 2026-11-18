@@ -7,7 +7,7 @@ export function createSceneryBatches(T,state,index=null){
  const matrix=new T.Matrix4(),sphere=new T.Sphere(),point=new T.Vector3();
  const projection=new T.Matrix4(),frustum=new T.Frustum();
  let scene,frame=0,cooldown=0,lastBuildings=-1,lastTerrainBuild;
- const stats={parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,ms:0,fallback:false,cacheHits:0,sourceChecks:0,reused:false};
+ const stats={parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,ms:0,fallback:false,cacheHits:0,sourceChecks:0,reused:false,buildingInstances:0,buildingBatches:0};
  const api={enabled:true,warming:false,cacheEnabled:true,stats,update,restore,dispose,matrixError};
  state.sceneryBatchStats=stats;
  const cachedCamera=new T.Matrix4(),cachedProjection=new T.Matrix4(),cachedScene=new T.Matrix4();
@@ -25,7 +25,11 @@ export function createSceneryBatches(T,state,index=null){
   !p.geometry.morphAttributes.position&&m.onBeforeCompile===T.Material.prototype.onBeforeCompile&&
   p.onBeforeRender===T.Object3D.prototype.onBeforeRender;}
  function visitRoots(visit){
-  for(const b of state.buildings)if(!b.dead&&b.visualMesh?.parent)visit(b.visualMesh);
+  for(const b of state.buildings)if(!b.dead){
+   if(b.visualMesh?.parent)visit(b.visualMesh);
+   if(b.constructionRig?.visible&&b.constructionRig.parent)visit(b.constructionRig);
+   if(b.damageVisual?.visible&&b.damageVisual.parent)visit(b.damageVisual);
+  }
   for(const key in state.chunks){const chunk=state.chunks[key];
    for(const t of chunk.userData?.trees||[])if(t.mesh?.parent)visit(t.mesh);
    if(chunk.userData?.ritualSite?.mesh?.parent)visit(chunk.userData.ritualSite.mesh);
@@ -139,7 +143,7 @@ export function createSceneryBatches(T,state,index=null){
   if(wasCached&&viewSteady)cacheCooldown=8;
   restore();frame++;
   if(scene!==state.scene){dispose();scene=state.scene;}
-  Object.assign(stats,{parts:0,instances:0,batches:0,uploads:0,skippedRoots:0});
+  Object.assign(stats,{parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,buildingInstances:0,buildingBatches:0});
   for(const [key,b]of buckets){
    b.items.length=0;b.dirty=false;if(b.mesh)b.mesh.visible=false;
    if(frame-b.used>180){b.mesh?.parent?.remove(b.mesh);b.mesh?.dispose();releaseGeometry(b);buckets.delete(key);}
@@ -153,8 +157,10 @@ export function createSceneryBatches(T,state,index=null){
   try{
    projection.multiplyMatrices(state.camera.projectionMatrix,state.camera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);
    visitedRoots.length=0;visitRoots(root=>{visitedRoots.push(root);collect(root);});
-   let savings=0;for(const b of buckets.values())if(b.items.length>=2)savings+=b.items.length-1;
-   if(!api.warming&&savings<64){cooldown=15;stats.ms=performance.now()-start;return;}
+   let savings=0,buildingSavings=0;for(const b of buckets.values())if(b.items.length>=2){
+    savings+=b.items.length-1;if(b.items[0].node.userData.mergedBuildingStatic)buildingSavings+=b.items.length-1;
+   }
+   if(!api.warming&&savings<64&&buildingSavings<8){cooldown=15;stats.ms=performance.now()-start;return;}
    for(const [key,b]of buckets){
     if(b.items.length<2){if(b.mesh)b.previous.length=0;if(frame-b.used>180){b.mesh?.parent?.remove(b.mesh);b.mesh?.dispose();releaseGeometry(b);buckets.delete(key);}continue;}
     if(b.items.length>b.capacity){
@@ -192,6 +198,7 @@ export function createSceneryBatches(T,state,index=null){
     b.mesh.count=b.items.length;b.mesh.visible=true;
     for(const r of b.items){masked.set(r.node,r.node.layers.mask);r.node.layers.set(hiddenLayer);}
     stats.instances+=b.items.length;stats.batches++;
+    if(b.items[0].node.userData.mergedBuildingStatic){stats.buildingInstances+=b.items.length;stats.buildingBatches++;}
    }
    state.raycaster?.layers.enable(hiddenLayer);
    if(api.cacheEnabled&&viewSteady&&cacheCooldown--<=0)remember();

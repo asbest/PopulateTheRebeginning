@@ -9145,6 +9145,7 @@ function createConstructionRig(radius,height) {
     for(const y of [.28,.58,.86]){
         const ring=new THREE.Mesh(ringGeo,rope);ring.rotation.x=Math.PI/2;ring.position.y=height*y;group.add(ring);
     }
+    Art.buildingGeometry.merge(group,'scaffold/'+key);
     return group;
 }
 
@@ -9172,6 +9173,7 @@ function createBuildingDamageVisual(radius,height){
         shard.position.set(Math.sin(a)*radius*(.55+(i%2)*.3),.65+(i%3)*.42,Math.cos(a)*radius*(.55+(i%2)*.3));
         shard.rotation.set((i%2-.5)*.45,a,(i%3-1)*.3);shard.castShadow=true;group.add(shard);
     }
+    Art.buildingGeometry.merge(group,'damage/'+radius+'/'+height);
     return group;
 }
 

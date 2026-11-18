@@ -21,12 +21,13 @@ try{
   const city=origin.clone().add(new THREE.Vector3(140,0,0)),buildings=[];
   for(const [i,type] of ['hut','tower','warrior','fire','temple','shipyard'].entries()){
    const b=api.createBuilding(type,city.x+(i%3-1)*8,city.z+(Math.floor(i/3)-1)*8,i%3,false,true);
-   b.underConstruction=false;b.visualMesh.scale.y=1;buildings.push(b);
+   b.underConstruction=false;b.visualMesh.scale.y=1;b.constructionRig.visible=false;
+   if(b.pathVisual)b.pathVisual.visible=true;if(b.roofFlame)b.roofFlame.visible=true;buildings.push(b);
   }
   await Promise.all(buildings.map(b=>Art.blender.ensure(Art.buildingAssetKey(b.type))));
   await new Promise(r=>setTimeout(r,0));
   const start=performance.now();
-  await Promise.all(buildings.map(b=>api.SettlementPreparation.prepareRoot(b.visualMesh,true)));
+  await Promise.all(buildings.map(b=>api.SettlementPreparation.prepareRoot(b.mesh,true)));
   // Loaded landscape also casts shadows from beyond the destination view.
   const chunks=Object.values(state.chunks);
   await Promise.all(chunks.map(c=>api.SettlementPreparation.prepareRoot(c,false,true)));
