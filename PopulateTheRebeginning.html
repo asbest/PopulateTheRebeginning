@@ -736,6 +736,8 @@ import {createBuildingBatches} from './art/building-batches.js';
 import { createShadowCache } from './art/shadow-cache.js';
 import {createTerrainLod} from './art/terrain-lod.js';
 import {createOverviewDetails} from './art/overview-details.js';
+import {createFlowerOverview} from './art/flower-overview.js';
+import {installTreeShadowCache} from './art/tree-shadow-cache.js';
 import {createGrassBatches} from './art/grass-batches.js';
 import {beginLod} from './art/lod-policy.js';
 import {createLodVisibility} from './art/lod-visibility.js';
@@ -1800,7 +1802,7 @@ window.setGraphicsQuality=function(tier='high'){
     tier=Object.hasOwn(GRAPHICS_PROFILES,tier)?tier:'high';
     const profile=setGraphicsTier(tier);
     state.graphicsQuality={...(state.graphicsQuality||{}),tier,coverDensity:profile.cover,maxPixelRatio:profile.pixel,
-        dynamicScale:1,minScale:profile.minScale,lastAdjustment:performance.now(),averageFps:state.graphicsQuality?.averageFps||60};
+        dynamicScale:1,vegetationPixelLimit:tier==='ultra'?1.5:2,resolutionProbe:null,resolutionCooldown:0,minScale:profile.minScale,lastAdjustment:performance.now(),averageFps:state.graphicsQuality?.averageFps||60};
     if(state.renderer){state.renderer.shadowMap.enabled=profile.shadows;state.renderer.shadowMap.needsUpdate=true;}
     if(state.sunLight)state.sunLight.castShadow=profile.shadows;
     if(state.renderer)state.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,profile.pixel)*state.graphicsQuality.dynamicScale);
@@ -4619,6 +4621,7 @@ for(let x=-RENDER_DISTANCE;x<=RENDER_DISTANCE;x++)for(let z=-RENDER_DISTANCE;z<=
 CHUNK_OFFSETS.sort((a,b)=>(a.x*a.x+a.z*a.z)-(b.x*b.x+b.z*b.z));
 
 function disposeChunkGeometry(chunk) {
+    FlowerOverview.release(chunk);
     removeChunkTreeObstacles(chunk);
     for(const tree of chunk.userData?.trees||[])restoreTree(tree);
     const owned=[chunk.children[0],chunk.children[1]];
@@ -5975,6 +5978,8 @@ const ShadowCache=createShadowCache(THREE);
 const TerrainLod=createTerrainLod(THREE,state,Art.resources,VISUAL_WATER_LEVEL,mesh=>SettlementPreparation.prepareRoot(mesh,false,false,false,true));
 window.TerrainLod=TerrainLod;
 const OverviewDetails=createOverviewDetails(THREE,state,()=>groundCoverGrassGeo);
+const FlowerOverview=createFlowerOverview(THREE,state,()=>FlowerPalette,()=>AssetCache.mats.flowerPetalBase);
+let TreeShadowCache;
 const GrassBatches=createGrassBatches(THREE,state,()=>groundCoverGrassGeo);
 const EffectWriter=createInstanceWriter(THREE);
 function terrainWorkerSnapshot(cx,cz){
@@ -11140,7 +11145,9 @@ async function init() {
             now=performance.now();BattleProfiler.add('modelLod',now-previous);previous=now;
             BuildingBatches.update();now=performance.now();BattleProfiler.add('buildingBatches',now-previous);previous=now;
             TerrainLod.update(camera,renderer);now=performance.now();BattleProfiler.add('terrainLod',now-previous);previous=now;
-            OverviewDetails.update(camera,renderer);now=performance.now();BattleProfiler.add('overviewDetails',now-previous);previous=now;
+            OverviewDetails.update(camera,renderer);
+            FlowerOverview.update(camera,renderer);
+            now=performance.now();BattleProfiler.add('overviewDetails',now-previous);previous=now;
             if(GrassBatches.enabled||GrassBatches.stats.batches)GrassBatches.update(camera);
             CharacterBatches.update(camera===state.camera);now=performance.now();BattleProfiler.add('characterBatches',now-previous);previous=now;
             SceneryBatches.update(camera===state.camera);now=performance.now();BattleProfiler.add('sceneryBatches',now-previous);previous=now;
@@ -11172,6 +11179,9 @@ async function init() {
         state.renderer.setSize(window.innerWidth, window.innerHeight);
         state.renderer.shadowMap.enabled = true;
         state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        const bindTreeShadowCache=()=>{TreeShadowCache?.dispose();TreeShadowCache=installTreeShadowCache(THREE,state,state.renderer);};
+        bindTreeShadowCache();
+        state.renderer.domElement.addEventListener('webglcontextrestored',bindTreeShadowCache);
         state.renderer.physicallyCorrectLights = true;
         state.renderer.outputEncoding = THREE.sRGBEncoding;
         document.body.appendChild(state.renderer.domElement);
@@ -11302,7 +11312,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, LodVisibility, TerrainRefresh, ShadowCache, SceneryBatches, BuildingBatches, OverviewDetails, GrassBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, LodVisibility, TerrainRefresh, ShadowCache, SceneryBatches, BuildingBatches, OverviewDetails, FlowerOverview, TreeShadowCache, GrassBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -13042,7 +13052,9 @@ function animate() {
     } else _qualityFrames++;
     if(state.graphicsQuality&&!state.isPaused&&!document.hidden&&_qualityFrames>0&&frameTime-_qualityWindowStart>2000) {
         const fps=_qualityFrames*1000/(frameTime-_qualityWindowStart);state.graphicsQuality.averageFps=fps;
-        const scale=adaptGraphicsBudget(fps,state.graphicsQuality.dynamicScale);
+        const {calls,triangles}=state.renderer.info.render;
+        const scale=adaptGraphicsBudget(fps,state.graphicsQuality.dynamicScale,
+            {quality:state.graphicsQuality,calls,triangles,overview:!state.isFPV&&state.viewScale>45});
         if(Math.abs(scale-state.graphicsQuality.dynamicScale)>.001) {
             state.graphicsQuality.dynamicScale=scale;
             state.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,state.graphicsQuality.maxPixelRatio)*scale);

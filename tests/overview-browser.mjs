@@ -27,6 +27,7 @@ try{
   const result=[];
   const {measureLandscapeDraws}=await import('./art/landscape-draws.js');
   const grassBatches=gameTestAPI.GrassBatches;
+  const {SceneryBatches:scenery,FlowerOverview:flowers,TreeShadowCache:treeShadows,ShadowCache}=gameTestAPI;
   for(const zoom of [25,65,110]){
    state.viewScale=zoom;gameTestAPI.updateCameraZoom();updateCameraPosition();
    TerrainLod.overviewEnabled=false;details.enabled=false;await settle();render();const before=renderer.info.render.triangles,a=read(),original=renderer.domElement.toDataURL();
@@ -42,6 +43,77 @@ try{
     throw Error('Incomplete landscape attribution '+JSON.stringify(draws));
    const entry={zoom,before,after,pixelError,meanError,details:{...details.stats},terrain:JSON.parse(JSON.stringify(TerrainLod.stats)),original,optimized,draws};
    if(zoom===110){
+    function compareVegetation(){
+     ShadowCache.enabled=false;
+     treeShadows.enabled=false;
+     scenery.treeOptimization=false;
+     flowers.enabled=false;
+     render();render();
+     const original=read();
+     const baseline=measureLandscapeDraws(renderer,state.scene,state.camera,render);
+     scenery.treeOptimization=true;
+     flowers.enabled=true;
+     for(let i=0;i<65;i++)render();
+     const optimized=read();
+     const grouped=measureLandscapeDraws(renderer,state.scene,state.camera,render);
+     const flowerStats={...flowers.stats};
+     if(grouped.main.trees.calls>=baseline.main.trees.calls||grouped.shadows.trees.calls>=baseline.shadows.trees.calls||
+        !flowerStats.blooms||grouped.main.flowers.triangles>=baseline.main.flowers.triangles)
+      throw Error('Vegetation draw work did not improve '+JSON.stringify({baseline,grouped,flowerStats,scenery:scenery.stats}));
+     const diff=(a,b)=>{
+      let changed=0;
+      for(let i=0;i<a.length;i+=4)if(Math.max(Math.abs(a[i]-b[i]),Math.abs(a[i+1]-b[i+1]),Math.abs(a[i+2]-b[i+2]))>12)changed++;
+      return changed/(a.length/4);
+     };
+     const vegetationError=diff(original,optimized);
+     if(vegetationError>.015)throw Error('Vegetation lost image detail '+vegetationError);
+     const timings={original:[],grouped:[]};
+     for(const enabled of [false,true,true,false]){
+      scenery.treeOptimization=flowers.enabled=enabled;
+      for(let i=0;i<3;i++)render();
+      gl.finish();
+      for(let i=0;i<6;i++){
+       const start=performance.now();render();gl.finish();
+       timings[enabled?'grouped':'original'].push(performance.now()-start);
+      }
+     }
+     const summary=values=>{values.sort((a,b)=>a-b);return {median:values[6],p95:values.at(-1)};};
+     const renderMs={original:summary(timings.original),grouped:summary(timings.grouped)};
+     scenery.treeOptimization=flowers.enabled=true;
+     for(let i=0;i<3;i++)render();
+     treeShadows.enabled=true;
+     treeShadows.minCpuMs=0;
+     for(let i=0;i<6;i++)render();
+     const shadowStats={...treeShadows.stats};
+     if(shadowStats.supported&&(!shadowStats.hits||shadowStats.errors))throw Error('Static tree shadows were not reused '+JSON.stringify(shadowStats));
+     const cached=read(),cacheError=diff(optimized,cached);
+     if(cacheError>.001)throw Error('Cached tree shadow image differs '+cacheError);
+     const shaman=state.shaman;
+     shaman.mesh.position.x+=.8;render();
+     const dynamic=read();
+     treeShadows.enabled=false;render();
+     if(diff(dynamic,read())>.001)throw Error('Moving shadow casters differ after composing cached tree shadows');
+     shaman.mesh.position.x-=.8;
+     treeShadows.enabled=true;
+     const tree=Object.values(state.chunks).flatMap(chunk=>chunk.userData.trees).find(candidate=>
+      candidate.mesh.children.some(part=>part.isMesh&&part.layers.mask===(1<<30)));
+     if(!tree)throw Error('No grouped tree available for burn/regrowth');
+     const {x,z}=tree.mesh.position,builds=treeShadows.stats.builds;
+     gameTestAPI.burnTreesAt(x,z,.1);
+     gameTestAPI.updateTreeRegrowth(8);
+     render();const burned=read();
+     treeShadows.enabled=false;scenery.treeOptimization=false;render();
+     if(!tree.burned||tree.mesh.children[1].visible||diff(burned,read())>.001)
+      throw Error('Burned tree or its shadow survived in a batch');
+     gameTestAPI.updateTreeRegrowth(gameTestAPI.CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
+     treeShadows.enabled=scenery.treeOptimization=true;
+     for(let i=0;i<7;i++)render();
+     if(tree.burned||!tree.mesh.children[1].visible||(shadowStats.supported&&treeShadows.stats.builds<=builds))
+      throw Error('Regrowth did not invalidate the static shadow cache');
+     ShadowCache.enabled=true;
+     return {baseline,grouped,vegetationError,flowerStats,shadowStats,cacheError,renderMs};
+    }
+    entry.vegetation=compareVegetation();
     const stats=()=>({...grassBatches.stats,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles});
     render();const originalGrass=read(),base=stats();
     grassBatches.enabled=true;render();render();const batchedGrass=read(),batched=stats();
@@ -67,6 +139,8 @@ try{
   details.enabled=false;render();
   state.isFPV=true;details.enabled=true;details.update(state.camera,renderer);
   if(details.stats.savedTriangles)throw Error('First-person grass lost geometry');
+  flowers.update(state.camera,renderer);
+  if(flowers.stats.blooms)throw Error('First-person flower geometry was simplified');
   return result;
  });
  if(errors.length)throw Error(errors.join('\n'));

@@ -6,14 +6,16 @@ export function createSceneryBatches(T,state,index=null){
  const boxes=createBoxInstances(T);
  const matrix=new T.Matrix4(),sphere=new T.Sphere(),point=new T.Vector3();
  const projection=new T.Matrix4(),frustum=new T.Frustum();
+ const sunFrustum=new T.Frustum(),affineMaterials=new WeakMap(),ownedMaterials=new Set();
+ let sunShadows=false,expandedTrees=false;
  let scene,frame=0,cooldown=0,lastBuildings=-1,lastTerrainBuild,lastMinSavings=-1,lodPrepared=false;
- const stats={parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,ms:0,fallback:false,cacheHits:0,sourceChecks:0,cacheSkippedRoots:0,reused:false,buildingInstances:0,buildingBatches:0,reason:'startup',cooldownFrames:0,potentialSavings:0,visitedRoots:0,unsupportedParts:0};
- const api={enabled:true,warming:false,cacheEnabled:true,minSavings:64,stats,update,restore,dispose,matrixError,eligible,
+ const stats={parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,ms:0,fallback:false,cacheHits:0,sourceChecks:0,cacheSkippedRoots:0,reused:false,buildingInstances:0,buildingBatches:0,treeBatches:0,treeInstances:0,reason:'startup',cooldownFrames:0,potentialSavings:0,visitedRoots:0,unsupportedParts:0};
+ const api={enabled:true,warming:false,cacheEnabled:true,treeOptimization:true,minSavings:64,stats,update,restore,dispose,matrixError,eligible,
   sourceLayers:part=>masked.get(part)??part.layers.mask,releaseParts};
  state.sceneryBatchStats=stats;
  const cachedCamera=new T.Matrix4(),cachedProjection=new T.Matrix4(),cachedScene=new T.Matrix4();
  const lastView=new T.Matrix4(),lastProjection=new T.Matrix4();
- let cached=false,cachedWarming=false,cachedMinSavings,cacheCooldown=0;const observedRoots=[],visitedRoots=[];
+ let cached=false,cachedWarming=false,cachedMinSavings,cachedTreeOptimization,cacheCooldown=0;const observedRoots=[],visitedRoots=[];
  function restore(){cached=false;for(const [part,mask]of masked)if(part.layers.mask===(1<<hiddenLayer))part.layers.mask=mask;masked.clear();}
  function releaseParts(parts){for(const part of parts)if(masked.has(part)){
   if(part.layers.mask===(1<<hiddenLayer))part.layers.mask=masked.get(part);masked.delete(part);cached=false;
@@ -22,12 +24,31 @@ export function createSceneryBatches(T,state,index=null){
   // The wrapper owns its bounds/VAOs, not the source vertex/index buffers.
   b.geometry.attributes={};b.geometry.index=null;b.geometry.dispose();
  }}
- function dispose(){restore();observedRoots.length=visitedRoots.length=0;for(const b of buckets.values()){b.mesh?.parent?.remove(b.mesh);b.mesh?.dispose();releaseGeometry(b);}buckets.clear();}
+ function dispose(){restore();observedRoots.length=visitedRoots.length=0;for(const b of buckets.values()){b.mesh?.parent?.remove(b.mesh);b.mesh?.dispose();releaseGeometry(b);}buckets.clear();for(const m of ownedMaterials)m.dispose();ownedMaterials.clear();}
+ function isTreePart(part){for(let node=part;node;node=node.parent)if(node.userData.landscapeKind==='trees')return true;return false;}
  function eligible(p){const m=p.material;return p.isMesh&&!p.isInstancedMesh&&!p.isSkinnedMesh&&
   !p.customDepthMaterial&&!p.customDistanceMaterial&&
   m?.type==='MeshStandardMaterial'&&!m.transparent&&m.opacity===1&&!m.clippingPlanes?.length&&
-  !p.geometry.morphAttributes.position&&m.onBeforeCompile===T.Material.prototype.onBeforeCompile&&
+  !p.geometry.morphAttributes.position&&(m.onBeforeCompile===T.Material.prototype.onBeforeCompile||
+    expandedTrees&&isTreePart(p)&&m.customProgramCacheKey()==='island-tree-wind-v1')&&
   p.onBeforeRender===T.Object3D.prototype.onBeforeRender;}
+ function affineMaterial(source){
+  let material=affineMaterials.get(source);
+  if(material&&ownedMaterials.has(material)&&material.userData.sourceVersion===source.version)return material;
+  if(material){material.dispose();ownedMaterials.delete(material);}
+  material=source.clone();material.userData.sourceVersion=source.version;
+  material.onBeforeCompile=(shader,renderer)=>{
+   source.onBeforeCompile(shader,renderer);
+   const normal=T.ShaderChunk.defaultnormal_vertex.replace(/#ifdef USE_INSTANCING[\s\S]*?#endif/,`#ifdef USE_INSTANCING
+      mat3 basis=mat3(instanceMatrix);
+      vec3 a=cross(basis[1],basis[2]);
+      transformedNormal=mat3(a,cross(basis[2],basis[0]),cross(basis[0],basis[1]))*objectNormal/dot(basis[0],a);
+     #endif`);
+   shader.vertexShader=shader.vertexShader.replace('#include <defaultnormal_vertex>',normal);
+  };
+  material.customProgramCacheKey=()=>source.customProgramCacheKey()+'/tree-affine-v1';
+  ownedMaterials.add(material);affineMaterials.set(source,material);return material;
+ }
  function visitRoots(visit){
   for(const b of state.buildings)if(!b.dead){
    if(b.visualMesh?.parent&&!b.visualMesh.userData.buildingBatchOwned)visit(b.visualMesh);
@@ -35,13 +56,13 @@ export function createSceneryBatches(T,state,index=null){
    if(b.damageVisual?.visible&&b.damageVisual.parent)visit(b.damageVisual);
   }
   for(const key in state.chunks){const chunk=state.chunks[key];
-   for(const t of chunk.userData?.trees||[])if(t.mesh?.parent)visit(t.mesh);
+   for(const t of chunk.userData?.trees||[])if(t.mesh?.parent&&!t.burned)visit(t.mesh);
    if(chunk.userData?.ritualSite?.mesh?.parent)visit(chunk.userData.ritualSite.mesh);
   }
  }
  function ancestorsVisible(root){for(let p=root.parent;p;p=p.parent)if(!p.visible)return false;return true;}
  function unchanged(){
-  if(!cached||!api.cacheEnabled||!api.enabled||scene!==state.scene||cachedWarming!==api.warming||cachedMinSavings!==api.minSavings||
+  if(!cached||!api.cacheEnabled||!api.enabled||scene!==state.scene||cachedWarming!==api.warming||cachedMinSavings!==api.minSavings||cachedTreeOptimization!==expandedTrees||
    !cachedCamera.equals(state.camera.matrixWorld)||!cachedProjection.equals(state.camera.projectionMatrix)||!cachedScene.equals(scene.matrixWorld))return false;
   let i=0,same=true;
   visitRoots(root=>{if(observedRoots[i++]?.root!==root)same=false;});
@@ -56,7 +77,7 @@ export function createSceneryBatches(T,state,index=null){
     const n=r.node;stats.sourceChecks++;
     if(n.visible!==r.visible)return false;
     if(!n.isMesh)continue;
-    if(n.geometry!==r.geometry||n.material!==r.material||eligible(n)!==r.eligible)return false;
+   if(n.geometry!==r.geometry||n.material!==r.material||n.material?.version!==r.materialVersion||eligible(n)!==r.eligible)return false;
     if(!r.eligible)continue;
     const g=n.geometry;
     if(!r.matrix.equals(n.matrixWorld)||n.layers.mask!==r.layers||n.castShadow!==r.cast||n.receiveShadow!==r.receive||
@@ -75,7 +96,7 @@ export function createSceneryBatches(T,state,index=null){
     const node=r.node;r.visible=node.visible;
     if(masked.has(node))entry.batched=true;
     if(node.isMesh){
-     r.geometry=node.geometry;r.material=node.material;r.eligible=eligible(node);
+     r.geometry=node.geometry;r.material=node.material;r.materialVersion=node.material?.version;r.eligible=eligible(node);
      if(r.eligible){const g=node.geometry;if(!r.matrix)r.matrix=new T.Matrix4();r.matrix.copy(node.matrixWorld);r.layers=node.layers.mask;
       r.cast=node.castShadow;r.receive=node.receiveShadow;r.order=node.renderOrder;r.culled=node.frustumCulled;
       r.index=g.index;r.indexVersion=g.index?.version;r.positionVersion=g.attributes.position.version;r.start=g.drawRange.start;r.count=g.drawRange.count;}
@@ -84,13 +105,14 @@ export function createSceneryBatches(T,state,index=null){
    observedRoots.push(entry);
   }
   cachedCamera.copy(state.camera.matrixWorld);cachedProjection.copy(state.camera.projectionMatrix);cachedScene.copy(scene.matrixWorld);
-  cachedWarming=api.warming;cachedMinSavings=api.minSavings;cached=true;
+  cachedWarming=api.warming;cachedMinSavings=api.minSavings;cachedTreeOptimization=expandedTrees;cached=true;
  }
  function orthogonal(m){const a=m.elements,x=a[0]*a[0]+a[1]*a[1]+a[2]*a[2],y=a[4]*a[4]+a[5]*a[5]+a[6]*a[6],z=a[8]*a[8]+a[9]*a[9]+a[10]*a[10];
   return m.determinant()>0&&Math.abs(a[0]*a[4]+a[1]*a[5]+a[2]*a[6])<1e-6*Math.sqrt(x*y)&&
    Math.abs(a[0]*a[8]+a[1]*a[9]+a[2]*a[10])<1e-6*Math.sqrt(x*z)&&Math.abs(a[4]*a[8]+a[5]*a[9]+a[6]*a[10])<1e-6*Math.sqrt(y*z);}
  function collect(root){
   const landscapeKind=root.userData.landscapeKind;
+  const tree=expandedTrees&&landscapeKind==='trees';
   if(!root?.parent)return;
   let list=roots.get(root);
   const topology=index?.list(root);
@@ -118,36 +140,42 @@ export function createSceneryBatches(T,state,index=null){
    }
    list.box.getBoundingSphere(list.bounds);list.rootMatrix.copy(root.matrixWorld);list.bounded=true;
   }
-  if(!api.warming&&!frustum.intersectsSphere(list.bounds)){stats.skippedRoots++;return;}
+  if(!api.warming&&!frustum.intersectsSphere(list.bounds)&&!(tree&&sunShadows&&sunFrustum.intersectsSphere(list.bounds))){stats.skippedRoots++;return;}
   for(const lod of list.lods)if(!lodPrepared||lod.autoUpdate)lod.update(state.camera);
   for(const r of list){
    const p=r.node;let visible=true;
    for(let n=p;n;n=n.parent){if(!n.visible){visible=false;break;}if(n===scene)break;}
    if(!visible||(p.layers.mask&1)===0)continue;
    if(!eligible(p)){stats.unsupportedParts++;continue;}
-   const changed=!r.seen||!r.matrix.equals(p.matrixWorld);
-   if(changed){r.matrix.copy(p.matrixWorld);r.valid=orthogonal(r.matrix);r.seen=true;}
+   const changed=!r.seen||r.tree!==tree||!r.matrix.equals(p.matrixWorld);
+   if(changed){
+    r.matrix.copy(p.matrixWorld);const rigidAxes=orthogonal(r.matrix);
+    r.tree=tree;r.affine=tree&&!rigidAxes;r.valid=rigidAxes||r.affine&&r.matrix.determinant()>1e-8;r.seen=true;
+   }
    if(!r.valid)continue;
    // Batch only parts the original camera pass would draw. Off-screen sources
    // remain untouched and continue casting their original visible shadows.
-   if(!api.warming&&p.frustumCulled&&!frustum.intersectsObject(p))continue;
+   const shadowOnly=!api.warming&&p.frustumCulled&&!frustum.intersectsObject(p);
+   if(shadowOnly&&!(tree&&sunShadows&&p.castShadow&&sunFrustum.intersectsObject(p)))continue;
+   const renderMaterial=r.affine?affineMaterial(p.material):p.material;
    const box=boxes.get(p.geometry),geometry=box?.geometry||p.geometry;
    const e=p.matrixWorld.elements,cx=Math.floor(e[12]/40),cz=Math.floor(e[14]/40);
-   if(!r.key||r.cx!==cx||r.cz!==cz||r.geometry!==geometry||r.material!==p.material||r.cast!==p.castShadow||
+   if(!r.key||r.cx!==cx||r.cz!==cz||r.geometry!==geometry||r.material!==renderMaterial||r.shadowOnly!==shadowOnly||r.cast!==p.castShadow||
     r.receive!==p.receiveShadow||r.order!==p.renderOrder||r.layers!==p.layers.mask){
-    r.cx=cx;r.cz=cz;r.geometry=geometry;r.box=box;r.material=p.material;r.cast=p.castShadow;
+    r.cx=cx;r.cz=cz;r.geometry=geometry;r.box=box;r.material=renderMaterial;r.shadowOnly=shadowOnly;r.cast=p.castShadow;
     r.receive=p.receiveShadow;r.order=p.renderOrder;r.layers=p.layers.mask;
-    r.key=[cx,cz,geometry.uuid,p.material.uuid,p.castShadow,p.receiveShadow,p.renderOrder,p.layers.mask,landscapeKind].join('|');
+    r.key=[cx,cz,geometry.uuid,renderMaterial.uuid,p.castShadow,p.receiveShadow,p.renderOrder,p.layers.mask,landscapeKind,shadowOnly].join('|');
    }
    const key=r.key;
    let b=buckets.get(key);
-   if(!b){b={source:geometry,material:p.material,cx,cz,cast:p.castShadow,receive:p.receiveShadow,
+   if(!b){b={source:geometry,material:renderMaterial,cx,cz,cast:p.castShadow,receive:p.receiveShadow,
     order:p.renderOrder,layers:p.layers.mask,landscapeKind,items:[],previous:[],capacity:0,mesh:null};buckets.set(key,b);}
    b.items.push(r);b.dirty ||= changed;b.used=frame;stats.parts++;
   }
  }
  function update(prepared=false){
   lodPrepared=prepared;stats.enabled=api.enabled;stats.minSavings=api.minSavings;
+  expandedTrees=api.treeOptimization&&(api.warming||!state.isFPV&&state.viewScale>=50);
   const start=performance.now();stats.sourceChecks=stats.cacheSkippedRoots=0;stats.reused=false;
   const viewSteady=state.camera&&lastView.equals(state.camera.matrixWorld)&&lastProjection.equals(state.camera.projectionMatrix),wasCached=cached;
   if(state.camera){lastView.copy(state.camera.matrixWorld);lastProjection.copy(state.camera.projectionMatrix);}
@@ -155,7 +183,7 @@ export function createSceneryBatches(T,state,index=null){
   if(wasCached&&viewSteady)cacheCooldown=8;
   restore();frame++;
   if(scene!==state.scene){dispose();scene=state.scene;}
-  Object.assign(stats,{parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,buildingInstances:0,buildingBatches:0});
+  Object.assign(stats,{parts:0,instances:0,batches:0,uploads:0,skippedRoots:0,buildingInstances:0,buildingBatches:0,treeBatches:0,treeInstances:0});
   for(const [key,b]of buckets){
    b.items.length=0;b.dirty=false;if(b.mesh)b.mesh.visible=false;
    if(frame-b.used>180){b.mesh?.parent?.remove(b.mesh);b.mesh?.dispose();releaseGeometry(b);buckets.delete(key);}
@@ -168,6 +196,11 @@ export function createSceneryBatches(T,state,index=null){
   if(!state.renderer?.capabilities.isWebGL2&&!state.renderer?.extensions.get('ANGLE_instanced_arrays')){api.enabled=false;stats.fallback=true;stats.reason='unsupported';stats.ms=performance.now()-start;return;}
   try{
    projection.multiplyMatrices(state.camera.projectionMatrix,state.camera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);
+   sunShadows=!!(state.renderer.shadowMap?.enabled&&state.sunLight?.castShadow);
+   if(sunShadows){
+    const shadow=state.sunLight.shadow;shadow.updateMatrices(state.sunLight);
+    sunFrustum.copy(shadow.getFrustum());
+   }
    stats.unsupportedParts=0;visitedRoots.length=0;visitRoots(root=>{visitedRoots.push(root);collect(root);});stats.visitedRoots=visitedRoots.length;
    let savings=0,buildingSavings=0;for(const b of buckets.values())if(b.items.length>=2){
     savings+=b.items.length-1;if(b.items[0].node.userData.mergedBuildingStatic)buildingSavings+=b.items.length-1;
@@ -211,8 +244,10 @@ export function createSceneryBatches(T,state,index=null){
      for(let i=0;i<b.items.length;i++)b.previous[i]=b.items[i];stats.uploads++;
     }
     b.mesh.count=b.items.length;b.mesh.visible=true;
+    b.mesh.userData.staticTreeShadow=expandedTrees&&b.landscapeKind==='trees'&&b.cast;
     for(const r of b.items){masked.set(r.node,r.node.layers.mask);r.node.layers.set(hiddenLayer);}
     stats.instances+=b.items.length;stats.batches++;
+    if(b.landscapeKind==='trees'){stats.treeBatches++;stats.treeInstances+=b.items.length;}
     if(b.items[0].node.userData.mergedBuildingStatic){stats.buildingInstances+=b.items.length;stats.buildingBatches++;}
    }
    state.raycaster?.layers.enable(hiddenLayer);

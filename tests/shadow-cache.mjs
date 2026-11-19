@@ -30,7 +30,25 @@ try{
    if(difference||cached>baseline||box.parent&&box.visible&&cached===baseline)throw Error(JSON.stringify({difference,baseline,cached}));
    checks.push({baseline,cached,difference});
   }
-  renderer.dispose();return {checks,stats:cache.stats};
+  cache.enabled=false;
+  const {installTreeShadowCache}=await import('./art/tree-shadow-cache.js');
+  const split=installTreeShadowCache(T,{scene},renderer);split.minCpuMs=0;
+  for(let i=0;i<16;i++){
+   const tree=new T.InstancedMesh(box.geometry,box.material,1);
+   tree.setMatrixAt(0,new T.Matrix4().makeScale(.42,1,.42));
+   tree.position.set((i%4)*1.6-2.4,1,Math.floor(i/4)*1.6-2.4);
+   tree.castShadow=true;tree.userData.staticTreeShadow=true;scene.add(tree);
+  }
+  scene.add(box);box.position.x=.3;
+  split.enabled=false;render();const baseline=pixels();split.enabled=true;
+  for(let i=0;i<7;i++)render();
+  const compare=(a,b)=>a.reduce((total,value,i)=>total+Number(Math.abs(value-b[i])>1),0);
+  if(split.stats.supported&&(!split.stats.hits||split.stats.errors))throw Error(JSON.stringify(split.stats));
+  if(compare(baseline,pixels()))throw Error('Static shadow composition changed pixels');
+  box.position.x=2;render();const moving=pixels();
+  split.enabled=false;render();
+  if(compare(moving,pixels()))throw Error('Dynamic shadow composition changed pixels');
+  split.dispose();renderer.dispose();return {checks,stats:cache.stats,treeCache:split.stats};
  });
  if(errors.length)throw Error(JSON.stringify(errors));console.log('PASS shadow cache preserves pixels through movement, visibility, light changes and destruction '+JSON.stringify(result));
 }finally{await browser.close();}

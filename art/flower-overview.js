@@ -1,0 +1,92 @@
+import {projectedPixels} from './lod-policy.js';
+
+// At subpixel detail replace each daisy/tulip head with one small solid bloom.
+// Keep the original stems, palette, instance base positions and wind shader.
+export function createFlowerOverview(T,state,palette,material){
+    const records=new WeakMap(),matrix=new T.Matrix4(),offset=new T.Matrix4();
+    const sphere=new T.Sphere(),clip=new T.Matrix4(),frustum=new T.Frustum();
+    const stats={chunks:0,blooms:0,savedTriangles:0};
+    state.flowerOverviewStats=stats;
+    const api={enabled:true,stats,update,release};
+    const layer=29;
+
+    function showOriginal(record){
+        for(const [mesh,mask] of record.masked)if(mesh.layers.mask===(1<<layer))mesh.layers.mask=mask;
+        record.masked.clear();
+        if(record.mesh)record.mesh.visible=false;
+    }
+    function release(chunk){
+        const record=records.get(chunk);
+        if(!record)return;
+        showOriginal(record);
+        if(record.mesh){chunk.remove(record.mesh);record.mesh.geometry.dispose();record.mesh.dispose();}
+        records.delete(chunk);
+    }
+    function update(camera,renderer){
+        stats.chunks=stats.blooms=stats.savedTriangles=0;
+        let builds=0;
+        clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
+        frustum.setFromProjectionMatrix(clip);
+        const limit=state.graphicsQuality?.vegetationPixelLimit??2;
+        for(const chunk of Object.values(state.chunks)){
+            const flowers=chunk.userData.flowers,stem=flowers?.stems,sourceBounds=stem?.geometry.boundingSphere;
+            if(!sourceBounds)continue;
+            let record=records.get(chunk);
+            if(record&&record.stem!==stem){release(chunk);record=null;}
+            if(!api.enabled||state.isFPV||!chunk.visible||!stem.visible){
+                if(record)showOriginal(record);
+                continue;
+            }
+            sphere.copy(sourceBounds).applyMatrix4(stem.matrixWorld);
+            const pixels=projectedPixels(camera,renderer.domElement.height,sphere.center,sphere.radius);
+            if(!frustum.intersectsSphere(sphere)||pixels*.65>limit*(record?.mesh?.visible?1.12:1)){
+                if(record)showOriginal(record);
+                continue;
+            }
+            const bases=stem.geometry.attributes.aBasePos;
+            if(!bases||!flowers.data.length)continue;
+            if(!record){
+                if(builds>=2)continue;
+                builds++;
+                const geometry=new T.OctahedronGeometry(.11);
+                geometry.setAttribute('aBasePos',new T.InstancedBufferAttribute(new Float32Array(bases.array.length),3));
+                const mesh=new T.InstancedMesh(geometry,material(),flowers.data.length);
+                mesh.name='Overview flower blooms';
+                mesh.userData.landscapeKind='flowers';
+                mesh.raycast=()=>{};
+                record={stem,mesh,masked:new Map(),matrixVersion:-1,baseVersion:-1};
+                records.set(chunk,record);
+                chunk.add(mesh);mesh.updateMatrixWorld(true);
+            }
+            const mesh=record.mesh;
+            if(record.matrixVersion!==stem.instanceMatrix.version||record.baseVersion!==bases.version){
+                mesh.geometry.attributes.aBasePos.array.set(bases.array);
+                mesh.geometry.attributes.aBasePos.needsUpdate=true;
+                for(let i=0;i<flowers.data.length;i++){
+                    const data=flowers.data[i];
+                    stem.getMatrixAt(i,matrix);
+                    offset.makeScale(data.scaleFactor*(data.isTulip?.72:1.1),data.isTulip?.28:.15,data.scaleFactor*(data.isTulip?.72:1.1));
+                    offset.setPosition(0,data.isTulip?.11:.2,0);
+                    mesh.setMatrixAt(i,matrix.multiply(offset));
+                    mesh.setColorAt(i,palette()[data.cIndex]);
+                }
+                mesh.geometry.boundingSphere=sourceBounds.clone();
+                mesh.instanceMatrix.needsUpdate=true;mesh.instanceColor.needsUpdate=true;
+                record.matrixVersion=stem.instanceMatrix.version;record.baseVersion=bases.version;
+            }
+            mesh.count=stem.count;
+            mesh.layers.mask=stem.layers.mask;
+            mesh.visible=true;
+            let originalTriangles=0;
+            for(const source of [flowers.centers,flowers.petals,flowers.tulips]){
+                if(!source?.visible||!source.count)continue;
+                if(!record.masked.has(source))record.masked.set(source,source.layers.mask);
+                source.layers.set(layer);
+                originalTriangles+=source.count*(source.geometry.index?.count??source.geometry.attributes.position.count)/3;
+            }
+            stats.chunks++;stats.blooms+=mesh.count;
+            stats.savedTriangles+=originalTriangles-mesh.count*8;
+        }
+    }
+    return api;
+}

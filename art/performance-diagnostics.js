@@ -49,6 +49,8 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
                 terrainLod:state.terrainLodStats?JSON.parse(JSON.stringify(state.terrainLodStats)):null,
                 terrainLodRecording:terrainRecording,
                 overviewDetails:state.overviewDetailStats?{...state.overviewDetailStats}:null,
+                flowerOverview:state.flowerOverviewStats?{...state.flowerOverviewStats}:null,
+                treeShadowCache:state.treeShadowCacheStats?{...state.treeShadowCacheStats}:null,
                 sceneryBatching:state.sceneryBatchStats?{...state.sceneryBatchStats}:null,
                 buildingBatching:state.buildingBatchStats?{...state.buildingBatchStats}:null,
                 characterBatching:state.characterBatchStats?{...state.characterBatchStats}:null,

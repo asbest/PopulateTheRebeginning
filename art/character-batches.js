@@ -134,9 +134,10 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         const material=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{},
             vertexShader:'varying vec2 vUv;varying float fade;void main(){vUv=uv;fade=instanceColor.r;gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.);}',
             fragmentShader:'varying vec2 vUv;varying float fade;void main(){float a=(1.-smoothstep(.12,.5,length(vUv-.5)))*fade;gl_FragColor=vec4(.03,.035,.025,a);}'});
-        blob=new T.InstancedMesh(geometry,material,2048);blob.frustumCulled=false;blob.count=0;
+        blob=new T.InstancedMesh(geometry,material,2048);blob.frustumCulled=false;
         blob.name='Distant unit contact shadows';blob.instanceMatrix.setUsage(T.DynamicDrawUsage);
-        blob.setColorAt(0,color.setRGB(.2,.2,.2));scene.add(blob);
+        // Three allocates the first instance color array from the current count.
+        blob.setColorAt(0,color.setRGB(.2,.2,.2));blob.count=0;scene.add(blob);
     }
     function update(prepared=false){
         lodPrepared=prepared;

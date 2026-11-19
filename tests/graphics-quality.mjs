@@ -98,8 +98,19 @@ try{
    throw Error('Adaptive budgets did not bound slow frames');
   for(let i=0;i<40;i++)scale=adaptGraphicsBudget(60,scale);
   if(scale!==1||graphicsSettings.detailScale!==1)throw Error('Adaptive budgets did not recover');
+  const quality={},load={quality,calls:800,triangles:1500000,overview:true};
+  if(adaptGraphicsBudget(21,1,load)!==1||quality.vegetationPixelLimit<=2)throw Error('Dense overview did not prioritize vegetation');
+  if(adaptGraphicsBudget(21,1,load)!==1||adaptGraphicsBudget(21,1,load)!==.9)throw Error('Resolution probe did not follow the vegetation budget');
+  if(adaptGraphicsBudget(21,.9,load)!==1||quality.adaptationReason!=='resolution-probe-no-gain')
+   throw Error('Unhelpful resolution probe did not restore quality');
+  const lightLoad={quality:{},calls:160,triangles:90000,overview:false};
+  if(adaptGraphicsBudget(23,1,lightLoad)!==.9||adaptGraphicsBudget(28,.9,lightLoad)!==.9||
+     lightLoad.quality.adaptationReason!=='resolution-probe-improved')throw Error('Useful resolution probe did not keep its gain');
   setGraphicsQuality('high');
   if(batch.stats.fallback||gameTestAPI.SceneryBatches.stats.fallback)throw Error('Instancing fallback');
+  const contactShadows=state.scene.getObjectByName('Distant unit contact shadows');
+  if(!contactShadows||contactShadows.instanceColor.count!==contactShadows.instanceMatrix.count)
+   throw Error('Contact-shadow color buffer does not cover the instance capacity');
   return {units:units.length,buildings:houses.length,snapshots,battle};
  });
  const low=await browser.newPage({viewport:{width:960,height:600}});

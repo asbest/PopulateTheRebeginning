@@ -40,8 +40,46 @@ export function qualityMaterial(material){
     if(changed)material.needsUpdate=true;
     return material;
 }
-export function adaptGraphicsBudget(fps,scale){
+export function adaptGraphicsBudget(fps,scale,workload=null){
     const profile=graphicsSettings.profile;
+    if(workload){
+        const {quality,calls,triangles,overview}=workload;
+        const geometryHeavy=calls>=500||triangles>=1000000;
+        const limit=graphicsSettings.tier==='ultra'?1.5:2;
+        if(quality.resolutionProbe){
+            const probe=quality.resolutionProbe;
+            quality.resolutionProbe=null;
+            const comparable=Math.abs(calls-probe.calls)<=Math.max(25,probe.calls*.15)&&
+                Math.abs(triangles-probe.triangles)<=Math.max(12000,probe.triangles*.15);
+            if(!comparable||fps<probe.fps*1.07){
+                quality.resolutionCooldown=4;
+                quality.adaptationReason=comparable?'resolution-probe-no-gain':'resolution-probe-scene-changed';
+                return probe.scale;
+            }
+            quality.adaptationReason='resolution-probe-improved';
+            return scale;
+        }
+        quality.resolutionCooldown=Math.max(0,(quality.resolutionCooldown||0)-1);
+        quality.vegetationPixelLimit=quality.vegetationPixelLimit??limit;
+        if(fps<32&&geometryHeavy&&overview&&quality.vegetationPixelLimit<limit+.8){
+            quality.vegetationPixelLimit=Math.min(limit+.8,quality.vegetationPixelLimit+.4);
+            quality.adaptationReason='overview-geometry';
+            return scale;
+        }
+        if(fps<32){
+            const trial=Math.max(profile.minScale,scale-.1);
+            if(trial<scale&&!quality.resolutionCooldown){
+                quality.resolutionProbe={fps,calls,triangles,scale};
+                quality.adaptationReason='testing-resolution';
+                return trial;
+            }
+            quality.adaptationReason='keeping-resolution';
+            return scale;
+        }
+        if(fps>45)quality.vegetationPixelLimit=Math.max(limit,quality.vegetationPixelLimit-.2);
+        quality.adaptationReason=fps>45?'restoring-detail':'stable';
+        return fps>45?Math.min(1,scale+.025):scale;
+    }
     if(fps<32){
         scale=Math.max(profile.minScale,scale-.1);
         graphicsSettings.detailScale=Math.max(.3,graphicsSettings.detailScale-.15);
