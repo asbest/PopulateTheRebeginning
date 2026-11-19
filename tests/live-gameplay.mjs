@@ -91,6 +91,9 @@ try {
 
   await page.locator('#btn-firestorm').click();
   const stormPoint=await page.evaluate(()=>{
+    // Keep real pointer input but control simulation time from here. A slow
+    // render or an unrelated combat update cannot consume the cast in CI.
+    stopTestPresentation();
     const shaman=state.shaman,p=shaman.mesh.position;
     state.mana=100;
     // Leave a walk order active when the player targets the spell.
@@ -107,10 +110,18 @@ try {
     action:state.currentAction,walking:!!state.shaman.finalDest,mana:state.mana,
     queued:gameTestAPI.SpellWindup.pending.some(cast=>cast.type==='firestorm'&&cast.caster===state.shaman)
   }));
-  if(accepted.action!=='firestorm'||accepted.walking||!accepted.queued||accepted.mana>22)
+  if(accepted.action!=='firestorm'||accepted.walking||!accepted.queued||accepted.mana!==20)
     throw Error('Firestorm did not take over the walk order: '+JSON.stringify(accepted));
-  await page.waitForFunction(()=>state.activeEffects.some(effect=>effect.constructor.name==='Firestorm')&&
-    state.projectiles.some(shot=>shot.stormShot),null,{timeout:30000});
+  await page.evaluate(()=>{
+    const {SpellWindup}=gameTestAPI;
+    SpellWindup.update(.4);
+    if(!SpellWindup.busy(state.shaman))throw Error('Firestorm ended before completing its windup');
+    SpellWindup.update(.41);
+    const storm=state.activeEffects.find(effect=>effect.constructor.name==='Firestorm');
+    if(!storm||SpellWindup.busy(state.shaman))throw Error('Firestorm did not finish its windup');
+    storm.update(1.01);
+    if(!state.projectiles.some(shot=>shot.stormShot))throw Error('Firestorm did not release a meteor');
+  });
   console.log('PASS Firestorm action and terrain click replace walking, spend mana and release fire rain');
   if(errors.length) throw new Error('Browser runtime errors: '+errors.join('\n'));
   console.log('PASS no browser runtime errors');
