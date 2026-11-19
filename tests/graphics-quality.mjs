@@ -13,7 +13,7 @@ try{
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
  await startManualSimulation(page,98217);
  const result=await page.evaluate(async()=>{
-  const {CharacterBatches:batch}=gameTestAPI,renderer=state.renderer,gl=renderer.getContext();
+  const {CharacterBatches:batch,BakedStatics:baked}=gameTestAPI,renderer=state.renderer,gl=renderer.getContext();
   const origin=state.shaman.mesh.position.clone();
   state.selectedUnits=[];state.viewScale=24;
   gameTestAPI.updateCameraZoom();state.cameraLookAt.copy(origin);updateCameraPosition();
@@ -37,6 +37,14 @@ try{
   houses[0].visualMesh.traverse(node=>{if(!material&&node.material?.normalMap)material=node.material;});
   if(!material)throw Error('No detailed building material');
   const lod=houses[0].visualMesh.getObjectByProperty('type','LOD');
+  const chunks=Object.values(state.chunks);
+  const trees=chunks.flatMap(chunk=>(chunk.userData.trees||[]).map(tree=>tree.mesh));
+  const palms=chunks.flatMap(chunk=>chunk.userData.palms?.mesh||[]);
+  function casterCount(roots){
+   let count=0;
+   for(const root of roots)root.traverse(part=>{if(part.isMesh&&part.castShadow)count++;});
+   return count;
+  }
   for(const tier of ['high','medium','low','ultra','high']){
    setGraphicsQuality(tier);
    renderer.render(state.scene,state.camera);gl.finish();
@@ -47,10 +55,15 @@ try{
     if(frame>=3)times.push(performance.now()-start);
    }
    times.sort((a,b)=>a-b);
+   const staticShadows={...baked.stats,trees:casterCount(trees),palms:casterCount(palms),buildings:casterCount(houses.map(h=>h.mesh))};
+   const dynamic=tier==='ultra';
+   if(dynamic?(staticShadows.tiles||!staticShadows.trees||!staticShadows.palms||!staticShadows.buildings):
+      (!staticShadows.tiles||staticShadows.trees||staticShadows.palms||staticShadows.buildings||staticShadows.rebuilt))
+    throw Error('Static shadow tier mismatch '+JSON.stringify({tier,staticShadows}));
    snapshots.push({tier,p95:times[Math.ceil(times.length*.95)-1],calls:renderer.info.render.calls,
     triangles:renderer.info.render.triangles,pixels:renderer.domElement.width*renderer.domElement.height,
     shadows:renderer.shadowMap.enabled,shadowSize:state.sunLight.shadow.mapSize.width,maxPixelRatio:state.graphicsQuality.maxPixelRatio,
-    normal:!!material.normalMap,lodThreshold:lod.userData.lodPixelThreshold});
+    normal:!!material.normalMap,lodThreshold:lod.userData.lodPixelThreshold,staticShadows});
   }
   const [high,medium,low,ultra,restored]=snapshots;
   if(low.shadows||!medium.shadows||medium.normal||low.normal||!high.normal||
@@ -60,6 +73,31 @@ try{
    throw Error('Quality budgets or restoration failed '+JSON.stringify(snapshots));
   if(units.some((u,i)=>JSON.stringify(u.rigidBody.translation())!==originalBodies[i]))
    throw Error('Rendering changed physics');
+  const shadowTiles=state.scene.children.filter(mesh=>mesh.name==='Baked tree and building shadows');
+  const pixels=()=>{
+   const image=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);
+   gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,image);
+   return image;
+  };
+  const shaded=pixels();
+  for(const tile of shadowTiles)tile.visible=false;
+  renderer.render(state.scene,state.camera);
+  const unshaded=pixels();
+  for(const tile of shadowTiles)tile.visible=true;
+  let darkened=0;
+  for(let i=0;i<shaded.length;i+=4)if(unshaded[i]-shaded[i]>8)darkened++;
+  if(darkened<20)throw Error('Baked shadows did not darken the visible terrain');
+
+  const decals=baked.stats.decals;
+  const temporary=gameTestAPI.createBuilding('hut',origin.x,origin.z,0,false,true);
+  renderer.render(state.scene,state.camera);
+  if(baked.stats.decals!==decals+1)throw Error('New building did not receive a baked shadow');
+  temporary.underConstruction=false;
+  renderer.render(state.scene,state.camera);
+  if(baked.stats.rebuilt!==1)throw Error('Completing construction did not update the shadow');
+  temporary.destroy(false);
+  renderer.render(state.scene,state.camera);
+  if(baked.stats.decals!==decals)throw Error('Destroyed building left a baked shadow');
   setGraphicsQuality('low');
   const frames=[];
   state.matchSettings.peaceTimeMinutes=0;state.matchElapsed=999;
@@ -111,7 +149,7 @@ try{
   const contactShadows=state.scene.getObjectByName('Distant unit contact shadows');
   if(!contactShadows||contactShadows.instanceColor.count!==contactShadows.instanceMatrix.count)
    throw Error('Contact-shadow color buffer does not cover the instance capacity');
-  return {units:units.length,buildings:houses.length,snapshots,battle};
+  return {units:units.length,buildings:houses.length,snapshots,darkened,battle};
  });
  const low=await browser.newPage({viewport:{width:960,height:600}});
  low.on('pageerror',error=>errors.push(String(error)));

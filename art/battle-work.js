@@ -71,7 +71,7 @@ export function createBattleWork({state,worker,findPath,walkable,treeConflict,ma
 }
 
 export function createBattleProfiler(){
-    const names=['frame','physics','simulation','ai','units','buildings','batching','render','other','modelLod','buildingBatches','terrainLod','overviewDetails','characterBatches','sceneryBatches','shadowCache'],size=240;
+    const names=['frame','physics','simulation','ai','units','buildings','batching','render','other','staticShadows','modelLod','buildingBatches','terrainLod','overviewDetails','characterBatches','sceneryBatches','shadowCache'],size=240;
     const samples=Object.fromEntries(names.map(n=>[n,new Float32Array(size)]));
     let count=0,index=0,started=0,current={};
     return {

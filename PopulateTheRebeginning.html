@@ -737,6 +737,7 @@ import { createShadowCache } from './art/shadow-cache.js';
 import {createTerrainLod} from './art/terrain-lod.js';
 import {createOverviewDetails} from './art/overview-details.js';
 import {createFlowerOverview} from './art/flower-overview.js';
+import {createBakedStatics} from './art/baked-statics.js';
 import {installTreeShadowCache} from './art/tree-shadow-cache.js';
 import {createGrassBatches} from './art/grass-batches.js';
 import {beginLod} from './art/lod-policy.js';
@@ -4389,6 +4390,7 @@ let treeFire;
 const LightningFx=createLightningFx(THREE,state);
 function charTree(tree) {
     if(tree.burned)return false;
+    BakedStatics.restoreCaster(tree.mesh);
     const crown=tree.mesh.children[1];
     tree.originalScale=tree.mesh.scale.clone();
     tree.originalAppearance=[];
@@ -4423,6 +4425,7 @@ function charTree(tree) {
     tree.charredMaterials=[...clonedMaterials.values()];
     tree.crownScale=crown?.scale.clone();
     tree.burned=true;
+    BakedStatics.invalidateCaster(tree.mesh);
     updateBurnedTree(tree);
     return true;
 }
@@ -4443,6 +4446,7 @@ function updateBurnedTree(tree) {
 
 function restoreTree(tree) {
     if(!tree.burned)return;
+    BakedStatics.restoreCaster(tree.mesh);
     for(const part of tree.originalParts||[]){
         part.mesh.material=part.material;
     }
@@ -4455,6 +4459,7 @@ function restoreTree(tree) {
     tree.charredMaterials=null;
     tree.crownScale=null;
     tree.burned=false;
+    BakedStatics.invalidateCaster(tree.mesh);
 }
 
 function burnTreesAt(x, z, radius, covers = null) {
@@ -4473,6 +4478,7 @@ function burnTreesAt(x, z, radius, covers = null) {
             if(tree?.burned)restoreTree(tree);
             state.treeBurns.set(id,state.treeTime+CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
             if(tree)charTree(tree);
+            else if(chunk)BakedStatics.invalidate(treeX,treeZ);
         };
         if(chunk){
             for(const tree of chunk.userData?.trees||[])
@@ -4538,6 +4544,7 @@ function updatePalmAppearance(palms,flames) {
         const age=state.treeTime-(ready-CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
         const char=ready>state.treeTime?Math.max(attr.getX(i),Math.min(1,Math.max(0,age/7))):0;
         const burned=ready>state.treeTime;
+        if(d.burned!==burned)BakedStatics.invalidate(d.x,d.z);
         if(d.burned!==burned||attr.getX(i)!==char){
             attr.setX(i,char);palms.mesh.setColorAt(i,burned?new THREE.Color(.27,.23,.2):d.tint);
             d.burned=burned;changed=true;
@@ -4732,6 +4739,7 @@ function updateChunkGeometry(mesh,cx,cz){return TerrainRefresh.update(mesh,cx,cz
 
 function updateChunkDecorations(chunk, cx, cz) {
     if (!chunk.userData) return;
+    BakedStatics.invalidateTerrain(cx*CHUNK_SIZE,cz*CHUNK_SIZE);
 
     if (chunk.userData.trees) {
         const trees = chunk.userData.trees;
@@ -5979,6 +5987,8 @@ const TerrainLod=createTerrainLod(THREE,state,Art.resources,VISUAL_WATER_LEVEL,m
 window.TerrainLod=TerrainLod;
 const OverviewDetails=createOverviewDetails(THREE,state,()=>groundCoverGrassGeo);
 const FlowerOverview=createFlowerOverview(THREE,state,()=>FlowerPalette,()=>AssetCache.mats.flowerPetalBase);
+const BakedStatics=createBakedStatics(THREE,state,SceneIndex,{chunkSize:CHUNK_SIZE,heightAt:getSurfaceHeight,
+    waterLevel:()=>VISUAL_WATER_LEVEL});
 let TreeShadowCache;
 const GrassBatches=createGrassBatches(THREE,state,()=>groundCoverGrassGeo);
 const EffectWriter=createInstanceWriter(THREE);
@@ -11141,6 +11151,8 @@ async function init() {
         StaticTransforms.bind(state.scene);
         state.scene.onBeforeRender=(renderer,scene,camera)=>{
             const start=performance.now();let previous=start,now;
+            BakedStatics.update();
+            now=performance.now();BattleProfiler.add('staticShadows',now-previous);previous=now;
             beginLod(camera,renderer,state,SceneIndex,LodVisibility);
             now=performance.now();BattleProfiler.add('modelLod',now-previous);previous=now;
             BuildingBatches.update();now=performance.now();BattleProfiler.add('buildingBatches',now-previous);previous=now;
@@ -11312,7 +11324,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, LodVisibility, TerrainRefresh, ShadowCache, SceneryBatches, BuildingBatches, OverviewDetails, FlowerOverview, TreeShadowCache, GrassBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, LodVisibility, TerrainRefresh, ShadowCache, SceneryBatches, BuildingBatches, OverviewDetails, FlowerOverview, BakedStatics, TreeShadowCache, GrassBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);

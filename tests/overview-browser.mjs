@@ -27,7 +27,7 @@ try{
   const result=[];
   const {measureLandscapeDraws}=await import('./art/landscape-draws.js');
   const grassBatches=gameTestAPI.GrassBatches;
-  const {SceneryBatches:scenery,FlowerOverview:flowers,TreeShadowCache:treeShadows,ShadowCache}=gameTestAPI;
+  const {SceneryBatches:scenery,FlowerOverview:flowers,BakedStatics:baked,ShadowCache}=gameTestAPI;
   for(const zoom of [25,65,110]){
    state.viewScale=zoom;gameTestAPI.updateCameraZoom();updateCameraPosition();
    TerrainLod.overviewEnabled=false;details.enabled=false;await settle();render();const before=renderer.info.render.triangles,a=read(),original=renderer.domElement.toDataURL();
@@ -45,7 +45,6 @@ try{
    if(zoom===110){
     function compareVegetation(){
      ShadowCache.enabled=false;
-     treeShadows.enabled=false;
      scenery.treeOptimization=false;
      flowers.enabled=false;
      render();render();
@@ -57,7 +56,7 @@ try{
      const optimized=read();
      const grouped=measureLandscapeDraws(renderer,state.scene,state.camera,render);
      const flowerStats={...flowers.stats};
-     if(grouped.main.trees.calls>=baseline.main.trees.calls||grouped.shadows.trees.calls>=baseline.shadows.trees.calls||
+     if(grouped.main.trees.calls>=baseline.main.trees.calls||grouped.shadows.trees.calls||baseline.shadows.trees.calls||
         !flowerStats.blooms||grouped.main.flowers.triangles>=baseline.main.flowers.triangles)
       throw Error('Vegetation draw work did not improve '+JSON.stringify({baseline,grouped,flowerStats,scenery:scenery.stats}));
      const diff=(a,b)=>{
@@ -81,37 +80,24 @@ try{
      const renderMs={original:summary(timings.original),grouped:summary(timings.grouped)};
      scenery.treeOptimization=flowers.enabled=true;
      for(let i=0;i<3;i++)render();
-     treeShadows.enabled=true;
-     treeShadows.minCpuMs=0;
-     for(let i=0;i<6;i++)render();
-     const shadowStats={...treeShadows.stats};
-     if(shadowStats.supported&&(!shadowStats.hits||shadowStats.errors))throw Error('Static tree shadows were not reused '+JSON.stringify(shadowStats));
-     const cached=read(),cacheError=diff(optimized,cached);
-     if(cacheError>.001)throw Error('Cached tree shadow image differs '+cacheError);
-     const shaman=state.shaman;
-     shaman.mesh.position.x+=.8;render();
-     const dynamic=read();
-     treeShadows.enabled=false;render();
-     if(diff(dynamic,read())>.001)throw Error('Moving shadow casters differ after composing cached tree shadows');
-     shaman.mesh.position.x-=.8;
-     treeShadows.enabled=true;
      const tree=Object.values(state.chunks).flatMap(chunk=>chunk.userData.trees).find(candidate=>
       candidate.mesh.children.some(part=>part.isMesh&&part.layers.mask===(1<<30)));
      if(!tree)throw Error('No grouped tree available for burn/regrowth');
-     const {x,z}=tree.mesh.position,builds=treeShadows.stats.builds;
+     const {x,z}=tree.mesh.position,decals=baked.stats.decals;
      gameTestAPI.burnTreesAt(x,z,.1);
      gameTestAPI.updateTreeRegrowth(8);
      render();const burned=read();
-     treeShadows.enabled=false;scenery.treeOptimization=false;render();
+     if(baked.stats.decals!==decals-1||!baked.stats.rebuilt)throw Error('Baked tree shadow survived the fire');
+     scenery.treeOptimization=false;render();
      if(!tree.burned||tree.mesh.children[1].visible||diff(burned,read())>.001)
       throw Error('Burned tree or its shadow survived in a batch');
      gameTestAPI.updateTreeRegrowth(gameTestAPI.CONFIG.TERRAIN_VEGETATION.TREE_REGROW_SECONDS);
-     treeShadows.enabled=scenery.treeOptimization=true;
+     scenery.treeOptimization=true;
      for(let i=0;i<7;i++)render();
-     if(tree.burned||!tree.mesh.children[1].visible||(shadowStats.supported&&treeShadows.stats.builds<=builds))
-      throw Error('Regrowth did not invalidate the static shadow cache');
+     if(tree.burned||!tree.mesh.children[1].visible||baked.stats.decals!==decals)
+      throw Error('Regrowth did not restore the baked tree shadow');
      ShadowCache.enabled=true;
-     return {baseline,grouped,vegetationError,flowerStats,shadowStats,cacheError,renderMs};
+     return {baseline,grouped,vegetationError,flowerStats,staticShadows:{...baked.stats},renderMs};
     }
     entry.vegetation=compareVegetation();
     const stats=()=>({...grassBatches.stats,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles});

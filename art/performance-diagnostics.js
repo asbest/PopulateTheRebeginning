@@ -7,7 +7,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
     let terrainRecording,landscapeFrame;
     const shadowTimes=[];
     let shadowDrawFrames=0,peakShadowCalls=0;
-    const names=['frame','physics','simulation','ai','units','buildings','batching','render','other','modelLod','buildingBatches','terrainLod','overviewDetails','characterBatches','sceneryBatches','shadowCache'];
+    const names=['frame','physics','simulation','ai','units','buildings','batching','render','other','staticShadows','modelLod','buildingBatches','terrainLod','overviewDetails','characterBatches','sceneryBatches','shadowCache'];
     function controls(){
         if(panel)return;
         panel=document.createElement('div');panel.id='performance-diagnostics';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','Performance diagnostics');
@@ -49,6 +49,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
                 terrainLod:state.terrainLodStats?JSON.parse(JSON.stringify(state.terrainLodStats)):null,
                 terrainLodRecording:terrainRecording,
                 overviewDetails:state.overviewDetailStats?{...state.overviewDetailStats}:null,
+                staticShadows:state.staticShadowStats?{...state.staticShadowStats}:null,
                 flowerOverview:state.flowerOverviewStats?{...state.flowerOverviewStats}:null,
                 treeShadowCache:state.treeShadowCacheStats?{...state.treeShadowCacheStats}:null,
                 sceneryBatching:state.sceneryBatchStats?{...state.sceneryBatchStats}:null,
@@ -57,7 +58,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
                 modelLod:state.modelLodStats?{...state.modelLodStats}:null,
                 lodVisibility:state.lodVisibilityStats?{...state.lodVisibilityStats}:null},
             environment:{userAgent:navigator.userAgent,cores:navigator.hardwareConcurrency||null,memoryGB:navigator.deviceMemory||null,webgl2:!!renderer.capabilities.isWebGL2,adapter},
-            notes:['CPU render includes driver waits and batching; it is not GPU execution time.','AI, units and buildings are parts of simulation; batching is part of rendering. Do not add overlapping timings.','modelLod, buildingBatches, terrainLod, overviewDetails, characterBatches, sceneryBatches and shadowCache subdivide batching; do not add them to batching or render.','Normal gameplay only; paused/hidden frames end the recording. No automatic bottleneck diagnosis is inferred from FPS alone.',
+            notes:['CPU render includes driver waits and batching; it is not GPU execution time.','AI, units and buildings are parts of simulation; batching is part of rendering. Do not add overlapping timings.','staticShadows, modelLod, buildingBatches, terrainLod, overviewDetails, characterBatches, sceneryBatches and shadowCache subdivide batching; do not add them to batching or render.','Normal gameplay only; paused/hidden frames end the recording. No automatic bottleneck diagnosis is inferred from FPS alone.',
                 'Landscape draw categories describe the final recorded frame. Shadow CPU timing, draw-frame count and peak calls cover the recording. Draw instrumentation adds some CPU overhead.',
                 'Terrain LOD and scenery counters describe the final frame. Terrain totals include loaded off-screen chunks; terrainLod.visible counts the camera frustum.',
                 'terrainLodRecording.activeFrames counts frames with simplification in the camera frustum; loadedActiveFrames also includes off-screen chunks. Reasons count frames with each loaded full-detail cause.']};
