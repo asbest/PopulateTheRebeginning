@@ -1,4 +1,5 @@
 import {seedWorld} from './fixtures/seed-world.mjs';
+import {clickVisibleControl} from './fixtures/click-control.mjs';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
@@ -89,11 +90,11 @@ try {
   if(Math.hypot(blast.start.x-blast.target.x,blast.start.z-blast.target.z) < 5) throw new Error('Blast test target too close');
   console.log('PASS fireball hotkey, terrain click, mana cost and target impact',blast);
 
-  await page.locator('#btn-firestorm').click();
+  // Freeze presentation before selecting the spell. Use the shared pointer
+  // helper so software WebGL cannot stall Playwright's post-click barrier.
+  await page.evaluate(()=>stopTestPresentation());
+  await clickVisibleControl(page,'#btn-firestorm');
   const stormPoint=await page.evaluate(()=>{
-    // Keep real pointer input but control simulation time from here. A slow
-    // render or an unrelated combat update cannot consume the cast in CI.
-    stopTestPresentation();
     const shaman=state.shaman,p=shaman.mesh.position;
     state.mana=100;
     // Leave a walk order active when the player targets the spell.
