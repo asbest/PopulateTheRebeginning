@@ -7532,6 +7532,20 @@ const SpellWindup={
     busy(caster){return this.pending.some(cast=>cast.caster===caster);},
     queue(type,x,z,caster,cost=0){
         if(this.busy(caster))return false;
+        // A deliberate cast replaces a prior walk order. Keeping that order
+        // active could make the caster walk out of her own windup.
+        if(caster.faction===0&&['move','manual'].includes(caster.state)){
+            caster.state='idle';
+            caster.target=null;
+            caster.finalDest=null;
+            caster.path.length=0;
+            caster.pathIndex=0;
+            caster.velocity.x=caster.velocity.z=0;
+            if(caster.rigidBody){
+                const {y}=caster.rigidBody.linvel();
+                caster.rigidBody.setLinvel({x:0,y,z:0},true);
+            }
+        }
         this.pending.push({type,x,z,caster,cost,remaining:SPELL_WINDUPS[type],
             startX:caster.mesh.position.x,startZ:caster.mesh.position.z,
             damageRevision:caster.damageRevision||0,pulseTimer:0});
@@ -7551,7 +7565,10 @@ const SpellWindup={
                 (caster.damageRevision||0)!==cast.damageRevision||
                 Math.hypot(caster.mesh.position.x-cast.startX,caster.mesh.position.z-cast.startZ)>1.5;
             if(interrupted){
-                if(caster?.faction===0&&cast.cost>0){state.mana+=cast.cost*.5;updateUI();}
+                if(caster?.faction===0){
+                    if(cast.cost>0){state.mana+=cast.cost*.5;updateUI();}
+                    showGameMessage('Spell interrupted.');
+                }
                 if(caster?.staffWindup?.type===cast.type)caster.staffWindup=null;
                 this.pending.splice(i,1);continue;
             }
@@ -10748,13 +10765,19 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null,
     const caster = state.shaman;
 
     if (spells.includes(action)) {
-        if (!caster || caster.state === 'dead' || caster.state === 'transported') return;
-        if(SPELL_WINDUPS[action]&&SpellWindup.busy(caster))return;
+        if (!caster || ['dead','transported','stunned','getting_up'].includes(caster.state)) {
+            showGameMessage('The shaman cannot cast right now.');
+            return;
+        }
+        if(SPELL_WINDUPS[action]&&SpellWindup.busy(caster)){
+            showGameMessage('The shaman is already preparing a spell.');
+            return;
+        }
 
         if (!state.cheatUnlimitedRange) {
             const maxRange = 10.0 + caster.mesh.position.y;
             const dist = Math.sqrt((x - caster.mesh.position.x)**2 + (z - caster.mesh.position.z)**2);
-            if (dist > maxRange) return;
+            if (dist > maxRange) {showGameMessage('Choose a target within the spell range.');return;}
         }
     }
 
@@ -10776,7 +10799,10 @@ function performAction(x, z, action = state.currentAction, overrideUnits = null,
     let cost = costs[action];
     if (state.campaignLevel === 12 && !action.startsWith('build_')) cost = 0;
     if (cost === undefined || isNaN(cost)) return;
-    if (state.mana < cost) return;
+    if (state.mana < cost) {
+        if(spells.includes(action))showGameMessage(`This spell requires ${cost} mana.`);
+        return;
+    }
     state.mana -= cost;
     updateUI();
 

@@ -88,6 +88,30 @@ try {
   if(Math.hypot(blast.impact.x-blast.target.x,blast.impact.z-blast.target.z) > 0.5) throw new Error('Blast detonated before reaching its target: '+JSON.stringify(blast));
   if(Math.hypot(blast.start.x-blast.target.x,blast.start.z-blast.target.z) < 5) throw new Error('Blast test target too close');
   console.log('PASS fireball hotkey, terrain click, mana cost and target impact',blast);
+
+  await page.locator('#btn-firestorm').click();
+  const stormPoint=await page.evaluate(()=>{
+    const shaman=state.shaman,p=shaman.mesh.position;
+    state.mana=100;
+    // Leave a walk order active when the player targets the spell.
+    shaman.target=new THREE.Vector3(p.x+18,p.y,p.z);
+    shaman.finalDest=shaman.target.clone();
+    shaman.path=[shaman.target];
+    shaman.pathIndex=0;
+    shaman.state='move';
+    const target=new THREE.Vector3(p.x+3,getHeight(p.x+3,p.z),p.z).project(state.camera);
+    return {x:(target.x+1)*innerWidth/2,y:(1-target.y)*innerHeight/2};
+  });
+  await page.mouse.click(stormPoint.x,stormPoint.y);
+  const accepted=await page.evaluate(()=>({
+    action:state.currentAction,walking:!!state.shaman.finalDest,mana:state.mana,
+    queued:gameTestAPI.SpellWindup.pending.some(cast=>cast.type==='firestorm'&&cast.caster===state.shaman)
+  }));
+  if(accepted.action!=='firestorm'||accepted.walking||!accepted.queued||accepted.mana>22)
+    throw Error('Firestorm did not take over the walk order: '+JSON.stringify(accepted));
+  await page.waitForFunction(()=>state.activeEffects.some(effect=>effect.constructor.name==='Firestorm')&&
+    state.projectiles.some(shot=>shot.stormShot),null,{timeout:30000});
+  console.log('PASS Firestorm action and terrain click replace walking, spend mana and release fire rain');
   if(errors.length) throw new Error('Browser runtime errors: '+errors.join('\n'));
   console.log('PASS no browser runtime errors');
   if(missing.length) console.log('MISSING RESOURCES',missing);
