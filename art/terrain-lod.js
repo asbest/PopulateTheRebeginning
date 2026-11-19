@@ -69,6 +69,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
         for(let i=0;i<2;i++){
             const source=chunk.children[i],geometry=new T.BufferGeometry();
             const proxy=new T.Mesh(geometry,source.material);proxy.name='Terrain render LOD';proxy.raycast=()=>{};proxy.receiveShadow=source.receiveShadow;
+            proxy.userData.landscapeKind=source.userData.landscapeKind=i===0?'terrain':'water';
             proxy.position.copy(source.position);chunk.add(proxy);
             const e={chunk,source,proxy,res,water:i===1,version:-1,levels:new Map(),pending:new Set(),
                 matrix:new T.Matrix4(),dirty:true,generation:0,current:0,active:false};entries.add(e);

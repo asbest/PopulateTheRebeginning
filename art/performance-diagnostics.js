@@ -1,9 +1,12 @@
 import {ASSET_REVISION} from './asset-revisions.js';
+import {measureLandscapeDraws} from './landscape-draws.js';
 
 export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
     let panel,output,status,startButton,copyButton,banner,running=false,started=0,last=0,previousGpu=false,report=null,missingCpuFrames=0;
     const samples={},intervals=[];
-    let terrainRecording;
+    let terrainRecording,landscapeFrame;
+    const shadowTimes=[];
+    let shadowDrawFrames=0,peakShadowCalls=0;
     const names=['frame','physics','simulation','ai','units','buildings','batching','render','other','modelLod','buildingBatches','terrainLod','overviewDetails','characterBatches','sceneryBatches','shadowCache'];
     function controls(){
         if(panel)return;
@@ -25,7 +28,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
     function start(){
         if(running)return;controls();report=null;output.value='';copyButton.disabled=true;
         for(const name of names)samples[name]=[];intervals.length=0;started=last=performance.now();
-        missingCpuFrames=0;
+        missingCpuFrames=0;landscapeFrame=null;shadowTimes.length=0;shadowDrawFrames=peakShadowCalls=0;
         terrainRecording={samples:0,activeFrames:0,fullDetailFrames:0,loadedActiveFrames:0,reasons:{},cameraModes:{}};
         previousGpu=gpu.enabled;gpu.reset();gpu.enabled=true;running=true;panel.style.display='none';banner.textContent='Recording diagnostics… 15s';banner.style.display='block';resume();
     }
@@ -36,7 +39,9 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
         let adapter=null;
         try{const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');adapter=gl.getParameter(debug?debug.UNMASKED_RENDERER_WEBGL:gl.RENDERER);}catch{}
         const cpu={};for(const name of names)cpu[name]=summary(samples[name]);
-        report={revision:ASSET_REVISION,diagnosticsVersion:2,measurementWarnings:missingCpuFrames?['CPU instrumentation missing: incompatible or cached game scripts. Save your game, then reload after the update.']:[],missingCpuFrames,recordedAt:new Date().toISOString(),reason,durationSeconds:+(elapsed/1000).toFixed(2),frames:intervals.length,
+        report={revision:ASSET_REVISION,diagnosticsVersion:3,landscapeDraws:landscapeFrame?{
+            main:landscapeFrame.main,shadows:landscapeFrame.shadows,shadowCpu:summary(shadowTimes),shadowDrawFrames,peakShadowCalls
+        }:null,measurementWarnings:missingCpuFrames?['CPU instrumentation missing: incompatible or cached game scripts. Save your game, then reload after the update.']:[],missingCpuFrames,recordedAt:new Date().toISOString(),reason,durationSeconds:+(elapsed/1000).toFixed(2),frames:intervals.length,
             fps:intervals.length?+(intervals.length*1000/intervals.reduce((sum,n)=>sum+n,0)).toFixed(1):null,
             frameIntervals:summary(intervals),cpu,gpu:gpuResult.supported&&gpuResult.samples?gpuResult:{available:false,reason:'GPU timing unavailable or no completed samples'},
             graphics:{...state.graphicsQuality,width:renderer.domElement.width,height:renderer.domElement.height,pixelRatio:renderer.getPixelRatio(),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles},
@@ -51,6 +56,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
                 lodVisibility:state.lodVisibilityStats?{...state.lodVisibilityStats}:null},
             environment:{userAgent:navigator.userAgent,cores:navigator.hardwareConcurrency||null,memoryGB:navigator.deviceMemory||null,webgl2:!!renderer.capabilities.isWebGL2,adapter},
             notes:['CPU render includes driver waits and batching; it is not GPU execution time.','AI, units and buildings are parts of simulation; batching is part of rendering. Do not add overlapping timings.','modelLod, buildingBatches, terrainLod, overviewDetails, characterBatches, sceneryBatches and shadowCache subdivide batching; do not add them to batching or render.','Normal gameplay only; paused/hidden frames end the recording. No automatic bottleneck diagnosis is inferred from FPS alone.',
+                'Landscape draw categories describe the final recorded frame. Shadow CPU timing, draw-frame count and peak calls cover the recording. Draw instrumentation adds some CPU overhead.',
                 'Terrain LOD and scenery counters describe the final frame. Terrain totals include loaded off-screen chunks; terrainLod.visible counts the camera frustum.',
                 'terrainLodRecording.activeFrames counts frames with simplification in the camera frustum; loadedActiveFrames also includes off-screen chunks. Reasons count frames with each loaded full-detail cause.']};
         pause();open();if(missingCpuFrames)status.textContent=report.measurementWarnings[0];output.value=JSON.stringify(report,null,2);copyButton.disabled=false;
@@ -83,5 +89,13 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
         if(now-started>=15000||intervals.length>=3600)finish('Completed');
     }
     document.addEventListener('visibilitychange',()=>{if(running&&document.hidden)finish('Page hidden');});
-    return {open,start,sample,finish,get running(){return running;},get report(){return report;}};
+    function render(renderer,scene,camera){
+        landscapeFrame=measureLandscapeDraws(renderer,scene,camera);
+        shadowTimes.push(landscapeFrame.shadowCpuMs);
+        let calls=0;
+        for(const kind in landscapeFrame.shadows)calls+=landscapeFrame.shadows[kind].calls;
+        if(calls)shadowDrawFrames++;
+        peakShadowCalls=Math.max(peakShadowCalls,calls);
+    }
+    return {open,start,sample,finish,render,get running(){return running;},get report(){return report;}};
 }

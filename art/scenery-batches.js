@@ -90,6 +90,7 @@ export function createSceneryBatches(T,state,index=null){
   return m.determinant()>0&&Math.abs(a[0]*a[4]+a[1]*a[5]+a[2]*a[6])<1e-6*Math.sqrt(x*y)&&
    Math.abs(a[0]*a[8]+a[1]*a[9]+a[2]*a[10])<1e-6*Math.sqrt(x*z)&&Math.abs(a[4]*a[8]+a[5]*a[9]+a[6]*a[10])<1e-6*Math.sqrt(y*z);}
  function collect(root){
+  const landscapeKind=root.userData.landscapeKind;
   if(!root?.parent)return;
   let list=roots.get(root);
   const topology=index?.list(root);
@@ -136,12 +137,12 @@ export function createSceneryBatches(T,state,index=null){
     r.receive!==p.receiveShadow||r.order!==p.renderOrder||r.layers!==p.layers.mask){
     r.cx=cx;r.cz=cz;r.geometry=geometry;r.box=box;r.material=p.material;r.cast=p.castShadow;
     r.receive=p.receiveShadow;r.order=p.renderOrder;r.layers=p.layers.mask;
-    r.key=[cx,cz,geometry.uuid,p.material.uuid,p.castShadow,p.receiveShadow,p.renderOrder,p.layers.mask].join('|');
+    r.key=[cx,cz,geometry.uuid,p.material.uuid,p.castShadow,p.receiveShadow,p.renderOrder,p.layers.mask,landscapeKind].join('|');
    }
    const key=r.key;
    let b=buckets.get(key);
    if(!b){b={source:geometry,material:p.material,cx,cz,cast:p.castShadow,receive:p.receiveShadow,
-    order:p.renderOrder,layers:p.layers.mask,items:[],previous:[],capacity:0,mesh:null};buckets.set(key,b);}
+    order:p.renderOrder,layers:p.layers.mask,landscapeKind,items:[],previous:[],capacity:0,mesh:null};buckets.set(key,b);}
    b.items.push(r);b.dirty ||= changed;b.used=frame;stats.parts++;
   }
  }
@@ -183,6 +184,7 @@ export function createSceneryBatches(T,state,index=null){
      geometry.groups=b.source.groups.map(g=>({...g}));geometry.setDrawRange(b.source.drawRange.start,b.source.drawRange.count);
      b.capacity=2**Math.ceil(Math.log2(b.items.length));b.mesh=new T.InstancedMesh(geometry,b.material,b.capacity);
      b.mesh.name='Spatial scenery batch';b.mesh.position.set(b.cx*40,0,b.cz*40);b.mesh.layers.mask=b.layers;
+     b.mesh.userData.landscapeKind=b.landscapeKind;
      b.mesh.raycast=()=>{}; // Selection uses the original building/tree hierarchy.
      b.mesh.castShadow=b.cast;b.mesh.receiveShadow=b.receive;b.mesh.renderOrder=b.order;
      b.mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);scene.add(b.mesh);b.mesh.updateMatrixWorld(true);

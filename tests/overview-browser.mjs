@@ -25,6 +25,8 @@ try{
    }
   }}
   const result=[];
+  const {measureLandscapeDraws}=await import('./art/landscape-draws.js');
+  const grassBatches=gameTestAPI.GrassBatches;
   for(const zoom of [25,65,110]){
    state.viewScale=zoom;gameTestAPI.updateCameraZoom();updateCameraPosition();
    TerrainLod.overviewEnabled=false;details.enabled=false;await settle();render();const before=renderer.info.render.triangles,a=read(),original=renderer.domElement.toDataURL();
@@ -35,7 +37,29 @@ try{
    if(pixelError>.015||meanError>.0035)throw Error('Overview appearance changed '+JSON.stringify({zoom,pixelError,meanError}));
    if(zoom>=65&&after>before*.9)throw Error('Insufficient overview savings '+JSON.stringify({zoom,before,after}));
    if(Object.values(state.chunks).some((c,i)=>(c.userData.groundCover.grass?.mesh.count||0)!==counts[i]))throw Error('Plant density changed');
-   result.push({zoom,before,after,pixelError,meanError,details:{...details.stats},terrain:JSON.parse(JSON.stringify(TerrainLod.stats)),original,optimized});
+   const draws=measureLandscapeDraws(renderer,state.scene,state.camera,render);
+   if(!draws.main.grass.calls||!draws.main.terrain.calls||!draws.main.water.calls)
+    throw Error('Incomplete landscape attribution '+JSON.stringify(draws));
+   const entry={zoom,before,after,pixelError,meanError,details:{...details.stats},terrain:JSON.parse(JSON.stringify(TerrainLod.stats)),original,optimized,draws};
+   if(zoom===110){
+    const stats=()=>({...grassBatches.stats,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles});
+    render();const originalGrass=read(),base=stats();
+    grassBatches.enabled=true;render();render();const batchedGrass=read(),batched=stats();
+    if(!batched.savedCalls||batched.uploads||batched.calls+batched.savedCalls!==base.calls||batched.triangles!==base.triangles)
+     throw Error('Grass batching changed draw coverage '+JSON.stringify({base,batched}));
+    let changed=0;
+    for(let i=0;i<originalGrass.length;i+=4)if(Math.max(...[0,1,2].map(c=>Math.abs(originalGrass[i+c]-batchedGrass[i+c])))>8)changed++;
+    if(changed/(originalGrass.length/4)>.001)throw Error('Grass batch pixels differ '+changed);
+    const timings={baseline:[],batched:[]};
+    for(const enabled of [false,true,true,false]){
+     grassBatches.enabled=enabled;render();gl.finish();
+     for(let i=0;i<8;i++){const start=performance.now();render();gl.finish();timings[enabled?'batched':'baseline'].push(performance.now()-start);}
+    }
+    grassBatches.enabled=false;render();
+    const median=values=>values.sort((a,b)=>a-b)[Math.floor(values.length/2)];
+    entry.grassPrototype={base,batched,changed,baselineMedianMs:median(timings.baseline),batchedMedianMs:median(timings.batched)};
+   }
+   result.push(entry);
   }
   const grass=Object.values(state.chunks).find(c=>c.userData.groundCover.grass?.mesh.count)?.userData.groundCover.grass.mesh;
   const reducedIndex=grass.geometry.index;details.release(grass);

@@ -736,6 +736,7 @@ import {createBuildingBatches} from './art/building-batches.js';
 import { createShadowCache } from './art/shadow-cache.js';
 import {createTerrainLod} from './art/terrain-lod.js';
 import {createOverviewDetails} from './art/overview-details.js';
+import {createGrassBatches} from './art/grass-batches.js';
 import {beginLod} from './art/lod-policy.js';
 import {createLodVisibility} from './art/lod-visibility.js';
 import { createSceneIndex } from './art/scene-index.js';
@@ -5667,6 +5668,12 @@ function createChunk(cx, cz, prepared = null) {
         };
     }
 
+    for(const [kind,layer] of Object.entries(grp.userData.groundCover||{}))if(layer?.mesh)layer.mesh.userData.landscapeKind=kind;
+    if(grp.userData.palms?.mesh)grp.userData.palms.mesh.userData.landscapeKind='palms';
+    for(const tree of grp.userData.trees)tree.mesh.userData.landscapeKind='trees';
+    for(const kind of ['stems','centers','petals','tulips']){
+        const mesh=grp.userData.flowers?.[kind];if(mesh)mesh.userData.landscapeKind='flowers';
+    }
     TerrainLod.register(grp,CHUNK_RES);
     StaticTransforms.add(grp);
     return grp;
@@ -5968,6 +5975,7 @@ const ShadowCache=createShadowCache(THREE);
 const TerrainLod=createTerrainLod(THREE,state,Art.resources,VISUAL_WATER_LEVEL,mesh=>SettlementPreparation.prepareRoot(mesh,false,false,false,true));
 window.TerrainLod=TerrainLod;
 const OverviewDetails=createOverviewDetails(THREE,state,()=>groundCoverGrassGeo);
+const GrassBatches=createGrassBatches(THREE,state,()=>groundCoverGrassGeo);
 const EffectWriter=createInstanceWriter(THREE);
 function terrainWorkerSnapshot(cx,cz){
   const x=cx*CHUNK_SIZE,z=cz*CHUNK_SIZE,half=CHUNK_SIZE/2+2;
@@ -11107,11 +11115,13 @@ async function init() {
             BuildingBatches.update();now=performance.now();BattleProfiler.add('buildingBatches',now-previous);previous=now;
             TerrainLod.update(camera,renderer);now=performance.now();BattleProfiler.add('terrainLod',now-previous);previous=now;
             OverviewDetails.update(camera,renderer);now=performance.now();BattleProfiler.add('overviewDetails',now-previous);previous=now;
+            if(GrassBatches.enabled||GrassBatches.stats.batches)GrassBatches.update(camera);
             CharacterBatches.update(camera===state.camera);now=performance.now();BattleProfiler.add('characterBatches',now-previous);previous=now;
             SceneryBatches.update(camera===state.camera);now=performance.now();BattleProfiler.add('sceneryBatches',now-previous);previous=now;
             ShadowCache.update(scene,camera,renderer,SceneIndex);now=performance.now();BattleProfiler.add('shadowCache',now-previous);
             BattleProfiler.add('batching',now-start);
         };
+        state.scene.onAfterRender=()=>{if(GrassBatches.enabled)GrassBatches.restore();};
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
         state.scene.fog = new THREE.Fog(CONFIG.BIOMES.normal.fog, CONFIG.BIOMES.normal.fogNear, CONFIG.BIOMES.normal.fogFar);
 
@@ -11266,7 +11276,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, LodVisibility, TerrainRefresh, ShadowCache, SceneryBatches, BuildingBatches, OverviewDetails, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, LodVisibility, TerrainRefresh, ShadowCache, SceneryBatches, BuildingBatches, OverviewDetails, GrassBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -13309,7 +13319,9 @@ function animate() {
 
     updateUnitListSelection();
     const renderStart=performance.now();GpuTimer.begin(state.renderer);
-    state.renderer.render(state.scene, state.camera);GpuTimer.end();
+    if(PerformanceDiagnostics.running)PerformanceDiagnostics.render(state.renderer,state.scene,state.camera);
+    else state.renderer.render(state.scene,state.camera);
+    GpuTimer.end();
     BattleProfiler.add('render',performance.now()-renderStart);BattleProfiler.end();PerformanceDiagnostics.sample();
     Art.resources.frame(performance.now()-frameTime,!!state.isPaused,!state.assetsReady,
         !!(Art.resources.stats.queued&&(state.projectiles.length||state.units.some(u=>u.state==='combat'))));
