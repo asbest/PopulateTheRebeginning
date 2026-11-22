@@ -2,23 +2,32 @@ import {graphicsSettings} from './graphics-settings.js';
 const context={height:600,selected:[],selectedRoots:new Set(),fpv:false};let generation=0;
 const stats={checked:0,updated:0,reused:0,culled:0};
 export function invalidateLod(){generation++;}
-let previousDetail,previousHeight;const previousSelected=[],previousSelectedRoots=[];
+let previousDetail,previousHeight,previousProjection,previousCamera;const previousSelected=[],previousSelectedRoots=[];
 export function beginLod(camera,renderer,state,index,visibility=null){
     stats.checked=stats.updated=stats.reused=stats.culled=0;state.modelLodStats=stats;
     context.height=renderer.domElement.height;context.selected=state.selectedUnits||[];context.fpv=state.isFPV;
     const detail=graphicsSettings.profile.detail*graphicsSettings.detailScale;
-    let changed=previousHeight!==context.height||previousDetail!==detail||previousSelected.length!==context.selected.length;
+    const projection=camera.projectionMatrix.elements[5];
+    let changed=previousHeight!==context.height||previousDetail!==detail||previousSelected.length!==context.selected.length||
+        previousCamera!==camera||previousProjection!==projection;
     if(!changed)for(let i=0;i<previousSelected.length;i++)if(previousSelected[i]!==context.selected[i]||previousSelectedRoots[i]!==context.selected[i].mesh){changed=true;break;}
     if(changed){
         generation++;previousHeight=context.height;previousDetail=detail;
+        previousCamera=camera;previousProjection=projection;
         previousSelected.length=previousSelectedRoots.length=context.selected.length;for(let i=0;i<previousSelected.length;i++){previousSelected[i]=context.selected[i];previousSelectedRoots[i]=context.selected[i].mesh;}
         context.selectedRoots.clear();for(const unit of context.selected)context.selectedRoots.add(unit.mesh);
     }
     visibility?.begin(camera,renderer);
+    const demand=camera.isOrthographicCamera?generation:undefined;
     if(index){const list=index.list(state.scene);for(const lod of list.lods)if(!lod.autoUpdate){
         if(visibility&&!visibility.allow(lod)){stats.culled++;continue;}
+        if(visibility?.reuse?.(lod,demand)){stats.reused++;continue;}
         stats.checked++;if(lod.update(camera)===false)stats.reused++;else stats.updated++;
-    }for(const root of list.visualLods){if(visibility&&!visibility.allow(root)){stats.culled++;continue;}stats.checked++;if(root.userData.updateLod(camera)===false)stats.reused++;else stats.updated++;}}
+    }for(const root of list.visualLods){
+        if(visibility&&!visibility.allow(root)){stats.culled++;continue;}
+        if(visibility?.reuse?.(root,demand)){stats.reused++;continue;}
+        stats.checked++;if(root.userData.updateLod(camera)===false)stats.reused++;else stats.updated++;
+    }}
 }
 export function projectedPixels(camera,height,position,margin=0){
     if(!camera.isPerspectiveCamera)return height*Math.abs(camera.projectionMatrix.elements[5])*.5;

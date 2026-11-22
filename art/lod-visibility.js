@@ -21,7 +21,12 @@ export function createLodVisibility(T,state,index,transforms){
    if(!e){e={chunk,members:[],sphere:new T.Sphere(),box:new T.Box3(),matrix:new T.Matrix4(),needed:true};chunks.set(chunk,e);}
    const topology=e.revision!==list.revision,pose=e.version!==version,terrain=e.land!==land||e.landVersion!==land?.version;
    if(topology){for(const node of e.members)if(owners.get(node)===e)owners.delete(node);e.members.length=0;
-    for(const node of list.lods){owners.set(node,e);e.members.push(node);}for(const node of list.visualLods){owners.set(node,e);e.members.push(node);}}
+    for(const node of list.lods){owners.set(node,e);e.members.push(node);}for(const node of list.visualLods){owners.set(node,e);e.members.push(node);}
+    e.stable=e.members.every(node=>{
+     for(let p=node;p&&p!==chunk;p=p.parent)if(!transforms.has(p))return false;
+     return true;
+    });
+   }
    const dirty=topology||pose||terrain||!e.matrix.equals(chunk.matrixWorld)||e.pending;
    // Repeated transform changes (burning/growing props) use the original LOD
    // path until they settle instead of rebuilding bounds during every frame.
@@ -40,6 +45,7 @@ export function createLodVisibility(T,state,index,transforms){
     if(e.box.isEmpty())e.unsafe=true;else e.box.expandByScalar(2).getBoundingSphere(e.sphere);
     e.matrix.copy(chunk.matrixWorld);e.pending=false;stats.rebuiltBounds++;
    }else if(moving)e.pending=true;
+   if(dirty)e.demand=undefined;
    e.revision=list.revision;e.version=version;e.land=land;e.landVersion=land?.version;
    e.needed=moving||e.unsafe||unknownShadow||cameraFrustum.intersectsSphere(e.sphere);
    for(let i=0;!e.needed&&i<shadows.length;i++)e.needed=shadows[i].intersectsSphere(e.sphere);
@@ -47,5 +53,14 @@ export function createLodVisibility(T,state,index,transforms){
    if(e.needed)stats.visibleChunks++;else stats.skippedChunks++;
   }
  }
- return {enabled:true,stats,begin,allow(node){const e=owners.get(node);return !this.enabled||!e||!e.chunk.parent||e.needed;}};
+ return {enabled:true,stats,begin,
+  allow(node){const e=owners.get(node);return !this.enabled||!e||!e.chunk.parent||e.needed;},
+  reuse(node,demand){
+   const e=owners.get(node);
+   if(!this.enabled||demand===undefined||!e?.stable||!e.chunk.parent||e.pending)return false;
+   // All members of a visible chunk share the same orthographic screen scale.
+   if(e.decisionFrame!==frame){e.decisionFrame=frame;e.reuse=e.demand===demand;e.demand=demand;}
+   return e.reuse;
+  }
+ };
 }

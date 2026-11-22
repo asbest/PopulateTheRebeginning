@@ -5,6 +5,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     const hiddenLayer=31,buckets=new Map(),materials=new Map(),records=new WeakMap(),parts=new WeakMap(),masked=new Map();
     const writer=createInstanceWriter(T);
     const inverse=new T.Matrix4(),matrix=new T.Matrix4(),color=new T.Color(),dummy=new T.Object3D();
+    const identity=new T.Matrix4();
     const frustum=new T.Frustum(),projection=new T.Matrix4(),sphere=new T.Sphere();
     const shadowProfiles={low:[20,24],medium:[32,32],high:[45,40],ultra:[60,56]};
     const shadowDistances=[],simplifiedCasters=[],partialShadowBatches=[],empty=[];
@@ -85,9 +86,9 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         return api.enabled&&api.crowdDetail&&!state.isFPV&&stats.visibleUnits>=15&&
             !state.selectedUnits.includes(unit)&&!unit.isShaman&&!unit.isVehicle&&projectedHeight(unit)<22;
     }
-    function collect(node,shadow,healthBar=false,simple=false){
+    function collect(node,shadow,healthBar=false,detail=0){
         if(!node.visible)return;
-        if(simple&&(smallDetails.has(node.name)||node.isLOD&&node.name.startsWith('Blender detail LOD character/'))){
+        if(detail&&(smallDetails.has(node.name)||detail===2&&node.isLOD&&node.name.startsWith('Blender detail LOD character/'))){
             node.traverse(maskPart);
             return;
         }
@@ -110,7 +111,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             }else b.items.push(node);
             b.used=frame;stats.parts++;
         }else if(!shadow&&node.isMesh)suppressShadow(node);
-        for(const child of node.children)collect(child,shadow,false,simple);
+        for(const child of node.children)collect(child,shadow,false,detail);
     }
     function suppressShadow(part){
         if(!part.castShadow)return;
@@ -136,6 +137,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             fragmentShader:'varying vec2 vUv;varying float fade;void main(){float a=(1.-smoothstep(.12,.5,length(vUv-.5)))*fade;gl_FragColor=vec4(.03,.035,.025,a);}'});
         blob=new T.InstancedMesh(geometry,material,2048);blob.frustumCulled=false;
         blob.name='Distant unit contact shadows';blob.instanceMatrix.setUsage(T.DynamicDrawUsage);
+        blob.userData.landscapeKind='characters';
         // Three allocates the first instance color array from the current count.
         blob.setColorAt(0,color.setRGB(.2,.2,.2));blob.count=0;scene.add(blob);
     }
@@ -154,9 +156,12 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         }
         try{
             if(state.renderer?.shadowMap&&shadowMap!==state.renderer.shadowMap)bindShadowPass(state.renderer.shadowMap);
+            const worldIsIdentity=scene.matrixWorld.equals(identity);
             inverse.copy(scene.matrixWorld).invert();
             projection.multiplyMatrices(state.camera.projectionMatrix,state.camera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);
             const focus=state.isFPV?state.camera.position:state.cameraLookAt;
+            const strategyDetail=state.camera.isOrthographicCamera&&state.graphicsQuality?.tier!=='ultra'
+                ?30*Math.max(1,state.renderer.getPixelRatio()):0;
             const [shadowRange,shadowBudget]=shadowProfiles[state.graphicsQuality?.tier]||shadowProfiles.high;
             let shadowRangeSq=shadowRange*shadowRange;
             if(!api.fullShadows&&state.units.length>shadowBudget){
@@ -186,7 +191,8 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 if(!animal&&inView&&u.state!=='dead')stats.visibleUnits++;
                 const useProjected=api.crowdDetail&&!api.warming&&!state.isFPV&&!animal;
                 const pixels=useProjected?projectedHeight(u):Infinity;
-                const simple=pixels<23&&!u.isVehicle&&!state.selectedUnits.includes(u);
+                const canSimplify=!u.isVehicle&&!u.isShaman&&!state.selectedUnits.includes(u);
+                const detail=canSimplify?(pixels<23?2:pixels<=strategyDetail?1:0):0;
                 const detailed=animal||api.fullShadows||state.renderer.shadowMap.enabled&&dx*dx+dz*dz<=shadowRangeSq&&pixels>=29;
                 if(!detailed&&!inView){
                     // Outside both the view and detailed-shadow range: suppress only
@@ -194,9 +200,9 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                     for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])root?.traverse(maskPart);
                     continue;
                 }
-                if(simple)stats.simplifiedUnits++;
+                if(detail)stats.simplifiedUnits++;
                 if(animal)collect(u.mesh,true);
-                else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed,false,simple);
+                else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed,false,detail);
                 // Preserve the original billboard transforms, fill scales and faction colors.
                 // Warm both instance shaders even when the starting units are at full health.
                 if(u.hpGroup&&(u.hpGroup.visible||api.warming)){
@@ -222,12 +228,15 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                     const minCapacity=b.healthBar?128:api.warming?32:8;
                     b.capacity=2**Math.ceil(Math.log2(Math.max(minCapacity,b.items.length)));
                     b.mesh=new T.InstancedMesh(b.geometry,b.material,b.capacity);b.mesh.name='Animated character batch';
+                    b.mesh.userData.landscapeKind='characters';
                     b.mesh.receiveShadow=b.receive;b.mesh.renderOrder=b.order;
                     b.mesh.frustumCulled=false;b.mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);scene.add(b.mesh);
                     b.mesh.updateMatrixWorld(true);
                 }
                 for(let i=0;i<b.items.length;i++){
-                    const part=b.items[i];matrix.multiplyMatrices(inverse,part.matrixWorld);writer.matrix(b.mesh,i,matrix);
+                    const part=b.items[i];
+                    const instance=worldIsIdentity?part.matrixWorld:matrix.multiplyMatrices(inverse,part.matrixWorld);
+                    writer.matrix(b.mesh,i,instance);
                     writer.color(b.mesh,i,part.material.color);masked.set(part,part.layers.mask);part.layers.set(hiddenLayer);
                 }
                 b.mesh.count=b.items.length;b.mesh.visible=true;b.mesh.castShadow=b.shadowCount>0;

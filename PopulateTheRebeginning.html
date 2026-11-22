@@ -7747,6 +7747,7 @@ window.Humanoid = class Humanoid {
 
         // Visuals
         this.mesh = new THREE.Group();
+        this.mesh.userData.landscapeKind='characters';
         const skinMat = AssetCache.mats.skin;
         const shirtMat = getFactionMaterial(faction);
 
@@ -9329,6 +9330,7 @@ function createBuilding(type, x, z, faction = 0, autoUpdate = true, isLoading = 
 
     const group = new THREE.Group();
     group.position.set(x, baseH, z);
+    group.userData.landscapeKind='buildings';
 
     let mesh, maxHp;
     if (type === 'hut') { mesh = buildHut(faction); maxHp = CONFIG.BUILDING.HUT_HP; }
@@ -13134,6 +13136,7 @@ function animate() {
     if(state.chunkWaterMat && state.chunkWaterMat.uniforms) state.chunkWaterMat.uniforms.time.value += dt;
 
     const physicsStart=performance.now();
+    BattleProfiler.add('frameSetup',physicsStart-frameTime);
     if (state.physicsWorld && typeof state.physicsWorld.step === 'function' && state.network.role !== 'client') {
         try {
             state.physicsAccumulator=Math.min((state.physicsAccumulator||0)+dt,.1);
@@ -13148,7 +13151,9 @@ function animate() {
 
     updateRangeRing();
 
+    const streamingStart=performance.now();
     updateChunks();
+    BattleProfiler.add('worldStreaming',performance.now()-streamingStart);
 
     if (state.network.role === 'host' && Math.floor(state.clock.elapsedTime * 60) % CONFIG.NETWORK.SYNC_INTERVAL === 0) {
         NetworkManager.sendFullState();

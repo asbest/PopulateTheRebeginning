@@ -139,6 +139,7 @@ export function createBakedStatics(T,state,index,{chunkSize,heightAt,waterLevel}
         geometry.setIndex(indices);geometry.computeBoundingSphere();
         const mesh=new T.Mesh(geometry,material);
         mesh.name='Baked tree and building shadows';
+        mesh.userData.landscapeKind='bakedShadows';
         mesh.position.set(entry.x,0,entry.z);mesh.renderOrder=1;mesh.raycast=()=>{};
         scene.add(mesh);mesh.updateMatrixWorld(true);entry.mesh=mesh;
     }

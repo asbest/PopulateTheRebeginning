@@ -31,3 +31,14 @@ near.lod.scale.setScalar(2);scene.updateMatrixWorld(true);beginLod(camera,render
 state.selectedUnits=[{mesh:near.lod}];beginLod(camera,renderer,state,index);assert.equal(near.lod.userData.activeLod,0);
 state.selectedUnits=[];camera.zoom=2;camera.updateProjectionMatrix();beginLod(camera,renderer,state,index);assert(state.modelLodStats.updated>0);
 console.log('PASS orthographic translation/rotation and camera pan reuse LOD; scale, zoom and selection still update it');
+beginLod(camera,renderer,state,index,visibility);
+const checked=state.modelLodStats.checked;
+beginLod(camera,renderer,state,index,visibility);
+assert(state.modelLodStats.checked<checked);
+near.lod.scale.setScalar(.5);scene.updateMatrixWorld(true);beginLod(camera,renderer,state,index,visibility);
+assert(state.modelLodStats.updated>0);
+camera.zoom=.1;camera.updateProjectionMatrix();beginLod(camera,renderer,state,index,visibility);
+assert.notEqual(near.lod.userData.activeLod,0);
+state.selectedUnits=[{mesh:near.lod}];beginLod(camera,renderer,state,index,visibility);
+assert.equal(near.lod.userData.activeLod,0);
+console.log('PASS orthographic chunk reuse invalidates for model scale, camera zoom and selection');

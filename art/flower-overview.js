@@ -1,6 +1,6 @@
 import {projectedPixels} from './lod-policy.js';
 
-// At subpixel detail replace each daisy/tulip head with one small solid bloom.
+// When individual petals no longer resolve, draw a single bloom for each head.
 // Keep the original stems, palette, instance base positions and wind shader.
 export function createFlowerOverview(T,state,palette,material){
     const records=new WeakMap(),matrix=new T.Matrix4(),offset=new T.Matrix4();
@@ -28,6 +28,8 @@ export function createFlowerOverview(T,state,palette,material){
         clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
         frustum.setFromProjectionMatrix(clip);
         const limit=state.graphicsQuality?.vegetationPixelLimit??2;
+        const strategyLimit=camera.isOrthographicCamera&&state.graphicsQuality?.tier!=='ultra'
+            ?3.5*Math.max(1,renderer.getPixelRatio()):0;
         for(const chunk of Object.values(state.chunks)){
             const flowers=chunk.userData.flowers,stem=flowers?.stems,sourceBounds=stem?.geometry.boundingSphere;
             if(!sourceBounds)continue;
@@ -39,7 +41,8 @@ export function createFlowerOverview(T,state,palette,material){
             }
             sphere.copy(sourceBounds).applyMatrix4(stem.matrixWorld);
             const pixels=projectedPixels(camera,renderer.domElement.height,sphere.center,sphere.radius);
-            if(!frustum.intersectsSphere(sphere)||pixels*.65>limit*(record?.mesh?.visible?1.12:1)){
+            const hysteresis=record?.mesh?.visible?1.12:1;
+            if(!frustum.intersectsSphere(sphere)||pixels*.65>limit*hysteresis&&pixels*.32>strategyLimit*hysteresis){
                 if(record)showOriginal(record);
                 continue;
             }

@@ -28,15 +28,17 @@ try{
   const {measureLandscapeDraws}=await import('./art/landscape-draws.js');
   const grassBatches=gameTestAPI.GrassBatches;
   const {SceneryBatches:scenery,FlowerOverview:flowers,BakedStatics:baked,ShadowCache}=gameTestAPI;
-  for(const zoom of [25,65,110]){
+  for(const zoom of [25,35,65,110]){
    state.viewScale=zoom;gameTestAPI.updateCameraZoom();updateCameraPosition();
-   TerrainLod.overviewEnabled=false;details.enabled=false;await settle();render();const before=renderer.info.render.triangles,a=read(),original=renderer.domElement.toDataURL();
+   TerrainLod.overviewEnabled=false;details.enabled=false;flowers.enabled=false;await settle();render();const before=renderer.info.render.triangles,a=read(),original=renderer.domElement.toDataURL();
    const counts=Object.values(state.chunks).map(c=>c.userData.groundCover.grass?.mesh.count||0);
-   TerrainLod.overviewEnabled=true;details.enabled=true;await settle();render();const after=renderer.info.render.triangles,b=read(),optimized=renderer.domElement.toDataURL();
+   TerrainLod.overviewEnabled=true;details.enabled=true;flowers.enabled=true;await settle();render();const after=renderer.info.render.triangles,b=read(),optimized=renderer.domElement.toDataURL();
    let differing=0,total=0;for(let i=0;i<a.length;i+=4){let max=0;for(let c=0;c<3;c++){const d=Math.abs(a[i+c]-b[i+c]);max=Math.max(max,d);total+=d;}if(max>12)differing++;}
    const pixelError=differing/(a.length/4),meanError=total/(a.length/4*3*255);
    if(pixelError>.015||meanError>.0035)throw Error('Overview appearance changed '+JSON.stringify({zoom,pixelError,meanError}));
    if(zoom>=65&&after>before*.9)throw Error('Insufficient overview savings '+JSON.stringify({zoom,before,after}));
+   if(zoom===35&&!details.stats.visibleSavedTriangles)throw Error('Grass still uses all narrow faces at strategy zoom');
+   if(zoom===35&&!flowers.stats.savedTriangles)throw Error('Flower detail did not simplify at strategy zoom');
    if(Object.values(state.chunks).some((c,i)=>(c.userData.groundCover.grass?.mesh.count||0)!==counts[i]))throw Error('Plant density changed');
    const draws=measureLandscapeDraws(renderer,state.scene,state.camera,render);
    if(!draws.main.grass.calls||!draws.main.terrain.calls||!draws.main.water.calls)

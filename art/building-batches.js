@@ -180,6 +180,7 @@ export function createBuildingBatches(T,state,budget,index,legacy,warm=()=>Promi
    // Relinquish legacy instance ownership before masking the original sources.
    legacy.releaseParts(g.parts.map(r=>r.node));
    const mesh=g.mesh=g.candidateMesh||new T.Mesh(g.geometry,g.material);mesh.name='Static building material batch';
+   mesh.userData.landscapeKind='buildings';
    mesh.position.copy(g.origin);mesh.castShadow=g.cast;mesh.receiveShadow=g.receive;mesh.renderOrder=g.order;
    mesh.frustumCulled=g.culled;mesh.layers.mask=g.layers;mesh.raycast=()=>{};g.scene.add(mesh);
    for(const r of g.parts){owners.set(r.node,{group:g,mask:r.layers});r.node.layers.set(hidden);}

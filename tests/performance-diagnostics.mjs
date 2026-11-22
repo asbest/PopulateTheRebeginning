@@ -17,10 +17,11 @@ try{
   const report=gameTestAPI.PerformanceDiagnostics.report;
   const draws=report.landscapeDraws;
   const calls=draws&&Object.values(draws.main).reduce((sum,entry)=>sum+entry.calls,0);
-  if(!draws?.main.terrain.calls||!draws.shadowCpu||calls!==report.graphics.drawCalls)
+  if(!draws?.main.terrain.calls||!draws.main.bakedShadows.calls||!draws.main.characters.calls||
+   !draws.shadowCpu||draws.sampleFrame!==report.frames||calls!==report.graphics.drawCalls)
    throw Error('Landscape draw attribution failed '+JSON.stringify({draws,calls,graphics:report.graphics}));
   if(!state.isPaused||gameTestAPI.GpuTimer.enabled||!report.frames||!report.fps||!report.cpu.physics||!report.cpu.ai||!report.cpu.units||report.durationSeconds<15)throw Error(JSON.stringify(report));
-  for(const name of ['staticShadows','modelLod','buildingBatches','terrainLod','overviewDetails','characterBatches','sceneryBatches','shadowCache'])
+  for(const name of ['frameSetup','worldStreaming','staticShadows','modelLod','buildingBatches','terrainLod','overviewDetails','characterBatches','sceneryBatches','shadowCache'])
    if(!report.cpu[name]||!Number.isFinite(report.cpu[name].medianMs))throw Error('Missing batching phase '+name);
   if(!report.scene.lodVisibility||!report.scene.characterBatching||!report.scene.sceneryBatching.reason||!Number.isFinite(report.scene.sceneryBatching.potentialSavings))throw Error('Missing visibility/batching decision');
   if(report.scene.staticShadows?.mode!=='baked'||!report.scene.staticShadows.tiles||!report.scene.staticShadows.decals)
