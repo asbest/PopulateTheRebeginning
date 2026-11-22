@@ -44,19 +44,22 @@ try {
             }
             return draw.call(this,camera,scene,geometry,material,object,group);
         };
-        const render=()=>{
+        const render=(refreshShadows=false)=>{
             buffers=uploadBytes=shadowParts=visibleParts=0;
             const keys=new Set(renderer.info.programs.map(p=>p.cacheKey)),start=performance.now();
+            if(refreshShadows)renderer.shadowMap.needsUpdate=true;
             renderer.render(state.scene,state.camera);gl.finish();
             return {ms:performance.now()-start,buffers,uploadBytes,shadowParts,visibleParts,
                 calls:renderer.info.render.calls,contactShadows:batch.stats.farShadows,
                 newPrograms:renderer.info.programs.filter(p=>!keys.has(p.cacheKey)).length};
         };
         focus(-75);render();const away=render();
-        focus(0);const first=render(),steady=render();
+        focus(0);const first=render(true),steady=render();
         focus(-75);render();
         focus(0);const repeat=render();
-        batch.fullShadows=true;render();const full=render();
+        // Count actual casters in both compared passes. The stationary scene
+        // can reuse its shadow map after the full-detail warm-up draw.
+        batch.fullShadows=true;render();const full=render(true);
         batch.fullShadows=false;
         if(first.visibleParts<2500||!first.contactShadows||!first.shadowParts||first.shadowParts>full.shadowParts*.8||
             steady.calls>full.calls*1.04||batch.matrixError()>.0001||batch.stats.fallback)
