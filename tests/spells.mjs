@@ -51,6 +51,45 @@ try{
    return {ballStart:ball.start.toArray(),tip:origin.toArray(),staffCharge:caster.staffCrystal.material.emissiveIntensity};
   });
  });
+ await check('First-person staff stays at the right edge while looking around and casting',async()=>{
+  await fresh();return p.evaluate(()=>{
+   const {caster}=fixture;
+   const camera=state.perspectiveCamera;
+   state.isFPV=true;state.camera=camera;
+   const point=new THREE.Vector3();let minSide=1,maxSide=0;
+   for(const aspect of [.43,1,16/9])for(const pitch of [-.9,0,.8])for(const casting of [false,true]){
+    camera.aspect=aspect;camera.updateProjectionMatrix();
+    state.fpvYaw=pitch*3;state.fpvPitch=pitch;
+    caster.animTime+=.3;caster.staffCastTimer=casting?.4:0;
+    updateCameraPosition();camera.updateMatrixWorld(true);
+    const model=state.scene.getObjectByName('First-person staff');
+    if(!model||caster.staffGrip.visible)throw Error('First-person staff did not replace the world staff');
+    model.updateMatrixWorld(true);
+    const tip=model.getObjectByName('StaffTip').getWorldPosition(point).project(camera);
+    if(tip.x<.65||tip.x>.97||Math.abs(tip.y)>.96||tip.z<-1||tip.z>1)throw Error('Crystal left the right edge '+JSON.stringify({aspect,pitch,casting,x:tip.x,y:tip.y}));
+    model.traverse(mesh=>{
+     const vertices=mesh.geometry?.attributes.position;
+     if(!vertices)return;
+     for(let i=0;i<vertices.count;i++){
+      point.fromBufferAttribute(vertices,i).applyMatrix4(mesh.matrixWorld).project(camera);
+      minSide=Math.min(minSide,point.x);maxSide=Math.max(maxSide,point.x);
+     }
+    });
+   }
+   if(minSide<.57||maxSide>1)throw Error('Staff geometry is in the aiming area or clipped '+JSON.stringify({minSide,maxSide}));
+   caster.staffCastTimer=0;updateCameraPosition();
+   gameTestAPI.executeSpell('blast',fixture.x,fixture.z,caster);
+   const displayedTip=state.scene.getObjectByName('First-person staff').getObjectByName('StaffTip').getWorldPosition(new THREE.Vector3());
+   const ray=state.particles.findLast(effect=>effect.mesh?.geometry?.type==='CylinderGeometry');
+   const rayLength=ray.mesh.geometry.parameters.height;
+   const rayStart=new THREE.Vector3(0,-rayLength*.5,0).applyQuaternion(ray.mesh.quaternion).add(ray.mesh.position);
+   if(rayStart.distanceTo(displayedTip)>.001)throw Error('Cast effect did not begin at the visible crystal');
+   if(state.projectiles.at(-1).start.distanceTo(caster.staffTip.getWorldPosition(new THREE.Vector3()))>.001)throw Error('First person changed the projectile origin');
+   setCameraView('strategy');
+   if(!caster.staffGrip.visible||state.scene.getObjectByName('First-person staff'))throw Error('World staff was not restored');
+   return {minSide,maxSide};
+  });
+ });
  await check('Only explicit hypnosis restores a timed faction change after saving',async()=>{
   await fresh();return p.evaluate(()=>{
    const {caster,enemy,x,z}=fixture,id=enemy.id;

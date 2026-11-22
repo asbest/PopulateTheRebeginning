@@ -750,6 +750,7 @@ import { createPerformanceDiagnostics } from './art/performance-diagnostics.js';
 import { invalidateHeightChunks } from './art/height-cache.js';
 import { createInstanceWriter } from './art/instance-writer.js';
 import { createCharacterBatches } from './art/character-batches.js';
+import { createFirstPersonStaff } from './art/first-person-staff.js';
 import { createBattleWork, createBattleProfiler } from './art/battle-work.js';
 import { observeEnemy, counterWeights, chooseBattleSpell, formationPoint, isMagicThreat } from './art/enemy-tactics.js';
 import {assetURL} from './art/asset-urls.js';
@@ -758,6 +759,7 @@ const localStorage=createBrowserStorage();
 installAssetCache();
 const Art = createArtKit(THREE);
 const Characters = createCharacters(THREE,Art);
+const FirstPersonStaff = createFirstPersonStaff(THREE);
 const Locomotion = createLocomotion(THREE);
 const TrainingProgress = createTrainingProgress(THREE);
 window.THREE = THREE; window.Characters = Characters;
@@ -7287,7 +7289,12 @@ function staffTipPosition(caster) {
 }
 function staffRay(caster,target,color=0x74eaff) {
     if(!caster?.staffTip)return;
-    const start=staffTipPosition(caster),delta=target.clone().sub(start),length=delta.length();
+    let visibleTip=null;
+    if(state.isFPV&&state.camera===state.perspectiveCamera&&state.selectedUnits[0]===caster){
+        FirstPersonStaff.update(state.scene,state.camera,caster);
+        visibleTip=FirstPersonStaff.tipPosition(caster);
+    }
+    const start=visibleTip||staffTipPosition(caster),delta=target.clone().sub(start),length=delta.length();
     if(length<.05)return;
     const material=new THREE.MeshBasicMaterial({color,transparent:true,opacity:.85,
         depthWrite:false,blending:THREE.AdditiveBlending});
@@ -12859,6 +12866,9 @@ function updateCameraPosition() {
              }
          }
     }
+
+    const controlled=state.isFPV?state.selectedUnits[0]:null;
+    FirstPersonStaff.update(state.scene,state.perspectiveCamera,controlled?.staffGrip&&controlled.state!=='dead'?controlled:null);
 
     if(!state.isFPV) {
         const dist = CONFIG.CAMERA.ORTHO_DIST;
