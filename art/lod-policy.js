@@ -54,7 +54,7 @@ export function protectedLod(node){
     return false;
 }
 export function configureLod(T,lod,radius,error=0){
-    let frame=-1,level=0,lastCamera,lastDemand;const point=new T.Vector3();
+    let frame=-1,level=0,lastCamera,lastDemand,lastScale;const point=new T.Vector3();
     lod.autoUpdate=false;
     lod.update=function(camera){
         // Explicit standalone calls (asset tools/tests) remain supported.
@@ -63,8 +63,15 @@ export function configureLod(T,lod,radius,error=0){
         const demand=Math.fround(scale*perUnit);
         // A translated/rotated sphere has the same projected size in an
         // orthographic view. Cache the actual LOD input, not every pose matrix.
-        if(frame===generation&&lastCamera===camera&&lastDemand===demand)return false;
-        frame=generation;lastCamera=camera;lastDemand=demand;
+        if(frame===generation&&lastCamera===camera){
+            if(lastDemand===demand)return false;
+            // Delay small perspective changes only while the current model
+            // remains within the pixel error budget. Scale changes still run immediately.
+            const currentError=Array.isArray(error)?error[level]||0:error;
+            if(context.fpv&&camera.isPerspectiveCamera&&lastScale===scale&&
+                Math.abs(demand-lastDemand)<=lastDemand*.06&&(!level||currentError*scale*perUnit<=.8))return false;
+        }
+        frame=generation;lastCamera=camera;lastDemand=demand;lastScale=scale;
         const detail=Math.max(.1,graphicsSettings.profile.detail*graphicsSettings.detailScale);
         this.userData.lodPixelThreshold=75/detail;
         let next=chooseLod(level,perUnit*radius*scale*2,75/detail,16/detail);

@@ -4657,7 +4657,10 @@ function updateChunks(force = false, specificChunks = null) {
 
     const activeKeys = new Set();
     let createdCount = 0;
-    const MAX_CHUNKS_PER_FRAME = CONFIG.TERRAIN.MAX_CHUNKS_PER_FRAME;
+    // Spread outer-ring work over several frames while walking. The camera's
+    // near-plane terrain and collider are still loaded synchronously on demand.
+    const walkingView=state.isFPV&&state.assetsReady&&!state.isPaused&&!force;
+    const MAX_CHUNKS_PER_FRAME = walkingView ? 1 : CONFIG.TERRAIN.MAX_CHUNKS_PER_FRAME;
     const streamStart=performance.now();
 
     // Refresh affected loaded chunks even when construction is outside the view.
@@ -4692,8 +4695,13 @@ function updateChunks(force = false, specificChunks = null) {
     }
     TerrainStream.retain(activeKeys);
     if(!force) {
+        let removed=0;
         for(let key in state.chunks) {
             if(!activeKeys.has(key)) {
+                if(walkingView&&(removed>=1||createdCount>0)){
+                    chunksLoadingPending=true;
+                    continue;
+                }
                 state.scene.remove(state.chunks[key]);
                 disposeChunkGeometry(state.chunks[key]);
                 if (state.physicsWorld && state.terrainColliders.has(key)) {
@@ -4701,6 +4709,7 @@ function updateChunks(force = false, specificChunks = null) {
                     state.terrainColliders.delete(key);
                 }
                 delete state.chunks[key];
+                removed++;
             }
         }
     }
@@ -12783,6 +12792,7 @@ window.toggleCameraView = function() {
 
 window.updateCameraPosition = updateCameraPosition;
 const _fpvForward=new THREE.Vector3(),_fpvRight=new THREE.Vector3(),_fpvUp=new THREE.Vector3();
+const _fpvSurfaceCell={ix:-1};
 function ensureFirstPersonGround(x,z) {
     const cx=Math.round(x/CHUNK_SIZE),cz=Math.round(z/CHUNK_SIZE),key=`${cx},${cz}`;
     if(state.chunks[key])return;
@@ -12797,14 +12807,15 @@ function firstPersonTerrainFloor(camera) {
     _fpvUp.set(0,1,0).applyQuaternion(camera.quaternion);
     const halfHeight=Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*near,halfWidth=halfHeight*camera.aspect;
     ensureFirstPersonGround(p.x,p.z);
-    let floor=getSurfaceHeight(p.x,p.z)+.2;
+    _fpvSurfaceCell.ix=-1;
+    let floor=sampleSurfaceHeight(p.x,p.z,_fpvSurfaceCell)+.2;
     // Protect the actual clipping-plane corners, not only the camera origin.
     for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++){
         const dx=_fpvForward.x*near+_fpvRight.x*halfWidth*x+_fpvUp.x*halfHeight*y;
         const dy=_fpvForward.y*near+_fpvRight.y*halfWidth*x+_fpvUp.y*halfHeight*y;
         const dz=_fpvForward.z*near+_fpvRight.z*halfWidth*x+_fpvUp.z*halfHeight*y;
         ensureFirstPersonGround(p.x+dx,p.z+dz);
-        floor=Math.max(floor,getSurfaceHeight(p.x+dx,p.z+dz)+.1-dy);
+        floor=Math.max(floor,sampleSurfaceHeight(p.x+dx,p.z+dz,_fpvSurfaceCell)+.1-dy);
     }
     return floor;
 }

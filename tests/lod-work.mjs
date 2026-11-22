@@ -47,3 +47,19 @@ assert.notEqual(near.lod.userData.activeLod,0);
 state.selectedUnits=[{mesh:near.lod}];beginLod(camera,renderer,state,index,visibility);
 assert.equal(near.lod.userData.activeLod,0);
 console.log('PASS orthographic chunk reuse invalidates for model scale, camera zoom and selection');
+
+const walkCamera=new T.PerspectiveCamera(60,1,.1,300);
+const walkLod=new T.LOD();
+for(let i=0;i<3;i++)walkLod.addLevel(new T.Object3D(),i*30);
+configureLod(T,walkLod,1,[0,.07,.15]);scene.add(walkLod);
+walkLod.position.z=-50;scene.updateMatrixWorld(true);
+state.isFPV=true;state.selectedUnits=[];
+function walk(z){walkCamera.position.z=z;walkCamera.updateMatrixWorld(true);beginLod(walkCamera,renderer,state);return walkLod.update(walkCamera);}
+assert(walk(0));assert.notEqual(walkLod.userData.activeLod,0);
+for(let z=.1;z<=2;z+=.1)assert(!walk(z));
+assert(walk(-5));
+// A small approach across the screen-error boundary must still restore detail.
+walkLod.scale.setScalar(1.15);scene.updateMatrixWorld(true);
+walk(3);assert.equal(walkLod.userData.activeLod,1);
+assert(walk(2));assert.equal(walkLod.userData.activeLod,0);
+console.log('PASS first-person steps reuse LOD decisions while the current mesh stays within the pixel error budget');

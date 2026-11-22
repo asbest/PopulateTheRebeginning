@@ -1,4 +1,5 @@
 import {projectedPixels,chooseLod} from './lod-policy.js';
+const FIRST_PERSON_PREPARATION_LIMIT=12;
 // Full perimeter samples join coarse/fine tiles and chunk borders. Matching
 // coarse neighbours share a single edge. Authoritative collision data is intact.
 export function terrainIndices(T,geometry,res,step,water,shore,maxError=Infinity,screenBudget=false,dryInterior=false){
@@ -55,9 +56,10 @@ export function terrainIndices(T,geometry,res,step,water,shore,maxError=Infinity
 export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()){
     const entries=new Set(),point=new T.Vector3(),world=new T.Matrix4(),projection=new T.Matrix4(),clip=new T.Matrix4(),frustum=new T.Frustum();
     let previousCamera,previousHeight,previousFocusX,previousFocusZ,previousFPV,previousEnabled,previousLayers,previousOverview;
+    let pendingFirstPerson=0;
     const reasons={disabled:0,offscreen:0,firstPerson:0,focus:0,preparing:0,pixelError:0,shorelineOrDetail:0,active:0};
     const stats={full:0,medium:0,far:0,savedTriangles:0,prepared:0,errors:0,lastError:null,
-        reusedFrames:0,updatedEntries:0,reusedEntries:0,cameraMode:null,zoom:1,viewScale:0,
+        reusedFrames:0,updatedEntries:0,reusedEntries:0,pendingFirstPerson:0,cameraMode:null,zoom:1,viewScale:0,
         viewportHeight:0,pixelErrorLimit:.8,overviewEnabled:true,occludedWaterTriangles:0,reasons,tiles:{coarse:0,protectedShore:0,errorLimited:0},visible:{full:0,medium:0,far:0,savedTriangles:0,occludedWaterTriangles:0}};
     state.terrainLodStats=stats;
     const api={enabled:true,overviewEnabled:true,stats,register,update};
@@ -116,6 +118,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             if(e.proxy.material!==e.source.material){e.proxy.material=e.source.material;e.dirty=true;}
             const shown=e.chunk.visible&&e.proxy.material.visible!==false;
             if(e.shown!==shown){e.shown=shown;e.dirty=true;}
+            if(e.waitingForSlot&&pendingFirstPerson<FIRST_PERSON_PREPARATION_LIMIT)e.dirty=true;
             e.active=active;dirty ||= e.dirty;
         }
         if(!dirty){stats.reusedFrames++;stats.updatedEntries=0;stats.reusedEntries=entries.size;return;}
@@ -143,6 +146,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
     }
     function select(e,camera,height,focus){
             stats.updatedEntries++;e.dirty=false;e.matrix.copy(e.chunk.matrixWorld);
+            e.waitingForSlot=false;e.requestedKey=null;
             const g=e.source.geometry;
             point.copy(e.source.position).applyMatrix4(e.chunk.matrixWorld);
             const pixels=projectedPixels(camera,height,point,0)*40;
@@ -156,10 +160,15 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
                 const step=e.dryInterior?1:[2,4,8][e.requested],worldError=.8/projectedPixels(camera,height,point,g.boundingSphere?.radius||0);
                 // Round downward: a cached variant never exceeds the pixel limit.
                 const limit=2**Math.floor(Math.log2(Math.max(Number.MIN_VALUE,worldError))),key=e.dryInterior?'dry':step+'/'+limit+'/'+overview;
-                if(!e.levels.has(key)&&!e.pending.has(key)&&e.pending.size<2){
+                const firstPerson=state.isFPV&&camera.isPerspectiveCamera;
+                e.requestedKey=key;
+                const needsPreparation=!e.levels.has(key)&&!e.pending.has(key)&&e.pending.size<2;
+                e.waitingForSlot=needsPreparation&&firstPerson&&pendingFirstPerson>=FIRST_PERSON_PREPARATION_LIMIT;
+                if(needsPreparation&&!e.waitingForSlot){
                     const gen=e.generation;e.pending.add(key);
+                    if(firstPerson)stats.pendingFirstPerson=++pendingFirstPerson;
                     budget.enqueue('terrain-lod/'+e.proxy.uuid+'/'+gen+'/'+key,async()=>{
-                        if(entries.has(e)&&gen===e.generation){
+                        if(entries.has(e)&&gen===e.generation&&(!firstPerson||e.requestedKey===key)){
                             const result=terrainIndices(T,g,e.res,step,e.water,shore,limit,overview,e.dryInterior);
                             result.step=step;result.overview=overview;
                             if(result.attribute.count>=g.index.count){result.attribute=g.index;result.owned=false;result.simplified=0;}
@@ -182,7 +191,8 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
                             finally{g.removeEventListener('dispose',detach);detach();}
                         }
                         e.pending.delete(key);e.dirty=true;
-                    },0,true).catch(error=>{e.pending.delete(key);stats.errors++;stats.lastError=String(error);console.warn('Terrain LOD kept full detail',error);});
+                    },0,true).catch(error=>{e.pending.delete(key);stats.errors++;stats.lastError=String(error);console.warn('Terrain LOD kept full detail',error);})
+                        .finally(()=>{if(firstPerson)stats.pendingFirstPerson=--pendingFirstPerson;});
                 }
                 for(const result of e.levels.values())if((result.simplified||result.occludedTriangles)&&(result.occludedTriangles||result.overview===overview)&&result.step<=step&&result.error<=worldError&&
                     (!selected||result.attribute.count<selected.attribute.count))selected=result;

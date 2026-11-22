@@ -329,6 +329,30 @@ try{
   state.isFPV=false;window.updateCameraPosition();
   return {samples,minGap,ownKey,cameraKey};
  }));
+ await check('Walking across a chunk boundary spreads streaming work and retains ground collision',()=>page.evaluate(()=>{
+  const {CONFIG,TerrainStream,updateChunks}=gameTestAPI;
+  const size=CONFIG.TERRAIN.CHUNK_SIZE,range=CONFIG.TERRAIN.RENDER_DISTANCE,side=2*range+1;
+  TerrainStream.disable('fixed first-person streaming fixture');
+  const traveler=state.units.find(u=>u.state!=='dead'&&u.type==='warrior');
+  traveler.placeOnGround(size/2-.2,0);state.selectedUnits=[traveler];
+  state.isFPV=true;state.camera=state.perspectiveCamera;state.isPaused=true;
+  for(let i=0;i<=side**2;i++)updateChunks();
+  if(Object.keys(state.chunks).length!==side**2)throw Error('Incomplete walking fixture');
+  traveler.placeOnGround(size/2+.2,0);state.isPaused=false;
+  window.updateCameraPosition();
+  if(!state.terrainColliders.has('1,0'))throw Error('Walking lost the collider under the camera');
+  let changed=0,peak=0;
+  for(let i=0;i<side*3;i++){
+   const before=new Set(Object.keys(state.chunks));updateChunks();
+   const after=new Set(Object.keys(state.chunks));
+   const work=[...before].filter(key=>!after.has(key)).length+[...after].filter(key=>!before.has(key)).length;
+   peak=Math.max(peak,work);changed+=work;
+  }
+  state.isPaused=true;
+  if(peak!==1||changed!==2*side||Object.keys(state.chunks).length!==side**2||!state.chunks[`${range+1},0`])
+   throw Error('Walking did not stream one outer chunk per update '+JSON.stringify({peak,changed,loaded:Object.keys(state.chunks).length}));
+  return {peak,changed,colliders:state.terrainColliders.size};
+ }));
  await check('No movement runtime errors',async()=>{if(errors.length)throw new Error(errors.join('\n'));});
 }finally{await browser.close();await fs.writeFile(path.join(root,'test-results','locomotion-report.json'),JSON.stringify({results,errors},null,2));}
 process.exitCode=results.some(r=>!r.pass)?1:0;

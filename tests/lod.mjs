@@ -65,3 +65,24 @@ waterMaterial.uniforms.waveStrength.value=1.55;await prepare();assert(lod.stats.
 for(let i=0;i<land.attributes.position.count;i++)land.attributes.position.setY(i,-2);land.attributes.position.needsUpdate=true;
 lod.update(camera,renderer);assert.equal(chunk.children[3].geometry.index,authoritative);assert.equal(lod.stats.occludedWaterTriangles,0);
 console.log('PASS dry-water culling falls back immediately after flooding or unsupported wave strength, without changing collision indices');
+
+const distantScene=new T.Scene(),movingCamera=new T.PerspectiveCamera(60,1,.1,450);
+const queue=[];
+const movingLod=createTerrainLod(T,{isFPV:true,viewScale:3},{enqueue(key,run){
+    return new Promise((resolve,reject)=>queue.push(()=>Promise.resolve().then(run).then(resolve,reject)));
+}},0);
+for(let i=0;i<9;i++){
+ const section=new T.Group();section.position.set((i%3-1)*40,0,-180-Math.floor(i/3)*40);
+ section.add(new T.Mesh(land.clone(),new T.MeshBasicMaterial()),new T.Mesh(liquid.clone(),waterMaterial));
+ distantScene.add(section);movingLod.register(section,80);
+}
+distantScene.updateMatrixWorld(true);movingCamera.updateMatrixWorld(true);movingLod.update(movingCamera,renderer);
+assert.equal(queue.length,12);assert.equal(movingLod.stats.pendingFirstPerson,12);
+movingCamera.rotation.y=Math.PI;movingCamera.updateMatrixWorld(true);movingLod.update(movingCamera,renderer);
+await Promise.all(queue.splice(0).map(run=>run()));
+assert.equal(movingLod.stats.prepared,0);assert.equal(movingLod.stats.pendingFirstPerson,0);
+movingCamera.rotation.y=0;movingCamera.updateMatrixWorld(true);movingLod.update(movingCamera,renderer);
+await Promise.all(queue.splice(0).map(run=>run()));
+movingLod.update(movingCamera,renderer);
+assert(queue.length>0&&queue.length<=12);
+console.log('PASS first-person terrain queues are bounded, skip work left behind and resume preparation in view');
