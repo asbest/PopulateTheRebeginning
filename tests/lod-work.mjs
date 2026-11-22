@@ -11,11 +11,16 @@ function chunkAt(x){const chunk=new T.Group();chunk.position.x=x;
  configureLod(T,lod,1);chunk.add(lod);state.chunks[x]=chunk;scene.add(chunk);transforms.add(chunk);return {chunk,lod};
 }
 const near=chunkAt(0),shadowOnly=chunkAt(80),far=chunkAt(2000);
+shadowOnly.lod.userData.landscapeKind='trees';
 const camera=new T.OrthographicCamera(-10,10,10,-10,.1,100);camera.position.set(0,20,0);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
 const sun=new T.DirectionalLight();sun.castShadow=true;sun.position.set(80,30,0);sun.target.position.set(80,0,0);
 Object.assign(sun.shadow.camera,{left:-15,right:15,top:15,bottom:-15,near:.1,far:100});sun.shadow.camera.updateProjectionMatrix();scene.add(sun,sun.target);
 scene.updateMatrixWorld(true);const visibility=createLodVisibility(T,state,index,transforms);visibility.begin(camera,renderer);
 assert(visibility.allow(near.lod));assert(visibility.allow(shadowOnly.lod));assert(!visibility.allow(far.lod));
+state.staticShadowStats={mode:'baked'};visibility.begin(camera,renderer);
+assert(!visibility.allow(shadowOnly.lod));
+state.staticShadowStats.mode='dynamic';visibility.begin(camera,renderer);
+assert(visibility.allow(shadowOnly.lod));
 visibility.begin(camera,renderer);assert.equal(visibility.stats.rebuiltBounds,0);
 renderer.shadowMap.enabled=false;visibility.begin(camera,renderer);assert(!visibility.allow(shadowOnly.lod));renderer.shadowMap.enabled=true;
 const point=new T.PointLight();point.castShadow=true;scene.add(point);scene.updateMatrixWorld(true);visibility.begin(camera,renderer);assert(visibility.stats.shadowFallback&&visibility.allow(far.lod));scene.remove(point);

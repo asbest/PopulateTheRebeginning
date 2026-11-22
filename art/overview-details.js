@@ -1,4 +1,4 @@
-import {projectedPixels} from './lod-policy.js';
+import {projectedCoverPixels} from './lod-policy.js';
 // Keep all eight volumetric grass blades. Only intermediate rings disappear
 // when their maximum displacement is below half a drawing-buffer pixel.
 export function grassIndices(T,geometry,step){
@@ -16,7 +16,7 @@ export function grassIndices(T,geometry,step){
  }
  return {index:new T.Uint16BufferAttribute(indices,1),error:error*2};
 }
-// The narrow sides of a blade cover less than a pixel in the strategy view.
+// The narrow sides of a blade can cover less than a pixel.
 // Keep both broad faces, with the original positions, normals and wind.
 function thinGrassIndices(T,geometry){
  const p=geometry.attributes.position,indices=[];let thickness=0;
@@ -33,7 +33,7 @@ function thinGrassIndices(T,geometry){
 export function createOverviewDetails(T,state,source=()=>null){
  const records=new WeakMap(),variants=new WeakMap(),sphere=new T.Sphere();
  const stats={full:0,medium:0,far:0,savedTriangles:0,visibleSavedTriangles:0};state.overviewDetailStats=stats;
- const api={enabled:true,stats,update,release};const clip=new T.Matrix4(),frustum=new T.Frustum();
+ const api={enabled:true,stats,update,release};const clip=new T.Matrix4(),frustum=new T.Frustum(),box=new T.Box3();
  function release(mesh){const r=records.get(mesh);if(!r)return;
   if(mesh.geometry===r.geometry&&r.levels.some(level=>mesh.geometry.index===level.index))mesh.geometry.setIndex(r.original);
   records.delete(mesh);
@@ -41,10 +41,13 @@ export function createOverviewDetails(T,state,source=()=>null){
  function update(camera,renderer){
   stats.full=stats.medium=stats.far=stats.savedTriangles=stats.visibleSavedTriangles=0;
   clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(clip);
+  const ultra=state.graphicsQuality?.tier==='ultra',firstPerson=state.isFPV&&camera.isPerspectiveCamera&&!ultra;
   for(const key in state.chunks){const layer=state.chunks[key].userData?.groundCover?.grass,mesh=layer?.mesh;if(!mesh)continue;
    const g=mesh.geometry,p=g.attributes.position;
    // Custom/replaced ground-cover geometry retains its original path.
    if(p?.count!==160||!g.index)continue;
+   const visible=mesh.visible&&mesh.layers.test(camera.layers)&&frustum.intersectsObject(mesh);
+   if(firstPerson&&api.enabled&&!visible)continue;
    let r=records.get(mesh);
    if(!r||r.geometry!==g||r.positionVersion!==p.version){
     const template=p.version===0?(source()||g):g,base=template.attributes.position;
@@ -56,10 +59,10 @@ export function createOverviewDetails(T,state,source=()=>null){
     r={geometry:g,original:r?.geometry===g?r.original:g.index,levels,scale,level:0,positionVersion:p.version};records.set(mesh,r);
    }
    let level=0;
-   if(api.enabled&&!state.isFPV&&g.boundingSphere){
+   if(api.enabled&&(!state.isFPV||firstPerson)&&g.boundingSphere){
     sphere.copy(g.boundingSphere).applyMatrix4(mesh.matrixWorld);
-    const pixels=projectedPixels(camera,renderer.domElement.height,sphere.center,sphere.radius),scale=r.scale*mesh.matrixWorld.getMaxScaleOnAxis();
-    if(camera.isOrthographicCamera&&state.graphicsQuality?.tier!=='ultra'&&p.version===0&&
+    const pixels=projectedCoverPixels(camera,renderer.domElement.height,mesh,sphere,box),scale=r.scale*mesh.matrixWorld.getMaxScaleOnAxis();
+    if((camera.isOrthographicCamera&&!ultra||firstPerson)&&p.version===0&&
        r.levels[2].error*scale*pixels*1.1<=(r.level===3?.95:.8))level=3;
     if(pixels*scale*.62<8)for(let i=0;i<2;i++){
      // Wind is an affine height-dependent shear of magnitude < .08.
@@ -69,7 +72,7 @@ export function createOverviewDetails(T,state,source=()=>null){
    r.level=level;const index=level?r.levels[level-1].index:r.original;if(g.index!==index)g.setIndex(index);
    stats[['full','medium','far','medium'][level]]++;
    const saved=(r.original.count-index.count)/3*mesh.count;stats.savedTriangles+=saved;
-   if(mesh.visible&&mesh.layers.test(camera.layers)&&frustum.intersectsObject(mesh))stats.visibleSavedTriangles+=saved;
+   if(visible)stats.visibleSavedTriangles+=saved;
   }
  }
  return api;

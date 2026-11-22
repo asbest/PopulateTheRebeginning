@@ -26,6 +26,10 @@ export function createLodVisibility(T,state,index,transforms){
      for(let p=node;p&&p!==chunk;p=p.parent)if(!transforms.has(p))return false;
      return true;
     });
+    e.onlyTrees=e.members.length>0&&e.members.every(node=>{
+     for(let p=node;p&&p!==chunk;p=p.parent)if(p.userData.landscapeKind==='trees')return true;
+     return false;
+    });
    }
    const dirty=topology||pose||terrain||!e.matrix.equals(chunk.matrixWorld)||e.pending;
    // Repeated transform changes (burning/growing props) use the original LOD
@@ -47,8 +51,9 @@ export function createLodVisibility(T,state,index,transforms){
    }else if(moving)e.pending=true;
    if(dirty)e.demand=undefined;
    e.revision=list.revision;e.version=version;e.land=land;e.landVersion=land?.version;
-   e.needed=moving||e.unsafe||unknownShadow||cameraFrustum.intersectsSphere(e.sphere);
-   for(let i=0;!e.needed&&i<shadows.length;i++)e.needed=shadows[i].intersectsSphere(e.sphere);
+   const usesShadowFrustum=!(e.onlyTrees&&state.staticShadowStats?.mode==='baked');
+   e.needed=moving||e.unsafe||usesShadowFrustum&&unknownShadow||cameraFrustum.intersectsSphere(e.sphere);
+   if(usesShadowFrustum)for(let i=0;!e.needed&&i<shadows.length;i++)e.needed=shadows[i].intersectsSphere(e.sphere);
    if(e.unsafe||moving)stats.unsafeChunks++;
    if(e.needed)stats.visibleChunks++;else stats.skippedChunks++;
   }

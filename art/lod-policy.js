@@ -35,6 +35,15 @@ export function projectedPixels(camera,height,position,margin=0){
     const depth=Math.max(camera.near,-(e[2]*position.x+e[6]*position.y+e[10]*position.z+e[14])-margin);
     return height*Math.abs(camera.projectionMatrix.elements[5])*.5/(camera.isPerspectiveCamera?depth:1);
 }
+export function projectedCoverPixels(camera,height,mesh,sphere,box){
+    if(!camera.isPerspectiveCamera||!mesh.coverBounds)return projectedPixels(camera,height,sphere.center,sphere.radius);
+    // Use the front of the entire cover batch, including blades at its nearest edge.
+    box.copy(mesh.coverBounds).applyMatrix4(mesh.matrixWorld);
+    const view=camera.matrixWorldInverse.elements;
+    const margin=(Math.abs(view[2])*(box.max.x-box.min.x)+Math.abs(view[6])*(box.max.y-box.min.y)+
+        Math.abs(view[10])*(box.max.z-box.min.z))*.5;
+    return projectedPixels(camera,height,sphere.center,margin);
+}
 export function chooseLod(previous,pixels,near,far){
     if(previous===0)return pixels<near*.85?(pixels<far*.85?2:1):0;
     if(previous===1)return pixels>near*1.15?0:pixels<far*.85?2:1;

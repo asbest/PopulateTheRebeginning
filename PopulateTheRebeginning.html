@@ -4954,8 +4954,8 @@ function setGroundCoverBounds(mesh,data) {
         minZ=Math.min(minZ,d.z);maxZ=Math.max(maxZ,d.z);
     }
     if(!data.length)return;
-    const bounds=new THREE.Box3(new THREE.Vector3(minX-2,minY-2,minZ-2),
-        new THREE.Vector3(maxX+2,maxY+4,maxZ+2));
+    const bounds=mesh.coverBounds||(mesh.coverBounds=new THREE.Box3());
+    bounds.min.set(minX-2,minY-2,minZ-2);bounds.max.set(maxX+2,maxY+4,maxZ+2);
     bounds.getBoundingSphere(mesh.geometry.boundingSphere || (mesh.geometry.boundingSphere=new THREE.Sphere()));
     mesh.frustumCulled=true;
 }
@@ -4968,9 +4968,9 @@ function setFlowerBounds(mesh,data) {
         minY=Math.min(minY,flower.h);maxY=Math.max(maxY,flower.h);
         minZ=Math.min(minZ,flower.z);maxZ=Math.max(maxZ,flower.z);
     }
-    new THREE.Box3(new THREE.Vector3(minX-1,minY-1,minZ-1),
-        new THREE.Vector3(maxX+1,maxY+2,maxZ+1))
-        .getBoundingSphere(mesh.geometry.boundingSphere||(mesh.geometry.boundingSphere=new THREE.Sphere()));
+    const bounds=mesh.coverBounds||(mesh.coverBounds=new THREE.Box3());
+    bounds.min.set(minX-1,minY-1,minZ-1);bounds.max.set(maxX+1,maxY+2,maxZ+1);
+    bounds.getBoundingSphere(mesh.geometry.boundingSphere||(mesh.geometry.boundingSphere=new THREE.Sphere()));
     mesh.frustumCulled=true;
 }
 

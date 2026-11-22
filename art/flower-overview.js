@@ -1,10 +1,10 @@
-import {projectedPixels} from './lod-policy.js';
+import {projectedCoverPixels} from './lod-policy.js';
 
 // When individual petals no longer resolve, draw a single bloom for each head.
 // Keep the original stems, palette, instance base positions and wind shader.
 export function createFlowerOverview(T,state,palette,material){
     const records=new WeakMap(),matrix=new T.Matrix4(),offset=new T.Matrix4();
-    const sphere=new T.Sphere(),clip=new T.Matrix4(),frustum=new T.Frustum();
+    const sphere=new T.Sphere(),clip=new T.Matrix4(),frustum=new T.Frustum(),box=new T.Box3();
     const stats={chunks:0,blooms:0,savedTriangles:0};
     state.flowerOverviewStats=stats;
     const api={enabled:true,stats,update,release};
@@ -28,21 +28,22 @@ export function createFlowerOverview(T,state,palette,material){
         clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
         frustum.setFromProjectionMatrix(clip);
         const limit=state.graphicsQuality?.vegetationPixelLimit??2;
-        const strategyLimit=camera.isOrthographicCamera&&state.graphicsQuality?.tier!=='ultra'
+        const ultra=state.graphicsQuality?.tier==='ultra',firstPerson=state.isFPV&&camera.isPerspectiveCamera&&!ultra;
+        const bloomLimit=(camera.isOrthographicCamera&&!ultra||firstPerson)
             ?3.5*Math.max(1,renderer.getPixelRatio()):0;
         for(const chunk of Object.values(state.chunks)){
             const flowers=chunk.userData.flowers,stem=flowers?.stems,sourceBounds=stem?.geometry.boundingSphere;
             if(!sourceBounds)continue;
             let record=records.get(chunk);
             if(record&&record.stem!==stem){release(chunk);record=null;}
-            if(!api.enabled||state.isFPV||!chunk.visible||!stem.visible){
+            if(!api.enabled||state.isFPV&&!firstPerson||!chunk.visible||!stem.visible){
                 if(record)showOriginal(record);
                 continue;
             }
             sphere.copy(sourceBounds).applyMatrix4(stem.matrixWorld);
-            const pixels=projectedPixels(camera,renderer.domElement.height,sphere.center,sphere.radius);
+            const pixels=projectedCoverPixels(camera,renderer.domElement.height,stem,sphere,box);
             const hysteresis=record?.mesh?.visible?1.12:1;
-            if(!frustum.intersectsSphere(sphere)||pixels*.65>limit*hysteresis&&pixels*.32>strategyLimit*hysteresis){
+            if(!frustum.intersectsSphere(sphere)||pixels*.65>limit*hysteresis&&pixels*.32>bloomLimit*hysteresis){
                 if(record)showOriginal(record);
                 continue;
             }

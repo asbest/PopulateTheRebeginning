@@ -7,6 +7,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
 try{
  const page=await browser.newPage({viewport:{width:800,height:600}}),errors=[];
  await seedWorld(page,98217);page.on('pageerror',e=>errors.push(String(e)));
+ await page.addInitScript(()=>localStorage.setItem('graphics-quality','high'));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:90000});
  const result=await page.evaluate(async()=>{
@@ -55,7 +56,40 @@ try{
    }
   }
   for(let i=0;i<sources.length;i++)if(sources[i].geometry.index.array.some((v,j)=>v!==indices[i][j]))throw Error('FPV LOD modified authoritative topology');
-  return {full,reduced,stats,pixelError,originalImage,optimizedImage,fpvFull,fpvReduced,fpvPixelError,fpvStats,fpvOriginalImage,fpvOptimizedImage,physicsUnchanged:true};
+  const {OverviewDetails:grass,FlowerOverview:flowers,CharacterBatches:characters}=gameTestAPI;
+  const {measureLandscapeDraws}=await import('./art/landscape-draws.js');
+  const render=()=>draw.call(renderer,state.scene,state.camera);
+  const cover=()=>measureLandscapeDraws(renderer,state.scene,state.camera,render).main;
+  grass.enabled=flowers.enabled=false;render();const unoptimized=cover(),coverBefore=pixels();
+  const size=gameTestAPI.CONFIG.TERRAIN.CHUNK_SIZE,p=state.camera.position;
+  const nearGrass=state.chunks[`${Math.round(p.x/size)},${Math.round(p.z/size)}`]?.userData.groundCover.grass?.mesh;
+  const nearIndex=nearGrass?.geometry.index;
+  grass.enabled=flowers.enabled=true;
+  for(let i=0;i<24;i++)render();
+  const optimized=cover(),coverAfter=pixels();
+  let changedCover=0;
+  for(let i=0;i<coverBefore.length;i+=4)if(Math.max(...[0,1,2].map(c=>Math.abs(coverBefore[i+c]-coverAfter[i+c])))>12)changedCover++;
+  const coverError=changedCover/(coverBefore.length/4);
+  if(!nearGrass||nearGrass.geometry.index!==nearIndex||!grass.stats.visibleSavedTriangles||
+     optimized.grass.triangles>=unoptimized.grass.triangles||optimized.flowers.triangles>=unoptimized.flowers.triangles||coverError>.018)
+   throw Error('FPV ground cover quality or savings failed '+JSON.stringify({unoptimized,optimized,coverError,grass:grass.stats,flowers:flowers.stats}));
+  for(let i=0;i<32;i++){
+   const distance=i<12?5+(i%4)*2:27+(i%6)*2,offset=(i%5-2)*1.2;
+   const x=selected.mesh.position.x+.84*distance-.54*offset,z=selected.mesh.position.z+.54*distance+.84*offset;
+   state.units.push(new Humanoid(i%2,'warrior',x,z));
+  }
+  const shadowDraws=enabled=>{
+   characters.firstPersonBudget=enabled;render();
+   return measureLandscapeDraws(renderer,state.scene,state.camera,render).shadows.characters;
+  };
+  const originalShadows=shadowDraws(false),reducedShadows=shadowDraws(true);
+  if(!reducedShadows.calls||reducedShadows.triangles>=originalShadows.triangles||!characters.stats.farShadows)
+   throw Error('FPV shadows did not preserve local casters and fall back for distant figures '+JSON.stringify({originalShadows,reducedShadows}));
+  setGraphicsQuality('ultra');render();
+  if(grass.stats.visibleSavedTriangles||flowers.stats.blooms)throw Error('Ultra first-person cover detail was reduced');
+  return {full,reduced,stats,pixelError,originalImage,optimizedImage,fpvFull,fpvReduced,fpvPixelError,fpvStats,fpvOriginalImage,fpvOptimizedImage,physicsUnchanged:true,
+   firstPersonCover:{grass:[unoptimized.grass.triangles,optimized.grass.triangles],flowers:[unoptimized.flowers.triangles,optimized.flowers.triangles],coverError},
+   firstPersonShadows:{original:originalShadows,reduced:reducedShadows}};
  });
  await fs.mkdir(new URL('../test-results/',import.meta.url),{recursive:true});
  for(const name of ['original','optimized'])await fs.writeFile(new URL('../test-results/lod-'+name+'.png',import.meta.url),Buffer.from(result[name+'Image'].split(',')[1],'base64'));

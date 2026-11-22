@@ -13,7 +13,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     let scene,blob,shadowMap,frame=0,lodPrepared=false;
     const stats={parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0,lodChecksAvoided:0,ms:0,fallback:false};
     state.characterBatchStats=stats;
-    const api={uploads:writer.stats,enabled:true,crowdDetail:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError,reducePose};
+    const api={uploads:writer.stats,enabled:true,crowdDetail:true,firstPersonBudget:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError,reducePose};
     const textureKeys=['map','normalMap','roughnessMap','metalnessMap','alphaMap','aoMap','bumpMap','emissiveMap'];
     function restore(){
         for(const [part,mask]of masked)part.layers.mask=mask;
@@ -160,9 +160,15 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             inverse.copy(scene.matrixWorld).invert();
             projection.multiplyMatrices(state.camera.projectionMatrix,state.camera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);
             const focus=state.isFPV?state.camera.position:state.cameraLookAt;
-            const strategyDetail=state.camera.isOrthographicCamera&&state.graphicsQuality?.tier!=='ultra'
+            const tier=state.graphicsQuality?.tier||'high';
+            const firstPerson=api.firstPersonBudget&&state.isFPV&&state.camera.isPerspectiveCamera&&tier!=='ultra'&&!api.warming;
+            const detailLimit=(state.camera.isOrthographicCamera&&tier!=='ultra'||firstPerson)
                 ?30*Math.max(1,state.renderer.getPixelRatio()):0;
-            const [shadowRange,shadowBudget]=shadowProfiles[state.graphicsQuality?.tier]||shadowProfiles.high;
+            let [shadowRange,shadowBudget]=shadowProfiles[tier]||shadowProfiles.high;
+            if(firstPerson){
+                shadowRange=tier==='high'?23:16;
+                shadowBudget=tier==='high'?12:8;
+            }
             let shadowRangeSq=shadowRange*shadowRange;
             if(!api.fullShadows&&state.units.length>shadowBudget){
                 shadowDistances.length=0;
@@ -189,11 +195,13 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 sphere.center.copy(p);sphere.center.y+=u.isVehicle?4:2;sphere.radius=u.isVehicle?10:3;
                 const inView=frustum.intersectsSphere(sphere);
                 if(!animal&&inView&&u.state!=='dead')stats.visibleUnits++;
-                const useProjected=api.crowdDetail&&!api.warming&&!state.isFPV&&!animal;
+                const useProjected=api.crowdDetail&&!api.warming&&(!state.isFPV||firstPerson)&&!animal;
                 const pixels=useProjected?projectedHeight(u):Infinity;
                 const canSimplify=!u.isVehicle&&!u.isShaman&&!state.selectedUnits.includes(u);
-                const detail=canSimplify?(pixels<23?2:pixels<=strategyDetail?1:0):0;
-                const detailed=animal||api.fullShadows||state.renderer.shadowMap.enabled&&dx*dx+dz*dz<=shadowRangeSq&&pixels>=29;
+                const detail=canSimplify?(pixels<23?2:pixels<=detailLimit?1:0):0;
+                const distanceSq=dx*dx+dz*dz;
+                const detailed=animal||api.fullShadows||state.renderer.shadowMap.enabled&&distanceSq<=shadowRangeSq&&
+                    (firstPerson?(inView?pixels>=29:distanceSq<=100):pixels>=29);
                 if(!detailed&&!inView){
                     // Outside both the view and detailed-shadow range: suppress only
                     // drawing, never the simulation or animation of the original rig.
