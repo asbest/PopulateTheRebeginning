@@ -20,7 +20,7 @@ try{
   if(Object.keys(state.chunks).length!==121)throw Error('Incomplete fixed overview fixture');
   const render=()=>draw.call(renderer,state.scene,state.camera),read=()=>{const data=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,data);return data;};
   async function settle(){const start=performance.now();for(let pass=0;pass<4;pass++){
-   render();while(Art.resources.stats.queued||gameTestAPI.BuildingBatches.stats.pending||Art.textureStatus.pending||Art.textureStatus.previewPending||Art.textureStatus.upgrading){
+   render();while(Art.resources.stats.queued||gameTestAPI.BuildingBatches.stats.pending||gameTestAPI.FlowerOverview.stats.pending||Art.textureStatus.pending||Art.textureStatus.previewPending||Art.textureStatus.upgrading){
     if(performance.now()-start>180000)throw Error('Overview preparation stalled');await new Promise(r=>setTimeout(r,20));
    }
   }}
@@ -45,7 +45,7 @@ try{
     throw Error('Incomplete landscape attribution '+JSON.stringify(draws));
    const entry={zoom,before,after,pixelError,meanError,details:{...details.stats},terrain:JSON.parse(JSON.stringify(TerrainLod.stats)),original,optimized,draws};
    if(zoom===110){
-    function compareVegetation(){
+    async function compareVegetation(){
      ShadowCache.enabled=false;
      scenery.treeOptimization=false;
      flowers.enabled=false;
@@ -55,6 +55,7 @@ try{
      scenery.treeOptimization=true;
      flowers.enabled=true;
      for(let i=0;i<65;i++)render();
+     await settle();render();
      const optimized=read();
      const grouped=measureLandscapeDraws(renderer,state.scene,state.camera,render);
      const flowerStats={...flowers.stats};
@@ -101,7 +102,7 @@ try{
      ShadowCache.enabled=true;
      return {baseline,grouped,vegetationError,flowerStats,staticShadows:{...baked.stats},renderMs};
     }
-    entry.vegetation=compareVegetation();
+    entry.vegetation=await compareVegetation();
     const stats=()=>({...grassBatches.stats,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles});
     render();const originalGrass=read(),base=stats();
     grassBatches.enabled=true;render();render();const batchedGrass=read(),batched=stats();

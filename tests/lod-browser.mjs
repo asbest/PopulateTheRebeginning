@@ -66,6 +66,11 @@ try{
   const nearIndex=nearGrass?.geometry.index;
   grass.enabled=flowers.enabled=true;
   for(let i=0;i<24;i++)render();
+  const warmStart=performance.now();
+  while(flowers.stats.pending){
+   if(performance.now()-warmStart>60000)throw Error('First-person flower preparation stalled');
+   await new Promise(resolve=>setTimeout(resolve,20));
+  }
   const optimized=cover(),coverAfter=pixels();
   let changedCover=0;
   for(let i=0;i<coverBefore.length;i+=4)if(Math.max(...[0,1,2].map(c=>Math.abs(coverBefore[i+c]-coverAfter[i+c])))>12)changedCover++;
@@ -78,6 +83,9 @@ try{
    const x=selected.mesh.position.x+.84*distance-.54*offset,z=selected.mesh.position.z+.54*distance+.84*offset;
    state.units.push(new Humanoid(i%2,'warrior',x,z));
   }
+  // The fixture holds all poses still. Count a fresh pass in both cases,
+  // including when the normal shadow cache would reuse the previous map.
+  gameTestAPI.ShadowCache.enabled=false;
   const shadowDraws=enabled=>{
    characters.firstPersonBudget=enabled;render();
    return measureLandscapeDraws(renderer,state.scene,state.camera,render).shadows.characters;

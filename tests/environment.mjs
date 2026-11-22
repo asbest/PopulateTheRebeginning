@@ -42,7 +42,9 @@ try{
   const stoneMesh=covers.find(c=>c.stones?.mesh)?.stones.mesh;
   const bushMesh=covers.find(c=>c.bushes?.mesh)?.bushes.mesh;
   const vertexColors=grassGeo.attributes.color.array;
-  const grassVolume={triangles:grassGeo.index.count/3,normals:grassGeo.attributes.normal.count,
+  const renderedGrassTriangles=grassGeo.index.count/3;
+  gameTestAPI.OverviewDetails.release(grassMesh);
+  const grassVolume={triangles:grassGeo.index.count/3,renderedGrassTriangles,normals:grassGeo.attributes.normal.count,
    vertices:grassGeo.attributes.position.count,minColor:Math.min(...vertexColors),instanceColors:grassMesh.instanceColor?.count||0,
    photoMap:!!grassMesh.material.map,emissive:grassMesh.material.emissiveIntensity,
    stableCulling:grassMesh.frustumCulled&&!!grassGeo.boundingSphere&&grassGeo.boundingSphere.radius>10};
@@ -109,7 +111,8 @@ try{
     result.flowerStyle.count<30||result.flowerStyle.colors<4||result.flowerStyle.petalCounts.length<4||
     !result.flowerStyle.daisy||!result.flowerStyle.tulip||result.flowerStyle.maxMeshes>4||!result.flowerVisibility.culled||
     result.flowerVisibility.inside<1||result.basePositions<1||result.contacts<2||
-    result.grassVolume.triangles<220||result.grassVolume.normals!==result.grassVolume.vertices||result.grassVolume.minColor<.18||
+    result.grassVolume.triangles!==256||![64,128,256].includes(result.grassVolume.renderedGrassTriangles)||
+    result.grassVolume.normals!==result.grassVolume.vertices||result.grassVolume.minColor<.18||
     result.grassVolume.instanceColors<1||result.grassVolume.photoMap||result.grassVolume.emissive<.14||!result.grassVolume.stableCulling||
     result.stoneStyle.normalMap||result.stoneStyle.receiveShadow||result.stoneStyle.emissive<.14||result.stoneStyle.instanceColors<1||
     result.stoneStyle.vertexColors<1||result.stoneStyle.bushVertexColors<1||result.stoneStyle.ratio>.08||

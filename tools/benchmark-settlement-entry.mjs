@@ -41,7 +41,7 @@ try{
   state.sunLight.target.position.copy(city);state.sunLight.position.copy(city).add(sunOffset);state.sunLight.target.updateMatrixWorld();
   renderer.setPixelRatio(1);
   const gl=renderer.getContext(),keys=new Set(renderer.info.programs.map(p=>p.cacheKey));
-  let textureUploads=0,largeStaticUploads=0;const textureSources=[];
+  let textureUploads=0,largeStaticUploads=0;const textureSources=[],staticSources=[];
   const originals={};
   for(const name of ['texImage2D','compressedTexImage2D','texSubImage2D']){
    originals[name]=gl[name];gl[name]=function(...args){
@@ -51,15 +51,25 @@ try{
    };
   }
   originals.bufferData=gl.bufferData;gl.bufferData=function(target,data,usage){
-   if(usage===gl.STATIC_DRAW&&(typeof data==='number'?data:data?.byteLength)>16384)largeStaticUploads++;
+   const bytes=typeof data==='number'?data:data?.byteLength;
+   if(usage===gl.STATIC_DRAW&&bytes>16384){
+    largeStaticUploads++;
+    const meshes=[];
+    state.scene.traverse(mesh=>{
+     if(!mesh.geometry)return;
+     const attrs={...mesh.geometry.attributes,index:mesh.geometry.index,instanceMatrix:mesh.instanceMatrix,instanceColor:mesh.instanceColor};
+     for(const [name,attr] of Object.entries(attrs))if(attr?.array===data)meshes.push(`${mesh.name||mesh.type}.${name}`);
+    });
+    staticSources.push({bytes,meshes});
+   }
    return originals.bufferData.apply(this,arguments);
   };
   const render=()=>{const start=performance.now();renderer.render(state.scene,state.camera);gl.finish();return performance.now()-start;};
   const read=()=>{const data=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,data);return data;};
-  const firstMs=render(),a=read(),firstUploads={textureUploads,largeStaticUploads};
+  const firstMs=render(),a=read(),firstUploads={textureUploads,largeStaticUploads},firstStaticSources=staticSources.slice();
   const secondMs=render(),b=read();for(const [name,original]of Object.entries(originals))gl[name]=original;
   let differing=0;for(let i=0;i<a.length;i+=4)if(Math.max(...[0,1,2].map(c=>Math.abs(a[i+c]-b[i+c])))>8)differing++;
-  return {firstMs,secondMs,firstUploads,textureSources,newPrograms:renderer.info.programs.filter(p=>!keys.has(p.cacheKey)).length,
+  return {firstMs,secondMs,firstUploads,textureSources,firstStaticSources,newPrograms:renderer.info.programs.filter(p=>!keys.has(p.cacheKey)).length,
    addedPrograms:renderer.info.programs.filter(p=>!keys.has(p.cacheKey)).map(p=>p.cacheKey),
    pixelError:differing/(gl.drawingBufferWidth*gl.drawingBufferHeight),textures:{...Art.textureStatus},
    budget:{...api.ResourceBudget.stats},preparation:{...api.SettlementPreparation.stats},chunks:chunks.length};

@@ -11,6 +11,9 @@ try{
   closeHelp();closeStoryOverlay();state.isPaused=true;state.clock.autoStart=false;state.clock.stop();
   const schedule=requestAnimationFrame;window.requestAnimationFrame=fn=>fn.name==='animate'?0:schedule(fn);await new Promise(r=>schedule(()=>schedule(r)));
   const renderer=state.renderer,draw=renderer.render,api=gameTestAPI.LodVisibility,gl=renderer.getContext();renderer.setPixelRatio(.8);gameTestAPI.ShadowCache.enabled=false;
+  // Flower batches are tested separately. Their incremental appearance must
+  // not change the scene between the two model-visibility captures.
+  gameTestAPI.FlowerOverview.enabled=false;
   renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
   gameTestAPI.TerrainStream.disable('fixed render management fixture');
   for(let pass=0;pass<(2*gameTestAPI.CONFIG.TERRAIN.RENDER_DISTANCE+1)**2+1;pass++)gameTestAPI.updateChunks();

@@ -2,10 +2,10 @@ import {projectedCoverPixels} from './lod-policy.js';
 
 // When individual petals no longer resolve, draw a single bloom for each head.
 // Keep the original stems, palette, instance base positions and wind shader.
-export function createFlowerOverview(T,state,palette,material){
+export function createFlowerOverview(T,state,palette,material,prepare){
     const records=new WeakMap(),matrix=new T.Matrix4(),offset=new T.Matrix4();
     const sphere=new T.Sphere(),clip=new T.Matrix4(),frustum=new T.Frustum(),box=new T.Box3();
-    const stats={chunks:0,blooms:0,savedTriangles:0};
+    const stats={chunks:0,blooms:0,savedTriangles:0,pending:0};
     state.flowerOverviewStats=stats;
     const api={enabled:true,stats,update,release};
     const layer=29;
@@ -48,7 +48,7 @@ export function createFlowerOverview(T,state,palette,material){
                 continue;
             }
             const bases=stem.geometry.attributes.aBasePos;
-            if(!bases||!flowers.data.length)continue;
+            if(!bases||!stem.count||!flowers.data.length)continue;
             if(!record){
                 if(builds>=2)continue;
                 builds++;
@@ -57,6 +57,7 @@ export function createFlowerOverview(T,state,palette,material){
                 const mesh=new T.InstancedMesh(geometry,material(),flowers.data.length);
                 mesh.name='Overview flower blooms';
                 mesh.userData.landscapeKind='flowers';
+                mesh.visible=false;
                 mesh.raycast=()=>{};
                 record={stem,mesh,masked:new Map(),matrixVersion:-1,baseVersion:-1};
                 records.set(chunk,record);
@@ -79,6 +80,21 @@ export function createFlowerOverview(T,state,palette,material){
                 record.matrixVersion=stem.instanceMatrix.version;record.baseVersion=bases.version;
             }
             mesh.count=stem.count;
+            if(!record.ready){
+                if(!record.pending&&!record.failed){
+                    const candidate=record;
+                    candidate.pending=true;stats.pending++;
+                    // Keep the original heads visible until the replacement's
+                    // larger buffers have been uploaded through the GPU budget.
+                    Promise.resolve().then(()=>records.get(chunk)===candidate?prepare(mesh):null)
+                        .then(()=>{candidate.ready=true;}).catch(error=>{
+                            candidate.failed=true;console.warn('Keeping full flower geometry after preparation failed',error);
+                        }).finally(()=>{
+                            candidate.pending=false;stats.pending--;
+                        });
+                }
+                continue;
+            }
             mesh.layers.mask=stem.layers.mask;
             mesh.visible=true;
             let originalTriangles=0;

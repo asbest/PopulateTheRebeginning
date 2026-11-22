@@ -5986,7 +5986,8 @@ const ShadowCache=createShadowCache(THREE);
 const TerrainLod=createTerrainLod(THREE,state,Art.resources,VISUAL_WATER_LEVEL,mesh=>SettlementPreparation.prepareRoot(mesh,false,false,false,true));
 window.TerrainLod=TerrainLod;
 const OverviewDetails=createOverviewDetails(THREE,state,()=>groundCoverGrassGeo);
-const FlowerOverview=createFlowerOverview(THREE,state,()=>FlowerPalette,()=>AssetCache.mats.flowerPetalBase);
+const FlowerOverview=createFlowerOverview(THREE,state,()=>FlowerPalette,()=>AssetCache.mats.flowerPetalBase,
+    mesh=>SettlementPreparation.prepareRoot(mesh,false,false,false,true,-.5));
 const BakedStatics=createBakedStatics(THREE,state,SceneIndex,{chunkSize:CHUNK_SIZE,heightAt:getSurfaceHeight,
     waterLevel:()=>VISUAL_WATER_LEVEL});
 let TreeShadowCache;
