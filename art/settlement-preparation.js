@@ -51,7 +51,7 @@ export function createSettlementPreparation(T,state,art,getLights){
    if(instanced){mesh.instanceMatrix=ownMatrix;mesh.instanceColor=null;mesh.dispose();}
   }
  }
- function collect(root,promote=false,largeOnly=false,nativeTarget=false,allowBusy=false,readyPriority=0){
+ function collect(root,promote=false,largeOnly=false,nativeTarget=false,allowBusy=false,readyPriority=0,diagnosticGroup=null){
   const env=environment(),jobs=[];
   root.traverse(source=>{
    if(!source.isMesh||!source.geometry?.attributes.position?.count||disposed.has(source.geometry)||Array.isArray(source.material)||source.isInstancedMesh&&source.count===0)return;
@@ -78,7 +78,7 @@ export function createSettlementPreparation(T,state,art,getLights){
     // These tiny loading-screen draws share one browser frame. Waiting for a
     // full island redraw between each one adds seconds on software renderers.
     const job=(nativeTarget&&!state.assetsReady?Promise.resolve().then(prepare):
-     budget.enqueue('settlement/'+key,prepare,()=>programs.has(program)?readyPriority:1,allowBusy)).catch(error=>{
+     budget.enqueue('settlement/'+key,prepare,()=>programs.has(program)?readyPriority:1,allowBusy,diagnosticGroup)).catch(error=>{
      warmed.delete(key);stats.errors++;console.warn('Settlement preparation deferred; keeping original rendering',error);
     });jobs.push(job);
    }
@@ -138,7 +138,7 @@ export function createSettlementPreparation(T,state,art,getLights){
   // them too, after the nearest chunks, without increasing the frame budget.
   const chunks=[];
   for(const chunk of Object.values(state.chunks)){
-   const mesh=chunk.children[0];if(!mesh)continue;
+   const mesh=chunk.children[0];if(!mesh||chunk.userData.walkingTerrainKey)continue;
    const distance=Math.min(mesh.position.distanceToSquared(camera),mesh.position.distanceToSquared(predicted));
    const stamp=env+'/'+chunk.children.length;
    if(roots.get(chunk)!==stamp)chunks.push({root:chunk,stamp,distance});

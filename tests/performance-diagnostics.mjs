@@ -50,6 +50,22 @@ try{
  await page.evaluate(()=>togglePause());
  await page.waitForFunction(()=>gameTestAPI.PerformanceDiagnostics.report?.reason==='Paused early');
  await page.evaluate(()=>{
+  const diagnostics=gameTestAPI.PerformanceDiagnostics,clock=performance.now.bind(performance);
+  let now=clock();
+  try{
+   performance.now=()=>now;diagnostics.start();
+   now+=120;diagnostics.event('terrainCollider',8);diagnostics.event('terrainCollider',4);
+   diagnostics.event('physicsSteps',0,4);diagnostics.sample();
+   now+=55;diagnostics.event('fireballImpact',0,3);diagnostics.sample();
+   now+=12;diagnostics.sample();diagnostics.finish('Stutter fixture');
+   const {stutters}=diagnostics.report;
+   if(stutters.over50Ms!==2||stutters.over100Ms!==1||stutters.p99Ms!==120||stutters.slowest[0].intervalMs!==120||
+      stutters.slowest[0].events.find(e=>e.name==='terrainCollider')?.ms!==12||
+      stutters.slowest[1].events.find(e=>e.name==='fireballImpact')?.count!==3||stutters.slowest[2].events.length)
+    throw Error('Stutter event attribution failed '+JSON.stringify(stutters));
+  }finally{performance.now=clock;}
+ });
+ await page.evaluate(()=>{
   const profiler=gameTestAPI.BattleProfiler,descriptor=Object.getOwnPropertyDescriptor(profiler,'last');
   Object.defineProperty(profiler,'last',{get:()=>undefined,configurable:true});
   try{

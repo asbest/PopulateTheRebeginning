@@ -126,10 +126,18 @@ try {
         const crosses=healingMesh.count/2;
         healingFx.update(1.5);
         const healingExpired=healingFx.activeCount===0&&!healingMesh.visible;
+        const budget=gameTestAPI.CombatEffectsBudget,near=state.camera.position;
+        budget.begin(state.graphicsQuality.tier);
+        for(let i=0;i<160;i++)fx.add('smoke',near.x+65,near.y,near.z,.5,1,0x332d2a);
+        const embers=fx.layers.glow.items.length;
+        const lights=state.scene.children.filter(node=>node.isPointLight).length;
+        for(let i=0;i<8;i++)fx.impact(near,false,false);
+        const saturated={...budget.stats,nearEmbers:fx.layers.glow.items.length-embers,
+            extraLights:state.scene.children.filter(node=>node.isPointLight).length-lights};
         return {loadedChunks,startupPulses,units:units.length,hits,thrown,peakBurnEmissions,burnEmissions,
             impactMs,before,launch,flight,after,aftermath,unbatchedAftermath,extraCalls:after.calls-before.calls,
             extraParticles:after.particles-before.particles,
-            hitPulses,expired,beforeHealing,healing,healingCount,crosses,healingExpired};
+            hitPulses,expired,beforeHealing,healing,healingCount,crosses,healingExpired,saturated};
     });
     if(report.hits!==report.units || report.thrown!==report.units || report.peakBurnEmissions>24 ||
         report.burnEmissions<report.units || report.hitPulses!==0 || !report.expired || report.extraCalls>30 ||
@@ -139,7 +147,8 @@ try {
         report.aftermath.programs>report.after.programs+2 ||
         report.healingCount<12 || report.crosses!==report.healingCount || !report.healingExpired ||
         report.healing.pointLights!==report.beforeHealing.pointLights ||
-        report.healing.programs>report.beforeHealing.programs || report.healing.calls>report.beforeHealing.calls+4) {
+        report.healing.programs>report.beforeHealing.programs || report.healing.calls>report.beforeHealing.calls+4 ||
+        !report.saturated.dropped || report.saturated.nearEmbers<8 || report.saturated.extraLights) {
         console.error(`::error title=Group impact rendering budget::${JSON.stringify(report)}`);
         throw new Error(`Group impact regressed: ${JSON.stringify(report)}`);
     }
