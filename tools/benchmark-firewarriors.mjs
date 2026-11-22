@@ -1,5 +1,6 @@
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
+import {seedWorld} from '../tests/fixtures/seed-world.mjs';
 
 const playwrightPath=process.argv.find(arg=>arg.startsWith('--playwright='))?.slice(13);
 const {chromium}=playwrightPath
@@ -8,6 +9,7 @@ const {chromium}=playwrightPath
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try {
     const page=await browser.newPage({viewport:{width:1280,height:800}});
+    await seedWorld(page,98217);
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
         {waitUntil:'load',timeout:90000});
     await page.waitForFunction(()=>window.gameTestAPI&&state.fireballShadersReady,null,{timeout:90000});
@@ -16,6 +18,13 @@ try {
         closeHelp();closeStoryOverlay();setGraphicsQuality('high');
         state.renderer.setPixelRatio(1);
         const start=state.shaman.mesh.position.clone().add(new THREE.Vector3(0,2,0));
+        state.cameraLookAt.copy(start);updateCameraPosition();
+        // An orthographic camera can sit well behind the viewed area. Keep the
+        // fight centered and verify that the effect budget follows that area.
+        const forward=state.camera.getWorldDirection(new THREE.Vector3());
+        state.camera.position.addScaledVector(forward,-65);
+        const {FireballFxManager:fx,CombatEffectsBudget:budget}=gameTestAPI;
+        fx.clear();budget.begin('high');
         const gl=state.renderer.getContext();
         const render=()=>{const t=performance.now();state.renderer.render(state.scene,state.camera);gl.finish();
             return {ms:performance.now()-t,calls:state.renderer.info.render.calls};};
@@ -29,17 +38,19 @@ try {
         const steadyFrame=render();
         const t1=performance.now();for(const shot of shots)shot.explode();
         const impactMs=performance.now()-t1;
-        gameTestAPI.FireballFxManager.update(0);
+        const emissionBudget={...budget.stats};
+        fx.update(0);
         const afterImpact=render();
         for(let i=0;i<32;i++)gameTestAPI.SurfaceMarks.add(start.x,start.z,{kind:'ember',radius:1.6,life:18});
-        const effects=Object.fromEntries(Object.entries(gameTestAPI.FireballFxManager.layers)
+        const effects=Object.fromEntries(Object.entries(fx.layers)
             .map(([name,layer])=>[name,layer.items.length]));
-        return {empty,constructMs,salvoFrame,steadyFrame,impactMs,afterImpact,effects,
-            impactParticles:state.particles.length,lights:gameTestAPI.FireballFxManager.lights.filter(light=>light.visible).length,
+        return {empty,constructMs,salvoFrame,steadyFrame,impactMs,afterImpact,effects,emissionBudget,
+            impactParticles:state.particles.length,lights:fx.lights.filter(light=>light.visible).length,
             emberMarks:gameTestAPI.SurfaceMarks.marks.filter(mark=>mark.kind==='ember').length};
     });
     if(result.lights>2||result.impactParticles>80||result.afterImpact.calls-result.empty.calls>20||
-        result.effects.glow<8||result.effects.smoke!==8||'ring' in result.effects||'flash' in result.effects||result.emberMarks>24)
+        result.effects.glow<8||result.effects.smoke!==8||result.emissionBudget.nearImpacts!==8||result.emissionBudget.dropped||
+        'ring' in result.effects||'flash' in result.effects||result.emberMarks>24)
         throw new Error('Firewarrior volley exceeded the light or effect budget: '+JSON.stringify(result));
     console.log(JSON.stringify(result));
 }finally{await browser.close();}

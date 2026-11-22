@@ -4035,8 +4035,11 @@ const SurfaceMarks={
 
 const SMOKE_GEO=new THREE.IcosahedronGeometry(.5,1);
 const CombatEffectsBudget=createCombatEffectsBudget();
+function combatEffectFocus(){
+    return state.isFPV?state.camera?.position:state.cameraLookAt;
+}
 function allowCombatEffect(x,z,impact=false,cost=1){
-    const camera=state.camera?.position,dx=x-(camera?.x??x),dz=z-(camera?.z??z);
+    const focus=combatEffectFocus(),dx=x-(focus?.x??x),dz=z-(focus?.z??z);
     return CombatEffectsBudget.claim(dx*dx+dz*dz,impact,cost);
 }
 function allowLooseCombatEffect(x,z,impact=false,cost=1){
@@ -6397,7 +6400,7 @@ const FireballFxManager={
     flash(x,y,z,color=0xff7b35,intensity=2,distance=14,life=.24){
         if(!['high','ultra'].includes(state.graphicsQuality?.tier))return;
         this.init();
-        const camera=state.camera.position,priority=flash=>(flash.x-camera.x)**2+(flash.z-camera.z)**2;
+        const focus=combatEffectFocus(),priority=flash=>(flash.x-focus.x)**2+(flash.z-focus.z)**2;
         const entry={x,y,z,color,intensity,distance,life,maxLife:life};
         this.flashes.push(entry);
         this.flashes.sort((a,b)=>priority(a)-priority(b));

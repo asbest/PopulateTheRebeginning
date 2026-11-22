@@ -126,7 +126,7 @@ try {
         const crosses=healingMesh.count/2;
         healingFx.update(1.5);
         const healingExpired=healingFx.activeCount===0&&!healingMesh.visible;
-        const budget=gameTestAPI.CombatEffectsBudget,near=state.camera.position;
+        const budget=gameTestAPI.CombatEffectsBudget,near=state.cameraLookAt;
         budget.begin(state.graphicsQuality.tier);
         for(let i=0;i<160;i++)fx.add('smoke',near.x+65,near.y,near.z,.5,1,0x332d2a);
         const embers=fx.layers.glow.items.length;
