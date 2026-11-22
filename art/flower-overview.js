@@ -1,5 +1,7 @@
 import {projectedCoverPixels} from './lod-policy.js';
 
+const MAX_PENDING_BLOOM_BATCHES=2;
+
 // When individual petals no longer resolve, draw a single bloom for each head.
 // Keep the original stems, palette, instance base positions and wind shader.
 export function createFlowerOverview(T,state,palette,material,prepare){
@@ -24,7 +26,6 @@ export function createFlowerOverview(T,state,palette,material,prepare){
     }
     function update(camera,renderer){
         stats.chunks=stats.blooms=stats.savedTriangles=0;
-        let builds=0;
         clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
         frustum.setFromProjectionMatrix(clip);
         const limit=state.graphicsQuality?.vegetationPixelLimit??2;
@@ -50,8 +51,9 @@ export function createFlowerOverview(T,state,palette,material,prepare){
             const bases=stem.geometry.attributes.aBasePos;
             if(!bases||!stem.count||!flowers.data.length)continue;
             if(!record){
-                if(builds>=2)continue;
-                builds++;
+                // A camera sweep can expose dozens of chunks before the GPU
+                // budget has processed even one job. Leave their originals live.
+                if(stats.pending>=MAX_PENDING_BLOOM_BATCHES)continue;
                 const geometry=new T.OctahedronGeometry(.11);
                 geometry.setAttribute('aBasePos',new T.InstancedBufferAttribute(new Float32Array(bases.array.length),3));
                 const mesh=new T.InstancedMesh(geometry,material(),flowers.data.length);

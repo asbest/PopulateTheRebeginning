@@ -13,6 +13,7 @@ try{
   closeHelp();closeStoryOverlay();state.isPaused=true;state.clock.autoStart=false;state.clock.stop();
   const schedule=requestAnimationFrame;window.requestAnimationFrame=fn=>fn.name==='animate'?0:schedule(fn);
   await new Promise(r=>schedule(()=>schedule(r)));
+  gameTestAPI.ResourceBudget.frame(0,true);
   const renderer=state.renderer,draw=renderer.render,details=gameTestAPI.OverviewDetails,gl=renderer.getContext();renderer.setPixelRatio(.8);
   renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
   gameTestAPI.TerrainStream.disable('fixed overview fixture');
@@ -21,7 +22,8 @@ try{
   const render=()=>draw.call(renderer,state.scene,state.camera),read=()=>{const data=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,data);return data;};
   async function settle(){const start=performance.now();for(let pass=0;pass<4;pass++){
    render();while(Art.resources.stats.queued||gameTestAPI.BuildingBatches.stats.pending||gameTestAPI.FlowerOverview.stats.pending||Art.textureStatus.pending||Art.textureStatus.previewPending||Art.textureStatus.upgrading){
-    if(performance.now()-start>180000)throw Error('Overview preparation stalled');await new Promise(r=>setTimeout(r,20));
+    if(performance.now()-start>180000)throw Error('Overview preparation stalled '+JSON.stringify({budget:Art.resources.stats,flowers:gameTestAPI.FlowerOverview.stats,buildings:gameTestAPI.BuildingBatches.stats,textures:Art.textureStatus}));
+    await new Promise(r=>setTimeout(r,20));
    }
   }}
   const result=[];
@@ -54,8 +56,10 @@ try{
      const baseline=measureLandscapeDraws(renderer,state.scene,state.camera,render);
      scenery.treeOptimization=true;
      flowers.enabled=true;
-     for(let i=0;i<65;i++)render();
      await settle();render();
+     // Let the tree batch re-evaluate the previous sparse view. Stop once
+     // the optimized paths have produced geometry for the comparison.
+     for(let i=0;i<=16&&!scenery.stats.treeBatches;i++)render();
      const optimized=read();
      const grouped=measureLandscapeDraws(renderer,state.scene,state.camera,render);
      const flowerStats={...flowers.stats};

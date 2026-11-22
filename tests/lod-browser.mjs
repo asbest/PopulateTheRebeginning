@@ -12,8 +12,16 @@ try{
  await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:90000});
  const result=await page.evaluate(async()=>{
   closeHelp();closeStoryOverlay();state.isPaused=true;window.enemyAIs=[];
+  const schedule=requestAnimationFrame;
+  window.requestAnimationFrame=fn=>fn.name==='animate'?0:schedule(fn);
+  await new Promise(resolve=>schedule(()=>schedule(resolve)));
+  gameTestAPI.ResourceBudget.frame(0,true);
   const renderer=state.renderer,draw=renderer.render;renderer.setPixelRatio(.8);
   renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
+  gameTestAPI.TerrainStream.disable('fixed terrain LOD fixture');
+  const chunkCount=(2*gameTestAPI.CONFIG.TERRAIN.RENDER_DISTANCE+1)**2;
+  for(let pass=0;pass<=chunkCount;pass++)gameTestAPI.updateChunks();
+  if(Object.keys(state.chunks).length!==chunkCount)throw Error('Incomplete fixed terrain LOD fixture');
   state.viewScale=65;gameTestAPI.updateCameraZoom();updateCameraPosition();state.camera.updateMatrixWorld(true);
   const sources=Object.values(state.chunks).flatMap(c=>c.children.slice(0,2));
   const indices=sources.map(m=>m.geometry.index.array.slice()),bodies=state.units.map(u=>JSON.stringify(u.rigidBody.translation()));
@@ -65,11 +73,17 @@ try{
   const nearGrass=state.chunks[`${Math.round(p.x/size)},${Math.round(p.z/size)}`]?.userData.groundCover.grass?.mesh;
   const nearIndex=nearGrass?.geometry.index;
   grass.enabled=flowers.enabled=true;
-  for(let i=0;i<24;i++)render();
+  render();render();
+  if(flowers.stats.pending>2)throw Error('First-person flower preparation exceeded its in-flight budget');
   const warmStart=performance.now();
-  while(flowers.stats.pending){
-   if(performance.now()-warmStart>60000)throw Error('First-person flower preparation stalled');
-   await new Promise(resolve=>setTimeout(resolve,20));
+  // Advance only after the queued GPU work completes. More full landscape
+  // draws while it is pending are especially expensive on CI's software GPU.
+  for(let pass=0;pass<4;pass++){
+   render();
+   while(flowers.stats.pending){
+    if(performance.now()-warmStart>60000)throw Error('First-person flower preparation stalled '+JSON.stringify({flowers:flowers.stats,budget:Art.resources.stats}));
+    await new Promise(resolve=>setTimeout(resolve,20));
+   }
   }
   const optimized=cover(),coverAfter=pixels();
   let changedCover=0;
