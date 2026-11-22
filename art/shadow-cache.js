@@ -39,7 +39,8 @@ export function createShadowCache(T){
                     const c=shadow.camera;value(c.near);value(c.far);value(c.zoom);value(c.left);value(c.right);value(c.top);value(c.bottom);
                     same=matrix(shadow.camera.projectionMatrix)&&same;
                 }
-                if(!(node.isMesh||node.isLine||node.isPoints)||!node.castShadow||!node.layers.test(camera.layers))return;
+                if(!(node.isMesh||node.isLine||node.isPoints)||!node.castShadow||
+                    !node.userData.shadowOnly&&!node.layers.test(camera.layers))return;
                 value(node);value(node.geometry);value(node.count);same=matrix(node.matrixWorld)&&same;
                 value(node.instanceMatrix?.version);value(node.instanceColor?.version);
                 value(node.geometry.index?.version);value(node.geometry.drawRange.start);value(node.geometry.drawRange.count);value(node.geometry.instanceCount);

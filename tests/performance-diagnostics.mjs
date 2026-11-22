@@ -26,6 +26,8 @@ try{
   if(!report.scene.lodVisibility||!report.scene.characterBatching||!report.scene.sceneryBatching.reason||!Number.isFinite(report.scene.sceneryBatching.potentialSavings))throw Error('Missing visibility/batching decision');
   if(report.scene.staticShadows?.mode!=='baked'||!report.scene.staticShadows.tiles||!report.scene.staticShadows.decals)
    throw Error('Missing baked shadow diagnostics');
+  if(!Number.isFinite(report.scene.firstPersonGrass?.culledInstances)||!Number.isFinite(report.scene.firstPersonTextureScan?.roots)||
+     !Number.isFinite(report.scene.characterBatching.shadowProxyParts))throw Error('Missing first-person optimization diagnostics');
   const recording=report.scene.terrainLodRecording;
   if(recording.samples!==report.frames||recording.activeFrames+recording.fullDetailFrames!==report.frames||
    !report.scene.terrainLod.reasons||!report.scene.terrainLod.cameraMode||!report.scene.sceneryBatching||!report.scene.buildingBatching||!report.scene.overviewDetails||!report.scene.modelLod)

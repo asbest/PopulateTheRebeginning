@@ -10,7 +10,7 @@ import {assetPath,assetURL} from './asset-urls.js';
 export function createTexturePipeline(T,resources){
     const plain=new T.TextureLoader();
     const procedural=createProceduralSurfaces(T),surfaces=new Map(),remoteFor=new WeakMap(),forward=new WeakMap();
-    const status={enabled:false,loaded:0,fallbacks:0,pending:0,previewLoaded:0,previewPending:0,promoted:0,upgrading:0};
+    const status={enabled:false,loaded:0,fallbacks:0,pending:0,previewLoaded:0,previewPending:0,promoted:0,upgrading:0,scopedRoots:0,scopedMeshes:0};
     const readyByTexture=new WeakMap(),pending=new Set();
     const texturesByURL=new Map();
     const previews=new Map(),entryByTexture=new WeakMap(),queue=[];
@@ -191,10 +191,11 @@ export function createTexturePipeline(T,resources){
         if(!texture||!gpuRenderer?.initTexture||gpuVersions.get(texture)===texture.version)return;
         gpuRenderer.initTexture(texture);gpuVersions.set(texture,texture.version);
     }
-    async function promote(texture){
+    async function promote(texture,deferred=false){
         if(useProceduralSurfaces())return;
         const entry=entryByTexture.get(texture);
         if(!entry||entry.high||entry.failed)return;
+        if(!deferred)entry.backgroundOnly=false;
         if(entry.upgrade)return entry.upgrade;
         entry.upgrade=(async()=>{
             await entry.ready;
@@ -207,7 +208,7 @@ export function createTexturePipeline(T,resources){
                     // copy that would force another upload at the first close view.
                     warmTexture(entry.texture);entry.high=true;status.promoted++;
                 };
-                if(resources)await resources.enqueue('texture/'+entry.texture.uuid,commit,-2);
+                if(resources)await resources.enqueue('texture/'+entry.texture.uuid,commit,()=>entry.backgroundOnly?1:-2);
                 else commit();
             }
             else entry.failed=true;
@@ -222,27 +223,36 @@ export function createTexturePipeline(T,resources){
         }
         while(status.upgrading<2&&queue.length){
             const entry=queue.shift();status.upgrading++;
-            promote(entry.texture).catch(error=>{entry.failed=true;console.warn('Keeping startup texture',error);})
+            promote(entry.texture,entry.backgroundOnly).catch(error=>{entry.failed=true;console.warn('Keeping startup texture',error);})
                 .finally(()=>{status.upgrading--;drain();});
         }
     }
-    function request(texture){
+    function request(texture,deferred=false){
         if(useProceduralSurfaces()||!graphicsSettings.profile.hd)return;
         const entry=entryByTexture.get(texture);
-        if(!entry||entry.high||entry.queued||entry.failed)return;
+        if(!entry||entry.high||entry.failed)return;
+        if(entry.queued){if(!deferred)entry.backgroundOnly=false;return;}
+        entry.backgroundOnly=deferred;
         entry.queued=true;queue.push(entry);drain();
     }
     const point=new T.Vector3();
-    function streamVisible(scene,focus,radius,extra=[]){
-        if(useProceduralSurfaces()||!previews.size)return;
-        const requestSurface=texture=>request(remoteFor.get(texture)||texture);
+    const surfaceMaps=['map','normalMap','roughnessMap','metalnessMap','emissiveMap'];
+    function streamVisible(scene,focus,radius,extra=[],roots=null){
+        if(useProceduralSurfaces()||!graphicsSettings.profile.hd||!previews.size)return;
+        const requestSurface=texture=>request(remoteFor.get(texture)||texture,!!roots);
         for(const texture of extra)requestSurface(texture);
         const radiusSq=radius*radius;
-        scene.traverseVisible(node=>{
+        const visit=node=>{
             if(!node.isMesh||!node.material)return;
+            if(roots)status.scopedMeshes++;
             if(point.setFromMatrixPosition(node.matrixWorld).distanceToSquared(focus)>radiusSq)return;
-            for(const material of [node.material].flat())for(const key of ['map','normalMap','roughnessMap','metalnessMap','emissiveMap'])requestSurface(material[key]);
-        });
+            const materials=Array.isArray(node.material)?node.material:[node.material];
+            for(const material of materials)for(const key of surfaceMaps)requestSurface(material[key]);
+        };
+        if(roots){
+            status.scopedRoots=roots.length;status.scopedMeshes=0;
+            for(const root of roots)root.traverseVisible(visit);
+        }else scene.traverseVisible(visit);
     }
     return {configure,load,status,streamVisible,
         promote:texture=>promote(remoteFor.get(texture)||texture),

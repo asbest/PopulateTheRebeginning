@@ -740,6 +740,7 @@ import {createFlowerOverview} from './art/flower-overview.js';
 import {createBakedStatics} from './art/baked-statics.js';
 import {installTreeShadowCache} from './art/tree-shadow-cache.js';
 import {createGrassBatches} from './art/grass-batches.js';
+import {createFirstPersonGrass} from './art/first-person-grass.js';
 import {beginLod} from './art/lod-policy.js';
 import {createLodVisibility} from './art/lod-visibility.js';
 import { createSceneIndex } from './art/scene-index.js';
@@ -4635,7 +4636,7 @@ function disposeChunkGeometry(chunk) {
     for(const tree of chunk.userData?.trees||[])restoreTree(tree);
     const owned=[chunk.children[0],chunk.children[1]];
     const cover=chunk.userData?.groundCover;
-    if(cover?.grass?.mesh)OverviewDetails.release(cover.grass.mesh);
+    if(cover?.grass?.mesh){FirstPersonGrass.release(cover.grass.mesh);OverviewDetails.release(cover.grass.mesh);}
     if(cover)for(const layer of Object.values(cover))if(layer?.mesh)owned.push(layer.mesh);
     if(chunk.userData?.palms?.mesh)owned.push(chunk.userData.palms.mesh);
     const flowers=chunk.userData?.flowers;
@@ -6003,6 +6004,7 @@ const BakedStatics=createBakedStatics(THREE,state,SceneIndex,{chunkSize:CHUNK_SI
     waterLevel:()=>VISUAL_WATER_LEVEL});
 let TreeShadowCache;
 const GrassBatches=createGrassBatches(THREE,state,()=>groundCoverGrassGeo);
+const FirstPersonGrass=createFirstPersonGrass(THREE,state);
 const EffectWriter=createInstanceWriter(THREE);
 function terrainWorkerSnapshot(cx,cz){
   const x=cx*CHUNK_SIZE,z=cz*CHUNK_SIZE,half=CHUNK_SIZE/2+2;
@@ -6027,6 +6029,7 @@ const TerrainStream=createTerrainStream({
 const BattleProfiler=createBattleProfiler();
 const GpuTimer=createGpuTimer();
 const PerformanceDiagnostics=createPerformanceDiagnostics({state,profiler:BattleProfiler,gpu:GpuTimer,
+ textureStats:()=>Art.textureStatus,
  pause:()=>{if(!state.isPaused)window.togglePause();},resume:()=>{if(state.isPaused)window.togglePause();}});
 window.openPerformanceDiagnostics=()=>PerformanceDiagnostics.open();
 const SettlementPreparation=createSettlementPreparation(THREE,state,Art,
@@ -11178,6 +11181,7 @@ async function init() {
             TerrainLod.update(camera,renderer);now=performance.now();BattleProfiler.add('terrainLod',now-previous);previous=now;
             OverviewDetails.update(camera,renderer);
             FlowerOverview.update(camera,renderer);
+            FirstPersonGrass.update(camera);
             now=performance.now();BattleProfiler.add('overviewDetails',now-previous);previous=now;
             if(GrassBatches.enabled||GrassBatches.stats.batches)GrassBatches.update(camera);
             CharacterBatches.update(camera===state.camera);now=performance.now();BattleProfiler.add('characterBatches',now-previous);previous=now;
@@ -11185,7 +11189,7 @@ async function init() {
             ShadowCache.update(scene,camera,renderer,SceneIndex);now=performance.now();BattleProfiler.add('shadowCache',now-previous);
             BattleProfiler.add('batching',now-start);
         };
-        state.scene.onAfterRender=()=>{if(GrassBatches.enabled)GrassBatches.restore();};
+        state.scene.onAfterRender=()=>{FirstPersonGrass.restore();if(GrassBatches.enabled)GrassBatches.restore();};
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
         state.scene.fog = new THREE.Fog(CONFIG.BIOMES.normal.fog, CONFIG.BIOMES.normal.fogNear, CONFIG.BIOMES.normal.fogFar);
 
@@ -11343,7 +11347,7 @@ async function init() {
         if(document.getElementById('story-overlay').style.display!=='flex')state.controlTutorial.start();
 
         if (new URLSearchParams(location.search).has('test')) {
-            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, LodVisibility, TerrainRefresh, ShadowCache, SceneryBatches, BuildingBatches, OverviewDetails, FlowerOverview, BakedStatics, TreeShadowCache, GrassBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
+            window.gameTestAPI = { CONFIG, restoreTerrainNoise, LightningFx, SettlementPreparation, ResourceBudget:Art.resources, GpuTimer, TerrainKernel, terrainWorkerSnapshot, TerrainStream, PerformanceDiagnostics, SceneIndex, StaticTransforms, LodVisibility, TerrainRefresh, ShadowCache, SceneryBatches, BuildingBatches, OverviewDetails, FlowerOverview, BakedStatics, FirstPersonGrass, firstPersonTextureRoots, TreeShadowCache, GrassBatches, createChunk, updateChunkGeometry, updateChunkWater, updateLightningSky, SoundManager, Locomotion, PathWorker, CharacterBatches, BattleWork, BattleProfiler, CritterManager, CloudManager, WaterSprayManager, SurfaceMarks, HitPulseManager, FirewarriorFlames, FireballFxManager, HealingFx, Fireball, SpellWindup, combatRange, combatLineClear, burnTreesAt, updateTreeRegrowth, onWheel, onPointerMove, onTouchMove, handleTap, updateCameraZoom, getBaseHeight, forEachTreeSite, forEachPalmSite, createRitualSite, applyTotemAura, findWorshipShaman, updateWorship, updateFaith, changeFaith, faithManaMultiplier, peaceTimeRemaining, isPeaceTime, terrainSpeedFactor, getSurfaceHeight, updateChunkPhysics, executeSpell, performAction, createBuilding, modifyTerrain, updateChunks, findNearestLand, aiDryHeight, updateUI, updateUnitList, updateContextMenus, updateRangeRing, SpatialHash, BuildingSpatialHash, updateCampaignMission, campaignMissionComplete, getCampaignMissionRule, campaignObjectiveSteps };
         }
     } catch(e) {
         console.error("Init failed:", e);
@@ -12913,6 +12917,21 @@ function updateCameraPosition() {
 
 function onResize() { updateCameraZoom(); state.renderer.setSize(window.innerWidth, window.innerHeight); }
 
+function firstPersonTextureRoots(focus,radius){
+    const roots=[],half=CHUNK_SIZE/2;
+    const firstX=Math.ceil((focus.x-radius-half)/CHUNK_SIZE),lastX=Math.floor((focus.x+radius+half)/CHUNK_SIZE);
+    const firstZ=Math.ceil((focus.z-radius-half)/CHUNK_SIZE),lastZ=Math.floor((focus.z+radius+half)/CHUNK_SIZE);
+    for(let x=firstX;x<=lastX;x++)for(let z=firstZ;z<=lastZ;z++){
+        const chunk=state.chunks[`${x},${z}`];if(chunk?.parent)roots.push(chunk);
+    }
+    for(const building of state.buildings){
+        const mesh=building.mesh;
+        if(!building.dead&&mesh.parent&&mesh.position.distanceToSquared(focus)<=(radius+building.collisionRadius)**2)roots.push(mesh);
+    }
+    for(const unit of state.units)if(unit.mesh?.parent&&unit.mesh.position.distanceToSquared(focus)<=radius*radius)roots.push(unit.mesh);
+    return roots;
+}
+
 function forceLandConnection(x1, z1, x2, z2) {
     const dist = Math.sqrt((x2 - x1)**2 + (z2 - z1)**2);
     const steps = Math.ceil(dist);
@@ -13403,9 +13422,16 @@ function animate() {
     Art.resources.frame(performance.now()-frameTime,!!state.isPaused,!state.assetsReady,
         !!(Art.resources.stats.queued&&(state.projectiles.length||state.units.some(u=>u.state==='combat'))));
     SettlementPreparation.tick(performance.now());
-    if(state.assetsReady&&(state.isFPV||state.viewScale<=14)&&performance.now()-(state.lastAssetStreamAt||0)>500){
+    if(state.assetsReady&&GRAPHICS_PROFILES[state.graphicsQuality?.tier]?.hd&&(state.isFPV||state.viewScale<=14)&&
+        performance.now()-(state.lastAssetStreamAt||0)>500){
         state.lastAssetStreamAt=performance.now();
-        Art.streamTextures(state.scene,state.isFPV?state.camera.position:state.cameraLookAt,state.isFPV?18:Math.max(12,state.viewScale*1.5));
+        if(state.isFPV){
+            Art.resources.enqueue('first-person-texture-scan',()=>{
+                if(!state.isFPV)return;
+                const focus=state.camera.position,radius=18;
+                Art.streamTextures(state.scene,focus,radius,firstPersonTextureRoots(focus,radius));
+            },1).catch(error=>console.warn('Nearby texture preparation deferred',error));
+        }else Art.streamTextures(state.scene,state.cameraLookAt,Math.max(12,state.viewScale*1.5));
     }
 }
 

@@ -1,9 +1,11 @@
 import {createInstanceWriter} from './instance-writer.js';
+import {CHARACTER_SHADOW_LAYER,createCharacterShadowProxy} from './character-shadow-proxy.js';
 // Draw the original, fully animated meshes as instances. The rig, collision
 // bodies, weapon pivots and raycast geometry remain authoritative and intact.
 export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     const hiddenLayer=31,buckets=new Map(),materials=new Map(),records=new WeakMap(),parts=new WeakMap(),masked=new Map();
     const writer=createInstanceWriter(T);
+    const shadowProxy=createCharacterShadowProxy(T,writer);
     const inverse=new T.Matrix4(),matrix=new T.Matrix4(),color=new T.Color(),dummy=new T.Object3D();
     const identity=new T.Matrix4();
     const frustum=new T.Frustum(),projection=new T.Matrix4(),sphere=new T.Sphere();
@@ -11,9 +13,9 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     const shadowDistances=[],simplifiedCasters=[],partialShadowBatches=[],empty=[];
     const smallDetails=new Set(['Eye','Iris','UpperEyelid','Brow','Earring','NoseBridge','NoseTip','Mouth','BraidBead','Thumb','RitualBeads','MaskEyeSlit']);
     let scene,blob,shadowMap,frame=0,lodPrepared=false;
-    const stats={parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0,lodChecksAvoided:0,ms:0,fallback:false};
+    const stats={parts:0,instances:0,batches:0,farShadows:0,shadowProxyParts:0,visibleUnits:0,simplifiedUnits:0,lodChecksAvoided:0,ms:0,fallback:false};
     state.characterBatchStats=stats;
-    const api={uploads:writer.stats,enabled:true,crowdDetail:true,firstPersonBudget:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError,reducePose};
+    const api={uploads:writer.stats,enabled:true,crowdDetail:true,firstPersonBudget:true,firstPersonShadowProxy:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError,reducePose};
     const textureKeys=['map','normalMap','roughnessMap','metalnessMap','alphaMap','aoMap','bumpMap','emissiveMap'];
     function restore(){
         for(const [part,mask]of masked)part.layers.mask=mask;
@@ -31,6 +33,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     }
     function dispose(){
         restore();partialShadowBatches.length=0;for(const b of buckets.values())b.mesh?.parent?.remove(b.mesh);
+        shadowProxy.dispose();
         for(const b of buckets.values())b.mesh?.dispose();
         for(const m of materials.values())m.dispose();buckets.clear();materials.clear();
         if(blob){blob.parent?.remove(blob);blob.geometry.dispose();blob.material.dispose();blob=null;}
@@ -121,12 +124,17 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
     function bindShadowPass(map){
         const render=map.render;
         map.render=function(lights,root,camera){
-            if(root!==scene||shadowMap!==map||!partialShadowBatches.length)return render.call(this,lights,root,camera);
+            if(root!==scene||shadowMap!==map||!partialShadowBatches.length&&!shadowProxy.active)return render.call(this,lights,root,camera);
+            const layers=camera.layers.mask;
+            if(shadowProxy.active)camera.layers.enable(CHARACTER_SHADOW_LAYER);
             // The detailed casters occupy the prefix of the same GPU batch.
             // Reuse the uploaded matrices for the shadow pass and restore the full draw count.
             for(const batch of partialShadowBatches)batch.mesh.count=batch.shadowCount;
             try{return render.call(this,lights,root,camera);}
-            finally{for(const batch of partialShadowBatches)batch.mesh.count=batch.items.length;}
+            finally{
+                camera.layers.mask=layers;
+                for(const batch of partialShadowBatches)batch.mesh.count=batch.items.length;
+            }
         };
         shadowMap=map;
     }
@@ -145,12 +153,15 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         lodPrepared=prepared;
         const start=performance.now();restore();frame++;writer.reset();
         if(scene!==state.scene){dispose();scene=state.scene;}
+        shadowProxy.begin();
         partialShadowBatches.length=0;
         for(const b of buckets.values()){b.items.length=0;b.shadowCount=0;if(b.mesh)b.mesh.visible=false;}
         if(blob){blob.count=0;blob.visible=false;}
-        Object.assign(stats,{parts:0,instances:0,batches:0,farShadows:0,visibleUnits:0,simplifiedUnits:0,lodChecksAvoided:0});
+        Object.assign(stats,{parts:0,instances:0,batches:0,farShadows:0,shadowProxyParts:0,visibleUnits:0,simplifiedUnits:0,lodChecksAvoided:0});
         const animals=wildlife(),bunnies=animals?.bunnies||empty,birds=animals?.birds||empty;
-        if(!api.enabled||!scene||!state.camera||state.units.length+bunnies.length+birds.length<12&&!api.warming){stats.ms=performance.now()-start;return;}
+        const tier=state.graphicsQuality?.tier||'high';
+        const firstPerson=api.firstPersonBudget&&state.isFPV&&state.camera?.isPerspectiveCamera&&tier!=='ultra'&&!api.warming;
+        if(!api.enabled||!scene||!state.camera||state.units.length+bunnies.length+birds.length<12&&!api.warming&&!firstPerson){stats.ms=performance.now()-start;return;}
         if(state.renderer&&!state.renderer.capabilities.isWebGL2&&!state.renderer.extensions.get('ANGLE_instanced_arrays')){
             api.enabled=false;stats.fallback=true;stats.ms=performance.now()-start;return;
         }
@@ -160,8 +171,6 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             inverse.copy(scene.matrixWorld).invert();
             projection.multiplyMatrices(state.camera.projectionMatrix,state.camera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);
             const focus=state.isFPV?state.camera.position:state.cameraLookAt;
-            const tier=state.graphicsQuality?.tier||'high';
-            const firstPerson=api.firstPersonBudget&&state.isFPV&&state.camera.isPerspectiveCamera&&tier!=='ultra'&&!api.warming;
             const detailLimit=(state.camera.isOrthographicCamera&&tier!=='ultra'||firstPerson)
                 ?30*Math.max(1,state.renderer.getPixelRatio()):0;
             let [shadowRange,shadowBudget]=shadowProfiles[tier]||shadowProfiles.high;
@@ -202,7 +211,10 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 const distanceSq=dx*dx+dz*dz;
                 const detailed=animal||api.fullShadows||state.renderer.shadowMap.enabled&&distanceSq<=shadowRangeSq&&
                     (firstPerson?(inView?pixels>=29:distanceSq<=100):pixels>=29);
-                if(!detailed&&!inView){
+                const proxy=detailed&&firstPerson&&api.firstPersonShadowProxy&&!api.fullShadows&&!animal&&
+                    !u.isVehicle&&!u.invisible&&!u.isPhantom&&u.torso;
+                if(proxy)shadowProxy.add(u,scene,inverse);
+                if((!detailed||proxy)&&!inView){
                     // Outside both the view and detailed-shadow range: suppress only
                     // drawing, never the simulation or animation of the original rig.
                     for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])root?.traverse(maskPart);
@@ -210,7 +222,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 }
                 if(detail)stats.simplifiedUnits++;
                 if(animal)collect(u.mesh,true);
-                else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed,false,detail);
+                else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed&&!proxy,false,detail);
                 // Preserve the original billboard transforms, fill scales and faction colors.
                 // Warm both instance shaders even when the starting units are at full health.
                 if(u.hpGroup&&(u.hpGroup.visible||api.warming)){
@@ -258,9 +270,11 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                     writer.flush(blob);
                 }
             }
+            stats.shadowProxyParts=shadowProxy.finish();
             stats.farShadows=shadows;state.raycaster?.layers.enable(hiddenLayer);
         }catch(error){
             api.enabled=false;stats.fallback=true;partialShadowBatches.length=0;restore();
+            shadowProxy.begin();
             for(const b of buckets.values())if(b.mesh)b.mesh.visible=false;if(blob)blob.visible=false;
             console.warn('Character batching unavailable; using original meshes',error);
         }

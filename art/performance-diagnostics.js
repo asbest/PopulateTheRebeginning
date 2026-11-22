@@ -1,7 +1,7 @@
 import {ASSET_REVISION} from './asset-revisions.js';
 import {measureLandscapeDraws} from './landscape-draws.js';
 
-export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
+export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume,textureStats=()=>null}){
     let panel,output,status,startButton,copyButton,banner,running=false,started=0,last=0,previousGpu=false,report=null,missingCpuFrames=0;
     const samples={},intervals=[];
     let terrainRecording,landscapeFrame,landscapeSample,finalLandscapeSample;
@@ -40,6 +40,7 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
         let adapter=null;
         try{const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');adapter=gl.getParameter(debug?debug.UNMASKED_RENDERER_WEBGL:gl.RENDERER);}catch{}
         const cpu={};for(const name of names)cpu[name]=summary(samples[name]);
+        const textures=textureStats();
         report={revision:ASSET_REVISION,diagnosticsVersion:3,landscapeDraws:landscapeFrame?{
             main:landscapeFrame.main,shadows:landscapeFrame.shadows,sampleFrame:landscapeFrame.sampleFrame,
             shadowCpu:summary(shadowTimes),shadowDrawFrames,peakShadowCalls
@@ -53,6 +54,8 @@ export function createPerformanceDiagnostics({state,profiler,gpu,pause,resume}){
                 overviewDetails:state.overviewDetailStats?{...state.overviewDetailStats}:null,
                 staticShadows:state.staticShadowStats?{...state.staticShadowStats}:null,
                 flowerOverview:state.flowerOverviewStats?{...state.flowerOverviewStats}:null,
+                firstPersonGrass:state.firstPersonGrassStats?{...state.firstPersonGrassStats}:null,
+                firstPersonTextureScan:textures?{roots:textures.scopedRoots,meshes:textures.scopedMeshes}:null,
                 treeShadowCache:state.treeShadowCacheStats?{...state.treeShadowCacheStats}:null,
                 sceneryBatching:state.sceneryBatchStats?{...state.sceneryBatchStats}:null,
                 buildingBatching:state.buildingBatchStats?{...state.buildingBatchStats}:null,

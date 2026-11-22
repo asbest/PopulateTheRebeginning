@@ -64,11 +64,11 @@ try{
    }
   }
   for(let i=0;i<sources.length;i++)if(sources[i].geometry.index.array.some((v,j)=>v!==indices[i][j]))throw Error('FPV LOD modified authoritative topology');
-  const {OverviewDetails:grass,FlowerOverview:flowers,CharacterBatches:characters}=gameTestAPI;
+  const {OverviewDetails:grass,FirstPersonGrass:quadrants,FlowerOverview:flowers,CharacterBatches:characters}=gameTestAPI;
   const {measureLandscapeDraws}=await import('./art/landscape-draws.js');
   const render=()=>draw.call(renderer,state.scene,state.camera);
   const cover=()=>measureLandscapeDraws(renderer,state.scene,state.camera,render).main;
-  grass.enabled=flowers.enabled=false;render();const unoptimized=cover(),coverBefore=pixels();
+  grass.enabled=flowers.enabled=quadrants.enabled=false;render();const unoptimized=cover(),coverBefore=pixels();
   const size=gameTestAPI.CONFIG.TERRAIN.CHUNK_SIZE,p=state.camera.position;
   const nearGrass=state.chunks[`${Math.round(p.x/size)},${Math.round(p.z/size)}`]?.userData.groundCover.grass?.mesh;
   const nearIndex=nearGrass?.geometry.index;
@@ -92,6 +92,18 @@ try{
   if(!nearGrass||nearGrass.geometry.index!==nearIndex||!grass.stats.visibleSavedTriangles||
      optimized.grass.triangles>=unoptimized.grass.triangles||optimized.flowers.triangles>=unoptimized.flowers.triangles||coverError>.018)
    throw Error('FPV ground cover quality or savings failed '+JSON.stringify({unoptimized,optimized,coverError,grass:grass.stats,flowers:flowers.stats}));
+  quadrants.enabled=true;
+  // The first render may create a few small buffers. The next view keeps
+  // the original material and blade topology, with fewer off-screen instances.
+  render();const culledGrass=cover().grass,culledPixels=pixels(),grassCulling={...quadrants.stats};
+  let cullingChanges=0;
+  for(let i=0;i<culledPixels.length;i+=4)if(Math.max(...[0,1,2].map(j=>Math.abs(culledPixels[i+j]-coverAfter[i+j])))>12)cullingChanges++;
+  if(!grassCulling.culledInstances||culledGrass.triangles>=optimized.grass.triangles||cullingChanges/(culledPixels.length/4)>.005)
+   throw Error('FPV grass culling did not preserve the image or reduce work '+JSON.stringify({culledGrass,optimized,grassCulling,cullingChanges}));
+  const textureRoots=gameTestAPI.firstPersonTextureRoots(p,18),nearChunks=textureRoots.filter(root=>root.userData.groundCover);
+  if(!nearChunks.length||nearChunks.length>4||!textureRoots.includes(selected.mesh))throw Error('Unexpected first-person texture scan roots');
+  Art.streamTextures(state.scene,p,18,textureRoots);
+  if(Art.textureStatus.scopedRoots!==textureRoots.length||!Art.textureStatus.scopedMeshes)throw Error('Texture scan ignored the nearby roots');
   for(let i=0;i<32;i++){
    const distance=i<12?5+(i%4)*2:27+(i%6)*2,offset=(i%5-2)*1.2;
    const x=selected.mesh.position.x+.84*distance-.54*offset,z=selected.mesh.position.z+.54*distance+.84*offset;
@@ -104,14 +116,31 @@ try{
    characters.firstPersonBudget=enabled;render();
    return measureLandscapeDraws(renderer,state.scene,state.camera,render).shadows.characters;
   };
+  characters.firstPersonShadowProxy=false;
   const originalShadows=shadowDraws(false),reducedShadows=shadowDraws(true);
   if(!reducedShadows.calls||reducedShadows.triangles>=originalShadows.triangles||!characters.stats.farShadows)
    throw Error('FPV shadows did not preserve local casters and fall back for distant figures '+JSON.stringify({originalShadows,reducedShadows}));
+  characters.firstPersonShadowProxy=true;
+  const proxyShadows=shadowDraws(true),proxyParts=characters.stats.shadowProxyParts;
+  if(!proxyParts||!proxyShadows.calls||proxyShadows.calls>=reducedShadows.calls||proxyShadows.triangles>=reducedShadows.triangles)
+   throw Error('FPV silhouettes did not improve the shadow pass '+JSON.stringify({reducedShadows,proxyShadows,proxyParts}));
+  const silhouettes=state.scene.getObjectByName('Animated character shadow silhouettes');
+  const beforePose=silhouettes.instanceMatrix.version;
+  for(const unit of state.units)if(unit.type==='warrior')unit.armR.rotation.x+=.4;
+  render();
+  if(silhouettes.instanceMatrix.version<=beforePose)throw Error('Shadow silhouettes did not follow the animated rig');
+  state.camera.translateZ(-3);state.camera.rotateY(.45);state.camera.updateMatrixWorld(true);
+  quadrants.enabled=false;const grassAfterTurn=cover().grass.triangles;
+  quadrants.enabled=true;render();const culledAfterTurn=cover().grass.triangles;
+  if(culledAfterTurn>=grassAfterTurn)throw Error('Grass culling did not update during movement and rotation');
   setGraphicsQuality('ultra');render();
-  if(grass.stats.visibleSavedTriangles||flowers.stats.blooms)throw Error('Ultra first-person cover detail was reduced');
+  if(grass.stats.visibleSavedTriangles||flowers.stats.blooms||quadrants.stats.culledInstances||characters.stats.shadowProxyParts)
+   throw Error('Ultra first-person detail was reduced');
   return {full,reduced,stats,pixelError,originalImage,optimizedImage,fpvFull,fpvReduced,fpvPixelError,fpvStats,fpvOriginalImage,fpvOptimizedImage,physicsUnchanged:true,
    firstPersonCover:{grass:[unoptimized.grass.triangles,optimized.grass.triangles],flowers:[unoptimized.flowers.triangles,optimized.flowers.triangles],coverError},
-   firstPersonShadows:{original:originalShadows,reduced:reducedShadows}};
+   firstPersonShadows:{original:originalShadows,reduced:reducedShadows,proxy:proxyShadows,proxyParts},
+   grassCulling:{before:optimized.grass,after:culledGrass,...grassCulling,cullingChanges,grassAfterTurn,culledAfterTurn},
+   textureScan:{roots:textureRoots.length,chunks:nearChunks.length}};
  });
  await fs.mkdir(new URL('../test-results/',import.meta.url),{recursive:true});
  for(const name of ['original','optimized'])await fs.writeFile(new URL('../test-results/lod-'+name+'.png',import.meta.url),Buffer.from(result[name+'Image'].split(',')[1],'base64'));
