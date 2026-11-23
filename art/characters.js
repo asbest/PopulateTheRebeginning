@@ -251,5 +251,7 @@ export function createCharacters(T,art) {
         for(const z of [-1.65,0,1.65])mesh(root,geo('hoop',()=>new T.TorusGeometry(1,.025,6,32)),gold,[0,4.5,z],[1.83,1.46,1],'BalloonHoop');
     }
     function setFaction(u,color){blender.updatePendingFaction(u.mesh,color);u.mesh.traverse(n=>{if(n.userData.characterFaction)n.material=mat('cloth',color);});}
-    return {build,setFaction,applyQuality,get ready(){return ready;},configureTextures,atlas:null,tiles};
+    return {build,setFaction,applyQuality,
+        compactPart:node=>sourceGeometry.has(node)?lowGeometry(sourceGeometry.get(node)):node.geometry,
+        get ready(){return ready;},configureTextures,atlas:null,tiles};
 }

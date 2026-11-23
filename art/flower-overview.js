@@ -29,10 +29,10 @@ export function createFlowerOverview(T,state,palette,material,prepare){
         clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);
         frustum.setFromProjectionMatrix(clip);
         const limit=state.graphicsQuality?.vegetationPixelLimit??2;
-        const tier=state.graphicsQuality?.tier,low=tier==='low';
+        const tier=state.graphicsQuality?.tier,low=tier==='low',medium=tier==='medium';
         const ultra=tier==='ultra',firstPerson=state.isFPV&&camera.isPerspectiveCamera&&!ultra;
         const bloomLimit=(camera.isOrthographicCamera&&!ultra||firstPerson)
-            ?3.5*Math.max(1,renderer.getPixelRatio()):0;
+            ?(medium?7.5:3.5)*Math.max(1,renderer.getPixelRatio()):0;
         for(const chunk of Object.values(state.chunks)){
             const flowers=chunk.userData.flowers,stem=flowers?.stems,sourceBounds=stem?.geometry.boundingSphere;
             if(!sourceBounds)continue;
@@ -54,7 +54,7 @@ export function createFlowerOverview(T,state,palette,material,prepare){
             if(!record){
                 // A camera sweep can expose dozens of chunks before the GPU
                 // budget has processed even one job. Leave their originals live.
-                if(!low&&stats.pending>=MAX_PENDING_BLOOM_BATCHES)continue;
+                if(!low&&!medium&&stats.pending>=MAX_PENDING_BLOOM_BATCHES)continue;
                 const geometry=new T.OctahedronGeometry(.11);
                 geometry.setAttribute('aBasePos',new T.InstancedBufferAttribute(new Float32Array(bases.array.length),3));
                 const mesh=new T.InstancedMesh(geometry,material(),flowers.data.length);
@@ -83,7 +83,7 @@ export function createFlowerOverview(T,state,palette,material,prepare){
                 record.matrixVersion=stem.instanceMatrix.version;record.baseVersion=bases.version;
             }
             mesh.count=stem.count;
-            if(!low&&!record.ready){
+            if(!low&&!medium&&!record.ready){
                 if(!record.pending&&!record.failed){
                     const candidate=record;
                     candidate.pending=true;stats.pending++;

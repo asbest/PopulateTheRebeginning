@@ -73,6 +73,25 @@ try{
    throw Error('Quality budgets or restoration failed '+JSON.stringify(snapshots));
   if(units.some((u,i)=>JSON.stringify(u.rigidBody.translation())!==originalBodies[i]))
    throw Error('Rendering changed physics');
+  const closeMesh=units[0].torso.getObjectByName('AnatomicalBody'),closeGeometry=closeMesh.geometry;
+  const previousScale=state.viewScale;
+  state.selectedUnits=[units[0]];state.viewScale=13;
+  gameTestAPI.updateCameraZoom();updateCameraPosition();
+  setGraphicsQuality('medium');
+  renderer.render(state.scene,state.camera);
+  const mediumLod={triangles:renderer.info.render.triangles,units:batch.stats.simplifiedUnits,
+   localShadowParts:batch.stats.shadowProxyParts,contactShadows:batch.stats.farShadows};
+  batch.crowdDetail=false;
+  renderer.render(state.scene,state.camera);
+  const fullMediumTriangles=renderer.info.render.triangles;
+  batch.crowdDetail=true;
+  if(mediumLod.triangles>=fullMediumTriangles||!mediumLod.units||!mediumLod.localShadowParts||mediumLod.localShadowParts>192||
+     !mediumLod.contactShadows||closeMesh.geometry!==closeGeometry)
+   throw Error('Medium did not preserve the selected rig and reduce detail for the crowd '+JSON.stringify({mediumLod,fullMediumTriangles}));
+  state.selectedUnits=[];state.viewScale=previousScale;
+  gameTestAPI.updateCameraZoom();updateCameraPosition();
+  setGraphicsQuality('high');
+  renderer.render(state.scene,state.camera);
   const shadowTiles=state.scene.children.filter(mesh=>mesh.name==='Baked tree and building shadows');
   const pixels=()=>{
    const image=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);
@@ -149,7 +168,7 @@ try{
   const contactShadows=state.scene.getObjectByName('Distant unit contact shadows');
   if(!contactShadows||contactShadows.instanceColor.count!==contactShadows.instanceMatrix.count)
    throw Error('Contact-shadow color buffer does not cover the instance capacity');
-  return {units:units.length,buildings:houses.length,snapshots,darkened,battle};
+  return {units:units.length,buildings:houses.length,snapshots,mediumLod,fullMediumTriangles,darkened,battle};
  });
  const low=await browser.newPage({viewport:{width:960,height:600}});
  low.on('pageerror',error=>errors.push(String(error)));

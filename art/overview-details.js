@@ -54,7 +54,7 @@ export function createOverviewDetails(T,state,source=()=>null){
  function update(camera,renderer){
   stats.full=stats.medium=stats.far=stats.savedTriangles=stats.visibleSavedTriangles=0;
   clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(clip);
-  const tier=state.graphicsQuality?.tier,low=tier==='low';
+  const tier=state.graphicsQuality?.tier,low=tier==='low',medium=tier==='medium';
   const ultra=tier==='ultra',firstPerson=state.isFPV&&camera.isPerspectiveCamera&&!ultra;
   for(const key in state.chunks){const layer=state.chunks[key].userData?.groundCover?.grass,mesh=layer?.mesh;if(!mesh)continue;
    const g=mesh.geometry,p=g.attributes.position;
@@ -77,11 +77,14 @@ export function createOverviewDetails(T,state,source=()=>null){
    else if(api.enabled&&(!state.isFPV||firstPerson)&&g.boundingSphere){
     sphere.copy(g.boundingSphere).applyMatrix4(mesh.matrixWorld);
     const pixels=projectedCoverPixels(camera,renderer.domElement.height,mesh,sphere,box),scale=r.scale*mesh.matrixWorld.getMaxScaleOnAxis();
+    const bladePixels=pixels*scale*.62,near=firstPerson&&bladePixels>24;
+    const thinLimit=medium&&!near?(r.level===3?2.1:1.8):(r.level===3?.95:.8);
     if((camera.isOrthographicCamera&&!ultra||firstPerson)&&p.version===0&&
-       r.levels[2].error*scale*pixels*1.1<=(r.level===3?.95:.8))level=3;
-    if(pixels*scale*.62<8)for(let i=0;i<2;i++){
+       r.levels[2].error*scale*pixels*1.1<=thinLimit)level=3;
+    if(bladePixels<(medium?24:8))for(let i=0;i<2;i++){
      // Wind is an affine height-dependent shear of magnitude < .08.
-     if(r.levels[i].error*scale*pixels*1.1<=(r.level===i+1?.5:.35))level=i+1;
+     const limit=medium?(r.level===i+1?1.3:1):(r.level===i+1?.5:.35);
+     if(r.levels[i].error*scale*pixels*1.1<=limit&&(!medium||!level||r.levels[i].index.count<r.levels[level-1].index.count))level=i+1;
     }
    }
    r.level=level;const index=level===4?lowGrass:level?r.levels[level-1].index:r.original;if(g.index!==index)g.setIndex(index);

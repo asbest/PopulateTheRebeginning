@@ -60,6 +60,17 @@ for(const [key,count] of compactEdges){
 }
 assert.deepEqual(geo.index.array,original);
 console.log('PASS compact Low water retains watertight shore edges and omits covered tiles');
+const nearWater=compactWaterIndices(T,p,80,0,'near'),farWater=compactWaterIndices(T,p,80,0,'far');
+assert.equal(nearWater.simplified,0);
+assert(nearWater.occludedTriangles>0&&nearWater.occludedTriangles<compact.occludedTriangles);
+assert.equal(nearWater.attribute.count/3,12800-nearWater.occludedTriangles);
+assert(farWater.simplified>0&&farWater.attribute.count<nearWater.attribute.count);
+assert.equal(farWater.occludedTriangles,nearWater.occludedTriangles);
+for(const row of [0,80]){
+ const edge=new Set(nearWater.attribute.array);
+ for(let col=0;col<=80;col++)assert(edge.has(row*81+col));
+}
+console.log('PASS Medium keeps dense nearby water and border overlap while simplifying open water at distance');
 assert.equal(chooseLod(0,74,75,16),0);assert.equal(chooseLod(1,76,75,16),1);assert.equal(chooseLod(0,50,75,16),1);assert.equal(chooseLod(2,100,75,16),0);
 console.log('PASS LOD hysteresis avoids toggling around thresholds');
 const blades=new T.BufferGeometry(),positions=[];
@@ -97,6 +108,15 @@ lod.update(camera,renderer);assert(chunk.children[3].visible);assert(chunk.child
 state.graphicsQuality.tier='high';lod.update(camera,renderer);
 assert.equal(chunk.children[3].geometry.index,authoritative);
 console.log('PASS Low water redraws after flooding and restores the original detail on tier switch');
+state.graphicsQuality.tier='medium';lod.update(camera,renderer);
+assert.equal(chunk.children[3].geometry.index,authoritative);
+state.cameraLookAt.x=100;lod.update(camera,renderer); // FPV uses the eye rather than strategy focus.
+assert.equal(chunk.children[3].geometry.index,authoritative);
+state.isFPV=false;lod.update(camera,renderer);
+assert(chunk.children[3].geometry.index.count<authoritative.count);
+waterMaterial.uniforms.waveStrength.value=2.1;lod.update(camera,renderer);
+assert.equal(chunk.children[3].geometry.index,authoritative);
+console.log('PASS Medium water retains full detail in First Person and falls back for unsupported waves');
 
 const distantScene=new T.Scene(),movingCamera=new T.PerspectiveCamera(60,1,.1,450);
 const queue=[];

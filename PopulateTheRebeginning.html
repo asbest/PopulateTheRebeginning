@@ -6115,7 +6115,7 @@ const PathWorker = {
     }
 };
 
-const CharacterBatches=createCharacterBatches(THREE,state,getSurfaceHeight,()=>CritterManager);
+const CharacterBatches=createCharacterBatches(THREE,state,getSurfaceHeight,()=>CritterManager,Characters.compactPart);
 const SceneIndex=createSceneIndex();
 const StaticTransforms=createStaticTransforms(SceneIndex);
 const LodVisibility=createLodVisibility(THREE,state,SceneIndex,StaticTransforms);

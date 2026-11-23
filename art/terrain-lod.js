@@ -57,17 +57,30 @@ export function terrainIndices(T,geometry,res,step,water,shore,maxError=Infinity
 // Low waves are vertically displaced by at most .48 world units.
 // Keep every shoreline sample and all cross-chunk edge samples. Only skip
 // tiles that are entirely covered by terrain, using the current land heights.
-export function compactWaterIndices(T,land,res,shore){
+export function compactWaterIndices(T,land,res,shore,detail='low'){
     const step=4,stride=res+1,id=(x,z)=>z*stride+x;
+    const fullWaves=detail!=='low';
     const tiles=res/step,types=new Uint8Array(tiles*tiles),indices=[];
     let occludedTriangles=0,simplified=0,shoreTiles=0;
     for(let z=0;z<tiles;z++)for(let x=0;x<tiles;x++){
         let min=Infinity,max=-Infinity;
+        const edge=x===0||z===0||x===tiles-1||z===tiles-1;
         for(let j=0;j<=step;j++)for(let i=0;i<=step;i++){
             const height=land.getY(id(x*step+i,z*step+j));
             min=Math.min(min,height);max=Math.max(max,height);
         }
-        const type=min>shore+1?0:max>=shore-2?1:2;
+        // Full waves move sideways. Guard dry interiors with one sample
+        // around each tile and keep the original overlap at chunk borders.
+        let dry=min>shore+1;
+        if(dry&&fullWaves){
+            dry=!edge;
+            const sx=x*step,sz=z*step;
+            for(let i=-1;i<=step+1&&dry;i++){
+                dry=land.getY(id(sx+i,sz-1))>shore+1&&land.getY(id(sx+i,sz+step+1))>shore+1&&
+                    land.getY(id(sx-1,sz+i))>shore+1&&land.getY(id(sx+step+1,sz+i))>shore+1;
+            }
+        }
+        const type=dry?0:detail==='near'||max>=shore-(fullWaves?3:2)?1:2;
         types[z*tiles+x]=type;
         if(type===0)occludedTriangles+=step*step*2;
         else if(type===1)shoreTiles++;
@@ -100,7 +113,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
     const entries=new Set(),point=new T.Vector3(),world=new T.Matrix4(),projection=new T.Matrix4(),clip=new T.Matrix4(),frustum=new T.Frustum();
     const hiddenWater={attribute:new T.Uint16BufferAttribute([],1),step:4,owned:false,simplified:0,shoreTiles:0,errorTiles:0};
     let previousCamera,previousHeight,previousFocusX,previousFocusZ,previousFPV,previousEnabled,previousLayers,previousOverview;
-    let pendingFirstPerson=0,previousLowWater;
+    let pendingFirstPerson=0,previousWaterTier;
     const reasons={disabled:0,offscreen:0,firstPerson:0,focus:0,preparing:0,pixelError:0,shorelineOrDetail:0,active:0};
     const stats={full:0,medium:0,far:0,savedTriangles:0,prepared:0,errors:0,lastError:null,
         reusedFrames:0,updatedEntries:0,reusedEntries:0,pendingFirstPerson:0,cameraMode:null,zoom:1,viewScale:0,
@@ -122,7 +135,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             source.visible=false;
             source.geometry.addEventListener('dispose',()=>{
                 for(const level of e.levels.values())release(level);
-                release(e.compactWater);
+                for(const level of e.compactWater?.values()||[])release(level);
                 geometry.attributes={};geometry.index=null;geometry.dispose();entries.delete(e);proxy.parent?.remove(proxy);
                 previousCamera=null;
             });
@@ -130,12 +143,12 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
     }
     function update(camera,renderer){
         const height=renderer.domElement.height,focus=state.isFPV?camera.position:state.cameraLookAt;
-        const lowWater=state.graphicsQuality?.tier==='low';
+        const tier=state.graphicsQuality?.tier;
         const changed=previousCamera!==camera||!world.equals(camera.matrixWorld)||!projection.equals(camera.projectionMatrix)||
             previousHeight!==height||previousFocusX!==focus.x||previousFocusZ!==focus.z||
             previousFPV!==state.isFPV||previousEnabled!==api.enabled||previousLayers!==camera.layers.mask||previousOverview!==api.overviewEnabled||
-            previousLowWater!==lowWater;
-        previousLowWater=lowWater;
+            previousWaterTier!==tier;
+        previousWaterTier=tier;
         previousCamera=camera;world.copy(camera.matrixWorld);projection.copy(camera.projectionMatrix);
         previousHeight=height;previousFocusX=focus.x;previousFocusZ=focus.z;previousFPV=state.isFPV;previousEnabled=api.enabled;previousLayers=camera.layers.mask;
         previousOverview=api.overviewEnabled;stats.overviewEnabled=api.overviewEnabled;
@@ -144,14 +157,17 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             const g=e.source.geometry,p=g.attributes.position;
             const land=e.water?e.chunk.children[0].geometry.attributes.position:null;
             if(land&&(e.landPosition!==land||e.landVersion!==land.version)){
-                release(e.compactWater);e.compactWater=null;
+                for(const level of e.compactWater?.values()||[])release(level);
+                e.compactWater?.clear();
                 e.minimumLand=Infinity;for(let i=0;i<land.count;i++)e.minimumLand=Math.min(e.minimumLand,land.getY(i));
                 e.landPosition=land;e.landVersion=land.version;e.dirty=true;
             }
             // Even strength 2 stays below .86 high and .22 sideways. All terrain
             // samples above shore+2 imply every rendered land triangle is dry.
-            const dry=api.overviewEnabled&&e.water&&e.minimumLand>shore+2&&
-                Math.abs(p.getX(1)-p.getX(0))>=.25&&(e.source.material.uniforms?.waveStrength?.value??1)<=2;
+            const supportedWaves=e.water&&Math.abs(p.getX(1)-p.getX(0))>=.25&&
+                (e.source.material.uniforms?.waveStrength?.value??1)<=2;
+            if(e.supportedWaves!==supportedWaves){e.supportedWaves=supportedWaves;e.dirty=true;}
+            const dry=api.overviewEnabled&&supportedWaves&&e.minimumLand>shore+2;
             const version=p.version+(g.attributes.depth?.version||0)+(g.attributes.foam?.version||0)+(land?.version||0);
             if(e.version!==version||e.position!==p||e.dryInterior!==dry){
                 e.dryInterior=dry;
@@ -181,7 +197,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
         stats.zoom=camera.zoom;stats.viewScale=state.viewScale;stats.viewportHeight=height;
         for(const e of entries){
             if(!e.active){e.dirty=false;continue;}
-            if(changed||e.dirty)select(e,camera,height,focus,lowWater);else stats.reusedEntries++;
+            if(changed||e.dirty)select(e,camera,height,focus,tier);else stats.reusedEntries++;
             stats[['full','medium','far'][e.current]]++;reasons[e.reason]++;
             stats.savedTriangles+=e.saved||0;
             stats.occludedWaterTriangles+=e.selected?.occludedTriangles||0;
@@ -193,7 +209,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             if(result){stats.tiles.coarse+=result.simplified;stats.tiles.protectedShore+=result.shoreTiles;stats.tiles.errorLimited+=result.errorTiles;}
         }
     }
-    function select(e,camera,height,focus,lowWater){
+    function select(e,camera,height,focus,tier){
             stats.updatedEntries++;e.dirty=false;e.matrix.copy(e.chunk.matrixWorld);
             e.waitingForSlot=false;e.requestedKey=null;
             const g=e.source.geometry;
@@ -204,12 +220,25 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             e.inView=e.shown&&e.proxy.layers.test(camera.layers)&&frustum.intersectsObject(e.proxy);
             e.reason=!api.enabled?'disabled':!e.inView?'offscreen':
                 !overview&&Math.abs(point.x-focus.x)<45&&Math.abs(point.z-focus.z)<45?(state.isFPV?'firstPerson':'focus'):null;
-            if(api.enabled&&e.inView&&lowWater&&e.water&&e.landPosition?.count===(e.res+1)**2&&e.res%4===0){
+            const low=tier==='low',cellSize=Math.abs(e.position.getX(1)-e.position.getX(0));
+            const medium=tier==='medium'&&e.supportedWaves;
+            if(api.enabled&&e.inView&&(low||medium)&&e.water&&e.landPosition?.count===(e.res+1)**2&&e.res%4===0){
                 const waterLevel=e.source.position.y;
-                if(e.compactWaterLevel!==waterLevel){release(e.compactWater);e.compactWater=null;e.compactWaterLevel=waterLevel;}
-                e.compactWater??=e.minimumLand>waterLevel+1?{...hiddenWater,occludedTriangles:g.index.count/3}
-                    :compactWaterIndices(T,e.landPosition,e.res,waterLevel);
-                if(e.compactWater.attribute.count<g.index.count){selected=e.compactWater;e.reason='active';}
+                e.compactWater??=new Map();
+                if(e.compactWaterLevel!==waterLevel){
+                    for(const level of e.compactWater.values())release(level);
+                    e.compactWater.clear();e.compactWaterLevel=waterLevel;
+                }
+                const halfWidth=cellSize*e.res*.5;
+                const near=Math.max(Math.abs(point.x-focus.x),Math.abs(point.z-focus.z))-halfWidth<24;
+                const detail=low?'low':near&&(state.isFPV||state.viewScale<=30)?'near':'far';
+                let compact=e.compactWater.get(detail);
+                if(!compact){
+                    compact=low&&e.minimumLand>waterLevel+1?{...hiddenWater,occludedTriangles:g.index.count/3}
+                        :compactWaterIndices(T,e.landPosition,e.res,waterLevel,detail);
+                    e.compactWater.set(detail,compact);
+                }
+                if(compact.attribute.count<g.index.count){selected=compact;e.reason='active';}
             }else if(!e.reason||api.enabled&&e.inView&&e.dryInterior){
                 e.requested=chooseLod(e.requested||0,pixels,600,300);
                 const step=e.dryInterior?1:[2,4,8][e.requested],worldError=.8/projectedPixels(camera,height,point,g.boundingSphere?.radius||0);

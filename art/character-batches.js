@@ -2,14 +2,14 @@ import {createInstanceWriter} from './instance-writer.js';
 import {CHARACTER_SHADOW_LAYER,createCharacterShadowProxy} from './character-shadow-proxy.js';
 // Draw the original, fully animated meshes as instances. The rig, collision
 // bodies, weapon pivots and raycast geometry remain authoritative and intact.
-export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
+export function createCharacterBatches(T,state,heightAt,wildlife=()=>null,compactPart=node=>node.geometry){
     const hiddenLayer=31,buckets=new Map(),materials=new Map(),records=new WeakMap(),parts=new WeakMap(),masked=new Map();
     const writer=createInstanceWriter(T);
     const shadowProxy=createCharacterShadowProxy(T,writer);
     const inverse=new T.Matrix4(),matrix=new T.Matrix4(),color=new T.Color(),dummy=new T.Object3D();
     const identity=new T.Matrix4();
     const frustum=new T.Frustum(),projection=new T.Matrix4(),sphere=new T.Sphere();
-    const shadowProfiles={low:[20,24],medium:[32,32],high:[45,40],ultra:[60,56]};
+    const shadowProfiles={low:[20,24],medium:[18,10],high:[45,40],ultra:[60,56]};
     const shadowDistances=[],simplifiedCasters=[],partialShadowBatches=[],empty=[];
     const smallDetails=new Set(['Eye','Iris','UpperEyelid','Brow','Earring','NoseBridge','NoseTip','Mouth','BraidBead','Thumb','RitualBeads','MaskEyeSlit']);
     let scene,blob,shadowMap,frame=0,lodPrepared=false;
@@ -89,7 +89,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         return api.enabled&&api.crowdDetail&&!state.isFPV&&stats.visibleUnits>=15&&
             !state.selectedUnits.includes(unit)&&!unit.isShaman&&!unit.isVehicle&&projectedHeight(unit)<22;
     }
-    function collect(node,shadow,healthBar=false,detail=0){
+    function collect(node,shadow,healthBar=false,detail=0,compact=false){
         if(!node.visible)return;
         if(detail&&(smallDetails.has(node.name)||detail===2&&node.isLOD&&node.name.startsWith('Blender detail LOD character/'))){
             node.traverse(maskPart);
@@ -97,15 +97,17 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         }
         if(node.isLOD){if(!lodPrepared||node.autoUpdate)node.update(state.camera);else stats.lodChecksAvoided++;}
         if(eligible(node,healthBar)){
-            const mk=materialKey(node.material),cast=node.castShadow;
+            const mk=materialKey(node.material),cast=node.castShadow,geometry=compact?compactPart(node):node.geometry;
             let part=parts.get(node);
-            if(!part||part.geometry!==node.geometry||part.mk!==mk||part.cast!==cast||part.receive!==node.receiveShadow||part.order!==node.renderOrder){
-                part={geometry:node.geometry,mk,cast,receive:node.receiveShadow,order:node.renderOrder,
-                    key:node.geometry.uuid+'|'+mk+'|'+cast+'|'+node.receiveShadow+'|'+node.renderOrder};parts.set(node,part);
+            if(!part||part.geometry!==geometry||part.mk!==mk||part.cast!==cast||part.receive!==node.receiveShadow||part.order!==node.renderOrder){
+                part={geometry,mk,cast,receive:node.receiveShadow,order:node.renderOrder,
+                    key:geometry.uuid+'|'+mk+'|'+cast+'|'+node.receiveShadow+'|'+node.renderOrder};parts.set(node,part);
             }
             const key=part.key;
             let b=buckets.get(key);
-            if(!b){b={geometry:node.geometry,material:materials.get(mk),cast,receive:node.receiveShadow,order:node.renderOrder,healthBar,items:[],shadowCount:0,mesh:null,capacity:0};buckets.set(key,b);}
+            if(!b){b={geometry,material:materials.get(mk),cast,receive:node.receiveShadow,order:node.renderOrder,
+                healthBar,compact:false,items:[],shadowCount:0,mesh:null,capacity:0};buckets.set(key,b);}
+            b.compact ||= geometry!==node.geometry;
             const end=b.items.length;
             if(cast&&shadow){
                 const slot=b.shadowCount++;
@@ -114,7 +116,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             }else b.items.push(node);
             b.used=frame;stats.parts++;
         }else if(!shadow&&node.isMesh)suppressShadow(node);
-        for(const child of node.children)collect(child,shadow,false,detail);
+        for(const child of node.children)collect(child,shadow,false,detail,compact);
     }
     function suppressShadow(part){
         if(!part.castShadow)return;
@@ -155,13 +157,14 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
         if(scene!==state.scene){dispose();scene=state.scene;}
         shadowProxy.begin();
         partialShadowBatches.length=0;
-        for(const b of buckets.values()){b.items.length=0;b.shadowCount=0;if(b.mesh)b.mesh.visible=false;}
+        for(const b of buckets.values()){b.items.length=0;b.shadowCount=0;b.compact=false;if(b.mesh)b.mesh.visible=false;}
         if(blob){blob.count=0;blob.visible=false;}
         Object.assign(stats,{parts:0,instances:0,batches:0,farShadows:0,shadowProxyParts:0,visibleUnits:0,simplifiedUnits:0,lodChecksAvoided:0});
         const animals=wildlife(),bunnies=animals?.bunnies||empty,birds=animals?.birds||empty;
         const tier=state.graphicsQuality?.tier||'high';
+        const medium=tier==='medium';
         const firstPerson=api.firstPersonBudget&&state.isFPV&&state.camera?.isPerspectiveCamera&&tier!=='ultra'&&!api.warming;
-        if(!api.enabled||!scene||!state.camera||state.units.length+bunnies.length+birds.length<12&&!api.warming&&!firstPerson){stats.ms=performance.now()-start;return;}
+        if(!api.enabled||!scene||!state.camera||state.units.length+bunnies.length+birds.length<12&&!api.warming&&!firstPerson&&!medium){stats.ms=performance.now()-start;return;}
         if(state.renderer&&!state.renderer.capabilities.isWebGL2&&!state.renderer.extensions.get('ANGLE_instanced_arrays')){
             api.enabled=false;stats.fallback=true;stats.ms=performance.now()-start;return;
         }
@@ -172,10 +175,10 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
             projection.multiplyMatrices(state.camera.projectionMatrix,state.camera.matrixWorldInverse);frustum.setFromProjectionMatrix(projection);
             const focus=state.isFPV?state.camera.position:state.cameraLookAt;
             const detailLimit=(state.camera.isOrthographicCamera&&tier!=='ultra'||firstPerson)
-                ?30*Math.max(1,state.renderer.getPixelRatio()):0;
+                ?(medium?56:30)*Math.max(1,state.renderer.getPixelRatio()):0;
             let [shadowRange,shadowBudget]=shadowProfiles[tier]||shadowProfiles.high;
             if(firstPerson){
-                shadowRange=tier==='high'?23:16;
+                shadowRange=tier==='high'?23:medium?14:16;
                 shadowBudget=tier==='high'?12:8;
             }
             let shadowRangeSq=shadowRange*shadowRange;
@@ -190,7 +193,8 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 if(shadowDistances.length>shadowBudget){
                     shadowDistances.sort((a,b)=>a-b);
                     // Crowds outside the close-up area use the existing contact shadow.
-                    shadowRangeSq=Math.max(12*12,shadowDistances[shadowBudget-1]);
+                    const nearest=shadowDistances[shadowBudget-1];
+                    shadowRangeSq=medium?nearest:Math.max(12**2,nearest);
                 }
             }
             let shadows=0;
@@ -207,11 +211,12 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 const useProjected=api.crowdDetail&&!api.warming&&(!state.isFPV||firstPerson)&&!animal;
                 const pixels=useProjected?projectedHeight(u):Infinity;
                 const canSimplify=!u.isVehicle&&!u.isShaman&&!state.selectedUnits.includes(u);
-                const detail=canSimplify?(pixels<23?2:pixels<=detailLimit?1:0):0;
+                const detail=canSimplify?(pixels<(medium?31:23)?2:pixels<=detailLimit?1:0):0;
+                const compact=medium&&canSimplify&&pixels<95;
                 const distanceSq=dx*dx+dz*dz;
                 const detailed=animal||api.fullShadows||state.renderer.shadowMap.enabled&&distanceSq<=shadowRangeSq&&
                     (firstPerson?(inView?pixels>=29:distanceSq<=100):pixels>=29);
-                const proxy=detailed&&firstPerson&&api.firstPersonShadowProxy&&!api.fullShadows&&!animal&&
+                const proxy=detailed&&(medium||firstPerson&&api.firstPersonShadowProxy)&&!api.fullShadows&&!animal&&
                     !u.isVehicle&&!u.invisible&&!u.isPhantom&&u.torso;
                 if(proxy)shadowProxy.add(u,scene,inverse);
                 if((!detailed||proxy)&&!inView){
@@ -220,9 +225,9 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                     for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])root?.traverse(maskPart);
                     continue;
                 }
-                if(detail)stats.simplifiedUnits++;
+                if(detail||compact)stats.simplifiedUnits++;
                 if(animal)collect(u.mesh,true);
-                else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed&&!proxy,false,detail);
+                else for(const root of [u.torso,u.legL,u.legR,u.airshipVisual])if(root)collect(root,detailed&&!proxy,false,detail,compact);
                 // Preserve the original billboard transforms, fill scales and faction colors.
                 // Warm both instance shaders even when the starting units are at full health.
                 if(u.hpGroup&&(u.hpGroup.visible||api.warming)){
@@ -237,7 +242,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null){
                 }
             }}
             for(const [key,b]of buckets){
-                if(b.items.length<(api.warming||b.healthBar?1:2)){
+                if(b.items.length<(api.warming||b.healthBar||b.compact?1:2)){
                     if(b.items.length&&b.cast&&!b.shadowCount)suppressShadow(b.items[0]);
                     if(!b.healthBar&&frame-b.used>300&&b.mesh){scene.remove(b.mesh);b.mesh.dispose();buckets.delete(key);}
                     continue;

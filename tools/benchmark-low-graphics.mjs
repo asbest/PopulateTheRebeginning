@@ -10,6 +10,8 @@ const {chromium}=customPlaywright
 const software=process.argv.includes('--software');
 const live=process.argv.includes('--live');
 const images=process.argv.find(arg=>arg.startsWith('--images='))?.slice(9);
+const tier=process.argv.find(arg=>arg.startsWith('--tier='))?.slice(7)||'low';
+if(!['low','medium'].includes(tier))throw Error('Use --tier=low or --tier=medium');
 const browser=await chromium.launch({
     headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),
     args:software?['--use-angle=swiftshader','--enable-unsafe-swiftshader']:[]
@@ -22,7 +24,7 @@ try{
         if(message.type()==='error'&&/THREE\.WebGLProgram|INVALID_OPERATION/.test(message.text()))errors.push(message.text());
     });
     await seedWorld(page,98217);
-    await page.addInitScript(()=>localStorage.setItem('graphics-quality','low'));
+    await page.addInitScript(tier=>localStorage.setItem('graphics-quality',tier),tier);
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
     await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady&&state.shaman,null,{timeout:90000});
     if(!live)await page.evaluate(()=>{
@@ -72,6 +74,25 @@ try{
             building.underConstruction=false;building.visualMesh.scale.y=1;
         }
         await Art.blender.loadAll();
+        const target=new THREE.Vector3(origin.x,getHeight(origin.x,origin.z-15)+1.5,origin.z-15);
+        let walkingStart=null,walkingScore=-Infinity;
+        for(const radius of [23,29,35])for(let angle=0;angle<2*Math.PI;angle+=Math.PI/8){
+            const x=target.x+Math.sin(angle)*radius,z=target.z+Math.cos(angle)*radius;
+            const sideX=Math.cos(angle),sideZ=-Math.sin(angle);
+            let clearance=Infinity;
+            for(const side of [-5,0,5]){
+                const px=x+sideX*side,pz=z+sideZ*side,ground=getHeight(px,pz);
+                if(ground<water+.4){clearance=-Infinity;break;}
+                const eye=ground+2.1;
+                for(const t of [.06,.12,.2,.3,.45,.6,.8]){
+                    const height=getHeight(px+(target.x-px)*t,pz+(target.z-pz)*t);
+                    clearance=Math.min(clearance,eye+(target.y-eye)*t-height);
+                }
+            }
+            const score=clearance-radius*.015;
+            if(score>walkingScore){walkingStart={x,z,sideX,sideZ};walkingScore=score;}
+        }
+        if(!walkingStart)throw Error('No dry first-person route facing the settlement');
         state.matchSettings.peaceTimeMinutes=0;
         const quantile=(values,p)=>values.slice().sort((a,b)=>a-b)[Math.ceil(values.length*p)-1];
         const results=[],samplePixel=new Uint8Array(4);
@@ -89,9 +110,13 @@ try{
             }
             const frames=[],cpu=[],triangles=[],calls=[];
             const updateView=step=>{
-                const x=Math.sin(step*.055)*6,z=scene==='first-person'?-step*.09:-17;
-                state.cameraLookAt.set(origin.x+x,origin.y,origin.z+z);
-                if(state.isFPV){shaman.placeOnGround(origin.x+x,origin.z+z);state.fpvYaw=Math.sin(step*.045)*.62;}
+                if(state.isFPV){
+                    const lateral=Math.sin(step*.055)*5;
+                    const x=walkingStart.x+lateral*walkingStart.sideX,z=walkingStart.z+lateral*walkingStart.sideZ;
+                    shaman.placeOnGround(x,z);
+                    state.fpvYaw=Math.atan2(x-target.x,z-target.z);
+                    state.fpvPitch=Math.atan2(target.y-shaman.mesh.position.y-2.1,Math.hypot(x-target.x,z-target.z));
+                }else state.cameraLookAt.set(origin.x+Math.sin(step*.055)*6,origin.y,origin.z-17);
                 updateCameraPosition();
             };
             if(live){
@@ -137,7 +162,7 @@ try{
                 image:capture?renderer.domElement.toDataURL():null});
         }
         const debug=gl.getExtension('WEBGL_debug_renderer_info');
-        return {gpu:gl.getParameter(debug?.UNMASKED_RENDERER_WEBGL||gl.RENDERER),width:gl.drawingBufferWidth,
+        return {tier:state.graphicsQuality.tier,gpu:gl.getParameter(debug?.UNMASKED_RENDERER_WEBGL||gl.RENDERER),width:gl.drawingBufferWidth,
             height:gl.drawingBufferHeight,units:state.units.length,buildings:state.buildings.length,results};
     },{live,capture:!!images});
     if(errors.length)throw Error(errors.join('\n'));
