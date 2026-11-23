@@ -1,13 +1,14 @@
 import fs from 'node:fs/promises';
 import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
 import {seedWorld} from './fixtures/seed-world.mjs';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:800,height:600}}),errors=[];await seedWorld(page,98217);
  // Image parity here covers High. Medium changes distant plant density.
- await page.addInitScript(()=>localStorage.setItem('graphics-quality','high'));
+ await useGraphicsTier(page,'high');
  page.on('pageerror',e=>errors.push(String(e)));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:120000});
@@ -19,8 +20,9 @@ try{
   const renderer=state.renderer,draw=renderer.render,details=gameTestAPI.OverviewDetails,gl=renderer.getContext();renderer.setPixelRatio(.8);
   renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
   gameTestAPI.TerrainStream.disable('fixed overview fixture');
-  for(let pass=0;pass<(2*gameTestAPI.CONFIG.TERRAIN.RENDER_DISTANCE+1)**2+1;pass++)gameTestAPI.updateChunks();
-  if(Object.keys(state.chunks).length!==121)throw Error('Incomplete fixed overview fixture');
+  const expectedChunks=(2*gameTestAPI.CONFIG.TERRAIN.RENDER_DISTANCE+1)**2;
+  for(let pass=0;pass<expectedChunks+1;pass++)gameTestAPI.updateChunks();
+  if(Object.keys(state.chunks).length!==expectedChunks)throw Error('Incomplete fixed overview fixture');
   const render=()=>draw.call(renderer,state.scene,state.camera),read=()=>{const data=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,data);return data;};
   async function settle(){const start=performance.now();for(let pass=0;pass<4;pass++){
    render();while(Art.resources.stats.queued||gameTestAPI.BuildingBatches.stats.pending||gameTestAPI.FlowerOverview.stats.pending||Art.textureStatus.pending||Art.textureStatus.previewPending||Art.textureStatus.upgrading){
@@ -35,7 +37,8 @@ try{
   for(const zoom of [25,35,65,110]){
    state.viewScale=zoom;gameTestAPI.updateCameraZoom();updateCameraPosition();
    TerrainLod.overviewEnabled=false;details.enabled=false;flowers.enabled=false;await settle();render();const before=renderer.info.render.triangles,a=read(),original=renderer.domElement.toDataURL();
-   const counts=Object.values(state.chunks).map(c=>c.userData.groundCover.grass?.mesh.count||0);
+   const grassMeshes=Object.values(state.chunks).flatMap(c=>c.userData.groundCover.grass?.mesh||[]);
+   const originalGrass=grassMeshes.map(mesh=>({mesh,count:mesh.count,index:mesh.geometry.index}));
    TerrainLod.overviewEnabled=true;details.enabled=true;flowers.enabled=true;await settle();render();const after=renderer.info.render.triangles,b=read(),optimized=renderer.domElement.toDataURL();
    let differing=0,total=0;for(let i=0;i<a.length;i+=4){let max=0;for(let c=0;c<3;c++){const d=Math.abs(a[i+c]-b[i+c]);max=Math.max(max,d);total+=d;}if(max>12)differing++;}
    const pixelError=differing/(a.length/4),meanError=total/(a.length/4*3*255);
@@ -43,7 +46,7 @@ try{
    if(zoom>=65&&after>before*.9)throw Error('Insufficient overview savings '+JSON.stringify({zoom,before,after}));
    if(zoom===35&&!details.stats.visibleSavedTriangles)throw Error('Grass still uses all narrow faces at strategy zoom');
    if(zoom===35&&!flowers.stats.savedTriangles)throw Error('Flower detail did not simplify at strategy zoom');
-   if(Object.values(state.chunks).some((c,i)=>(c.userData.groundCover.grass?.mesh.count||0)!==counts[i]))throw Error('Plant density changed');
+   if(originalGrass.some(({mesh,count})=>mesh.count!==count))throw Error('Plant density changed');
    const draws=measureLandscapeDraws(renderer,state.scene,state.camera,render);
    if(!draws.main.grass.calls||!draws.main.terrain.calls||!draws.main.water.calls)
     throw Error('Incomplete landscape attribution '+JSON.stringify(draws));
@@ -126,16 +129,41 @@ try{
     const median=values=>values.sort((a,b)=>a-b)[Math.floor(values.length/2)];
     entry.grassPrototype={base,batched,changed,baselineMedianMs:median(timings.baseline),batchedMedianMs:median(timings.batched)};
    }
+   if(zoom===110){
+    const {mesh,index}=originalGrass.find(({mesh})=>mesh.count);
+    details.release(mesh);
+    if(mesh.geometry.index!==index)throw Error('Chunk cleanup did not restore the source grass index');
+   }
    result.push(entry);
   }
-  const grass=Object.values(state.chunks).find(c=>c.userData.groundCover.grass?.mesh.count)?.userData.groundCover.grass.mesh;
-  const reducedIndex=grass.geometry.index;details.release(grass);
-  if(grass.geometry.index.count!==768||reducedIndex.array.length===0)throw Error('Chunk cleanup did not detach the shared grass index');
   details.enabled=false;render();
   state.isFPV=true;details.enabled=true;details.update(state.camera,renderer);
   if(details.stats.savedTriangles)throw Error('First-person grass lost geometry');
   flowers.update(state.camera,renderer);
   if(flowers.stats.blooms)throw Error('First-person flower geometry was simplified');
+  state.isFPV=false;
+  setGraphicsQuality('medium');
+  const mediumGrass=Object.values(state.chunks).flatMap(c=>c.userData.groundCover.grass?.mesh||[]);
+  const baseCounts=new Map(mediumGrass.map(mesh=>[mesh,mesh.count]));
+  const focus=state.cameraLookAt;
+  const nearGrass=mediumGrass.filter(mesh=>mesh.coverBounds&&
+   Math.max(mesh.coverBounds.min.x-focus.x,focus.x-mesh.coverBounds.max.x,0)<10&&
+   Math.max(mesh.coverBounds.min.z-focus.z,focus.z-mesh.coverBounds.max.z,0)<10);
+  const beforeRender=state.scene.onBeforeRender;
+  let thinned=0,nearFull=0;
+  state.scene.onBeforeRender=function(...args){
+   beforeRender.apply(this,args);
+   thinned=mediumGrass.filter(mesh=>mesh.count<baseCounts.get(mesh)).length;
+   nearFull=nearGrass.filter(mesh=>mesh.count===baseCounts.get(mesh)).length;
+   for(const mesh of mediumGrass){
+    const full=baseCounts.get(mesh);
+    if(mesh.count!==full&&mesh.count!==Math.ceil(full/2))throw Error('Unexpected Medium grass density');
+   }
+  };
+  try{render();}finally{state.scene.onBeforeRender=beforeRender;}
+  if(!thinned||!nearGrass.length||nearFull!==nearGrass.length||!details.stats.visibleOmittedClumps||
+     mediumGrass.some(mesh=>mesh.count!==baseCounts.get(mesh)))throw Error('Medium grass render did not protect nearby or restore source counts');
+  result.at(-1).mediumGrass={chunksThinned:thinned,nearFull,visibleOmittedClumps:details.stats.visibleOmittedClumps};
   return result;
  });
  if(errors.length)throw Error(errors.join('\n'));

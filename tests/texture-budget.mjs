@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
@@ -8,6 +9,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
  ...(process.argv.includes('--software-gl')?{args:['--use-gl=angle','--use-angle=swiftshader']}:{})});
 try{
  const page=await browser.newPage({viewport:{width:960,height:600}}),errors=[];
+ await useGraphicsTier(page,'high');
  const cpuRate=Number(process.argv.find(arg=>arg.startsWith('--cpu-throttle='))?.split('=')[1]||1);
  if(cpuRate>1){const session=await page.context().newCDPSession(page);await session.send('Emulation.setCPUThrottlingRate',{rate:cpuRate});}
  page.on('pageerror',error=>errors.push(String(error)));

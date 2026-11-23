@@ -1,10 +1,12 @@
 import {createRequire} from 'node:module';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 import {pathToFileURL} from 'node:url';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];
+ await useGraphicsTier(page,'high');
  page.on('pageerror',e=>errors.push(String(e)));
  page.on('console',m=>{if(m.type()==='error'&&/shader|webgl/i.test(m.text()))errors.push(m.text());});
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',{waitUntil:'load',timeout:90000});

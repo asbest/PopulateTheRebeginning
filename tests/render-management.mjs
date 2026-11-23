@@ -1,10 +1,12 @@
 import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 import {seedWorld} from './fixtures/seed-world.mjs';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:800,height:600}}),errors=[];await seedWorld(page,98217);page.on('pageerror',e=>errors.push(String(e)));
+ await useGraphicsTier(page,'medium');
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:120000});
  const result=await page.evaluate(async()=>{
@@ -16,8 +18,9 @@ try{
   gameTestAPI.FlowerOverview.enabled=false;
   renderer.render=function(scene,...args){if(scene!==state.scene)return draw.call(this,scene,...args);};
   gameTestAPI.TerrainStream.disable('fixed render management fixture');
-  for(let pass=0;pass<(2*gameTestAPI.CONFIG.TERRAIN.RENDER_DISTANCE+1)**2+1;pass++)gameTestAPI.updateChunks();
-  if(Object.keys(state.chunks).length!==121)throw Error('Incomplete fixed render fixture');
+  const expectedChunks=(2*gameTestAPI.CONFIG.TERRAIN.RENDER_DISTANCE+1)**2;
+  for(let pass=0;pass<expectedChunks+1;pass++)gameTestAPI.updateChunks();
+  if(Object.keys(state.chunks).length!==expectedChunks)throw Error('Incomplete fixed render fixture');
   const render=()=>draw.call(renderer,state.scene,state.camera),read=()=>{const data=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,data);return data;};
   async function settle(){const start=performance.now();for(let pass=0;pass<4;pass++){
    render();while(Art.resources.stats.queued||gameTestAPI.BuildingBatches.stats.pending||Art.textureStatus.pending||Art.textureStatus.previewPending||Art.textureStatus.upgrading){

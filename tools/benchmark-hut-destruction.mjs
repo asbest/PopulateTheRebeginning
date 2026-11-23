@@ -1,4 +1,5 @@
 import {createRequire} from 'node:module';
+import {useGraphicsTier} from '../tests/fixtures/graphics-tier.mjs';
 import {pathToFileURL} from 'node:url';
 
 const playwrightPath=process.argv.find(arg=>arg.startsWith('--playwright='))?.slice(13);
@@ -13,7 +14,7 @@ try {
             isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36'}}
     ]) {
     const page=await browser.newPage(profile.options);
-    if(profile.name==='Android')await page.addInitScript(()=>localStorage.setItem('graphics-quality','low'));
+    await useGraphicsTier(page,profile.name==='Android'?'low':'high');
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1',
         {waitUntil:'load',timeout:90000});
     await page.waitForFunction(()=>window.gameTestAPI&&state.shaman&&state.renderer,null,{timeout:90000});

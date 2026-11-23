@@ -1,10 +1,12 @@
 import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
+import {useGraphicsTier} from '../tests/fixtures/graphics-tier.mjs';
 import {seedWorld,startManualSimulation} from '../tests/fixtures/seed-world.mjs';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:960,height:600}}),errors=[];
+ await useGraphicsTier(page,'medium');
  await seedWorld(page,98217);
  page.on('pageerror',e=>errors.push(String(e)));page.on('console',m=>{if(/Scenery batching unavailable|Error compiling|VALIDATE_STATUS/.test(m.text()))errors.push(m.text());});
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');

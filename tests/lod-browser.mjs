@@ -1,5 +1,6 @@
 import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
 import {seedWorld} from './fixtures/seed-world.mjs';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 import fs from 'node:fs/promises';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
@@ -7,7 +8,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
 try{
  const page=await browser.newPage({viewport:{width:800,height:600}}),errors=[];
  await seedWorld(page,98217);page.on('pageerror',e=>errors.push(String(e)));
- await page.addInitScript(()=>localStorage.setItem('graphics-quality','high'));
+ await useGraphicsTier(page,'high');
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:90000});
  const result=await page.evaluate(async()=>{

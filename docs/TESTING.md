@@ -7,7 +7,7 @@ failures, exits with a failure code if any suite fails, and writes
 
 Use `npm run test:list` to inspect the complete inventory. New test files are
 automatically included in the simulation group. GitHub uses the same runner in
-six independent groups; all groups run even when another fails. Each group
+seven independent groups; all groups run even when another fails. Each group
 uploads its reports, including its suite summary.
 
 `licenses.mjs` tests the separate license guard with isolated Git fixtures:
@@ -80,10 +80,11 @@ checks in a separately installed Brave browser:
 node tests/startup.mjs --browser=/absolute/path/to/brave
 ```
 
-## Coverage reviewed on 2026-10-25
+## Coverage by group
 
 | Group | Suites and current behavior |
 | --- | --- |
+| Tutorial | `control-tutorial`: first-run sequence, Help replay, pointer controls, construction, explicit training and Airship production. |
 | Interface | `startup`, `peace-time`, `campaign-story`, `campaign-levels`, `live-gameplay`, `browser`: welcome screen, desktop/touch controls, explicit unit selection, configurable 2.5-minute peace default, campaign journal, progression, saves and live play. |
 | Simulation | `ai-stutter`, `building-durability`, `building-navigation`, `combat-system`, `faith-worship`, `locomotion`, `network`, `pathfinder-worker`, `spells`, `strategy`, `totem-aura`, `tree-navigation`: scheduling, building strength and spacing, demolition through a selected builder, hidden actions without a selected unit, manual combat, worship, flight/landing/recovery, terrain collision, worker fallback, spell preparation, AI, healing/mana and tree obstacles. |
 | Rendering | `blender-assets`, `ktx2`, `environment`, `terrain-variety`, `trees`, `sfx-assets`, `materials`: assets, compressed textures and fallback, water/scenery, terrain, connected vegetation, burning/regrowth and audio files. |
@@ -107,6 +108,26 @@ The firestorm gate disables peace time, completes spell preparation and directs
 impacts at a loaded tree. It checks the current batched effects and rejects shader
 compilation during impacts. Burned-tree materials retain the original wind shader
 and its cache key; `trees.mjs` checks this alongside burning and regrowth.
+
+## Rendering optimizations
+
+Pin the graphics preset before navigation if a fixture depends on a particular
+shader, texture, shadow, or LOD policy. Use `useGraphicsTier` from
+`tests/fixtures/graphics-tier.mjs`. Hardware-based defaults are exercised by
+normal startup and browser checks.
+
+Compare optimized and reference draws using the same scene, camera and
+resolution. For a change intended to preserve the image, keep the pixel parity
+checks. For deliberate LOD changes, check the relevant contract directly.
+`overview-browser` checks High image parity and separately measures Medium grass
+counts during a real render. `lod.mjs` checks density transitions and source
+state restoration. `lod-browser` exercises the perspective camera and verifies
+nearby detail and authoritative collision geometry.
+
+Performance gates check work such as drawn triangles, draw calls and shader
+compilation. Record FPS and frame percentiles for comparisons on the same
+machine. `tools/benchmark-low-graphics.mjs --tier=medium --live` and its
+`--tier=low` variant are manual comparison tools.
 
 ## Network checks
 

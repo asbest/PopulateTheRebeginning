@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 
@@ -11,6 +12,7 @@ if(pack.version!==2||!Object.values(pack.models).every(model=>Object.values(mode
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try {
     const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[],missing=[];
+    await useGraphicsTier(page,'high');
     page.on('pageerror',e=>errors.push(String(e)));
     page.on('response',r=>{if(r.status()===404)missing.push(r.url());});
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1&assets=full',{waitUntil:'load',timeout:60000});

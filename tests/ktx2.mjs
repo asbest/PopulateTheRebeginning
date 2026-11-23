@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
@@ -47,6 +48,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
 try{
     async function openGame(query='',missingGrass=false){
         const page=await browser.newPage();
+        await useGraphicsTier(page,'high');
         const errors=[],ktxRequests=[],failedRequests=[],badResponses=[];
         page.on('pageerror',error=>errors.push(String(error)));
         page.on('requestfailed',request=>failedRequests.push(`${request.url()}: ${request.failure()?.errorText}`));
@@ -130,6 +132,7 @@ try{
 
     await check('A stalled KTX2 request cannot trap the welcome screen',async()=>{
         const page=await browser.newPage();
+        await useGraphicsTier(page,'high');
         const errors=[];
         let releaseRequest;
         const blocked=new Promise(resolve=>{releaseRequest=resolve;});

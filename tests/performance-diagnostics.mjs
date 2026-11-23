@@ -1,10 +1,12 @@
 import {createRequire} from 'node:module';import {pathToFileURL} from 'node:url';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 import {clickVisibleControl} from './fixtures/click-control.mjs';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const context=await browser.newContext({permissions:['clipboard-read','clipboard-write']}),page=await context.newPage(),errors=[];
+ await useGraphicsTier(page,'high');
  page.on('pageerror',e=>errors.push(String(e)));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:90000});

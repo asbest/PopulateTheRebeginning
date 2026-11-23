@@ -1,4 +1,5 @@
 import {createRequire} from 'node:module';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 import {pathToFileURL} from 'node:url';
 import path from 'node:path';
 const arg=process.argv.find(value=>value.startsWith('--playwright='))?.slice(13);
@@ -11,7 +12,7 @@ try{
   const context=await browser.newContext(),page=await context.newPage(),errors=[],images=[];
   page.on('pageerror',error=>errors.push(error.message));
   page.on('request',request=>{if(/\.(png|webp|ktx2)(\?|$)/.test(request.url())&&!request.url().includes('key-art'))images.push(request.url());});
-  if(mode==='low')await page.addInitScript(()=>localStorage.setItem('graphics-quality','low'));
+  if(mode!=='local')await useGraphicsTier(page,mode==='low'?'low':'high');
   if(mode==='unreachable')await page.route(/\.(png|webp|ktx2)(\?|$)/,route=>route.abort('connectionrefused'));
   const url=mode==='local'?pathToFileURL(path.resolve(import.meta.dirname,'../PopulateTheRebeginning.html')).href:base+'/PopulateTheRebeginning.html';
   await page.goto(url+'?test=1',{waitUntil:'load',timeout:90000});await ready(page);
@@ -27,11 +28,13 @@ try{
    return {surfacePixels:surface.image.width,tones:values.size,units:state.units.length};
   });
   if(mode==='low'&&images.length)throw Error('Low fetched image surfaces '+images.join(','));
+  if(mode==='unreachable'&&!images.length)throw Error('The network-failure fixture did not request any image surfaces');
   if(errors.length)throw Error(mode+': '+errors.join('\n'));
   console.log('PASS procedural '+mode,result);
   await context.close();
  }
  const context=await browser.newContext(),page=await context.newPage();
+ await useGraphicsTier(page,'high');
  await page.goto(base+'/PopulateTheRebeginning.html?test=1&cache=1');await ready(page);
  await page.evaluate(async()=>{
   await navigator.serviceWorker.ready;

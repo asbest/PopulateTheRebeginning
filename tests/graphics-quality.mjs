@@ -1,13 +1,14 @@
 import {createRequire} from 'node:module';
 import {pathToFileURL} from 'node:url';
 import {seedWorld,startManualSimulation} from './fixtures/seed-world.mjs';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 const arg=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:960,height:600}}),errors=[];
  await seedWorld(page,98217);
- await page.addInitScript(()=>localStorage.setItem('graphics-quality','high'));
+ await useGraphicsTier(page,'high');
  page.on('pageerror',e=>errors.push(String(e)));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});
@@ -172,7 +173,7 @@ try{
  });
  const low=await browser.newPage({viewport:{width:960,height:600}});
  low.on('pageerror',error=>errors.push(String(error)));
- await low.addInitScript(()=>localStorage.setItem('graphics-quality','low'));
+ await useGraphicsTier(low,'low');
  await low.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await low.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:90000});
  await low.evaluate(()=>{

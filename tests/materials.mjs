@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import {useGraphicsTier} from './fixtures/graphics-tier.mjs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
@@ -8,6 +9,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
 const root=path.resolve(import.meta.dirname,'..'),errors=[];
 try {
  const page=await browser.newPage({viewport:{width:1440,height:900}});
+ await useGraphicsTier(page,'high');
  page.on('pageerror',e=>errors.push(String(e)));
  page.on('console',m=>{if(m.type()==='error'&&/shader|webgl|texture/i.test(m.text()))errors.push(m.text());});
  page.on('requestfailed',r=>errors.push(`${r.url()}: ${r.failure()?.errorText}`));

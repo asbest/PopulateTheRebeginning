@@ -1,4 +1,5 @@
 import {createRequire} from 'node:module';
+import {useGraphicsTier} from '../tests/fixtures/graphics-tier.mjs';
 import {pathToFileURL} from 'node:url';
 const modulePath=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createRequire(import.meta.url)('playwright');
@@ -9,6 +10,7 @@ const browser=await chromium.launch({headless:true,...(process.platform==='win32
  ...(process.argv.includes('--software-gl')?{args:['--use-gl=angle','--use-angle=swiftshader']}:{})});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:800}}),errors=[];
+ await useGraphicsTier(page,'medium');
  page.on('pageerror',e=>errors.push(String(e)));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.shaman,null,{timeout:90000});

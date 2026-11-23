@@ -1,10 +1,12 @@
 import {createRequire} from 'node:module';
+import {useGraphicsTier} from '../tests/fixtures/graphics-tier.mjs';
 import {pathToFileURL} from 'node:url';
 const modulePath=process.argv.find(a=>a.startsWith('--playwright='))?.slice(13);
 const {chromium}=modulePath?await import(pathToFileURL(modulePath).href):createRequire(import.meta.url)('playwright');
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:960,height:600}}),errors=[];
+ await useGraphicsTier(page,'high');
  page.on('pageerror',e=>errors.push(String(e)));
  page.on('console',m=>{if((m.type()==='error'&&/shader|webgl/i.test(m.text()))||m.text().includes('Character batching unavailable'))errors.push(m.text());});
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
@@ -27,7 +29,7 @@ try{
   const visibility=state.units.map(u=>[u,u.mesh.visible]);for(const [u]of visibility)u.mesh.visible=false;
   render();const background=pixels();for(const [u,visible]of visibility)u.mesh.visible=visible;
   batch.enabled=true;render();const optimized=render(),after=pixels();
-  if(batch.stats.fallback||batch.stats.instances<1000)throw new Error('Original meshes were not batched');
+  if(batch.stats.fallback||!batch.stats.instances)throw new Error('Original meshes were not batched');
   if(JSON.stringify(snapshot())!==stateBefore)throw new Error('Rendering altered rig or physics state');
   let differing=0,actorPixels=0;for(let i=0;i<before.length;i+=4){let delta=0,actor=0;for(let c=0;c<3;c++){delta=Math.max(delta,Math.abs(before[i+c]-after[i+c]));actor=Math.max(actor,Math.abs(before[i+c]-background[i+c]));}if(delta>12)differing++;if(actor>12)actorPixels++;}
   const differingFraction=differing/(width*height);

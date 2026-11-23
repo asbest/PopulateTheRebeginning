@@ -1,4 +1,5 @@
 import {createRequire} from 'node:module';
+import {useGraphicsTier} from '../tests/fixtures/graphics-tier.mjs';
 import {pathToFileURL} from 'node:url';
 import {seedWorld,startManualSimulation} from '../tests/fixtures/seed-world.mjs';
 
@@ -7,6 +8,7 @@ const {chromium}=path?await import(pathToFileURL(path).href):createRequire(impor
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
     const page=await browser.newPage({viewport:{width:960,height:600}}),errors=[];
+    await useGraphicsTier(page,'high');
     page.on('pageerror',error=>errors.push(error.message));
     await seedWorld(page,98217);
     await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
@@ -62,9 +64,12 @@ try{
                 throw Error('Crowd detail did not reduce work '+JSON.stringify({count,combat,baseline,optimized}));
             result.push({count,combat,baseline,optimized});
         }
-        const probe=state.units[0];state.isFPV=true;
+        const probe=state.units[0];
+        state.selectedUnits=[probe];state.isFPV=true;state.camera=state.perspectiveCamera;
+        state.fpvYaw=Math.PI;state.fpvPitch=0;updateCameraPosition();
         renderer.render(state.scene,state.camera);
-        if(batch.stats.simplifiedUnits||batch.reducePose(probe))throw Error('First-person detail was reduced');
+        if(!batch.stats.visibleUnits||batch.reducePose(probe))
+            throw Error('First-person fixture did not render actors or throttled the controlled pose');
         return result;
     });
     if(errors.length)throw Error(errors.join('\n'));
