@@ -6,6 +6,8 @@ const {chromium}=arg?await import(pathToFileURL(arg).href):createRequire(import.
 const browser=await chromium.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{})});
 try{
  const page=await browser.newPage({viewport:{width:800,height:600}}),errors=[];await seedWorld(page,98217);
+ // Image parity here covers High. Medium changes distant plant density.
+ await page.addInitScript(()=>localStorage.setItem('graphics-quality','high'));
  page.on('pageerror',e=>errors.push(String(e)));
  await page.goto((process.env.GAME_URL||'http://127.0.0.1:8765')+'/PopulateTheRebeginning.html?test=1');
  await page.waitForFunction(()=>window.gameTestAPI&&state.assetsReady,null,{timeout:120000});

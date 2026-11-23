@@ -63,6 +63,7 @@ export function createOverviewDetails(T,state,source=()=>null){
   clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(clip);
   const tier=state.graphicsQuality?.tier,low=tier==='low',medium=tier==='medium';
   const ultra=tier==='ultra',firstPerson=state.isFPV&&camera.isPerspectiveCamera&&!ultra;
+  const densityLod=api.enabled&&medium&&(!state.isFPV||firstPerson);
   const focus=firstPerson?camera.position:state.cameraLookAt;
   for(const key in state.chunks){const layer=state.chunks[key].userData?.groundCover?.grass,mesh=layer?.mesh;if(!mesh)continue;
    const g=mesh.geometry,p=g.attributes.position;
@@ -81,7 +82,7 @@ export function createOverviewDetails(T,state,source=()=>null){
     r={geometry:g,original:r?.geometry===g?r.original:g.index,levels,scale,level:0,positionVersion:p.version};records.set(mesh,r);
    }
    const fullCount=mesh.count;
-   if(api.enabled&&medium&&visible&&mesh.coverBounds&&focus){
+   if(densityLod&&visible&&mesh.coverBounds&&focus){
     box.copy(mesh.coverBounds).applyMatrix4(mesh.matrixWorld);
     const dx=Math.max(box.min.x-focus.x,focus.x-box.max.x,0);
     const dz=Math.max(box.min.z-focus.z,focus.z-box.max.z,0);
@@ -94,7 +95,7 @@ export function createOverviewDetails(T,state,source=()=>null){
      mesh.count=Math.ceil(fullCount/2);
      stats.visibleOmittedClumps+=fullCount-mesh.count;
     }
-   }else if(!medium||!api.enabled)r.sparse=false;
+   }else if(!densityLod)r.sparse=false;
    let level=0;
    if(api.enabled&&low&&p.version===0)level=4;
    else if(api.enabled&&(!state.isFPV||firstPerson)&&g.boundingSphere){

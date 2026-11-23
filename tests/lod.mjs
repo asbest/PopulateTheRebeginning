@@ -107,6 +107,11 @@ grassDetails.restore();assert.equal(nearbyGrass.mesh.count,11);assert.equal(dist
 const eye=new T.PerspectiveCamera(60,1,.1,300);
 eye.updateMatrixWorld(true);grassState.isFPV=true;
 grassDetails.update(eye,grassRenderer);assert.equal(distantGrass.mesh.count,6);
+grassState.cameraLookAt.z=0;
+grassDetails.update(grassCamera,grassRenderer);
+assert.equal(distantGrass.mesh.count,11,'A camera transition restores grass until perspective is ready');
+assert.equal(grassDetails.stats.savedTriangles,0);
+grassDetails.update(eye,grassRenderer);assert.equal(distantGrass.mesh.count,6);
 grassState.graphicsQuality.tier='high';
 grassDetails.update(eye,grassRenderer);assert.equal(distantGrass.mesh.count,11);
 console.log('PASS Medium grass uses half of the distant clumps, restores them near the focus, and leaves High at full density');
