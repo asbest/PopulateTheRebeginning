@@ -53,8 +53,17 @@ try{
  });
  await check('First-person staff stays at the right edge while looking around and casting',async()=>{
   await fresh();return p.evaluate(()=>{
-   const {caster}=fixture;
+   const {caster,enemy}=fixture;
    const camera=state.perspectiveCamera;
+   const grippingHands=[caster.armR,enemy.armR,enemy.armL].map(arm=>arm.userData.lower.userData.palm);
+   const tier=state.graphicsQuality.tier;
+   for(const quality of ['low','medium','high',tier]){
+    setGraphicsQuality(quality);
+    for(const hand of grippingHands){
+     hand.geometry.computeBoundingSphere();
+     if(hand.geometry.boundingSphere.radius>.1)throw Error('A unit lost the closed grip geometry at '+quality);
+    }
+   }
    state.isFPV=true;state.camera=camera;
    const point=new THREE.Vector3();let minSide=1,maxSide=0;
    for(const aspect of [.43,1,16/9])for(const pitch of [-.9,0,.8])for(const casting of [false,true]){

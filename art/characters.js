@@ -190,6 +190,7 @@ export function createCharacters(T,art) {
         function closeHand(arm,axis='y'){
             const lower=arm.userData.lower,side=arm===u.armL?1:-1,palm=lower.userData.palm;
             palm.geometry=geo(`grasp/${side}/${axis}`,()=>createGripGeometry(T,side,axis));palm.scale.set(1,1,1);
+            sourceGeometry.set(palm,palm.geometry);
             lower.remove(lower.userData.thumb);lower.userData.thumb=null;palm.name='GrippingHand';
         }
         if(['shaman','warrior','preacher'].includes(role))closeHand(u.armR);
