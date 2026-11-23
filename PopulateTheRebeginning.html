@@ -1805,7 +1805,10 @@ window.state = state;
 window.flowerUniforms = { uTime: { value: 0 } };
 window.setGraphicsQuality=function(tier='high'){
     tier=Object.hasOwn(GRAPHICS_PROFILES,tier)?tier:'high';
+    const previous=state.graphicsQuality?.tier;
     const profile=setGraphicsTier(tier);
+    updateTerrainGraphics(tier);
+    if(previous!==tier&&(previous==='low'||tier==='low'))for(const unit of state.units)Characters.applyQuality(unit.mesh);
     state.graphicsQuality={...(state.graphicsQuality||{}),tier,coverDensity:profile.cover,maxPixelRatio:profile.pixel,
         dynamicScale:1,vegetationPixelLimit:tier==='ultra'?1.5:2,resolutionProbe:null,resolutionCooldown:0,minScale:profile.minScale,lastAdjustment:performance.now(),averageFps:state.graphicsQuality?.averageFps||60};
     if(state.renderer){state.renderer.shadowMap.enabled=profile.shadows;state.renderer.shadowMap.needsUpdate=true;}
@@ -4276,6 +4279,13 @@ function initTerrainResources() {
             vWorldXZ = worldPosition.xz;
             vec3 pos = position;
 
+        #ifdef LOW_WATER
+            float bend=sin(dot(vWorldXZ,vec2(.079,-.096))+time*.21);
+            float p1=dot(vWorldXZ,vec2(.21,.075))+time*.72+bend*.82;
+            float p2=dot(vWorldXZ,vec2(-.09,.29))+time*.93-bend*.65;
+            pos.y+=(sin(p1)*.19+sin(p2)*.11)*min(waveStrength,1.6);
+            vWaveNormal=vec3(-.032*cos(p1),1.0,-.027*cos(p2));
+        #else
             vec2 d1=normalize(vec2(1.0,.32)),d2=normalize(vec2(-.28,1.0));
             vec2 d3=normalize(vec2(.58,-.82)),d4=normalize(vec2(-.91,-.41));
             // A slow, continuous bend breaks ruler-straight wave fronts across chunks.
@@ -4297,6 +4307,7 @@ function initTerrainResources() {
             pos.y+=height;
             vCrest=smoothstep(.15,.34,height)+smoothstep(.075,.15,length(gradient))*.24;
             vWaveNormal=normalize(vec3(-gradient.x,1.0,-gradient.y));
+        #endif
             vWorldPosition=(modelMatrix*vec4(pos,1.0)).xyz;
             gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
         }
@@ -4318,6 +4329,28 @@ function initTerrainResources() {
         float waterHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
         float waterNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(waterHash(i),waterHash(i+vec2(1,0)),f.x),mix(waterHash(i+vec2(0,1)),waterHash(i+vec2(1,1)),f.x),f.y);}
         void main() {
+        #ifdef LOW_WATER
+            float bend=sin(dot(vWorldXZ,vec2(.079,-.096))+time*.21);
+            float swell=sin(dot(vWorldXZ,vec2(.36,.18))+time*.74+bend);
+            float fine=sin(dot(vWorldXZ,vec2(-.63,.78))-time*1.09+swell*.6-bend);
+            float shallows=1.0-smoothstep(.4,9.0,vDepth);
+            vec3 base=mix(color*vec3(.38,.72,1.0),vec3(.045,.59,.63),shallows*.74);
+            vec3 viewDir=normalize(cameraPosition-vWorldPosition);
+            float grazing=1.0-clamp(dot(viewDir,vWaveNormal),0.0,1.0);
+            float rim=grazing*grazing;
+            base=mix(base,skyColor,.12+rim*.52);
+            base+=vec3(.021,.040,.047)*swell*fine;
+            float foam=smoothstep(.47,.91,vFoam*(.8+.2*fine));
+            vec3 finalColor=mix(base,vec3(.9,.98,.97),foam*.58);
+            float finalAlpha=.84+foam*.13;
+            if(lava>.5){
+                vec2 flow=vWorldXZ*.19+vec2(time*.035,-time*.021);
+                float crust=waterNoise(flow);
+                float seam=1.0-smoothstep(.03,.14,abs(crust-.5));
+                finalColor=mix(vec3(.08,.014,.005)*(1.0+crust),vec3(1.7,.19,.012)*(1.0+.25*fine),seam);
+                finalAlpha=1.0;
+            }
+        #else
             float noise=waterNoise(vWorldXZ*.72+vec2(time*.16,-time*.11));
             vec2 brokenXZ=vWorldXZ+vec2(noise-.5,.5-noise)*.8;
             float swell=sin(dot(brokenXZ,vec2(.39,.19))+time*.7+noise*.7);
@@ -4356,6 +4389,7 @@ function initTerrainResources() {
                 finalColor=mix(cooled,molten,clamp(cracks*.9+embers*.18,0.0,1.0));
                 finalAlpha=1.0;
             }
+        #endif
             gl_FragColor = vec4(finalColor, finalAlpha);
             #include <tonemapping_fragment>
             #include <encodings_fragment>
@@ -4380,6 +4414,19 @@ function initTerrainResources() {
 
     // Assign to state to update time in loop
     state.chunkWaterMat = chunkWaterMat;
+    updateTerrainGraphics(state.graphicsQuality?.tier);
+}
+
+function updateTerrainGraphics(tier){
+    if(!chunkWaterMat)return;
+    const low=tier==='low';
+    if(low===Object.hasOwn(chunkWaterMat.defines,'LOW_WATER'))return;
+    if(low)chunkWaterMat.defines.LOW_WATER=1;
+    else delete chunkWaterMat.defines.LOW_WATER;
+    chunkWaterMat.needsUpdate=true;
+    if(low)chunkTerrainMat.defines.LOW_TERRAIN=1;
+    else delete chunkTerrainMat.defines.LOW_TERRAIN;
+    chunkTerrainMat.needsUpdate=true;
 }
 
 function forEachTreeSite(cx,cz,visit) {

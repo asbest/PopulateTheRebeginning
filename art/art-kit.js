@@ -299,6 +299,17 @@ export function createArtKit(T) {
         const shoreUniform={value:shoreLevel};
         material.userData.shoreUniform=shoreUniform;
         material.onBeforeCompile = shader => {
+            if(material.defines.LOW_TERRAIN){
+                // Land colours already encode elevation, biomes and the shore.
+                // Add the baked surface variation without per-fragment texture sampling.
+                shader.vertexShader='attribute vec4 artTerrainPattern;\nvarying float vTerrainTint;\n'+shader.vertexShader;
+                shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',
+                    '#include <color_vertex>\nvTerrainTint=.88+.16*artTerrainPattern.x+.10*artTerrainPattern.y-.10*artTerrainPattern.z;');
+                shader.fragmentShader='varying float vTerrainTint;\n'+shader.fragmentShader;
+                shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',
+                    '#include <color_fragment>\ndiffuseColor.rgb*=vTerrainTint;');
+                return;
+            }
             shader.uniforms.artGrass={value:textures.grass};
             shader.uniforms.artRock={value:textures.cliff};
             shader.uniforms.artSand={value:textures.sand};
@@ -363,7 +374,7 @@ export function createArtKit(T) {
                     texture2D(artDirtNormal,vArtPosition.xz*.34).xyz,artDirtWeight)*2.0-1.0;
                 normal=normalize(normal+vec3(artN.x,artN.z,artN.y)*(.038+.068*grassWeight)*organic);`);
         };
-        material.customProgramCacheKey=()=> 'island-terrain-detail-v8';
+        material.customProgramCacheKey=()=>material.defines.LOW_TERRAIN?'island-terrain-low-v1':'island-terrain-detail-v8';
     }
     return {building,buildingAssetKey,buildingGeometry,tree,dress,terrainDetail,textures,palette,uniforms,resources,ready:blender.ready,blender,
         configureTextures,textureStatus:pipeline.status,loadTexture:pipeline.load,

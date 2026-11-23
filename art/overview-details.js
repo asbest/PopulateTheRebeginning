@@ -30,18 +30,32 @@ function thinGrassIndices(T,geometry){
  }
  return {index:new T.Uint16BufferAttribute(indices,1),error:thickness};
 }
+
+function lowGrassIndices(T){
+ const indices=[];
+ // The wider face of each original blade, with its middle bend and tip.
+ // The shared grass material already draws both sides.
+ for(let blade=0;blade<8;blade++)for(let ring=0;ring<4;ring+=2){
+  const a=blade*20+ring*4,b=a+1,c=a+8,d=b+8;
+  indices.push(a,b,c,b,d,c);
+ }
+ return new T.Uint16BufferAttribute(indices,1);
+}
 export function createOverviewDetails(T,state,source=()=>null){
  const records=new WeakMap(),variants=new WeakMap(),sphere=new T.Sphere();
+ const lowGrass=lowGrassIndices(T);
  const stats={full:0,medium:0,far:0,savedTriangles:0,visibleSavedTriangles:0};state.overviewDetailStats=stats;
  const api={enabled:true,stats,update,release};const clip=new T.Matrix4(),frustum=new T.Frustum(),box=new T.Box3();
  function release(mesh){const r=records.get(mesh);if(!r)return;
-  if(mesh.geometry===r.geometry&&r.levels.some(level=>mesh.geometry.index===level.index))mesh.geometry.setIndex(r.original);
+  if(mesh.geometry===r.geometry&&(mesh.geometry.index===lowGrass||r.levels.some(level=>mesh.geometry.index===level.index)))
+   mesh.geometry.setIndex(r.original);
   records.delete(mesh);
  }
  function update(camera,renderer){
   stats.full=stats.medium=stats.far=stats.savedTriangles=stats.visibleSavedTriangles=0;
   clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(clip);
-  const ultra=state.graphicsQuality?.tier==='ultra',firstPerson=state.isFPV&&camera.isPerspectiveCamera&&!ultra;
+  const tier=state.graphicsQuality?.tier,low=tier==='low';
+  const ultra=tier==='ultra',firstPerson=state.isFPV&&camera.isPerspectiveCamera&&!ultra;
   for(const key in state.chunks){const layer=state.chunks[key].userData?.groundCover?.grass,mesh=layer?.mesh;if(!mesh)continue;
    const g=mesh.geometry,p=g.attributes.position;
    // Custom/replaced ground-cover geometry retains its original path.
@@ -59,7 +73,8 @@ export function createOverviewDetails(T,state,source=()=>null){
     r={geometry:g,original:r?.geometry===g?r.original:g.index,levels,scale,level:0,positionVersion:p.version};records.set(mesh,r);
    }
    let level=0;
-   if(api.enabled&&(!state.isFPV||firstPerson)&&g.boundingSphere){
+   if(api.enabled&&low&&p.version===0)level=4;
+   else if(api.enabled&&(!state.isFPV||firstPerson)&&g.boundingSphere){
     sphere.copy(g.boundingSphere).applyMatrix4(mesh.matrixWorld);
     const pixels=projectedCoverPixels(camera,renderer.domElement.height,mesh,sphere,box),scale=r.scale*mesh.matrixWorld.getMaxScaleOnAxis();
     if((camera.isOrthographicCamera&&!ultra||firstPerson)&&p.version===0&&
@@ -69,8 +84,8 @@ export function createOverviewDetails(T,state,source=()=>null){
      if(r.levels[i].error*scale*pixels*1.1<=(r.level===i+1?.5:.35))level=i+1;
     }
    }
-   r.level=level;const index=level?r.levels[level-1].index:r.original;if(g.index!==index)g.setIndex(index);
-   stats[['full','medium','far','medium'][level]]++;
+   r.level=level;const index=level===4?lowGrass:level?r.levels[level-1].index:r.original;if(g.index!==index)g.setIndex(index);
+   stats[['full','medium','far','medium','far'][level]]++;
    const saved=(r.original.count-index.count)/3*mesh.count;stats.savedTriangles+=saved;
    if(visible)stats.visibleSavedTriangles+=saved;
   }

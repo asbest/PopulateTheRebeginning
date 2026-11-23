@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import * as T from '../vendor/three.module.js';
 globalThis.window={addEventListener(){}};globalThis.location={protocol:'http:'};globalThis.localStorage={getItem:()=>null};
-const {terrainIndices,createTerrainLod}=await import('../art/terrain-lod.js');
+const {compactWaterIndices,terrainIndices,createTerrainLod}=await import('../art/terrain-lod.js');
 const {grassIndices}=await import('../art/overview-details.js');
 const {chooseLod}=await import('../art/lod-policy.js');
 const geo=new T.PlaneGeometry(40,40,80,80);geo.rotateX(-Math.PI/2);
@@ -39,6 +39,27 @@ console.log('PASS only dry water interiors are omitted; all perimeter wave-overl
 for(let i=0;i<p.count;i++)p.setY(i,0);
 assert.equal(terrainIndices(T,geo,80,8,false,0).attribute.count,geo.index.count);
 console.log('PASS shore terrain retains full geometry');
+for(let i=0;i<p.count;i++)p.setY(i,p.getX(i)*.5);
+const compact=compactWaterIndices(T,p,80,0),compactEdges=new Map();
+assert(compact.simplified>0&&compact.shoreTiles>0&&compact.occludedTriangles>0);
+assert(compact.attribute.count<original.length/2);
+for(let i=0;i<compact.attribute.count;i+=3){
+ const [a,b,c]=compact.attribute.array.subarray(i,i+3);
+ assert((p.getZ(b)-p.getZ(a))*(p.getX(c)-p.getX(a))-(p.getX(b)-p.getX(a))*(p.getZ(c)-p.getZ(a))>0);
+ for(const [u,v] of [[a,b],[b,c],[c,a]]){
+  const key=Math.min(u,v)+','+Math.max(u,v);compactEdges.set(key,(compactEdges.get(key)||0)+1);
+ }
+}
+// All exposed edges stay on the chunk perimeter or behind dry land.
+for(const [key,count] of compactEdges){
+ assert(count===1||count===2);
+ if(count===2)continue;
+ const [a,b]=key.split(',').map(Number),outside=[-20,20].some(edge=>
+  p.getX(a)===edge&&p.getX(b)===edge||p.getZ(a)===edge&&p.getZ(b)===edge);
+ assert(outside||Math.min(p.getY(a),p.getY(b))>1);
+}
+assert.deepEqual(geo.index.array,original);
+console.log('PASS compact Low water retains watertight shore edges and omits covered tiles');
 assert.equal(chooseLod(0,74,75,16),0);assert.equal(chooseLod(1,76,75,16),1);assert.equal(chooseLod(0,50,75,16),1);assert.equal(chooseLod(2,100,75,16),0);
 console.log('PASS LOD hysteresis avoids toggling around thresholds');
 const blades=new T.BufferGeometry(),positions=[];
@@ -65,6 +86,17 @@ waterMaterial.uniforms.waveStrength.value=1.55;await prepare();assert(lod.stats.
 for(let i=0;i<land.attributes.position.count;i++)land.attributes.position.setY(i,-2);land.attributes.position.needsUpdate=true;
 lod.update(camera,renderer);assert.equal(chunk.children[3].geometry.index,authoritative);assert.equal(lod.stats.occludedWaterTriangles,0);
 console.log('PASS dry-water culling falls back immediately after flooding or unsupported wave strength, without changing collision indices');
+state.graphicsQuality={tier:'low'};
+lod.update(camera,renderer);assert(chunk.children[3].visible);
+for(let i=0;i<land.attributes.position.count;i++)land.attributes.position.setY(i,10);
+land.attributes.position.needsUpdate=true;
+lod.update(camera,renderer);assert(!chunk.children[3].visible);
+for(let i=0;i<land.attributes.position.count;i++)land.attributes.position.setY(i,-10);
+land.attributes.position.needsUpdate=true;
+lod.update(camera,renderer);assert(chunk.children[3].visible);assert(chunk.children[3].geometry.index.count<authoritative.count);
+state.graphicsQuality.tier='high';lod.update(camera,renderer);
+assert.equal(chunk.children[3].geometry.index,authoritative);
+console.log('PASS Low water redraws after flooding and restores the original detail on tier switch');
 
 const distantScene=new T.Scene(),movingCamera=new T.PerspectiveCamera(60,1,.1,450);
 const queue=[];

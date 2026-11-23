@@ -1,11 +1,12 @@
 // Original tribal character meshes. Shared geometry and atlas materials keep large armies affordable.
-import {qualityMaterial} from './graphics-settings.js';
+import {graphicsSettings,qualityMaterial} from './graphics-settings.js';
 import {createBlenderPack} from './blender-pack.js';
 import {createGripGeometry} from './hand-grip.js';
 // The public pivots match the gameplay rig; collision shapes and unit statistics are untouched.
 export function createCharacters(T,art) {
     const blender=createBlenderPack(T);
     const cache = new Map(), materials = new Map();
+    const compactLofts=new WeakMap(),compactGeometry=new WeakMap(),sourceGeometry=new WeakMap();
     const hairCanvas=document.createElement('canvas');hairCanvas.width=hairCanvas.height=512;
     const hairContext=hairCanvas.getContext('2d');
     hairContext.fillStyle='#d6cbc0';hairContext.fillRect(0,0,512,512);
@@ -60,8 +61,29 @@ export function createCharacters(T,art) {
     const skin=mat('skin',0xdccabf), leather=mat('leather'), gold=mat('gold'), bone=mat('cloth',0xe6d8ad), dark=mat('cloth',0x293744);
     const eye=mat('plain',0x172028), ivory=mat('plain',0xede0c2), lip=mat('skin',0x754b48);
     function geo(key,fn){if(!cache.has(key))cache.set(key,fn());return cache.get(key);}
+    function lowGeometry(geometry){
+        if(compactGeometry.has(geometry))return compactGeometry.get(geometry);
+        const p=geometry.parameters;
+        let compact=geometry;
+        if(compactLofts.has(geometry))compact=loft(compactLofts.get(geometry),8);
+        else if(geometry.type==='SphereGeometry'&&p.widthSegments>8){
+            compact=new T.SphereGeometry(p.radius,8,Math.min(6,p.heightSegments),p.phiStart,p.phiLength,p.thetaStart,p.thetaLength);
+        }else if(geometry.type==='TubeGeometry'&&p.tubularSegments===12&&p.radialSegments===6){
+            compact=new T.TubeGeometry(p.path,6,p.radius,4,p.closed);
+        }
+        compactGeometry.set(geometry,compact);
+        return compact;
+    }
+    function applyQuality(root){
+        const low=graphicsSettings.tier==='low'&&root.userData.characterRole!=='shaman';
+        root.traverse(node=>{
+            const source=sourceGeometry.get(node);
+            if(source)node.geometry=low?lowGeometry(source):source;
+        });
+    }
     function mesh(parent,g,m,pos=[0,0,0],scale=[1,1,1],name='Detail') {
         const n=new T.Mesh(g,m);n.name=name;n.position.set(...pos);n.scale.set(...scale);n.castShadow=n.receiveShadow=true;
+        sourceGeometry.set(n,g);
         parent.add(n);return n;
     }
     const oval=(p,pos,size,m,name)=>mesh(p,geo('oval',()=>new T.SphereGeometry(1,16,12)),m,pos,size,name);
@@ -74,7 +96,9 @@ export function createCharacters(T,art) {
                 const a=s/segments*Math.PI*2;positions.push(Math.sin(a)*rx,y,Math.cos(a)*rz+z);uv.push(s/segments,r/(rings.length-1));
                 if(r&&s){const b=r*(segments+1)+s;indices.push(b,b-1,b-segments-2,b,b-segments-2,b-segments-1);}
             }});
-            const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();return g;
+            const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
+            if(segments>8)compactLofts.set(g,rings);
+            return g;
         });
     }
     function tube(p,points,r,m,name='Braid') {
@@ -100,6 +124,7 @@ export function createCharacters(T,art) {
             const visual=new T.Group();visual.name='AirshipVisual';root.add(visual);
             airship(visual,faction);blender.attach(visual,'character/airship/root',color);
             u.airshipVisual=visual;
+            applyQuality(root);
             return;
         }
         u.torso=new T.Group();u.torso.name='Torso';u.torso.position.y=.9;root.add(u.torso);
@@ -216,6 +241,7 @@ export function createCharacters(T,art) {
         for(const [part,pivot] of Object.entries({torso:u.torso,head:u.head,armL:u.armL,armR:u.armR,legL:u.legL,legR:u.legR})) {
             blender.attach(pivot,'character/'+role+'/'+part,color);
         }
+        applyQuality(root);
         return root;
     }
     function airship(root,faction) {
@@ -225,5 +251,5 @@ export function createCharacters(T,art) {
         for(const z of [-1.65,0,1.65])mesh(root,geo('hoop',()=>new T.TorusGeometry(1,.025,6,32)),gold,[0,4.5,z],[1.83,1.46,1],'BalloonHoop');
     }
     function setFaction(u,color){blender.updatePendingFaction(u.mesh,color);u.mesh.traverse(n=>{if(n.userData.characterFaction)n.material=mat('cloth',color);});}
-    return {build,setFaction,get ready(){return ready;},configureTextures,atlas:null,tiles};
+    return {build,setFaction,applyQuality,get ready(){return ready;},configureTextures,atlas:null,tiles};
 }

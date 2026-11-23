@@ -53,10 +53,54 @@ export function terrainIndices(T,geometry,res,step,water,shore,maxError=Infinity
     }
     return {attribute:new T.Uint16BufferAttribute(index,1),error:maximumError,simplified,shoreTiles,errorTiles,occludedTriangles};
 }
+
+// Low waves are vertically displaced by at most .48 world units.
+// Keep every shoreline sample and all cross-chunk edge samples. Only skip
+// tiles that are entirely covered by terrain, using the current land heights.
+export function compactWaterIndices(T,land,res,shore){
+    const step=4,stride=res+1,id=(x,z)=>z*stride+x;
+    const tiles=res/step,types=new Uint8Array(tiles*tiles),indices=[];
+    let occludedTriangles=0,simplified=0,shoreTiles=0;
+    for(let z=0;z<tiles;z++)for(let x=0;x<tiles;x++){
+        let min=Infinity,max=-Infinity;
+        for(let j=0;j<=step;j++)for(let i=0;i<=step;i++){
+            const height=land.getY(id(x*step+i,z*step+j));
+            min=Math.min(min,height);max=Math.max(max,height);
+        }
+        const type=min>shore+1?0:max>=shore-2?1:2;
+        types[z*tiles+x]=type;
+        if(type===0)occludedTriangles+=step*step*2;
+        else if(type===1)shoreTiles++;
+        else simplified++;
+    }
+    for(let z=0;z<tiles;z++)for(let x=0;x<tiles;x++){
+        const type=types[z*tiles+x],sx=x*step,sz=z*step;
+        if(type===0)continue;
+        if(type===1){
+            for(let j=0;j<step;j++)for(let i=0;i<step;i++){
+                const k=id(sx+i,sz+j);
+                indices.push(k,k+stride,k+1,k+stride,k+stride+1,k+1);
+            }
+            continue;
+        }
+        const ring=[],center=id(sx+step/2,sz+step/2);
+        const left=x===0||types[z*tiles+x-1]===1?1:step;
+        const bottom=z===tiles-1||types[(z+1)*tiles+x]===1?1:step;
+        const right=x===tiles-1||types[z*tiles+x+1]===1?1:step;
+        const top=z===0||types[(z-1)*tiles+x]===1?1:step;
+        for(let i=0;i<step;i+=left)ring.push(id(sx,sz+i));
+        for(let i=0;i<step;i+=bottom)ring.push(id(sx+i,sz+step));
+        for(let i=step;i>0;i-=right)ring.push(id(sx+step,sz+i));
+        for(let i=step;i>0;i-=top)ring.push(id(sx+i,sz));
+        for(let i=0;i<ring.length;i++)indices.push(center,ring[i],ring[(i+1)%ring.length]);
+    }
+    return {attribute:new T.Uint16BufferAttribute(indices,1),step,simplified,shoreTiles,errorTiles:0,occludedTriangles};
+}
 export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()){
     const entries=new Set(),point=new T.Vector3(),world=new T.Matrix4(),projection=new T.Matrix4(),clip=new T.Matrix4(),frustum=new T.Frustum();
+    const hiddenWater={attribute:new T.Uint16BufferAttribute([],1),step:4,owned:false,simplified:0,shoreTiles:0,errorTiles:0};
     let previousCamera,previousHeight,previousFocusX,previousFocusZ,previousFPV,previousEnabled,previousLayers,previousOverview;
-    let pendingFirstPerson=0;
+    let pendingFirstPerson=0,previousLowWater;
     const reasons={disabled:0,offscreen:0,firstPerson:0,focus:0,preparing:0,pixelError:0,shorelineOrDetail:0,active:0};
     const stats={full:0,medium:0,far:0,savedTriangles:0,prepared:0,errors:0,lastError:null,
         reusedFrames:0,updatedEntries:0,reusedEntries:0,pendingFirstPerson:0,cameraMode:null,zoom:1,viewScale:0,
@@ -78,6 +122,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             source.visible=false;
             source.geometry.addEventListener('dispose',()=>{
                 for(const level of e.levels.values())release(level);
+                release(e.compactWater);
                 geometry.attributes={};geometry.index=null;geometry.dispose();entries.delete(e);proxy.parent?.remove(proxy);
                 previousCamera=null;
             });
@@ -85,9 +130,12 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
     }
     function update(camera,renderer){
         const height=renderer.domElement.height,focus=state.isFPV?camera.position:state.cameraLookAt;
+        const lowWater=state.graphicsQuality?.tier==='low';
         const changed=previousCamera!==camera||!world.equals(camera.matrixWorld)||!projection.equals(camera.projectionMatrix)||
             previousHeight!==height||previousFocusX!==focus.x||previousFocusZ!==focus.z||
-            previousFPV!==state.isFPV||previousEnabled!==api.enabled||previousLayers!==camera.layers.mask||previousOverview!==api.overviewEnabled;
+            previousFPV!==state.isFPV||previousEnabled!==api.enabled||previousLayers!==camera.layers.mask||previousOverview!==api.overviewEnabled||
+            previousLowWater!==lowWater;
+        previousLowWater=lowWater;
         previousCamera=camera;world.copy(camera.matrixWorld);projection.copy(camera.projectionMatrix);
         previousHeight=height;previousFocusX=focus.x;previousFocusZ=focus.z;previousFPV=state.isFPV;previousEnabled=api.enabled;previousLayers=camera.layers.mask;
         previousOverview=api.overviewEnabled;stats.overviewEnabled=api.overviewEnabled;
@@ -96,6 +144,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             const g=e.source.geometry,p=g.attributes.position;
             const land=e.water?e.chunk.children[0].geometry.attributes.position:null;
             if(land&&(e.landPosition!==land||e.landVersion!==land.version)){
+                release(e.compactWater);e.compactWater=null;
                 e.minimumLand=Infinity;for(let i=0;i<land.count;i++)e.minimumLand=Math.min(e.minimumLand,land.getY(i));
                 e.landPosition=land;e.landVersion=land.version;e.dirty=true;
             }
@@ -132,7 +181,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
         stats.zoom=camera.zoom;stats.viewScale=state.viewScale;stats.viewportHeight=height;
         for(const e of entries){
             if(!e.active){e.dirty=false;continue;}
-            if(changed||e.dirty)select(e,camera,height,focus);else stats.reusedEntries++;
+            if(changed||e.dirty)select(e,camera,height,focus,lowWater);else stats.reusedEntries++;
             stats[['full','medium','far'][e.current]]++;reasons[e.reason]++;
             stats.savedTriangles+=e.saved||0;
             stats.occludedWaterTriangles+=e.selected?.occludedTriangles||0;
@@ -144,7 +193,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             if(result){stats.tiles.coarse+=result.simplified;stats.tiles.protectedShore+=result.shoreTiles;stats.tiles.errorLimited+=result.errorTiles;}
         }
     }
-    function select(e,camera,height,focus){
+    function select(e,camera,height,focus,lowWater){
             stats.updatedEntries++;e.dirty=false;e.matrix.copy(e.chunk.matrixWorld);
             e.waitingForSlot=false;e.requestedKey=null;
             const g=e.source.geometry;
@@ -155,7 +204,13 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             e.inView=e.shown&&e.proxy.layers.test(camera.layers)&&frustum.intersectsObject(e.proxy);
             e.reason=!api.enabled?'disabled':!e.inView?'offscreen':
                 !overview&&Math.abs(point.x-focus.x)<45&&Math.abs(point.z-focus.z)<45?(state.isFPV?'firstPerson':'focus'):null;
-            if(!e.reason||api.enabled&&e.inView&&e.dryInterior){
+            if(api.enabled&&e.inView&&lowWater&&e.water&&e.landPosition?.count===(e.res+1)**2&&e.res%4===0){
+                const waterLevel=e.source.position.y;
+                if(e.compactWaterLevel!==waterLevel){release(e.compactWater);e.compactWater=null;e.compactWaterLevel=waterLevel;}
+                e.compactWater??=e.minimumLand>waterLevel+1?{...hiddenWater,occludedTriangles:g.index.count/3}
+                    :compactWaterIndices(T,e.landPosition,e.res,waterLevel);
+                if(e.compactWater.attribute.count<g.index.count){selected=e.compactWater;e.reason='active';}
+            }else if(!e.reason||api.enabled&&e.inView&&e.dryInterior){
                 e.requested=chooseLod(e.requested||0,pixels,600,300);
                 const step=e.dryInterior?1:[2,4,8][e.requested],worldError=.8/projectedPixels(camera,height,point,g.boundingSphere?.radius||0);
                 // Round downward: a cached variant never exceeds the pixel limit.
@@ -201,7 +256,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
             }
             e.current=selected?(selected.step===8?2:1):0;e.selected=selected;
             e.saved=(g.index.count-(selected?.attribute.count||g.index.count))/3;
-            e.source.visible=!api.enabled;e.proxy.visible=api.enabled;
+            e.source.visible=!api.enabled;e.proxy.visible=api.enabled&&selected?.attribute.count!==0;
             const attribute=selected?.attribute||g.index;
             if(e.proxy.geometry.index!==attribute)e.proxy.geometry.setIndex(attribute);
     }

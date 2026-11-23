@@ -89,7 +89,8 @@ export function createFirstPersonGrass(T,state){
 
     function update(camera){
         restore();stats.chunks=stats.cells=stats.culledInstances=stats.uploads=0;
-        if(!api.enabled||!state.isFPV||!camera.isPerspectiveCamera||state.graphicsQuality?.tier==='ultra')return;
+        const tier=state.graphicsQuality?.tier;
+        if(!api.enabled||!state.isFPV||!camera.isPerspectiveCamera||tier==='ultra'||tier==='low')return;
         clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(clip);
         for(const chunk of Object.values(state.chunks)){
             const layer=chunk.userData.groundCover?.grass,source=layer?.mesh;
