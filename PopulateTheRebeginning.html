@@ -11338,7 +11338,10 @@ async function init() {
             ShadowCache.update(scene,camera,renderer,SceneIndex);now=performance.now();BattleProfiler.add('shadowCache',now-previous);
             BattleProfiler.add('batching',now-start);
         };
-        state.scene.onAfterRender=()=>{FirstPersonGrass.restore();if(GrassBatches.enabled)GrassBatches.restore();};
+        state.scene.onAfterRender=()=>{
+            FirstPersonGrass.restore();if(GrassBatches.enabled)GrassBatches.restore();
+            OverviewDetails.restore();
+        };
         state.scene.background = new THREE.Color(CONFIG.BIOMES.normal.bg);
         state.scene.fog = new THREE.Fog(CONFIG.BIOMES.normal.fog, CONFIG.BIOMES.normal.fogNear, CONFIG.BIOMES.normal.fogFar);
 

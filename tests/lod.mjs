@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as T from '../vendor/three.module.js';
 globalThis.window={addEventListener(){}};globalThis.location={protocol:'http:'};globalThis.localStorage={getItem:()=>null};
 const {compactWaterIndices,terrainIndices,createTerrainLod}=await import('../art/terrain-lod.js');
-const {grassIndices}=await import('../art/overview-details.js');
+const {createOverviewDetails,grassIndices}=await import('../art/overview-details.js');
 const {chooseLod}=await import('../art/lod-policy.js');
 const geo=new T.PlaneGeometry(40,40,80,80);geo.rotateX(-Math.PI/2);
 const p=geo.attributes.position;for(let i=0;i<p.count;i++)p.setY(i,10);
@@ -82,6 +82,34 @@ for(const step of [2,4]){const level=grassIndices(T,blades,step);assert.equal(le
  for(let blade=0;blade<8;blade++)assert([...level.index.array].some(i=>i===blade*20+16));
 }
 console.log('PASS overview grass keeps every blade tip and bounds ring interpolation error');
+blades.setIndex(grassIndices(T,blades,1).index);
+function grassAt(z){
+ const mesh=new T.InstancedMesh(blades.clone(),new T.MeshBasicMaterial(),11);
+ mesh.position.z=z;mesh.coverBounds=new T.Box3(new T.Vector3(-1,0,-1),new T.Vector3(1,1,1));
+ mesh.updateMatrixWorld(true);
+ return {mesh,data:[{scale:1,height:1}]};
+}
+const nearbyGrass=grassAt(-8),distantGrass=grassAt(-64);
+const grassState={graphicsQuality:{tier:'medium'},cameraLookAt:new T.Vector3(),isFPV:false,
+ chunks:[nearbyGrass,distantGrass].map(grass=>({userData:{groundCover:{grass}}}))};
+const grassDetails=createOverviewDetails(T,grassState,()=>blades);
+const grassRenderer={domElement:{height:600}};
+const grassCamera=new T.OrthographicCamera(-50,50,80,-80,.1,300);
+grassCamera.position.set(0,100,0);grassCamera.lookAt(0,0,-.001);grassCamera.updateMatrixWorld(true);
+grassDetails.update(grassCamera,grassRenderer);
+assert.equal(nearbyGrass.mesh.count,11);assert.equal(distantGrass.mesh.count,6);
+assert.equal(grassDetails.stats.visibleOmittedClumps,5);
+grassState.cameraLookAt.z=-31;
+grassDetails.update(grassCamera,grassRenderer);assert.equal(distantGrass.mesh.count,6,'Hysteresis keeps the same prefix');
+grassState.cameraLookAt.z=-45;
+grassDetails.update(grassCamera,grassRenderer);assert.equal(distantGrass.mesh.count,11,'Near camera focus restores density');
+grassDetails.restore();assert.equal(nearbyGrass.mesh.count,11);assert.equal(distantGrass.mesh.count,11);
+const eye=new T.PerspectiveCamera(60,1,.1,300);
+eye.updateMatrixWorld(true);grassState.isFPV=true;
+grassDetails.update(eye,grassRenderer);assert.equal(distantGrass.mesh.count,6);
+grassState.graphicsQuality.tier='high';
+grassDetails.update(eye,grassRenderer);assert.equal(distantGrass.mesh.count,11);
+console.log('PASS Medium grass uses half of the distant clumps, restores them near the focus, and leaves High at full density');
 const scene=new T.Scene(),chunk=new T.Group(),land=new T.PlaneGeometry(40,40,80,80),liquid=new T.PlaneGeometry(40,40,80,80);
 land.rotateX(-Math.PI/2);liquid.rotateX(-Math.PI/2);for(let i=0;i<land.attributes.position.count;i++)land.attributes.position.setY(i,10);
 liquid.setAttribute('depth',new T.Float32BufferAttribute(new Float32Array(6561),1));liquid.setAttribute('foam',new T.Float32BufferAttribute(new Float32Array(6561),1));

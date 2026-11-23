@@ -43,19 +43,27 @@ function lowGrassIndices(T){
 }
 export function createOverviewDetails(T,state,source=()=>null){
  const records=new WeakMap(),variants=new WeakMap(),sphere=new T.Sphere();
+ const thinned=new Map();
  const lowGrass=lowGrassIndices(T);
- const stats={full:0,medium:0,far:0,savedTriangles:0,visibleSavedTriangles:0};state.overviewDetailStats=stats;
- const api={enabled:true,stats,update,release};const clip=new T.Matrix4(),frustum=new T.Frustum(),box=new T.Box3();
+ const stats={full:0,medium:0,far:0,savedTriangles:0,visibleSavedTriangles:0,visibleOmittedClumps:0};state.overviewDetailStats=stats;
+ const api={enabled:true,stats,update,restore,release};const clip=new T.Matrix4(),frustum=new T.Frustum(),box=new T.Box3();
+ function restore(){
+  for(const [mesh,count] of thinned)mesh.count=count;
+  thinned.clear();
+ }
  function release(mesh){const r=records.get(mesh);if(!r)return;
+  if(thinned.has(mesh)){mesh.count=thinned.get(mesh);thinned.delete(mesh);}
   if(mesh.geometry===r.geometry&&(mesh.geometry.index===lowGrass||r.levels.some(level=>mesh.geometry.index===level.index)))
    mesh.geometry.setIndex(r.original);
   records.delete(mesh);
  }
  function update(camera,renderer){
-  stats.full=stats.medium=stats.far=stats.savedTriangles=stats.visibleSavedTriangles=0;
+  restore();
+  stats.full=stats.medium=stats.far=stats.savedTriangles=stats.visibleSavedTriangles=stats.visibleOmittedClumps=0;
   clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(clip);
   const tier=state.graphicsQuality?.tier,low=tier==='low',medium=tier==='medium';
   const ultra=tier==='ultra',firstPerson=state.isFPV&&camera.isPerspectiveCamera&&!ultra;
+  const focus=firstPerson?camera.position:state.cameraLookAt;
   for(const key in state.chunks){const layer=state.chunks[key].userData?.groundCover?.grass,mesh=layer?.mesh;if(!mesh)continue;
    const g=mesh.geometry,p=g.attributes.position;
    // Custom/replaced ground-cover geometry retains its original path.
@@ -72,6 +80,21 @@ export function createOverviewDetails(T,state,source=()=>null){
     let scale=1;for(const d of layer.data)scale=Math.max(scale,d.scale*Math.max(1.8,d.height||1));
     r={geometry:g,original:r?.geometry===g?r.original:g.index,levels,scale,level:0,positionVersion:p.version};records.set(mesh,r);
    }
+   const fullCount=mesh.count;
+   if(api.enabled&&medium&&visible&&mesh.coverBounds&&focus){
+    box.copy(mesh.coverBounds).applyMatrix4(mesh.matrixWorld);
+    const dx=Math.max(box.min.x-focus.x,focus.x-box.max.x,0);
+    const dz=Math.max(box.min.z-focus.z,focus.z-box.max.z,0);
+    // Leave near clumps at full density. The same seeded prefix is always
+    // drawn at distance, with a buffer to avoid flicker around the boundary.
+    const limit=r.sparse?28:36;
+    r.sparse=dx*dx+dz*dz>limit*limit;
+    if(r.sparse&&fullCount>1){
+     thinned.set(mesh,fullCount);
+     mesh.count=Math.ceil(fullCount/2);
+     stats.visibleOmittedClumps+=fullCount-mesh.count;
+    }
+   }else if(!medium||!api.enabled)r.sparse=false;
    let level=0;
    if(api.enabled&&low&&p.version===0)level=4;
    else if(api.enabled&&(!state.isFPV||firstPerson)&&g.boundingSphere){
@@ -89,7 +112,7 @@ export function createOverviewDetails(T,state,source=()=>null){
    }
    r.level=level;const index=level===4?lowGrass:level?r.levels[level-1].index:r.original;if(g.index!==index)g.setIndex(index);
    stats[['full','medium','far','medium','far'][level]]++;
-   const saved=(r.original.count-index.count)/3*mesh.count;stats.savedTriangles+=saved;
+   const saved=(r.original.count*fullCount-index.count*mesh.count)/3;stats.savedTriangles+=saved;
    if(visible)stats.visibleSavedTriangles+=saved;
   }
  }
