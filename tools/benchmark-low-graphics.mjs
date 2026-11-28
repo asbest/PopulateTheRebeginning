@@ -11,13 +11,17 @@ const software=process.argv.includes('--software');
 const live=process.argv.includes('--live');
 const images=process.argv.find(arg=>arg.startsWith('--images='))?.slice(9);
 const tier=process.argv.find(arg=>arg.startsWith('--tier='))?.slice(7)||'low';
-if(!['low','medium'].includes(tier))throw Error('Use --tier=low or --tier=medium');
+const sceneFilter=process.argv.find(arg=>arg.startsWith('--scene='))?.slice(8);
+const scenes=['overview','first-person','battle'];
+if(!['low','medium','high'].includes(tier))throw Error('Use --tier=low, --tier=medium or --tier=high');
+if(sceneFilter&&!scenes.includes(sceneFilter))throw Error('Unknown scene: '+sceneFilter);
 const browser=await chromium.launch({
     headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),
     args:software?['--use-angle=swiftshader','--enable-unsafe-swiftshader']:[]
 });
 try{
-    const page=await browser.newPage({viewport:{width:480,height:852},deviceScaleFactor:2});
+    const viewport=tier==='high'?{width:410,height:843}:{width:480,height:852};
+    const page=await browser.newPage({viewport,deviceScaleFactor:2});
     const errors=[];
     page.on('pageerror',error=>errors.push(String(error)));
     page.on('console',message=>{
@@ -34,7 +38,7 @@ try{
         };
     });
     if(!live)await startManualSimulation(page,98217);
-    const result=await page.evaluate(async ({live,capture})=>{
+    const result=await page.evaluate(async ({live,capture,scenes})=>{
         closeHelp();closeStoryOverlay();
         state.isPaused=true;
         window.enemyAIs=[];
@@ -96,7 +100,7 @@ try{
         state.matchSettings.peaceTimeMinutes=0;
         const quantile=(values,p)=>values.slice().sort((a,b)=>a-b)[Math.ceil(values.length*p)-1];
         const results=[],samplePixel=new Uint8Array(4);
-        for(const scene of ['overview','first-person','battle']){
+        for(const scene of scenes){
             state.selectedUnits=scene==='first-person'?[shaman]:[];
             state.isFPV=scene==='first-person';
             state.camera=state.isFPV?state.perspectiveCamera:state.orthoCamera;
@@ -164,7 +168,7 @@ try{
         const debug=gl.getExtension('WEBGL_debug_renderer_info');
         return {tier:state.graphicsQuality.tier,gpu:gl.getParameter(debug?.UNMASKED_RENDERER_WEBGL||gl.RENDERER),width:gl.drawingBufferWidth,
             height:gl.drawingBufferHeight,units:state.units.length,buildings:state.buildings.length,results};
-    },{live,capture:!!images});
+    },{live,capture:!!images,scenes:sceneFilter?[sceneFilter]:scenes});
     if(errors.length)throw Error(errors.join('\n'));
     for(const scene of result.results){
         if(scene.image)await writeFile(images+'-'+scene.scene+'.png',Buffer.from(scene.image.split(',')[1],'base64'));

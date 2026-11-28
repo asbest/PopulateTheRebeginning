@@ -113,7 +113,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
     const entries=new Set(),point=new T.Vector3(),world=new T.Matrix4(),projection=new T.Matrix4(),clip=new T.Matrix4(),frustum=new T.Frustum();
     const hiddenWater={attribute:new T.Uint16BufferAttribute([],1),step:4,owned:false,simplified:0,shoreTiles:0,errorTiles:0};
     let previousCamera,previousHeight,previousFocusX,previousFocusZ,previousFPV,previousEnabled,previousLayers,previousOverview;
-    let pendingFirstPerson=0,previousWaterTier;
+    let pendingFirstPerson=0,previousWaterTier,preparedWaterThisFrame=false;
     const reasons={disabled:0,offscreen:0,firstPerson:0,focus:0,preparing:0,pixelError:0,shorelineOrDetail:0,active:0};
     const stats={full:0,medium:0,far:0,savedTriangles:0,prepared:0,errors:0,lastError:null,
         reusedFrames:0,updatedEntries:0,reusedEntries:0,pendingFirstPerson:0,cameraMode:null,zoom:1,viewScale:0,
@@ -125,13 +125,15 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
         const temp=new T.BufferGeometry();temp.setIndex(result.attribute);temp.dispose();
     }
     function register(chunk,res){
+        let landProxy;
         for(let i=0;i<2;i++){
             const source=chunk.children[i],geometry=new T.BufferGeometry();
             const proxy=new T.Mesh(geometry,source.material);proxy.name='Terrain render LOD';proxy.raycast=()=>{};proxy.receiveShadow=source.receiveShadow;
             proxy.userData.landscapeKind=source.userData.landscapeKind=i===0?'terrain':'water';
             proxy.position.copy(source.position);chunk.add(proxy);
             const e={chunk,source,proxy,res,water:i===1,version:-1,levels:new Map(),pending:new Set(),
-                matrix:new T.Matrix4(),dirty:true,generation:0,current:0,active:false};entries.add(e);
+                landProxy,matrix:new T.Matrix4(),dirty:true,generation:0,current:0,active:false};entries.add(e);
+            if(i===0)landProxy=proxy;
             source.visible=false;
             source.geometry.addEventListener('dispose',()=>{
                 for(const level of e.levels.values())release(level);
@@ -192,6 +194,7 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
         stats.tiles.coarse=stats.tiles.protectedShore=stats.tiles.errorLimited=0;
         stats.occludedWaterTriangles=0;
         stats.visible.full=stats.visible.medium=stats.visible.far=stats.visible.savedTriangles=stats.visible.occludedWaterTriangles=0;
+        preparedWaterThisFrame=false;
         clip.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);frustum.setFromProjectionMatrix(clip);
         stats.cameraMode=state.isFPV?'first-person':camera.isOrthographicCamera?'orthographic':'perspective';
         stats.zoom=camera.zoom;stats.viewScale=state.viewScale;stats.viewportHeight=height;
@@ -222,7 +225,11 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
                 !overview&&Math.abs(point.x-focus.x)<45&&Math.abs(point.z-focus.z)<45?(state.isFPV?'firstPerson':'focus'):null;
             const low=tier==='low',cellSize=Math.abs(e.position.getX(1)-e.position.getX(0));
             const medium=tier==='medium'&&e.supportedWaves;
-            if(api.enabled&&e.inView&&(low||medium)&&e.water&&e.landPosition?.count===(e.res+1)**2&&e.res%4===0){
+            // Only cull occluded High water against the exact land mesh. Keep
+            // every visible wave vertex, including the chunk overlap.
+            const high=tier==='high'&&state.isFPV&&camera.isPerspectiveCamera&&e.supportedWaves&&api.overviewEnabled&&
+                e.landProxy?.geometry.index===e.chunk.children[0].geometry.index;
+            if(api.enabled&&e.inView&&(low||medium||high)&&e.water&&e.landPosition?.count===(e.res+1)**2&&e.res%4===0){
                 const waterLevel=e.source.position.y;
                 e.compactWater??=new Map();
                 if(e.compactWaterLevel!==waterLevel){
@@ -231,14 +238,16 @@ export function createTerrainLod(T,state,budget,shore,warm=()=>Promise.resolve()
                 }
                 const halfWidth=cellSize*e.res*.5;
                 const near=Math.max(Math.abs(point.x-focus.x),Math.abs(point.z-focus.z))-halfWidth<24;
-                const detail=low?'low':near&&(state.isFPV||state.viewScale<=30)?'near':'far';
+                const detail=low?'low':high||near&&(state.isFPV||state.viewScale<=30)?'near':'far';
                 let compact=e.compactWater.get(detail);
-                if(!compact){
+                if(!compact&&high&&preparedWaterThisFrame)e.dirty=true;
+                else if(!compact){
+                    if(high)preparedWaterThisFrame=true;
                     compact=low&&e.minimumLand>waterLevel+1?{...hiddenWater,occludedTriangles:g.index.count/3}
                         :compactWaterIndices(T,e.landPosition,e.res,waterLevel,detail);
                     e.compactWater.set(detail,compact);
                 }
-                if(compact.attribute.count<g.index.count){selected=compact;e.reason='active';}
+                if(compact&&compact.attribute.count<g.index.count){selected=compact;e.reason='active';}
             }else if(!e.reason||api.enabled&&e.inView&&e.dryInterior){
                 e.requested=chooseLod(e.requested||0,pixels,600,300);
                 const step=e.dryInterior?1:[2,4,8][e.requested],worldError=.8/projectedPixels(camera,height,point,g.boundingSphere?.radius||0);

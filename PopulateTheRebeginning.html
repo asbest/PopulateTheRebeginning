@@ -5883,7 +5883,11 @@ const Pathfinder = {
     openHeap: new BinaryHeap(node => node.f),
     openSet: new Map(),
     closedSet: new Set(),
-    findPath: function(startPos, endPos, isFlying = false, unitHeight = 1.5, avoidWater = false, waterExit = false) {
+    findPath(...args) {
+        return this.searchPath(...args).next().value;
+    },
+    *searchPath(startPos,endPos,isFlying=false,unitHeight=1.5,avoidWater=false,waterExit=false,work=null) {
+        if(work){startPos=startPos.clone();endPos=endPos.clone();}
         avoidWater=avoidWater||(!isFlying&&!waterExit&&state.matchSettings.liquid==='lava');
         let startNode = { x: Math.round(startPos.x / this.GRID_SIZE), y: Math.round(startPos.z / this.GRID_SIZE) };
         let endNode = { x: Math.round(endPos.x / this.GRID_SIZE), y: Math.round(endPos.z / this.GRID_SIZE) };
@@ -5930,13 +5934,12 @@ const Pathfinder = {
             return !isFlying&&treeBlocksSegment(startPos.x,startPos.z,endPos.x,endPos.z,true)?[startGrid]:[];
         }
 
-        this.openHeap.clear();
-        this.openSet.clear();
-        this.closedSet.clear();
-
-        const openHeap = this.openHeap;
-        const openSet = this.openSet;
-        const closedSet = this.closedSet;
+        // A suspended search keeps its own frontier. Immediate orders keep
+        // the existing reusable workspace and can run between its slices.
+        const openHeap=work?new BinaryHeap(node=>node.f):this.openHeap;
+        const openSet=work?new Map():this.openSet;
+        const closedSet=work?new Set():this.closedSet;
+        openHeap.clear();openSet.clear();closedSet.clear();
 
         const getKey = (x, y) => (x & 0xFFFF) << 16 | (y & 0xFFFF);
 
@@ -5952,6 +5955,7 @@ const Pathfinder = {
         while(openHeap.size() > 0) {
             iterations++;
             if(iterations > MAX_ITER) break;
+            if(work&&(iterations&7)===0&&work.expired())yield;
 
             const currentNode = openHeap.pop();
             const key = getKey(currentNode.x, currentNode.y);
@@ -6051,6 +6055,11 @@ const Pathfinder = {
     }
 };
 window.Pathfinder = Pathfinder;
+
+const AIPlanningWork={
+    cursor:0,deadline:0,
+    expired(){return performance.now()>=this.deadline;}
+};
 
 const PathWorker = {
     worker:null,disabled:false,nextId:1,snapshotKey:null,pending:new Map(),fallbackQueue:[],
@@ -9746,13 +9755,30 @@ class EnemyAI {
         state.units.push(new Humanoid(this.faction, 'wild', braveSafe.x, braveSafe.z));
     }
 
-    update(dt) {
+    update(dt,work=null) {
         this.recruitCooldown = Math.max(0, this.recruitCooldown - dt);
         this.spellCooldown=Math.max(0,(this.spellCooldown||0)-dt);
         this.bridgeCooldown=Math.max(0,(this.bridgeCooldown||0)-dt);
         this.timer+=dt;
-        if(this.timer>=Math.min(2,CONFIG.AI.THINK_INTERVAL)){this.timer=0;this.think();}
-        this.flushPathQueue();
+        const interval=Math.min(2,CONFIG.AI.THINK_INTERVAL);
+        if(this.planning&&(!work||this.planning.version!==state.navigationVersion||this.planning.water!==state.waterState)){
+            this.planning=null;this.timer=interval;
+        }
+        if(!work){
+            if(this.timer>=interval){this.timer=0;this.think();}
+        }else if(!work.expired()){
+            if(!this.planning&&this.timer>=interval){
+                this.timer=0;
+                this.planning={version:state.navigationVersion,water:state.waterState,steps:this.thinkSteps(work)};
+            }
+            if(this.planning){
+                const profile=PerformanceDiagnostics.running,start=profile?performance.now():0;
+                const {done}=this.planning.steps.next();
+                if(profile)PerformanceDiagnostics.event('aiPlanning',performance.now()-start);
+                if(done)this.planning=null;
+            }
+        }
+        this.flushPathQueue(work);
     }
     distance(a,b){return Math.hypot(a.x-b.x,a.z-b.z);}
     rescueFromWater(u) {
@@ -9827,10 +9853,10 @@ class EnemyAI {
         finish(undefined,true);
         return u.state==='move'||u.state==='combat';
     }
-    flushPathQueue() {
+    flushPathQueue(work=null) {
         let processed=0;
         for(const [id,order] of this.pathQueue) {
-            if(!PathWorker.canAccept())break;
+            if(work?.expired()||!PathWorker.canAccept())break;
             this.pathQueue.delete(id);
             this.resolvePath(order);
             if(++processed>=3) break;
@@ -10045,7 +10071,8 @@ class EnemyAI {
         return this.reconOrigin&&{position:this.reconOrigin,kind:'recon'};
     }
 
-    squadOrder(fit,home,foes,reserve,ready,goal) {
+    squadOrder(...args){return this.squadOrderSteps(...args).next().value;}
+    *squadOrderSteps(fit,home,foes,reserve,ready,goal,work=null) {
         const guard=(unit,index)=>{
             const radius=7+Math.floor(index/16)*3;
             this.moveUnit(unit,{x:home.x+Math.cos(index*2.4)*radius,z:home.z+Math.sin(index*2.4)*radius},'guard');
@@ -10139,7 +10166,8 @@ class EnemyAI {
         if(!squad.routeChecked||squad.routeChecked+14<this.intelTime&&
             (squad.waterState!==state.waterState||squad.needsBridge)){
             const start=new THREE.Vector3(center.x,0,center.z),end=new THREE.Vector3(point.x,0,point.z);
-            const route=isWalkableLine(start,end,false,1.5,true)?[]:Pathfinder.findPath(start,end,false,1.5,true);
+            const route=isWalkableLine(start,end,false,1.5,true)?[]:
+                yield* Pathfinder.searchPath(start,end,false,1.5,true,false,work);
             squad.routeChecked=this.intelTime;
             squad.waterState=state.waterState;
             squad.waypoints=route?.filter((_,index)=>index%6===5)||[];
@@ -10180,7 +10208,8 @@ class EnemyAI {
         return center;
     }
 
-    think() {
+    think(){return this.thinkSteps().next().value;}
+    *thinkSteps(work=null) {
         const members = state.units.filter(u => u.faction === this.faction && u.state !== 'dead' && !u.isPhantom);
         const units = members.filter(u => u.state !== 'transported');
         const buildings=state.buildings.filter(b=>b.faction===this.faction&&!b.dead);
@@ -10314,7 +10343,7 @@ class EnemyAI {
                     nearest(threats,unit.mesh.position);
                 this.engage(unit,danger,'defend');
             }
-        }else assaultCenter=this.squadOrder(fit,home,foes,reserve,ready,goal);
+        }else assaultCenter=yield* this.squadOrderSteps(fit,home,foes,reserve,ready,goal,work);
         if(this.myShaman&&this.myShaman.aiRole!=='retreat'){
             const bridging=goal&&this.squad?.phase==='advance'&&this.squad.needsBridge&&!threats.length&&
                 this.bridgeCooldown===0&&this.approachBridge(goal.position);
@@ -10334,20 +10363,32 @@ class EnemyAI {
             // Finished settlements continue population growth through hut replacement/expansion.
             if(!type&&workers.length<4&&counts.hut<14)type='hut';
             if(type){
-                const buildRoute=(u,x,z)=>{
+                const buildRoute=function*(u,x,z){
+                    if(work?.expired())yield;
                     const destination=new THREE.Vector3(x,0,z);
-                    const path=Pathfinder.findPath(u.mesh.position,destination,false,u.height,true);
+                    const start=u.mesh.position.clone();
+                    if(isWalkableLine(start,destination,false,u.height,true))return true;
+                    const path=yield* Pathfinder.searchPath(start,destination,false,u.height,true,false,work);
                     if(!path)return false;
                     // A* reaches a rounded grid cell. Check its final metres too: a
                     // shoreline or steep bank can separate that cell from the site.
-                    const last=path.length?path[path.length-1]:u.mesh.position;
+                    const last=path.length?path[path.length-1]:start;
                     return isWalkableLine(last,destination,false,u.height,true);
                 };
+                const eligibleBuilder=u=>u.faction===this.faction&&!['dead','stunned','getting_up','transported'].includes(u.state);
+                const findBuilder=function*(x,z){
+                    const distance=u=>(u.mesh.position.x-x)**2+(u.mesh.position.z-z)**2;
+                    const ranked=builders.slice().sort((a,b)=>distance(a)-distance(b));
+                    for(const u of ranked)
+                        if(eligibleBuilder(u)&&(yield* buildRoute(u,x,z))&&eligibleBuilder(u))return u;
+                };
                 let pending=this.pendingBuild;
+                let builder;
                 if(!pending||pending.type!==type){
                     pending=null;
                     let nextIndex=this.buildSearchIndex||0,routeChecks=0;
                     for(let n=0;n<192&&routeChecks<24;n++){
+                        if(work?.expired())yield;
                         const i=(nextIndex+n)%192;
                         this.buildSearchIndex=(i+1)%192;
                         const radius=8+Math.floor(i/24)*4,angle=i*2.399963+this.faction;
@@ -10357,7 +10398,8 @@ class EnemyAI {
                             this.blockedBuildSites.some(p=>this.distance(p,{x,z})<4))continue;
                         if([[3,0],[-3,0],[0,3],[0,-3]].some(([dx,dz])=>getHeight(x+dx,z+dz)<WATER_LEVEL||Math.abs(getHeight(x+dx,z+dz)-h)>4))continue;
                         routeChecks++;
-                        if(!builders.some(u=>buildRoute(u,x,z)))continue;
+                        builder=yield* findBuilder(x,z);
+                        if(!builder)continue;
                         pending={type,x,z,bestDistance:Infinity,stalledFor:0};break;
                     }
                     this.pendingBuild=pending;
@@ -10366,7 +10408,7 @@ class EnemyAI {
                     this.pendingBuild=null;pending=null;
                 }
                 if(pending){
-                    const builder=nearest(builders.filter(u=>buildRoute(u,pending.x,pending.z)),pending);
+                    builder??=yield* findBuilder(pending.x,pending.z);
                     if(!builder)this.pendingBuild=null;
                     else if(this.distance(builder.mesh.position,pending)<=3){createBuilding(type,pending.x,pending.z,this.faction);this.pendingBuild=null;}
                     else {
@@ -11333,7 +11375,7 @@ async function init() {
             FirstPersonGrass.update(camera);
             now=performance.now();BattleProfiler.add('overviewDetails',now-previous);previous=now;
             if(GrassBatches.enabled||GrassBatches.stats.batches)GrassBatches.update(camera);
-            CharacterBatches.update(camera===state.camera);now=performance.now();BattleProfiler.add('characterBatches',now-previous);previous=now;
+            CharacterBatches.update(camera===state.camera,LodVisibility);now=performance.now();BattleProfiler.add('characterBatches',now-previous);previous=now;
             SceneryBatches.update(camera===state.camera);now=performance.now();BattleProfiler.add('sceneryBatches',now-previous);previous=now;
             ShadowCache.update(scene,camera,renderer,SceneIndex);now=performance.now();BattleProfiler.add('shadowCache',now-previous);
             BattleProfiler.add('batching',now-start);
@@ -13369,7 +13411,12 @@ function animate() {
     if(isPeaceTime()&&(state.projectiles.length||state.activeEffects.length))cancelOffensiveEffectsDuringPeace();
     const simulationStart=performance.now();BattleWork.begin();
     const aiStart=performance.now();
-    if (state.network.role !== 'client'&&!state.controlTutorial?.active) window.enemyAIs.forEach(ai => ai.update(dt));
+    if (state.network.role !== 'client'&&!state.controlTutorial?.active) {
+        const tribes=window.enemyAIs,count=tribes.length;
+        AIPlanningWork.deadline=aiStart+2.5;
+        for(let i=0;i<count;i++)tribes[(AIPlanningWork.cursor+i)%count].update(dt,AIPlanningWork);
+        if(count)AIPlanningWork.cursor=(AIPlanningWork.cursor+1)%count;
+    }
     BattleProfiler.add('ai',performance.now()-aiStart);
     PathWorker.update();
 

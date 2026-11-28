@@ -60,6 +60,11 @@ export function createLodVisibility(T,state,index,transforms){
  }
  return {enabled:true,stats,begin,
   allow(node){const e=owners.get(node);return !this.enabled||!e||!e.chunk.parent||e.needed;},
+  castsIntoShadow(mesh){
+   // Match the renderer's per-source frustum check even when the resulting
+   // instance batch has no bounds of its own.
+   return !this.enabled||unknownShadow||!mesh.frustumCulled||shadows.some(frustum=>frustum.intersectsObject(mesh));
+  },
   reuse(node,demand){
    const e=owners.get(node);
    if(!this.enabled||demand===undefined||!e?.stable||!e.chunk.parent||e.pending)return false;

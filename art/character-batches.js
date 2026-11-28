@@ -12,7 +12,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null,compac
     const shadowProfiles={low:[20,24],medium:[18,10],high:[45,40],ultra:[60,56]};
     const shadowDistances=[],simplifiedCasters=[],partialShadowBatches=[],empty=[];
     const smallDetails=new Set(['Eye','Iris','UpperEyelid','Brow','Earring','NoseBridge','NoseTip','Mouth','BraidBead','Thumb','RitualBeads','MaskEyeSlit']);
-    let scene,blob,shadowMap,frame=0,lodPrepared=false;
+    let scene,blob,shadowMap,frame=0,lodPrepared=false,shadowVisibility;
     const stats={parts:0,instances:0,batches:0,farShadows:0,shadowProxyParts:0,visibleUnits:0,simplifiedUnits:0,lodChecksAvoided:0,ms:0,fallback:false};
     state.characterBatchStats=stats;
     const api={uploads:writer.stats,enabled:true,crowdDetail:true,firstPersonBudget:true,firstPersonShadowProxy:true,fullShadows:false,warming:false,stats,update,restore,dispose,matrixError,reducePose};
@@ -109,7 +109,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null,compac
                 healthBar,compact:false,items:[],shadowCount:0,mesh:null,capacity:0};buckets.set(key,b);}
             b.compact ||= geometry!==node.geometry;
             const end=b.items.length;
-            if(cast&&shadow){
+            if(cast&&shadow&&(!shadowVisibility||shadowVisibility.castsIntoShadow(node))){
                 const slot=b.shadowCount++;
                 if(slot<end)b.items[end]=b.items[slot];
                 b.items[slot]=node;
@@ -151,7 +151,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null,compac
         // Three allocates the first instance color array from the current count.
         blob.setColorAt(0,color.setRGB(.2,.2,.2));blob.count=0;scene.add(blob);
     }
-    function update(prepared=false){
+    function update(prepared=false,visibility=null){
         lodPrepared=prepared;
         const start=performance.now();restore();frame++;writer.reset();
         if(scene!==state.scene){dispose();scene=state.scene;}
@@ -164,6 +164,7 @@ export function createCharacterBatches(T,state,heightAt,wildlife=()=>null,compac
         const tier=state.graphicsQuality?.tier||'high';
         const medium=tier==='medium';
         const firstPerson=api.firstPersonBudget&&state.isFPV&&state.camera?.isPerspectiveCamera&&tier!=='ultra'&&!api.warming;
+        shadowVisibility=prepared&&firstPerson&&tier==='high'&&!api.fullShadows?visibility:null;
         if(!api.enabled||!scene||!state.camera||state.units.length+bunnies.length+birds.length<12&&!api.warming&&!firstPerson&&!medium){stats.ms=performance.now()-start;return;}
         if(state.renderer&&!state.renderer.capabilities.isWebGL2&&!state.renderer.extensions.get('ANGLE_instanced_arrays')){
             api.enabled=false;stats.fallback=true;stats.ms=performance.now()-start;return;

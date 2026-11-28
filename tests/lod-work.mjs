@@ -17,6 +17,8 @@ const sun=new T.DirectionalLight();sun.castShadow=true;sun.position.set(80,30,0)
 Object.assign(sun.shadow.camera,{left:-15,right:15,top:15,bottom:-15,near:.1,far:100});sun.shadow.camera.updateProjectionMatrix();scene.add(sun,sun.target);
 scene.updateMatrixWorld(true);const visibility=createLodVisibility(T,state,index,transforms);visibility.begin(camera,renderer);
 assert(visibility.allow(near.lod));assert(visibility.allow(shadowOnly.lod));assert(!visibility.allow(far.lod));
+assert(visibility.castsIntoShadow(shadowOnly.lod.children[0]));
+assert(!visibility.castsIntoShadow(far.lod.children[0]));
 state.staticShadowStats={mode:'baked'};visibility.begin(camera,renderer);
 assert(!visibility.allow(shadowOnly.lod));
 state.staticShadowStats.mode='dynamic';visibility.begin(camera,renderer);
@@ -24,6 +26,7 @@ assert(visibility.allow(shadowOnly.lod));
 visibility.begin(camera,renderer);assert.equal(visibility.stats.rebuiltBounds,0);
 renderer.shadowMap.enabled=false;visibility.begin(camera,renderer);assert(!visibility.allow(shadowOnly.lod));renderer.shadowMap.enabled=true;
 const point=new T.PointLight();point.castShadow=true;scene.add(point);scene.updateMatrixWorld(true);visibility.begin(camera,renderer);assert(visibility.stats.shadowFallback&&visibility.allow(far.lod));scene.remove(point);
+assert(visibility.castsIntoShadow(far.lod.children[0]),'Unknown shadow frustums preserve the caster');
 camera.position.x=2000;camera.lookAt(2000,0,0);camera.updateMatrixWorld(true);visibility.begin(camera,renderer);assert(visibility.allow(far.lod));assert(!visibility.allow(near.lod));assert(visibility.allow(shadowOnly.lod));
 scene.add(far.lod);visibility.begin(camera,renderer);assert(visibility.allow(far.lod));
 console.log('PASS static LOD culling preserves off-screen shadow casters, camera entry, unsupported shadows and reparented objects');

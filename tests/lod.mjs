@@ -150,6 +150,17 @@ assert(chunk.children[3].geometry.index.count<authoritative.count);
 waterMaterial.uniforms.waveStrength.value=2.1;lod.update(camera,renderer);
 assert.equal(chunk.children[3].geometry.index,authoritative);
 console.log('PASS Medium water retains full detail in First Person and falls back for unsupported waves');
+state.isFPV=true;state.graphicsQuality.tier='high';waterMaterial.uniforms.waveStrength.value=1.55;
+const waterView=new T.PerspectiveCamera(60,1,.1,300);
+waterView.position.set(8,12,18);waterView.lookAt(0,0,0);waterView.updateMatrixWorld(true);
+for(let i=0;i<land.attributes.position.count;i++)land.attributes.position.setY(i,land.attributes.position.getX(i)*.5);
+land.attributes.position.needsUpdate=true;
+lod.update(waterView,renderer);
+assert.equal(chunk.children[2].geometry.index,land.index);
+assert(lod.stats.visible.occludedWaterTriangles>0);
+assert.equal(chunk.children[3].geometry.index.count/3,authoritative.count/3-lod.stats.visible.occludedWaterTriangles);
+assert.equal(liquid.index,authoritative);
+console.log('PASS High first-person culls only hidden water triangles and preserves the exact shore and land meshes');
 
 const distantScene=new T.Scene(),movingCamera=new T.PerspectiveCamera(60,1,.1,450);
 const queue=[];

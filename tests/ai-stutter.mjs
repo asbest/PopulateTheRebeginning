@@ -39,8 +39,27 @@ try {
             const repeatedFailureCalls=failed.calls;
             gameTestAPI.BuildingSpatialHash.markDirty();
             ai.moveUnit(failed,goal,'guard');ai.flushPathQueue();
+            const start=p.clone(),end=start.clone().add(new THREE.Vector3(74,0,81));
+            const whole=Pathfinder.findPath(start,end,true).map(point=>point.toArray());
+            const search=Pathfinder.searchPath(start,end,true,1.5,false,false,{expired:()=>true});
+            let slice=search.next(),yields=0;
+            while(!slice.done&&yields<2000){
+                yields++;
+                // Immediate orders can use A* without modifying a suspended frontier.
+                Pathfinder.findPath(start,start.clone().add(new THREE.Vector3(-8,0,6)),true);
+                slice=search.next();
+            }
+            if(!slice.done||!yields||JSON.stringify(slice.value.map(point=>point.toArray()))!==JSON.stringify(whole))
+                throw Error('Frame slicing changed the strategic path');
+            const probe=new ai.constructor(ai.faction),work={expired:()=>false};
+            let started=0,finished=0;
+            probe.thinkSteps=function*(){started++;yield;finished++;};
+            probe.timer=2;probe.update(.1,work);
+            gameTestAPI.BuildingSpatialHash.markDirty();
+            probe.update(.1,work);probe.update(.1,work);
+            if(started!==2||finished!==1||probe.planning)throw Error('An obsolete strategic search continued across a navigation change');
             return {queued,initialCalls,firstFrameCalls,secondFrameCalls,allCalls,
-                firstFailureCalls,repeatedFailureCalls,retriedAfterChange:failed.calls};
+                firstFailureCalls,repeatedFailureCalls,retriedAfterChange:failed.calls,yields};
         } finally {
             state.units.length=originalLength;
             ai.pathQueue.clear();
